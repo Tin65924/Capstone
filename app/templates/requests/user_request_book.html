@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Book Procurement Request - MCST Library</title>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#191a1d",
+                        "background-light": "#f7f7f7",
+                        "background-dark": "#18191a"
+                    },
+                    fontFamily: {
+                        display: "Manrope"
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.125rem",
+                        lg: "0.25rem",
+                        xl: "0.5rem",
+                        full: "0.75rem"
+                    }
+                }
+            }
+        };
+    </script>
+</head>
+
+<body class="bg-background-light dark:bg-background-dark text-[#0d121b] dark:text-white font-display overflow-hidden">
+    <div class="flex h-screen w-full flex-row">
+        <!-- Sidebar -->
+        <div
+            class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0">
+            <div class="p-6">
+                <div class="flex items-center gap-3 mb-8">
+                    <div class="bg-primary/10 p-2 rounded-lg text-primary">
+                        <span class="material-symbols-outlined" style="">local_library</span>
+                    </div>
+                    <h1 class="text-xl font-bold tracking-tight" style="">Profile</h1>
+                </div>
+                <div class="flex flex-col items-center mb-6">
+                    <div class="h-20 w-20 rounded-full bg-cover bg-center mb-3 ring-4 ring-primary/10"
+                        data-alt="Portrait of Alice Student"
+                        style="background-image: url(&quot;https://lh3.googleusercontent.com/aida-public/AB6AXuCkcv98J_6qGD7t-VqddLCYMILDlrzK6AKmcFAFZijgmQoy6GFBlTuESKfGNDh9mJMnMDBKRDEuCZBe8QJnNs85uBsvrz1LY3gROkLx5mMskEQhRJfHu8XLitpu2_2vXV3JxtK2d0p280rb_D7XqPYnHnB-nH6mYdfPwpQ6OgLwvAgVaEc99uwSs8r0oIDJL2CBkO5JrEqjz-pw3k_nUAqXphQJvfezlqXncllU7aw8bBEPek61muPCRlihYpS7HcmKChpHRbENzSg&quot;);">
+                    </div>
+                    <h2 class="text-lg font-bold" style="">Alice | Student</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400" style="">ID: 8934201</p>
+                </div>
+                <nav class="flex flex-col gap-2">
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors"
+                        href="{{ url_for('main.user_profile') }}" style="">
+                        <span class="material-symbols-outlined" style="">dashboard</span>
+                        <span class="" style="">Dashboard</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg bg-primary/10 text-primary font-medium"
+                        href="{{ url_for('requests.user_request_book') }}" style="">
+                        <span class="material-symbols-outlined" style="">book_online</span>
+                        <span class="" style="">Request Book</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors"
+                        href="{{ url_for('main.user_history') }}" style="">
+                        <span class="material-symbols-outlined" style="">history</span>
+                        <span class="" style="">History</span>
+                    </a>
+                </nav>
+            </div>
+            <div class="mt-auto p-6 border-t border-[#cfd7e7] dark:border-gray-700">
+                <button
+                    class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-700 transition-colors"
+                    style="">
+                    <span class="material-symbols-outlined text-[18px]" style="">logout</span>
+                    <span class="" style="">Log Out</span>
+                </button>
+            </div>
+        </div>
+        <!-- Main Content -->
+        <main class="flex-1 h-full overflow-y-auto bg-background-light dark:bg-background-dark">
+            <div class="max-w-4xl mx-auto px-6 py-12">
+                <!-- Book Procurement Header -->
+                <div class="mb-10">
+                    <h1 class="text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight" style="">Book
+                        Procurement</h1>
+                    <p class="text-gray-500 dark:text-gray-400 mt-3 text-lg" style="">Submit a request for books not
+                        currently available in our digital or physical library collection.</p>
+                </div>
+                <!-- Form Card -->
+                <div
+                    class="bg-white dark:bg-[#1a2235] rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-8 md:p-12">
+                    <form class="space-y-8">
+                        <!-- Book Title Field -->
+                        <div>
+                            <label class="block text-sm font-bold text-gray-900 dark:text-white mb-2" for="book-title"
+                                style="">
+                                Book Title <span class="text-red-500" style="">*</span>
+                            </label>
+                            <input
+                                class="w-full px-4 py-3.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder:text-gray-400"
+                                id="book-title" name="book-title" placeholder="Enter the full title of the book"
+                                required="" type="text">
+                        </div>
+                        <!-- Author Field -->
+                        <div>
+                            <label class="block text-sm font-bold text-gray-900 dark:text-white mb-2" for="author"
+                                style="">
+                                Author (Optional)
+                            </label>
+                            <input
+                                class="w-full px-4 py-3.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder:text-gray-400"
+                                id="author" name="author" placeholder="Enter the author's name" type="text">
+                            <p class="mt-2 text-xs text-gray-400" style="">Recommended for faster processing</p>
+                        </div>
+                        <!-- Submit Button -->
+                        <div class="pt-4">
+                            <button
+                                class="w-full sm:w-auto px-8 py-3.5 bg-primary text-white font-bold rounded-lg hover:bg-gray-800 transition-colors shadow-lg active:transform active:scale-[0.98]"
+                                type="submit" style="">
+                                Submit Request
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+
+</html>

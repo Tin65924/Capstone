@@ -1,0 +1,220 @@
+
+1. Request & Procurement Management Module
+Purpose:
+Manages the lifecycle of book requests from submission until final procurement status update.
+
+A. Request Management Submodule
+Handles submission, validation, and tracking of book requests.
+User Roles Allowed to Request:
+●Students
+●Faculty
+
+Student Request Process:
+●Input Book Title
+●Optional Author
+●Librarian checks existing inventory
+●Librarian assigns Status: 
+oPending Review (Default after request is submitted)
+oExisting in Collection (After system checks if its on already collected)
+oApproved
+oRejected
+oProcured
+
+Faculty Request Process:
+●Librarian to upload the list of the book list from supplier
+●when faculty request for books
+●check the supplier list
+●if the book is there then proceed with request
+●then this will be routed to the librarian for approval or endorsement
+●if the book is not present
+●then the faculty will input the book details
+
+System Features:
+●Duplicate Title Detection 
+oDetects if book already exists
+oDetects if book is already requested
+oIf already requested → increments demand counter
+●Demand Counter (number of requests per title)
+●Request History Tracking
+●Status Monitoring Dashboard
+
+B. Procurement Management Submodule
+Handles status updates for approved requests.
+Purchase Validation (Reference Only):
+●Check budget allocation
+●Confirm availability with supplier
+●Confirm edition/version
+
+Procurement Status Tracking:
+●For Ordering
+●Ordered
+●Delivered
+●Cancelled
+●Out of Stock
+●Procured
+
+System Limitation:
+●System will NOT handle: 
+oShipping
+oActual ordering
+oPayment transactions
+oSupplier delivery display
+●System only allows status updates (e.g., Procured, Rejected, etc.)
+
+2. Cataloging & Accessioning Module
+Purpose:
+Registers acquired books into the system and makes them searchable.
+
+A. Bibliographic Cataloging Submodule
+Encodes searchable book metadata:
+●Title
+●Author
+●Edition
+●Publisher
+●Year Published
+●Subject Classification
+●Accession Number
+●Call Number
+
+System Outcomes:
+●Book becomes searchable
+●Book becomes officially registered
+●Book becomes linkable to circulation rules
+
+Limitation:
+●System will NOT store full KOHA-level metadata
+●Only searchable catalog details will be stored (Title, Author, Year, etc.)
+This module is bibliographic encoding — not inventory reconciliation.
+
+3. Circulation Management Module
+Purpose:
+Handles borrowing, returning, renewal, and penalty computation.
+
+A. Borrower Management
+Allowed Borrowers:
+●Students
+●Faculty
+Borrower Data:
+●ID Number
+●Program / Department
+●Active Status Validation
+
+B. Borrowing Submodule
+Borrowing Process:
+●Select Borrowing Type: 
+oOvernight
+oDaily Circulation
+●If Overnight: 
+oOptionally add Due Date
+oOr system auto-calculates due date
+●If Daily Circulation: 
+oDue Date field not available
+●Enter Student / Faculty ID Number
+●Enter Book Accession Number
+●Execute Borrow / Return
+
+Rules Engine:
+●Overnight → Next-day / a week return
+●Student’s are limited to up to 3 borrowed books.
+●Faculty → Up to 1 month (if multiple copies available)
+●High-demand books → Daily Circulation only
+●Notify overdues (2 days before overdue)
+●System checks: 
+oIf book is already borrowed → clicking button returns book
+oIf book is not borrowed → clicking button borrows book
+
+Tracking:
+●Tracks borrowing frequency per title
+●Tracks borrowing per program
+
+C. Return & Penalty Handling
+●Scan / Enter accession number
+●Automatically compute overdue fine
+●Update status to “Available”
+●Damage tagging (Librarian adds notes)
+●Lost status tagging
+
+4. Inventory Monitoring Module
+Purpose:
+Reconciles physical books with system records.
+
+Inventory Process:
+●Scan (if scanner available) OR
+●Manually enter accession number
+
+Rules Engine:
+●If book is entered during inventory → Marked Available
+●If book is NOT entered: 
+oSystem checks if borrowed
+oIf not borrowed → Marked Missing
+
+A. Real-Time Monitoring
+Track status:
+●Available
+●Borrowed
+●Lost
+●Damaged
+●Missing
+
+B. Annual Physical Inventory
+●Generate accession master list
+●Conduct physical shelf checking
+●Automatic marking: Present / Missing
+●Cross-check with borrowed records
+●Generate discrepancy report
+
+Note:
+All reports generated from inventory will be displayed under Module 5 (Reporting Module).
+
+5. Descriptive Analytics & Reporting Dashboard
+Purpose:
+Transforms system data into decision-support intelligence.
+
+Available KPIs:
+●Books Borrowed per Program
+●Utilization Rate (Borrowed ÷ Total Collection)
+●Most Borrowed Titles
+●Underutilized Titles
+●Online Resource Usage
+
+Features:
+●Drag-and-drop KPI builder
+●Time filtering (Semester, Yearly)
+●Exportable reports
+●Data visualization cards
+Supports procurement planning and budget defense.
+
+6.(Administrative module)
+
+( Submodule User Authentication & Access Control Module)
+Purpose:
+Controls system access and enforces permissions.
+
+●Only institutional email accounts allowed (e.g., mcst domain)
+Role-Based Access:
+●Librarian (Full Control)
+●Faculty (Request & View)
+●Student (Request & View Status)
+●Admin (System Oversight)
+
+Security Controls:
+●Session logging
+●Activity audit trail
+
+7. Backup & Recovery Module
+Purpose:
+Prevents data loss and ensures system continuity.
+
+●Automated Monthly Backup
+●Secure Storage Location
+Prevents data loss due to system failure or corruption.
+
+FINAL SYSTEM ARCHITECTURE FLOW
+→ Request Module
+→ Procurement Status Update
+→ Accessioning
+→ Cataloging
+→ Circulation
+→ Monitoring & Analytics
+→ Inventory Reconciliation
+→ Procurement Feedback

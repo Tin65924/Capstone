@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>User History - MCST Library</title>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#191a1d",
+                        "background-light": "#f7f7f7",
+                        "background-dark": "#18191a"
+                    },
+                    fontFamily: {
+                        display: "Manrope"
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.125rem",
+                        lg: "0.25rem",
+                        xl: "0.5rem",
+                        full: "0.75rem"
+                    }
+                }
+            }
+        };
+    </script>
+</head>
+
+<body class="bg-background-light dark:bg-background-dark text-[#0d121b] dark:text-white font-display overflow-hidden">
+    <div class="flex h-screen w-full flex-row">
+        <!-- Sidebar -->
+        <div
+            class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0">
+            <div class="p-6">
+                <div class="flex items-center gap-3 mb-8">
+                    <div class="bg-primary/10 p-2 rounded-lg text-primary">
+                        <span class="material-symbols-outlined" style="">local_library</span>
+                    </div>
+                    <h1 class="text-xl font-bold tracking-tight" style="">Profile</h1>
+                </div>
+                <div class="flex flex-col items-center mb-6">
+                    <div class="h-20 w-20 rounded-full bg-cover bg-center mb-3 ring-4 ring-primary/10"
+                        data-alt="Portrait of Alice Student"
+                        style="background-image: url(&quot;https://lh3.googleusercontent.com/aida-public/AB6AXuCkcv98J_6qGD7t-VqddLCYMILDlrzK6AKmcFAFZijgmQoy6GFBlTuESKfGNDh9mJMnMDBKRDEuCZBe8QJnNs85uBsvrz1LY3gROkLx5mMskEQhRJfHu8XLitpu2_2vXV3JxtK2d0p280rb_D7XqPYnHnB-nH6mYdfPwpQ6OgLwvAgVaEc99uwSs8r0oIDJL2CBkO5JrEqjz-pw3k_nUAqXphQJvfezlqXncllU7aw8bBEPek61muPCRlihYpS7HcmKChpHRbENzSg&quot;);">
+                    </div>
+                    <h2 class="text-lg font-bold" style="">Alice | Student</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400" style="">ID: 8934201</p>
+                </div>
+                <nav class="flex flex-col gap-2">
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors"
+                        href="{{ url_for('main.user_profile') }}" style="">
+                        <span class="material-symbols-outlined" style="">dashboard</span>
+                        <span class="" style="">Dashboard</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors"
+                        href="{{ url_for('requests.user_request_book') }}" style="">
+                        <span class="material-symbols-outlined" style="">book_online</span>
+                        <span class="" style="">Request Book</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg bg-primary/10 text-primary font-medium"
+                        href="{{ url_for('main.user_history') }}" style="">
+                        <span class="material-symbols-outlined" style="">history</span>
+                        <span class="" style="">History</span>
+                    </a>
+                </nav>
+            </div>
+            <div class="mt-auto p-6 border-t border-[#cfd7e7] dark:border-gray-700">
+                <button
+                    class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-700 transition-colors"
+                    style="">
+                    <span class="material-symbols-outlined text-[18px]" style="">logout</span>
+                    <span class="" style="">Log Out</span>
+                </button>
+            </div>
+        </div>
+        <!-- Main Content -->
+        <main class="flex-1 h-full overflow-y-auto bg-background-light dark:bg-background-dark">
+            <div class="max-w-4xl mx-auto px-6 py-12">
+                <!-- User History Header -->
+                <div class="mb-10">
+                    <h1 class="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight uppercase" style="">
+                        User History</h1>
+                    <p class="text-gray-500 dark:text-gray-400 mt-3 text-lg" style="">A complete log of your previous
+                        borrowings, requests, and reservations.</p>
+                </div>
+                <!-- History List -->
+                <div class="space-y-4">
+                    <!-- History Card 1 -->
+                    <div
+                        class="bg-white dark:bg-[#1a2235] p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white" style="">Design Systems for the
+                                Web</h3>
+                            <p class="text-gray-500 dark:text-gray-400 text-sm" style="">Alla Kholmatova</p>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span class="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500"
+                                style="">22 Oct 2023</span>
+                            <span
+                                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                style="">
+                                Returned
+                            </span>
+                        </div>
+                    </div>
+                    <!-- History Card 2 -->
+                    <div
+                        class="bg-white dark:bg-[#1a2235] p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white" style="">Quantum Computing: A
+                                Gentle Introduction</h3>
+                            <p class="text-gray-500 dark:text-gray-400 text-sm" style="">Eleanor Rieffel and Wolfgang
+                                Polak</p>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span class="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500"
+                                style="">15 Oct 2023</span>
+                            <span
+                                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                                style="">
+                                Procured
+                            </span>
+                        </div>
+                    </div>
+                    <!-- History Card 3 -->
+                    <div
+                        class="bg-white dark:bg-[#1a2235] p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white" style="">Thinking, Fast and Slow
+                            </h3>
+                            <p class="text-gray-500 dark:text-gray-400 text-sm" style="">Daniel Kahneman</p>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span class="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500"
+                                style="">08 Oct 2023</span>
+                            <span
+                                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                                style="">
+                                Expired
+                            </span>
+                        </div>
+                    </div>
+                    <!-- History Card 4 -->
+                    <div
+                        class="bg-white dark:bg-[#1a2235] p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white" style="">The Pragmatic
+                                Programmer</h3>
+                            <p class="text-gray-500 dark:text-gray-400 text-sm" style="">Andrew Hunt and David Thomas
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span class="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500"
+                                style="">01 Oct 2023</span>
+                            <span
+                                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                style="">
+                                Returned
+                            </span>
+                        </div>
+                    </div>
+                    <!-- History Card 5 -->
+                    <div
+                        class="bg-white dark:bg-[#1a2235] p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white" style="">Artificial
+                                Intelligence: A Modern Approach</h3>
+                            <p class="text-gray-500 dark:text-gray-400 text-sm" style="">Stuart Russell and Peter Norvig
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span class="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500"
+                                style="">24 Sep 2023</span>
+                            <span
+                                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                style="">
+                                Returned
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-8 flex justify-center">
+                    <button
+                        class="text-sm font-bold text-primary dark:text-white hover:underline flex items-center gap-2"
+                        style="">
+                        Load More Activity
+                        <span class="material-symbols-outlined text-[18px]" style="">expand_more</span>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+
+</html>

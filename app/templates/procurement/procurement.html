@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Book Requests - MCST Library</title>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#191a1d",
+                        "background-light": "#f7f7f7",
+                        "background-dark": "#18191a"
+                    },
+                    fontFamily: {
+                        display: "Manrope"
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.125rem",
+                        lg: "0.25rem",
+                        xl: "0.5rem",
+                        full: "0.75rem"
+                    }
+                }
+            }
+        };
+    </script>
+</head>
+
+<body class="bg-background-light dark:bg-background-dark text-[#0d121b] dark:text-white font-display overflow-hidden">
+    <div class="flex h-screen w-full flex-row">
+        <!-- Sidebar -->
+        <div
+            class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0">
+            <div class="p-6 flex-1 flex flex-col overflow-hidden">
+                <div class="flex items-center gap-3 mb-8 shrink-0">
+                    <div class="bg-primary/10 p-2 rounded-lg text-primary">
+                        <span class="material-symbols-outlined" style="">local_library</span>
+                    </div>
+                    <h1 class="text-xl font-bold tracking-tight" style="">MCST Library</h1>
+                </div>
+                <div class="flex flex-col items-center mb-6 shrink-0">
+                    <div class="h-20 w-20 rounded-full bg-cover bg-center mb-3 ring-4 ring-primary/10"
+                        data-alt="Portrait of Alice Student"
+                        style="background-image: url(&quot;https://lh3.googleusercontent.com/aida-public/AB6AXuCkcv98J_6qGD7t-VqddLCYMILDlrzK6AKmcFAFZijgmQoy6GFBlTuESKfGNDh9mJMnMDBKRDEuCZBe8QJnNs85uBsvrz1LY3gROkLx5mMskEQhRJfHu8XLitpu2_2vXV3JxtK2d0p280rb_D7XqPYnHnB-nH6mYdfPwpQ6OgLwvAgVaEc99uwSs8r0oIDJL2CBkO5JrEqjz-pw3k_nUAqXphQJvfezlqXncllU7aw8bBEPek61muPCRlihYpS7HcmKChpHRbENzSg&quot;);">
+                    </div>
+                    <h2 class="text-lg font-bold text-center" style="">{{ current_user.full_name }}</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400" style="">{{ current_user.role }}</p>
+                </div>
+                                <nav class="flex flex-col gap-1 overflow-y-auto pr-2 custom-scrollbar">
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.index') }}">
+                        <span class="material-symbols-outlined">home</span>
+                        <span class="text-sm">Home</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('cataloging.public_catalog') }}">
+                        <span class="material-symbols-outlined">menu_book</span>
+                        <span class="text-sm">Catalog</span>
+                    </a>
+                    <hr class="border-gray-200 dark:border-gray-700 my-1">
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.dashboard') }}">
+                        <span class="material-symbols-outlined">dashboard</span>
+                        <span class="text-sm">Dashboard</span>
+                    </a>
+                    <hr class="border-gray-200 dark:border-gray-700 my-1">
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('requests.list_requests') }}">
+                        <span class="material-symbols-outlined">book_online</span>
+                        <span class="text-sm">Book Requests</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('circulation.reservations_page') }}">
+                        <span class="material-symbols-outlined">event_available</span>
+                        <span class="text-sm">Reservation Management</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-bold transition-colors bg-primary/10 text-primary"
+                        href="{{ url_for('procurement.procurement_dashboard') }}">
+                        <span class="material-symbols-outlined">shopping_cart</span>
+                        <span class="text-sm">Procurement Management</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('cataloging.cataloging_page') }}">
+                        <span class="material-symbols-outlined">library_books</span>
+                        <span class="text-sm">Cataloging</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('circulation.circulation_page') }}">
+                        <span class="material-symbols-outlined">sync_alt</span>
+                        <span class="text-sm">Circulation Management</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('inventory.inventory_page') }}">
+                        <span class="material-symbols-outlined">inventory_2</span>
+                        <span class="text-sm">Inventory Monitoring</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('analytics.analytics_page') }}">
+                        <span class="material-symbols-outlined">analytics</span>
+                        <span class="text-sm">Reports & Analytics</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('auth.admin_users') }}">
+                        <span class="material-symbols-outlined">manage_accounts</span>
+                        <span class="text-sm leading-tight">User Management & Access Control</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('backup.backup_page') }}">
+                        <span class="material-symbols-outlined">settings_backup_restore</span>
+                        <span class="text-sm">Backup & Recovery</span>
+                    </a>
+                </nav>
+            </div>
+            <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-gray-800 transition-colors">
+                    <span class="material-symbols-outlined text-[18px]">logout</span>
+                    <span>Log Out</span>
+                </a>
+            </div>
+        </div>
+        <!-- Main Content -->
+        <main class="flex-1 h-full overflow-y-auto bg-background-light dark:bg-background-dark">
+            <div class="max-w-7xl mx-auto px-6 py-8">
+                <!-- Header -->
+                <div class="mb-8">
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white" style="">Procurement Management<div>
+                            <br></div>
+                    </h1>
+                    <p class="text-gray-500 dark:text-gray-400 mt-1" style=""><br></p>
+                </div>
+                <!-- Recent Book Requests Section -->
+                <section class="mb-8">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <!-- Request Card 1 -->
+                        <div
+                            class="bg-white dark:bg-[#1a2235] rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm flex flex-col">
+                            <div class="p-5 flex-1">
+                                <h3 class="text-lg font-bold text-gray-900 dark:text-white leading-tight mb-1" style="">
+                                    Introduction to Algorithms</h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mb-3" style="">Thomas H. Cormen, et
+                                    al.</p>
+                                <div class="mb-4">
+                                    <span
+                                        class="inline-block px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                                        style="">For Ordering</span>
+                                </div>
+                                <div class="">
+                                    <label
+                                        class="block text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-2"
+                                        style="">Update Status</label>
+                                    <select
+                                        class="w-full text-sm rounded-lg border-gray-200 dark:border-gray-700 dark:bg-[#111827] focus:ring-primary focus:border-primary transition-all">
+                                        <option selected="">For Ordering</option>
+                                        <option>Ordered</option>
+                                        <option>Procured</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Request Card 2 -->
+                        <div
+                            class="bg-white dark:bg-[#1a2235] rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm flex flex-col">
+                            <div class="p-5 flex-1">
+                                <h3 class="text-lg font-bold text-gray-900 dark:text-white leading-tight mb-1" style="">
+                                    Clean Code</h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mb-3" style="">Robert C. Martin</p>
+                                <div class="mb-4">
+                                    <span
+                                        class="inline-block px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                                        style="">Ordered</span>
+                                </div>
+                                <div class="">
+                                    <label
+                                        class="block text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-2"
+                                        style="">Update Status</label>
+                                    <select
+                                        class="w-full text-sm rounded-lg border-gray-200 dark:border-gray-700 dark:bg-[#111827] focus:ring-primary focus:border-primary transition-all">
+                                        <option>For Ordering</option>
+                                        <option selected="">Ordered</option>
+                                        <option>Procured</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Request Card 3 -->
+                        <div
+                            class="bg-white dark:bg-[#1a2235] rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm flex flex-col">
+                            <div class="p-5 flex-1">
+                                <h3 class="text-lg font-bold text-gray-900 dark:text-white leading-tight mb-1" style="">
+                                    The Pragmatic Programmer</h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mb-3" style="">Andrew Hunt &amp;
+                                    David Thomas</p>
+                                <div class="mb-4">
+                                    <span
+                                        class="inline-block px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                        style="">Procured</span>
+                                </div>
+                                <div class="">
+                                    <label
+                                        class="block text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-2"
+                                        style="">Update Status</label>
+                                    <select
+                                        class="w-full text-sm rounded-lg border-gray-200 dark:border-gray-700 dark:bg-[#111827] focus:ring-primary focus:border-primary transition-all">
+                                        <option>For Ordering</option>
+                                        <option>Ordered</option>
+                                        <option selected="">Procured</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cfd7e7;
+            border-radius: 10px;
+        }
+
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #374151;
+        }
+    </style>
+</body>
+
+</html>

@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Circulation Management | MCST Library</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,1" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#191a1d",
+                        "background-light": "#f7f7f7",
+                        "background-dark": "#18191a"
+                    },
+                    fontFamily: {
+                        display: "Manrope"
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        :root {
+            --primary: #191a1d;
+            --primary-light: #374151;
+            --primary-dark: #0f1012;
+            --secondary: #0ea5e9;
+            --bg-body: #f8fafc;
+            --bg-card: #ffffff;
+            --border-color: #e2e8f0;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --sidebar-width: 256px;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            --radius: 12px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Manrope', sans-serif;
+        }
+
+        h1, h2, h3, .font-outfit {
+            font-family: 'Manrope', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            display: flex;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Sidebar Styles */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cfd7e7;
+            border-radius: 10px;
+        }
+
+        /* Main Content Adjustments */
+        main {
+            flex: 1;
+            padding: 2rem 3rem;
+            max-width: calc(100vw - 256px);
+        }
+
+        .card {
+            background: white;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+            margin-bottom: 2rem;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .card:hover {
+            box-shadow: var(--shadow-md);
+        }
+
+        .card-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8fafc;
+        }
+
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 700;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th {
+            background: #f8fafc;
+            padding: 1rem 1.5rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        td {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.875rem;
+            color: var(--text-main);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: #f1f5f9;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-borrowed { background: #374151; color: #e5e7eb; }
+        .badge-returned { background: #dcfce7; color: #166534; }
+        .badge-danger { background: #fee2e2; color: #991b1b; }
+        .badge-warning { background: #fef3c7; color: #92400e; }
+
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .icon-box {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Micro-animations */
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-slide-up {
+            animation: slideUp 0.4s ease forwards;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0 h-screen sticky top-0">
+      <div class="p-6 flex-1 flex flex-col overflow-hidden">
+        
+        <!-- Logo / Title -->
+        <div class="flex items-center gap-3 mb-8 shrink-0">
+          <div class="bg-primary/10 p-2 rounded-lg text-primary">
+            <span class="material-symbols-outlined">local_library</span>
+          </div>
+          <h1 class="text-xl font-bold tracking-tight">MCST Library</h1>
+        </div>
+
+        <!-- User Profile -->
+        <div class="flex flex-col items-center mb-6 shrink-0">
+          <div class="h-20 w-20 rounded-full bg-cover bg-center mb-3 ring-4 ring-primary/10"
+            style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCkcv98J_6qGD7t-VqddLCYMILDlrzK6AKmcFAFZijgmQoy6GFBlTuESKfGNDh9mJMnMDBKRDEuCZBe8QJnNs85uBsvrz1LY3gROkLx5mMskEQhRJfHu8XLitpu2_2vXV3JxtK2d0p280rb_D7XqPYnHnB-nH6mYdfPwpQ6OgLwvAgVaEc99uwSs8r0oIDJL2CBkO5JrEqjz-pw3k_nUAqXphQJvfezlqXncllU7aw8bBEPek61muPCRlihYpS7HcmKChpHRbENzSg');">
+          </div>
+          <h2 class="text-lg font-bold text-center">{{ current_user.full_name }}</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">{{ current_user.role }}</p>
+        </div>
+
+        <!-- Navigation -->
+                        <nav class="flex flex-col gap-1 overflow-y-auto pr-2 custom-scrollbar">
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.index') }}">
+                        <span class="material-symbols-outlined">home</span>
+                        <span class="text-sm">Home</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('cataloging.public_catalog') }}">
+                        <span class="material-symbols-outlined">menu_book</span>
+                        <span class="text-sm">Catalog</span>
+                    </a>
+                    <hr class="border-gray-200 dark:border-gray-700 my-1">
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.dashboard') }}">
+                        <span class="material-symbols-outlined">dashboard</span>
+                        <span class="text-sm">Dashboard</span>
+                    </a>
+                    <hr class="border-gray-200 dark:border-gray-700 my-1">
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('requests.list_requests') }}">
+                        <span class="material-symbols-outlined">book_online</span>
+                        <span class="text-sm">Book Requests</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('circulation.reservations_page') }}">
+                        <span class="material-symbols-outlined">event_available</span>
+                        <span class="text-sm">Reservation Management</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('procurement.procurement_dashboard') }}">
+                        <span class="material-symbols-outlined">shopping_cart</span>
+                        <span class="text-sm">Procurement Management</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('cataloging.cataloging_page') }}">
+                        <span class="material-symbols-outlined">library_books</span>
+                        <span class="text-sm">Cataloging</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors bg-primary/10 text-primary" href="{{ url_for('circulation.circulation_page') }}">
+                        <span class="material-symbols-outlined">sync_alt</span>
+                        <span class="text-sm">Circulation Management</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('inventory.inventory_page') }}">
+                        <span class="material-symbols-outlined">inventory_2</span>
+                        <span class="text-sm">Inventory Monitoring</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('analytics.analytics_page') }}">
+                        <span class="material-symbols-outlined">analytics</span>
+                        <span class="text-sm">Reports & Analytics</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('auth.admin_users') }}">
+                        <span class="material-symbols-outlined">manage_accounts</span>
+                        <span class="text-sm leading-tight">User Management & Access Control</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('backup.backup_page') }}">
+                        <span class="material-symbols-outlined">settings_backup_restore</span>
+                        <span class="text-sm">Backup & Recovery</span>
+                    </a>
+                </nav>
+
+      </div>
+
+      <!-- Logout -->
+      <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
+        <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-gray-800 transition-colors">
+          <span class="material-symbols-outlined text-[18px]">logout</span>
+          <span>Log Out</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <main>
+        <!-- Header Section -->
+        <div class="mb-10 animate-slide-up">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Circulation Management</h1>
+            <p class="text-gray-500">Overview of loans, returns, and priority alerts.</p>
+        </div>
+
+        <!-- Quick Stats Row -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 animate-slide-up" style="animation-delay: 0.1s;">
+            <div class="stat-card">
+                <div class="icon-box bg-blue-100 text-blue-600">
+                    <span class="material-symbols-outlined">import_export</span>
+                </div>
+                <div class="stat-value">42</div>
+                <div class="stat-label">Total Active Loans</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon-box bg-red-100 text-red-600">
+                    <span class="material-symbols-outlined">alarm_on</span>
+                </div>
+                <div class="stat-value">05</div>
+                <div class="stat-label">Overdue Items</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon-box bg-amber-100 text-amber-600">
+                    <span class="material-symbols-outlined">event_note</span>
+                </div>
+                <div class="stat-value">08</div>
+                <div class="stat-label">Due in 48 Hours</div>
+            </div>
+        </div>
+
+        <!-- Recent Transactions -->
+        <div class="card animate-slide-up" style="animation-delay: 0.2s;">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <span class="material-symbols-outlined text-primary">history</span>
+                    Recent Transactions
+                </h3>
+                <button class="text-primary font-semibold text-sm hover:underline">View All History</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Borrower Name</th>
+                            <th>Type</th>
+                            <th>Book Title</th>
+                            <th>Action</th>
+                            <th>Date & Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="font-semibold">Juan Dela Cruz</td>
+                            <td>Student</td>
+                            <td class="text-gray-600 italic">Intro to Algorithms</td>
+                            <td><span class="badge badge-borrowed">Borrowed</span></td>
+                            <td class="text-gray-500">Apr 21, 10:32 AM</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">Maria Santos</td>
+                            <td>Faculty</td>
+                            <td class="text-gray-600 italic">Principles of Economics</td>
+                            <td><span class="badge badge-returned">Returned</span></td>
+                            <td class="text-gray-500">Apr 21, 09:50 AM</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">Ana Reyes</td>
+                            <td>Student</td>
+                            <td class="text-gray-600 italic">Filipino Literature</td>
+                            <td><span class="badge badge-borrowed">Borrowed</span></td>
+                            <td class="text-gray-500">Apr 20, 04:15 PM</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+            <!-- Overdue Books -->
+            <div class="card animate-slide-up" style="animation-delay: 0.3s;">
+                <div class="card-header border-b border-red-100 bg-red-50/30">
+                    <h3 class="card-title text-red-700">
+                        <span class="material-symbols-outlined">warning</span>
+                        Overdue Books
+                    </h3>
+                    <span class="px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded">Needs Attention</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Borrower Name</th>
+                                <th>Book Title</th>
+                                <th>Due Date</th>
+                                <th>Days Late</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="font-semibold">Pedro Cruz</td>
+                                <td class="text-gray-600 italic">Data Structures</td>
+                                <td>Apr 18</td>
+                                <td><span class="text-red-600 font-bold">3 days</span></td>
+                            </tr>
+                            <tr>
+                                <td class="font-semibold">Lisa Ramos</td>
+                                <td class="text-gray-600 italic">Rizal Works</td>
+                                <td>Apr 19</td>
+                                <td><span class="text-red-600 font-bold">2 days</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Due Soon -->
+            <div class="card animate-slide-up" style="animation-delay: 0.4s;">
+                <div class="card-header border-b border-amber-100 bg-amber-50/30">
+                    <h3 class="card-title text-amber-700">
+                        <span class="material-symbols-outlined">notification_important</span>
+                        Due Soon (Next 1–2 Days)
+                    </h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Borrower Name</th>
+                                <th>Book Title</th>
+                                <th>Due Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="font-semibold">Carla Gomez</td>
+                                <td class="text-gray-600 italic">Database Systems</td>
+                                <td class="font-medium">Apr 22</td>
+                            </tr>
+                            <tr>
+                                <td class="font-semibold">Mark Reyes</td>
+                                <td class="text-gray-600 italic">Physics Fundamentals</td>
+                                <td class="font-medium">Apr 22</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="p-4 bg-amber-50/30 border-t border-amber-100 italic text-xs text-amber-800">
+                    💡 Tip: Send automated reminders to these borrowers tonight.
+                </div>
+            </div>
+        </div>
+    </main>
+
+</body>
+</html>

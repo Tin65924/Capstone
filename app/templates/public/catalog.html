@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Library Resource Catalog Search{% endblock %}
+{% block content %}
+<main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+    <section class="mb-10">
+        <form method="GET" action="{{ url_for('cataloging.public_catalog') }}" class="flex flex-col gap-4">
+            <div class="flex flex-col md:flex-row gap-3">
+                <div class="relative min-w-[180px]">
+                    <select name="field"
+                        class="w-full flex items-center justify-between bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-4 py-3 rounded text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer">
+                        <option value="" {% if not search_field %}selected{% endif %}>All Fields</option>
+                        <option value="title" {% if search_field == 'title' %}selected{% endif %}>Title</option>
+                        <option value="author" {% if search_field == 'author' %}selected{% endif %}>Author</option>
+                        <option value="isbn" {% if search_field == 'isbn' %}selected{% endif %}>ISBN</option>
+                        <option value="category" {% if search_field == 'category' %}selected{% endif %}>Category</option>
+                    </select>
+                </div>
+                <div class="relative flex-grow">
+                    <span class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <span class="material-icons text-slate-400">search</span>
+                    </span>
+                    <input name="q" value="{{ search_query or '' }}"
+                        class="block w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-sm placeholder-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                        placeholder="Search by title, author, keyword, or ISBN..." type="text" />
+                </div>
+                <button type="submit"
+                    class="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded font-semibold text-sm transition-all flex items-center justify-center gap-2">
+                    Search Resources
+                </button>
+            </div>
+        </form>
+    </section>
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h2 class="text-lg font-bold text-slate-800 dark:text-white">Catalog Results</h2>
+            <p class="text-sm text-slate-500">
+                {% if search_query %}
+                    Showing {{ books|length }} result{{ 's' if books|length != 1 }} for <span class="italic">&quot;{{ search_query }}&quot;</span>
+                {% else %}
+                    Showing {{ books|length }} book{{ 's' if books|length != 1 }}
+                {% endif %}
+            </p>
+        </div>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {% if books %}
+            {% for book in books %}
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden flex flex-col hover:shadow-lg hover:border-primary/30 transition-all group">
+                <div class="p-5 flex-grow flex flex-col">
+                    <div class="mb-3">
+                        {% if book[9] == 'E-Book' %}
+                        <span class="inline-flex bg-primary/10 text-primary px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight">E-Book</span>
+                        {% elif book[11] == 'active' %}
+                        <span class="inline-flex bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                            In Library
+                        </span>
+                        {% else %}
+                        <span class="inline-flex bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                            {{ book[11] }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    <h3 class="text-primary font-bold text-base leading-tight mb-2 line-clamp-2">{{ book[1] }}</h3>
+                    <p class="text-slate-600 dark:text-slate-400 text-xs mb-4">{{ book[2] }}</p>
+                    <div class="mt-auto space-y-3">
+                        <div class="flex flex-col gap-1 text-[10px] text-slate-400 font-medium">
+                            {% if book[5] %}<span>Copyright: {{ book[5] }}</span>{% endif %}
+                            {% if book[8] %}<span>ISBN: {{ book[8] }}</span>{% endif %}
+                        </div>
+                        <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
+                            <a href="{{ url_for('cataloging.book_info', book_id=book[0]) }}" class="text-primary text-xs font-bold hover:underline">View Details</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="col-span-full flex flex-col items-center justify-center py-16 text-center">
+                <span class="material-symbols-outlined text-5xl text-slate-300 dark:text-slate-600 mb-4">search_off</span>
+                <h3 class="text-lg font-bold text-slate-700 dark:text-slate-300 mb-1">No books found</h3>
+                <p class="text-sm text-slate-500">Try adjusting your search terms or browse all available books.</p>
+            </div>
+        {% endif %}
+    </div>
+    <footer class="mt-12 py-8 border-t border-slate-200 dark:border-slate-800">
+        <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+            <p class="text-sm text-slate-500">Showing <span class="font-medium text-slate-900 dark:text-slate-100">{{ books|length }}</span> result{{ 's' if books|length != 1 }}</p>
+        </div>
+    </footer>
+</main>
+{% endblock %}

@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Public Library Home - New Arrivals{% endblock %}
+{% block content %}
+<section class="flex flex-col items-center justify-center py-16 px-4 bg-white dark:bg-[#151c2b] border-b border-[#e7ebf3] dark:border-gray-800">
+    <div class="max-w-[800px] w-full flex flex-col items-center text-center">
+        <h1 class="text-[#0d121b] dark:text-white tracking-tight text-4xl md:text-5xl font-extrabold leading-tight pb-4">
+            Discover Knowledge
+        </h1>
+        <p class="text-gray-500 dark:text-gray-400 text-lg font-normal leading-normal pb-8 max-w-2xl">
+            Access thousands of books across our academic network. Start your research journey here.
+        </p>
+        <form method="GET" action="{{ url_for('cataloging.public_catalog') }}" class="w-full">
+            <div class="w-full relative group">
+                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <span class="material-symbols-outlined text-gray-400">search</span>
+                </div>
+                <input name="q"
+                    class="block w-full rounded-xl border-0 py-4 pl-12 pr-36 text-gray-900 dark:text-white ring-1 ring-inset ring-gray-300 dark:ring-gray-700 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary bg-gray-50 dark:bg-gray-800 sm:text-lg sm:leading-6 shadow-sm transition-shadow"
+                    placeholder="Search by title, author, or ISBN..." type="text">
+                <div class="absolute inset-y-0 right-0 flex py-2 pr-2">
+                    <button type="submit"
+                        class="inline-flex items-center rounded-lg bg-primary px-4 py-1 text-sm font-semibold text-white shadow-sm hover:bg-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+                        Search
+                    </button>
+                </div>
+            </div>
+            <input type="hidden" name="field" id="searchField" value="">
+            <div class="flex gap-3 pt-6 flex-wrap justify-center" id="filterButtons">
+                <button type="button" data-field=""
+                    class="flex items-center gap-x-2 rounded-full bg-primary/10 dark:bg-primary/20 border border-primary/20 px-4 py-1.5 transition hover:bg-primary/20">
+                    <span class="material-symbols-outlined text-primary text-[18px]">check</span>
+                    <span class="text-primary text-sm font-bold">All</span>
+                </button>
+                <button type="button" data-field="title"
+                    class="flex items-center gap-x-2 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-4 py-1.5 transition">
+                    <span class="text-gray-600 dark:text-gray-300 text-sm font-medium">Title</span>
+                </button>
+                <button type="button" data-field="author"
+                    class="flex items-center gap-x-2 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-4 py-1.5 transition">
+                    <span class="text-gray-600 dark:text-gray-300 text-sm font-medium">Author</span>
+                </button>
+                <button type="button" data-field="isbn"
+                    class="flex items-center gap-x-2 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-4 py-1.5 transition">
+                    <span class="text-gray-600 dark:text-gray-300 text-sm font-medium">ISBN</span>
+                </button>
+            </div>
+        </form>
+        <script>
+        document.getElementById('filterButtons').addEventListener('click', function(e) {
+            var btn = e.target.closest('button');
+            if (!btn) return;
+            this.querySelectorAll('button').forEach(function(b) {
+                b.className = 'flex items-center gap-x-2 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-4 py-1.5 transition';
+                var icon = b.querySelector('.material-symbols-outlined');
+                if (icon) icon.remove();
+                var span = b.querySelector('span:not(.material-symbols-outlined)');
+                if (span) span.className = 'text-gray-600 dark:text-gray-300 text-sm font-medium';
+            });
+            btn.className = 'flex items-center gap-x-2 rounded-full bg-primary/10 dark:bg-primary/20 border border-primary/20 px-4 py-1.5 transition hover:bg-primary/20';
+            var check = document.createElement('span');
+            check.className = 'material-symbols-outlined text-primary text-[18px]';
+            check.textContent = 'check';
+            btn.insertBefore(check, btn.firstChild);
+            var span = btn.querySelector('span:not(.material-symbols-outlined)');
+            if (span) span.className = 'text-primary text-sm font-bold';
+            document.getElementById('searchField').value = btn.getAttribute('data-field');
+        });
+        </script>
+    </div>
+</section>
+<main class="flex-grow layout-container w-full max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div class="lg:col-span-12 flex flex-col gap-6">
+            <div class="flex items-center justify-between border-b border-[#e7ebf3] dark:border-gray-800 pb-4">
+                <h3 class="text-2xl font-bold text-[#0d121b] dark:text-white">New Arrivals</h3>
+                <a class="text-primary text-sm font-bold hover:underline flex items-center gap-1" href="{{ url_for('cataloging.public_catalog') }}">
+                    View full catalog <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                </a>
+            </div>
+            <div class="flex flex-col bg-white dark:bg-[#151c2b] rounded-xl border border-[#e7ebf3] dark:border-gray-800 divide-y divide-[#e7ebf3] dark:divide-gray-800 overflow-hidden shadow-sm">
+                {% if new_arrivals %}
+                    {% for book in new_arrivals %}
+                    <div class="group flex flex-col sm:flex-row sm:items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                        <div class="flex flex-col gap-0.5">
+                            <h4 class="text-lg font-bold text-[#0d121b] dark:text-white group-hover:text-primary transition-colors">{{ book[1] }}</h4>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">{{ book[2] }}</p>
+                        </div>
+                        <div class="mt-3 sm:mt-0">
+                            {% if book[9] == 'E-Book' %}
+                            <span class="inline-flex items-center rounded-md bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary ring-1 ring-inset ring-primary/20 uppercase tracking-wider">E-Book</span>
+                            {% elif book[11] == 'active' %}
+                            <span class="inline-flex items-center rounded-md bg-green-50 dark:bg-green-900/30 px-2.5 py-1 text-xs font-bold text-green-700 dark:text-green-400 ring-1 ring-inset ring-green-600/20 uppercase tracking-wider">Available</span>
+                            {% else %}
+                            <span class="inline-flex items-center rounded-md bg-yellow-50 dark:bg-yellow-900/30 px-2.5 py-1 text-xs font-bold text-yellow-800 dark:text-yellow-500 ring-1 ring-inset ring-yellow-600/20 uppercase tracking-wider">{{ book[11] }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="p-5 text-center text-gray-500 dark:text-gray-400">
+                        <p>No new arrivals at this time.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</main>
+{% endblock %}

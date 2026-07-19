@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Select Your Role{% endblock %}
+{% block content %}
+<main class="flex-grow flex items-center justify-center px-6 py-12">
+    <div class="w-full max-w-lg">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="mb-6 space-y-3">
+            {% for category, message in messages %}
+            <div class="flex items-start gap-3 p-4 rounded-lg border text-sm
+                {% if category == 'error' %}bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300
+                {% elif category == 'info' %}bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300
+                {% else %}bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300{% endif %}">
+                <span class="material-icons text-lg mt-0.5 flex-shrink-0">
+                    {% if category == 'error' %}error{% elif category == 'info' %}info{% else %}check_circle{% endif %}
+                </span>
+                <span>{{ message }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+        <div class="bg-white dark:bg-slate-900 shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden p-8 md:p-10">
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-primary/10 dark:bg-primary/20 rounded-xl mb-6">
+                    <span class="material-icons text-primary text-4xl">how_to_reg</span>
+                </div>
+                <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Complete Your Registration</h1>
+                <p class="mt-2 text-slate-500 dark:text-slate-400 font-medium">Select your role to continue</p>
+            </div>
+            <form method="POST" action="{{ url_for('auth.role_select') }}" class="space-y-6">
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">I am a...</label>
+                    <div class="grid grid-cols-2 gap-4">
+                        <label class="relative flex flex-col items-center gap-2 p-5 border-2 rounded-xl cursor-pointer transition-all duration-200
+                            border-slate-200 dark:border-slate-700 hover:border-primary/50 dark:hover:border-primary/50
+                            has-[:checked]:border-primary has-[:checked]:bg-primary/5 dark:has-[:checked]:bg-primary/10">
+                            <input type="radio" name="role" value="Student" class="sr-only peer" required>
+                            <span class="material-icons text-3xl text-slate-400 peer-checked:text-primary">school</span>
+                            <span class="text-sm font-semibold text-slate-700 dark:text-slate-300 peer-checked:text-primary">Student</span>
+                            <span class="text-xs text-slate-400 text-center">Auto-approved. Up to 3 books.</span>
+                        </label>
+                        <label class="relative flex flex-col items-center gap-2 p-5 border-2 rounded-xl cursor-pointer transition-all duration-200
+                            border-slate-200 dark:border-slate-700 hover:border-primary/50 dark:hover:border-primary/50
+                            has-[:checked]:border-primary has-[:checked]:bg-primary/5 dark:has-[:checked]:bg-primary/10">
+                            <input type="radio" name="role" value="Faculty" class="sr-only peer" required>
+                            <span class="material-icons text-3xl text-slate-400 peer-checked:text-primary">badge</span>
+                            <span class="text-sm font-semibold text-slate-700 dark:text-slate-300 peer-checked:text-primary">Faculty</span>
+                            <span class="text-xs text-slate-400 text-center">Requires librarian approval.</span>
+                        </label>
+                    </div>
+                </div>
+                <div>
+                    <label for="id_number" class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">ID Number</label>
+                    <input type="text" id="id_number" name="id_number" required
+                           class="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors text-sm"
+                           placeholder="e.g. 2024-8192">
+                </div>
+                <div>
+                    <label for="department" class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Program / Department</label>
+                    <input type="text" id="department" name="department"
+                           class="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors text-sm"
+                           placeholder="e.g. BSIT, BSBA, BSHM">
+                </div>
+                <button type="submit"
+                        class="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:opacity-90 transition-opacity">
+                    Continue
+                </button>
+            </form>
+        </div>
+    </div>
+</main>
+{% endblock %}

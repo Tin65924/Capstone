@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cataloging Module | MCST Library</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,1" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#191a1d",
+                        "background-light": "#f7f7f7",
+                        "background-dark": "#18191a"
+                    },
+                    fontFamily: {
+                        display: "Manrope"
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        :root {
+            --primary: #191a1d;
+            --primary-light: #374151;
+            --primary-dark: #0f1012;
+            --secondary: #0ea5e9;
+            --bg-body: #f8fafc;
+            --bg-card: #ffffff;
+            --border-color: #e2e8f0;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --sidebar-width: 256px;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            --radius: 12px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Manrope', sans-serif; }
+        h1, h2, h3, .font-outfit { font-family: 'Manrope', sans-serif; }
+        body {
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            display: flex;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cfd7e7; border-radius: 10px; }
+        main { flex: 1; padding: 2rem 3rem; max-width: calc(100vw - 256px); }
+        .card {
+            background: white;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 0.625rem 1.25rem; border-radius: 10px; font-weight: 600;
+            font-size: 0.875rem; transition: all 0.2s; gap: 0.5rem; cursor: pointer;
+            border: none; text-decoration: none;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); }
+        .btn-outline {
+            background: transparent; border: 1px solid var(--border-color);
+            color: var(--text-main);
+        }
+        .btn-outline:hover { background: #f8fafc; border-color: var(--primary); color: var(--primary); }
+        .btn-sm { padding: 0.375rem 0.75rem; font-size: 0.75rem; }
+        .table-container { overflow-x: auto; width: 100%; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th {
+            background: #f8fafc; padding: 1rem 1.25rem; font-size: 0.7rem;
+            font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+            color: var(--text-muted); border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+        }
+        td {
+            padding: 0.875rem 1.25rem; border-bottom: 1px solid var(--border-color);
+            font-size: 0.875rem; color: var(--text-main);
+        }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: #f1f5f9; }
+        .status-badge {
+            display: inline-flex; align-items: center;
+            padding: 0.25rem 0.75rem; border-radius: 9999px;
+            font-size: 0.75rem; font-weight: 600;
+        }
+        .status-active { background: #dcfce7; color: #166534; }
+        .status-archived { background: #f1f5f9; color: #475569; }
+        .search-input {
+            width: 100%; padding: 0.75rem 1.25rem; background: #f8fafc;
+            border: 1px solid var(--border-color); border-radius: 10px;
+            outline: none; transition: all 0.2s; font-size: 0.875rem;
+        }
+        .search-input:focus { border-color: var(--primary); background: white; box-shadow: 0 0 0 4px rgba(0,0,0,0.05); }
+        .pagination {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 1rem 1.5rem; background: #f8fafc; border-top: 1px solid var(--border-color);
+        }
+        .page-btn {
+            padding: 0.5rem 1rem; border: 1px solid var(--border-color);
+            background: white; border-radius: 8px; font-size: 0.875rem;
+            font-weight: 500; cursor: pointer; transition: all 0.2s;
+        }
+        .page-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+        .page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-in { animation: fadeIn 0.4s ease-out forwards; }
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px);
+            z-index: 1000; align-items: center; justify-content: center; padding: 1.5rem;
+        }
+        .modal {
+            background: white; border-radius: 20px; width: 100%;
+            max-width: 640px; overflow: hidden; box-shadow: var(--shadow-lg);
+            transform: scale(0.95); transition: transform 0.2s;
+            max-height: 90vh; overflow-y: auto;
+        }
+        .modal-show { display: flex; }
+        .modal-show .modal { transform: scale(1); }
+        .form-input {
+            width: 100%; padding: 0.625rem 0.875rem; border: 1px solid var(--border-color);
+            border-radius: 8px; font-size: 0.875rem; outline: none; transition: all 0.2s;
+        }
+        .form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(0,0,0,0.05); }
+        .form-label { display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.375rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .flash-msg {
+            padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem; font-weight: 500;
+            margin-bottom: 1rem;
+        }
+        .flash-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .flash-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0 h-screen sticky top-0">
+      <div class="p-6 flex-1 flex flex-col overflow-hidden">
+        <div class="flex items-center gap-3 mb-8 shrink-0">
+          <div class="bg-primary/10 p-2 rounded-lg text-primary">
+            <span class="material-symbols-outlined">local_library</span>
+          </div>
+          <h1 class="text-xl font-bold tracking-tight">MCST Library</h1>
+        </div>
+        <div class="flex flex-col items-center mb-6 shrink-0">
+          <div class="h-20 w-20 rounded-full bg-cover bg-center mb-3 ring-4 ring-primary/10"
+            style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCkcv98J_6qGD7t-VqddLCYMILDlrzK6AKmcFAFZijgmQoy6GFBlTuESKfGNDh9mJMnMDBKRDEuCZBe8QJnNs85uBsvrz1LY3gROkLx5mMskEQhRJfHu8XLitpu2_2vXV3JxtK2d0p280rb_D7XqPYnHnB-nH6mYdfPwpQ6OgLwvAgVaEc99uwSs8r0oIDJL2CBkO5JrEqjz-pw3k_nUAqXphQJvfezlqXncllU7aw8bBEPek61muPCRlihYpS7HcmKChpHRbENzSg');">
+          </div>
+          <h2 class="text-lg font-bold text-center">{{ current_user.full_name }}</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">{{ current_user.role }}</p>
+        </div>
+        <nav class="flex flex-col gap-1 overflow-y-auto pr-2 custom-scrollbar">
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.index') }}">
+                <span class="material-symbols-outlined">home</span><span class="text-sm">Home</span>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('cataloging.public_catalog') }}">
+                <span class="material-symbols-outlined">menu_book</span><span class="text-sm">Catalog</span>
+            </a>
+            <hr class="border-gray-200 dark:border-gray-700 my-1">
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.dashboard') }}">
+                <span class="material-symbols-outlined">dashboard</span><span class="text-sm">Dashboard</span>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('requests.list_requests') }}">
+                <span class="material-symbols-outlined">book_online</span><span class="text-sm">Book Requests</span>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('circulation.reservations_page') }}">
+                <span class="material-symbols-outlined">event_available</span><span class="text-sm">Reservation Management</span>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('procurement.procurement_dashboard') }}">
+                <span class="material-symbols-outlined">shopping_cart</span><span class="text-sm">Procurement Management</span>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors bg-primary/10 text-primary" href="{{ url_for('cataloging.cataloging_page') }}">
+                <span class="material-symbols-outlined">library_books</span><span class="text-sm">Cataloging</span>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('circulation.circulation_page') }}">
+                <span class="material-symbols-outlined">sync_alt</span><span class="text-sm">Circulation Management</span>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('inventory.inventory_page') }}">
+                <span class="material-symbols-outlined">inventory_2</span><span class="text-sm">Inventory Monitoring</span>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('analytics.analytics_page') }}">
+                <span class="material-symbols-outlined">analytics</span><span class="text-sm">Reports & Analytics</span>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('auth.admin_users') }}">
+                <span class="material-symbols-outlined">manage_accounts</span><span class="text-sm leading-tight">User Management & Access Control</span>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('backup.backup_page') }}">
+                <span class="material-symbols-outlined">settings_backup_restore</span><span class="text-sm">Backup & Recovery</span>
+            </a>
+        </nav>
+      </div>
+      <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
+        <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-gray-800 transition-colors">
+          <span class="material-symbols-outlined text-[18px]">logout</span><span>Log Out</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <main>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="flash-msg flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <div class="flex justify-between items-center mb-8 animate-in">
+            <div>
+                <h1 class="text-3xl font-bold">Cataloging Module</h1>
+                <p class="text-gray-500 mt-1">Manage and organize your library's information database.</p>
+            </div>
+            <div class="flex gap-3">
+                <button class="btn btn-primary" onclick="openModal('addBookModal')">
+                    <span class="material-symbols-outlined">add</span> Add New Book
+                </button>
+                <button class="btn btn-outline" onclick="openModal('bulkImportModal')">
+                    <span class="material-symbols-outlined">upload_file</span> Bulk Import
+                </button>
+            </div>
+        </div>
+
+        <!-- Search & Filter -->
+        <form method="GET" action="{{ url_for('cataloging.cataloging_page') }}" class="flex flex-wrap gap-4 mb-8 animate-in" style="animation-delay: 0.1s;">
+            <div class="flex-1 min-w-[200px] flex gap-2">
+                <select name="field" class="form-input w-auto" onchange="this.form.submit()">
+                    <option value="" {% if not search_field %}selected{% endif %}>All Fields</option>
+                    <option value="title" {% if search_field == 'title' %}selected{% endif %}>Title</option>
+                    <option value="author" {% if search_field == 'author' %}selected{% endif %}>Author</option>
+                    <option value="isbn" {% if search_field == 'isbn' %}selected{% endif %}>ISBN</option>
+                    <option value="accession" {% if search_field == 'accession' %}selected{% endif %}>Accession No.</option>
+                </select>
+                <input type="text" name="q" value="{{ search_query }}" class="search-input" placeholder="Search catalog..." onkeydown="if(event.key==='Enter')this.form.submit()">
+                <button type="submit" class="btn btn-primary btn-sm"><span class="material-symbols-outlined">search</span></button>
+                {% if search_query %}
+                <a href="{{ url_for('cataloging.cataloging_page') }}" class="btn btn-outline btn-sm">Clear</a>
+                {% endif %}
+            </div>
+        </form>
+
+        <!-- Table Card -->
+        <div class="card animate-in" style="animation-delay: 0.2s;">
+            <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <div class="text-sm font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                    <span class="material-symbols-outlined text-gray-400">format_list_bulleted</span>
+                    Library Collection
+                    <span class="text-gray-400 font-medium normal-case">({{ total }} book{{ 's' if total != 1 }})</span>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Author</th>
+                            <th>Year</th>
+                            <th>ISBN</th>
+                            <th>Material Type</th>
+                            <th>LOC Class.</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if books %}
+                        {% for book in books %}
+                        <tr>
+                            <td class="font-bold max-w-[250px] truncate" title="{{ book[1] }}">{{ book[1] }}</td>
+                            <td>{{ book[2] }}</td>
+                            <td>{{ book[5] if book[5] else '—' }}</td>
+                            <td class="font-mono text-xs">{{ book[8] if book[8] else '—' }}</td>
+                            <td>{{ book[9] }}</td>
+                            <td class="text-gray-500 italic text-xs">{{ book[7] if book[7] else '—' }}</td>
+                            <td>
+                                <span class="status-badge {{ 'status-active' if book[11] == 'active' else 'status-archived' }}">
+                                    {{ book[11] }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="flex gap-1">
+                                    <button class="p-1.5 rounded-lg border border-gray-100 hover:bg-white hover:border-primary hover:text-primary transition-all" data-book='{{ book|tojson }}' onclick="editBook(this)" title="Edit">
+                                        <span class="material-symbols-outlined text-[18px]">edit</span>
+                                    </button>
+                                    <form method="POST" action="{{ url_for('cataloging.toggle_book_status', book_id=book[0]) }}" style="display:inline" onsubmit="return confirm('{{ 'Archive' if book[11] == 'active' else 'Activate' }} this book?')">
+                                        <button type="submit" class="p-1.5 rounded-lg border border-gray-100 hover:bg-white hover:border-amber-500 hover:text-amber-500 transition-all" title="{{ 'Archive' if book[11] == 'active' else 'Activate' }}">
+                                            <span class="material-symbols-outlined text-[18px]">{{ 'archive' if book[11] == 'active' else 'unarchive' }}</span>
+                                        </button>
+                                    </form>
+                                    <button class="p-1.5 rounded-lg border border-gray-100 hover:bg-white hover:border-primary hover:text-primary transition-all" onclick="openAddAccession({{ book[0] }})" title="Add Accession">
+                                        <span class="material-symbols-outlined text-[18px]">add_box</span>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center py-16 text-gray-400">
+                                <div class="flex flex-col items-center gap-2">
+                                    <span class="material-symbols-outlined text-4xl">search_off</span>
+                                    <span class="font-medium">No books found</span>
+                                    <span class="text-sm">Try adjusting your search or add a new book.</span>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pagination">
+                <div class="text-sm text-gray-500 font-medium">
+                    {% if books %}
+                    {% set end = page * per_page if page * per_page <= total else total %}
+                    Showing {{ ((page-1) * per_page) + 1 }}–{{ end }} of {{ total }} books
+                    {% endif %}
+                </div>
+                <div class="flex gap-2">
+                    {% if page > 1 %}
+                    <a href="{{ url_for('cataloging.cataloging_page', q=search_query, field=search_field, page=page-1) }}" class="page-btn">
+                        <span class="material-symbols-outlined text-sm">chevron_left</span> Previous
+                    </a>
+                    {% else %}
+                    <button class="page-btn" disabled><span class="material-symbols-outlined text-sm">chevron_left</span> Previous</button>
+                    {% endif %}
+                    {% if page * per_page < total %}
+                    <a href="{{ url_for('cataloging.cataloging_page', q=search_query, field=search_field, page=page+1) }}" class="page-btn">
+                        Next <span class="material-symbols-outlined text-sm">chevron_right</span>
+                    </a>
+                    {% else %}
+                    <button class="page-btn" disabled>Next <span class="material-symbols-outlined text-sm">chevron_right</span></button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add Book Modal -->
+    <div id="addBookModal" class="modal-overlay" onclick="closeModal(event, 'addBookModal')">
+        <div class="modal">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+                <h2 class="text-xl font-bold">Add New Book</h2>
+                <button onclick="closeModal(null, 'addBookModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <form method="POST" action="{{ url_for('cataloging.add_book') }}" class="p-6 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="col-span-2">
+                        <label class="form-label">Title *</label>
+                        <input type="text" name="title" required class="form-input" placeholder="Book title">
+                    </div>
+                    <div>
+                        <label class="form-label">Author *</label>
+                        <input type="text" name="author" required class="form-input" placeholder="Author name">
+                    </div>
+                    <div>
+                        <label class="form-label">Material Type</label>
+                        <select name="material_type" class="form-input">
+                            <option value="Book">Book</option>
+                            <option value="E-Book">E-Book</option>
+                            <option value="Reference">Reference</option>
+                            <option value="Periodical">Periodical</option>
+                            <option value="Thesis">Thesis</option>
+                            <option value="Multimedia">Multimedia</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Edition</label>
+                        <input type="text" name="edition" class="form-input" placeholder="e.g. 3rd">
+                    </div>
+                    <div>
+                        <label class="form-label">Publisher</label>
+                        <input type="text" name="publisher" class="form-input" placeholder="Publisher name">
+                    </div>
+                    <div>
+                        <label class="form-label">Year Published</label>
+                        <input type="number" name="year_published" class="form-input" placeholder="e.g. 2024" min="1000" max="9999">
+                    </div>
+                    <div>
+                        <label class="form-label">ISBN</label>
+                        <input type="text" name="isbn" class="form-input" placeholder="ISBN number">
+                    </div>
+                    <div>
+                        <label class="form-label">Call Number / LOC Class.</label>
+                        <input type="text" name="call_number" class="form-input" placeholder="e.g. QA76.73">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="form-label">Subject Classification</label>
+                        <input type="text" name="subject_classification" class="form-input" placeholder="e.g. Computer Science">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="form-label">Description</label>
+                        <textarea name="description" rows="3" class="form-input" placeholder="Brief description..."></textarea>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                    <button type="button" class="btn btn-outline" onclick="closeModal(null, 'addBookModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Book</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Book Modal -->
+    <div id="editBookModal" class="modal-overlay" onclick="closeModal(event, 'editBookModal')">
+        <div class="modal">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+                <h2 class="text-xl font-bold">Edit Book</h2>
+                <button onclick="closeModal(null, 'editBookModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <form method="POST" id="editBookForm" class="p-6 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="col-span-2">
+                        <label class="form-label">Title *</label>
+                        <input type="text" name="title" id="edit_title" required class="form-input">
+                    </div>
+                    <div>
+                        <label class="form-label">Author *</label>
+                        <input type="text" name="author" id="edit_author" required class="form-input">
+                    </div>
+                    <div>
+                        <label class="form-label">Material Type</label>
+                        <select name="material_type" id="edit_material_type" class="form-input">
+                            <option value="Book">Book</option>
+                            <option value="E-Book">E-Book</option>
+                            <option value="Reference">Reference</option>
+                            <option value="Periodical">Periodical</option>
+                            <option value="Thesis">Thesis</option>
+                            <option value="Multimedia">Multimedia</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Edition</label>
+                        <input type="text" name="edition" id="edit_edition" class="form-input">
+                    </div>
+                    <div>
+                        <label class="form-label">Publisher</label>
+                        <input type="text" name="publisher" id="edit_publisher" class="form-input">
+                    </div>
+                    <div>
+                        <label class="form-label">Year Published</label>
+                        <input type="number" name="year_published" id="edit_year" class="form-input" min="1000" max="9999">
+                    </div>
+                    <div>
+                        <label class="form-label">ISBN</label>
+                        <input type="text" name="isbn" id="edit_isbn" class="form-input">
+                    </div>
+                    <div>
+                        <label class="form-label">Call Number / LOC Class.</label>
+                        <input type="text" name="call_number" id="edit_call_number" class="form-input">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="form-label">Subject Classification</label>
+                        <input type="text" name="subject_classification" id="edit_subject" class="form-input">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="form-label">Description</label>
+                        <textarea name="description" id="edit_description" rows="3" class="form-input"></textarea>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                    <button type="button" class="btn btn-outline" onclick="closeModal(null, 'editBookModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Accession Modal -->
+    <div id="addAccessionModal" class="modal-overlay" onclick="closeModal(event, 'addAccessionModal')">
+        <div class="modal" style="max-width: 480px;">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+                <h2 class="text-xl font-bold">Add Accession Copy</h2>
+                <button onclick="closeModal(null, 'addAccessionModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <form method="POST" id="addAccessionForm" class="p-6 space-y-4">
+                <div>
+                    <label class="form-label">Accession Number *</label>
+                    <input type="text" name="accession_number" required class="form-input" placeholder="e.g. 2025-0001">
+                </div>
+                <div>
+                    <label class="form-label">Copy Number</label>
+                    <input type="number" name="copy_number" class="form-input" placeholder="Auto if blank">
+                </div>
+                <div>
+                    <label class="form-label">Source</label>
+                    <select name="source" class="form-input">
+                        <option value="">— Select —</option>
+                        <option value="purchase">Purchase</option>
+                        <option value="donation">Donation</option>
+                    </select>
+                </div>
+                <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                    <button type="button" class="btn btn-outline" onclick="closeModal(null, 'addAccessionModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Accession</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bulk Import Modal -->
+    <div id="bulkImportModal" class="modal-overlay" onclick="closeModal(event, 'bulkImportModal')">
+        <div class="modal" style="max-width: 540px;">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+                <h2 class="text-xl font-bold">Bulk Import Books</h2>
+                <button onclick="closeModal(null, 'bulkImportModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <form method="POST" action="{{ url_for('cataloging.bulk_import') }}" enctype="multipart/form-data" class="p-6 space-y-4">
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+                    <strong>CSV Format:</strong> Upload a CSV file with headers like
+                    <code class="bg-blue-100 px-1 rounded">title</code>,
+                    <code class="bg-blue-100 px-1 rounded">author</code>,
+                    <code class="bg-blue-100 px-1 rounded">isbn</code>,
+                    <code class="bg-blue-100 px-1 rounded">year</code>,
+                    <code class="bg-blue-100 px-1 rounded">publisher</code>,
+                    <code class="bg-blue-100 px-1 rounded">edition</code>, etc.
+                    Headers are detected automatically &mdash; order does not matter.
+                    Only <strong>title</strong> and <strong>author</strong> are required.
+                </div>
+                <div>
+                    <label class="form-label">Select CSV File</label>
+                    <input type="file" name="file" accept=".csv" required
+                           class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-gray-800 cursor-pointer">
+                </div>
+                <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                    <button type="button" class="btn btn-outline" onclick="closeModal(null, 'bulkImportModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><span class="material-symbols-outlined">upload</span> Import</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Utility: open/close modals
+        function openModal(id) { document.getElementById(id).classList.add('modal-show'); }
+        function closeModal(e, id) {
+            if (!e || e.target.classList.contains('modal-overlay') || e.target.closest('button')) {
+                document.getElementById(id).classList.remove('modal-show');
+            }
+        }
+
+        // Edit Book (data stored in data-book attribute via |tojson)
+        function editBook(btn) {
+            var b = JSON.parse(btn.getAttribute('data-book'));
+            document.getElementById('editBookForm').action = '/cataloging/' + b[0] + '/edit';
+            document.getElementById('edit_title').value = b[1];
+            document.getElementById('edit_author').value = b[2];
+            document.getElementById('edit_edition').value = b[3] || '';
+            document.getElementById('edit_publisher').value = b[4] || '';
+            document.getElementById('edit_year').value = b[5] || '';
+            document.getElementById('edit_subject').value = b[6] || '';
+            document.getElementById('edit_call_number').value = b[7] || '';
+            document.getElementById('edit_isbn').value = b[8] || '';
+            document.getElementById('edit_material_type').value = b[9] || 'Book';
+            document.getElementById('edit_description').value = b[10] || '';
+            openModal('editBookModal');
+        }
+
+        // Add Accession
+        function openAddAccession(bookId) {
+            document.getElementById('addAccessionForm').action = '/cataloging/' + bookId + '/accession/add';
+            document.getElementById('addAccessionForm').querySelector('[name="accession_number"]').value = '';
+            document.getElementById('addAccessionForm').querySelector('[name="copy_number"]').value = '';
+            document.getElementById('addAccessionForm').querySelector('[name="source"]').value = '';
+            openModal('addAccessionModal');
+        }
+
+        // Close modals on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.modal-show').forEach(function(el) {
+                    el.classList.remove('modal-show');
+                });
+            }
+        });
+    </script>
+</body>
+</html>

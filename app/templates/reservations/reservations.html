@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reservation Management | MCST Library</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,1" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#191a1d",
+                        "background-light": "#f7f7f7",
+                        "background-dark": "#18191a"
+                    },
+                    fontFamily: {
+                        display: "Manrope"
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        :root {
+            --primary: #191a1d;
+            --primary-light: #374151;
+            --primary-dark: #0f1012;
+            --secondary: #0ea5e9;
+            --bg-body: #f8fafc;
+            --bg-card: #ffffff;
+            --border-color: #e2e8f0;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --radius: 12px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Manrope', sans-serif;
+        }
+
+        h1, h2, h3, .font-outfit {
+            font-family: 'Manrope', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            display: flex;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Sidebar Styles */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cfd7e7;
+            border-radius: 10px;
+        }
+
+        /* Main Content */
+        main {
+            flex: 1;
+            padding: 2rem 3rem;
+            max-width: calc(100vw - 256px);
+        }
+
+        .card {
+            background: white;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th {
+            background: #f8fafc;
+            padding: 1rem 1.5rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        td {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.875rem;
+            color: var(--text-main);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .badge {
+            padding: 0.25rem 0.625rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .btn-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            transition: all 0.2s;
+        }
+
+        .btn-icon:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .animate-in {
+            animation: slideIn 0.3s ease-out forwards;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0 h-screen sticky top-0">
+      <div class="p-6 flex-1 flex flex-col overflow-hidden">
+        
+        <!-- Logo / Title -->
+        <div class="flex items-center gap-3 mb-8 shrink-0">
+          <div class="bg-primary/10 p-2 rounded-lg text-primary">
+            <span class="material-symbols-outlined">local_library</span>
+          </div>
+          <h1 class="text-xl font-bold tracking-tight">MCST Library</h1>
+        </div>
+
+        <!-- User Profile -->
+        <div class="flex flex-col items-center mb-6 shrink-0">
+          <div class="h-20 w-20 rounded-full bg-cover bg-center mb-3 ring-4 ring-primary/10"
+            style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCkcv98J_6qGD7t-VqddLCYMILDlrzK6AKmcFAFZijgmQoy6GFBlTuESKfGNDh9mJMnMDBKRDEuCZBe8QJnNs85uBsvrz1LY3gROkLx5mMskEQhRJfHu8XLitpu2_2vXV3JxtK2d0p280rb_D7XqPYnHnB-nH6mYdfPwpQ6OgLwvAgVaEc99uwSs8r0oIDJL2CBkO5JrEqjz-pw3k_nUAqXphQJvfezlqXncllU7aw8bBEPek61muPCRlihYpS7HcmKChpHRbENzSg');">
+          </div>
+          <h2 class="text-lg font-bold text-center">{{ current_user.full_name }}</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">{{ current_user.role }}</p>
+        </div>
+
+        <!-- Navigation -->
+                        <nav class="flex flex-col gap-1 overflow-y-auto pr-2 custom-scrollbar">
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.index') }}">
+                        <span class="material-symbols-outlined">home</span>
+                        <span class="text-sm">Home</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('cataloging.public_catalog') }}">
+                        <span class="material-symbols-outlined">menu_book</span>
+                        <span class="text-sm">Catalog</span>
+                    </a>
+                    <hr class="border-gray-200 dark:border-gray-700 my-1">
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.dashboard') }}">
+                        <span class="material-symbols-outlined">dashboard</span>
+                        <span class="text-sm">Dashboard</span>
+                    </a>
+                    <hr class="border-gray-200 dark:border-gray-700 my-1">
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('requests.list_requests') }}">
+                        <span class="material-symbols-outlined">book_online</span>
+                        <span class="text-sm">Book Requests</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors bg-primary/10 text-primary" href="{{ url_for('circulation.reservations_page') }}">
+                        <span class="material-symbols-outlined">event_available</span>
+                        <span class="text-sm">Reservation Management</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('procurement.procurement_dashboard') }}">
+                        <span class="material-symbols-outlined">shopping_cart</span>
+                        <span class="text-sm">Procurement Management</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('cataloging.cataloging_page') }}">
+                        <span class="material-symbols-outlined">library_books</span>
+                        <span class="text-sm">Cataloging</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('circulation.circulation_page') }}">
+                        <span class="material-symbols-outlined">sync_alt</span>
+                        <span class="text-sm">Circulation Management</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('inventory.inventory_page') }}">
+                        <span class="material-symbols-outlined">inventory_2</span>
+                        <span class="text-sm">Inventory Monitoring</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('analytics.analytics_page') }}">
+                        <span class="material-symbols-outlined">analytics</span>
+                        <span class="text-sm">Reports & Analytics</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('auth.admin_users') }}">
+                        <span class="material-symbols-outlined">manage_accounts</span>
+                        <span class="text-sm leading-tight">User Management & Access Control</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('backup.backup_page') }}">
+                        <span class="material-symbols-outlined">settings_backup_restore</span>
+                        <span class="text-sm">Backup & Recovery</span>
+                    </a>
+                </nav>
+
+      </div>
+
+      <!-- Logout -->
+      <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
+        <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-gray-800 transition-colors">
+          <span class="material-symbols-outlined text-[18px]">logout</span>
+          <span>Log Out</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <main>
+        <div class="mb-8 animate-in">
+            <h1 class="text-3xl font-bold font-outfit">Reservation Management</h1>
+            <p class="text-gray-500 mt-1">Manage book reservations and pickup queues.</p>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 animate-in" style="animation-delay: 0.1s;">
+            <div class="card p-4 flex items-center gap-4">
+                <div class="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center"><span class="material-symbols-outlined">calendar_month</span></div>
+                <div><div class="text-xs text-gray-400 font-bold uppercase tracking-wider">Active Reservations</div><div class="text-xl font-bold">24</div></div>
+            </div>
+            <div class="card p-4 flex items-center gap-4">
+                <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><span class="material-symbols-outlined">check_circle</span></div>
+                <div><div class="text-xs text-gray-400 font-bold uppercase tracking-wider">Ready for Pickup</div><div class="text-xl font-bold">12</div></div>
+            </div>
+            <div class="card p-4 flex items-center gap-4">
+                <div class="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center"><span class="material-symbols-outlined">hourglass_top</span></div>
+                <div><div class="text-xs text-gray-400 font-bold uppercase tracking-wider">Pending Release</div><div class="text-xl font-bold">08</div></div>
+            </div>
+        </div>
+
+        <!-- Reservation Table -->
+        <div class="card animate-in" style="animation-delay: 0.2s;">
+            <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/20">
+                <h3 class="font-bold text-xs uppercase tracking-wider text-gray-400">Reservation Tracking</h3>
+                <button class="bg-primary text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-primary-dark transition-all">Export Report</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Book Title</th>
+                            <th>Author</th>
+                            <th class="text-center">Users Reserved</th>
+                            <th class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="font-bold text-gray-900 font-outfit">Introduction to Algorithms</td>
+                            <td class="text-gray-500">Thomas H. Cormen, et al.</td>
+                            <td class="text-center">
+                                <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 font-bold text-sm">5</span>
+                            </td>
+                            <td class="text-right">
+                                <button class="text-primary font-bold text-xs hover:underline flex items-center gap-1 ml-auto">
+                                    Details <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="font-bold text-gray-900 font-outfit">Design Systems</td>
+                            <td class="text-gray-500">Alla Kholmatova</td>
+                            <td class="text-center">
+                                <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 font-bold text-sm">3</span>
+                            </td>
+                            <td class="text-right">
+                                <button class="text-primary font-bold text-xs hover:underline flex items-center gap-1 ml-auto">
+                                    Details <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="font-bold text-gray-900 font-outfit">Clean Code</td>
+                            <td class="text-gray-500">Robert C. Martin</td>
+                            <td class="text-center">
+                                <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 font-bold text-sm">2</span>
+                            </td>
+                            <td class="text-right">
+                                <button class="text-primary font-bold text-xs hover:underline flex items-center gap-1 ml-auto">
+                                    Details <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="font-bold text-gray-900 font-outfit">The Pragmatic Programmer</td>
+                            <td class="text-gray-500">Andrew Hunt & David Thomas</td>
+                            <td class="text-center">
+                                <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 font-bold text-sm">1</span>
+                            </td>
+                            <td class="text-right">
+                                <button class="text-primary font-bold text-xs hover:underline flex items-center gap-1 ml-auto">
+                                    Details <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+</body>
+</html>

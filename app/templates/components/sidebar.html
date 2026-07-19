@@ -1,0 +1,28 @@
+<aside class="w-64 bg-white dark:bg-[#151c2b] border-r border-[#e7ebf3] dark:border-gray-800 min-h-screen flex-shrink-0">
+    <nav class="p-4 space-y-1">
+        <a href="{{ url_for('main.dashboard') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm rounded-lg {% if request.endpoint == 'main.dashboard' %}bg-primary/10 text-primary font-semibold{% else %}text-[#0d121b] dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}">
+            <span class="material-symbols-outlined text-xl">dashboard</span> Dashboard
+        </a>
+        <a href="{{ url_for('requests.list_requests') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm rounded-lg {% if request.endpoint and 'requests' in request.endpoint %}bg-primary/10 text-primary font-semibold{% else %}text-[#0d121b] dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}">
+            <span class="material-symbols-outlined text-xl">request_page</span> Requests
+        </a>
+        <a href="{{ url_for('procurement.procurement_dashboard') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm rounded-lg {% if request.endpoint and 'procurement' in request.endpoint %}bg-primary/10 text-primary font-semibold{% else %}text-[#0d121b] dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}">
+            <span class="material-symbols-outlined text-xl">inventory_2</span> Procurement
+        </a>
+        <a href="{{ url_for('cataloging.cataloging_page') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm rounded-lg {% if request.endpoint and 'cataloging' in request.endpoint %}bg-primary/10 text-primary font-semibold{% else %}text-[#0d121b] dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}">
+            <span class="material-symbols-outlined text-xl">menu_book</span> Cataloging
+        </a>
+        <a href="{{ url_for('circulation.circulation_page') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm rounded-lg {% if request.endpoint and 'circulation' in request.endpoint %}bg-primary/10 text-primary font-semibold{% else %}text-[#0d121b] dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}">
+            <span class="material-symbols-outlined text-xl">sync_alt</span> Circulation
+        </a>
+        <a href="{{ url_for('inventory.inventory_page') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm rounded-lg {% if request.endpoint and 'inventory' in request.endpoint %}bg-primary/10 text-primary font-semibold{% else %}text-[#0d121b] dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}">
+            <span class="material-symbols-outlined text-xl">fact_check</span> Inventory
+        </a>
+        <a href="{{ url_for('analytics.analytics_page') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm rounded-lg {% if request.endpoint and 'analytics' in request.endpoint %}bg-primary/10 text-primary font-semibold{% else %}text-[#0d121b] dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}">
+            <span class="material-symbols-outlined text-xl">insights</span> Analytics
+        </a>
+        <a href="{{ url_for('backup.backup_page') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm rounded-lg {% if request.endpoint and 'backup' in request.endpoint %}bg-primary/10 text-primary font-semibold{% else %}text-[#0d121b] dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800{% endif %}">
+            <span class="material-symbols-outlined text-xl">backup</span> Backup
+        </a>
+    </nav>
+</aside>

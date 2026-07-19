@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Book Requests - MCST Library</title>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#191a1d",
+                        "background-light": "#f7f7f7",
+                        "background-dark": "#18191a"
+                    },
+                    fontFamily: {
+                        display: "Manrope"
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.125rem",
+                        lg: "0.25rem",
+                        xl: "0.5rem",
+                        full: "0.75rem"
+                    }
+                }
+            }
+        };
+    </script>
+</head>
+
+<body class="bg-background-light dark:bg-background-dark text-[#0d121b] dark:text-white font-display overflow-hidden">
+    <div class="flex h-screen w-full flex-row">
+        <!-- Sidebar -->
+        <div
+            class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0">
+            <div class="p-6 flex-1 flex flex-col overflow-hidden">
+                <div class="flex items-center gap-3 mb-8 shrink-0">
+                    <div class="bg-primary/10 p-2 rounded-lg text-primary">
+                        <span class="material-symbols-outlined" style="">local_library</span>
+                    </div>
+                    <h1 class="text-xl font-bold tracking-tight" style="">MCST Library</h1>
+                </div>
+                <div class="flex flex-col items-center mb-6 shrink-0">
+                    <div class="h-20 w-20 rounded-full bg-cover bg-center mb-3 ring-4 ring-primary/10"
+                        data-alt="Portrait of Alice Student"
+                        style="background-image: url(&quot;https://lh3.googleusercontent.com/aida-public/AB6AXuCkcv98J_6qGD7t-VqddLCYMILDlrzK6AKmcFAFZijgmQoy6GFBlTuESKfGNDh9mJMnMDBKRDEuCZBe8QJnNs85uBsvrz1LY3gROkLx5mMskEQhRJfHu8XLitpu2_2vXV3JxtK2d0p280rb_D7XqPYnHnB-nH6mYdfPwpQ6OgLwvAgVaEc99uwSs8r0oIDJL2CBkO5JrEqjz-pw3k_nUAqXphQJvfezlqXncllU7aw8bBEPek61muPCRlihYpS7HcmKChpHRbENzSg&quot;);">
+                    </div>
+                    <h2 class="text-lg font-bold text-center" style="">{{ current_user.full_name }}</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400" style="">{{ current_user.role }}</p>
+                </div>
+                                <nav class="flex flex-col gap-1 overflow-y-auto pr-2 custom-scrollbar">
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.index') }}">
+                        <span class="material-symbols-outlined">home</span>
+                        <span class="text-sm">Home</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('cataloging.public_catalog') }}">
+                        <span class="material-symbols-outlined">menu_book</span>
+                        <span class="text-sm">Catalog</span>
+                    </a>
+                    <hr class="border-gray-200 dark:border-gray-700 my-1">
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.dashboard') }}">
+                        <span class="material-symbols-outlined">dashboard</span>
+                        <span class="text-sm">Dashboard</span>
+                    </a>
+                    {% if current_user.role in ('Student', 'Faculty') %}
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.user_profile') }}">
+                        <span class="material-symbols-outlined">person</span>
+                        <span class="text-sm">My Profile</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.user_history') }}">
+                        <span class="material-symbols-outlined">history</span>
+                        <span class="text-sm">My History</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('requests.user_request_book') }}">
+                        <span class="material-symbols-outlined">add_box</span>
+                        <span class="text-sm">Request Book</span>
+                    </a>
+                    {% endif %}
+                    <hr class="border-gray-200 dark:border-gray-700 my-1">
+                    {% if current_user.role in ('Librarian', 'Admin') %}
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-bold transition-colors bg-primary/10 text-primary" href="{{ url_for('requests.list_requests') }}">
+                        <span class="material-symbols-outlined">book_online</span>
+                        <span class="text-sm">Book Requests</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('circulation.reservations_page') }}">
+                        <span class="material-symbols-outlined">event_available</span>
+                        <span class="text-sm">Reservation Management</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('procurement.procurement_dashboard') }}">
+                        <span class="material-symbols-outlined">shopping_cart</span>
+                        <span class="text-sm">Procurement Management</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('cataloging.cataloging_page') }}">
+                        <span class="material-symbols-outlined">library_books</span>
+                        <span class="text-sm">Cataloging</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('circulation.circulation_page') }}">
+                        <span class="material-symbols-outlined">sync_alt</span>
+                        <span class="text-sm">Circulation Management</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('inventory.inventory_page') }}">
+                        <span class="material-symbols-outlined">inventory_2</span>
+                        <span class="text-sm">Inventory Monitoring</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('analytics.analytics_page') }}">
+                        <span class="material-symbols-outlined">analytics</span>
+                        <span class="text-sm">Reports & Analytics</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('auth.admin_users') }}">
+                        <span class="material-symbols-outlined">manage_accounts</span>
+                        <span class="text-sm leading-tight">User Management & Access Control</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('backup.backup_page') }}">
+                        <span class="material-symbols-outlined">settings_backup_restore</span>
+                        <span class="text-sm">Backup & Recovery</span>
+                    </a>
+                </nav>
+            </div>
+                    {% endif %}
+            <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-gray-800 transition-colors">
+                    <span class="material-symbols-outlined text-[18px]">logout</span>
+                    <span>Log Out</span>
+                </a>
+            </div>
+        </div>
+        <!-- Main Content -->
+        <main class="flex-1 h-full overflow-y-auto bg-background-light dark:bg-background-dark">
+            <div class="max-w-7xl mx-auto px-6 py-8">
+                <!-- Header -->
+                <div class="mb-8">
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white" style="">Book Requests</h1>
+                    <p class="text-gray-500 dark:text-gray-400 mt-1" style=""><br></p>
+                </div>
+                <!-- Recent Book Requests Section -->
+                <section class="mb-8">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <!-- Request Card 1 -->
+                        <div
+                            class="bg-white dark:bg-[#1a2235] rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm flex flex-col">
+                            <div class="p-5 flex-1">
+                                <h3 class="text-lg font-bold text-gray-900 dark:text-white leading-tight mb-1" style="">
+                                    Introduction to Algorithms</h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" style="">Thomas H. Cormen, et
+                                    al.</p>
+                                <div
+                                    class="flex items-center gap-4 py-3 border-t border-gray-50 dark:border-gray-800 flex-wrap">
+                                    <div class="w-full mb-1"><span
+                                            class="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500"
+                                            style="">Demands:</span></div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="material-symbols-outlined text-gray-400 text-sm"
+                                            style="">school</span>
+                                        <span class="text-xs font-bold text-gray-600 dark:text-gray-300"
+                                            style="">Student: 1</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="material-symbols-outlined text-gray-400 text-sm"
+                                            style="">badge</span>
+                                        <span class="text-xs font-bold text-gray-600 dark:text-gray-300"
+                                            style="">Faculty: 2</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div
+                                class="p-4 bg-gray-50/50 dark:bg-gray-800/30 border-t border-gray-50 dark:border-gray-800 flex flex-col gap-2">
+                                <button
+                                    class="w-full py-2 text-xs font-bold text-primary dark:text-white border border-gray-200 dark:border-gray-600 rounded hover:bg-white dark:hover:bg-gray-700 transition-colors"
+                                    style="">View Details</button>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <button
+                                        class="py-2 text-xs font-bold bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                                        style="">Approve</button>
+                                    <button
+                                        class="py-2 text-xs font-bold bg-white dark:bg-transparent border border-red-200 dark:border-red-900/50 text-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                        style="">Reject</button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Request Card 2 -->
+                        <div
+                            class="bg-white dark:bg-[#1a2235] rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm flex flex-col">
+                            <div class="p-5 flex-1">
+                                <h3 class="text-lg font-bold text-gray-900 dark:text-white leading-tight mb-1" style="">
+                                    Clean Code</h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" style="">Robert C. Martin</p>
+                                <div
+                                    class="flex items-center gap-4 py-3 border-t border-gray-50 dark:border-gray-800 flex-wrap">
+                                    <div class="w-full mb-1"><span
+                                            class="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500"
+                                            style="">Demands:</span></div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="material-symbols-outlined text-gray-400 text-sm"
+                                            style="">school</span>
+                                        <span class="text-xs font-bold text-gray-600 dark:text-gray-300"
+                                            style="">Student: 5</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="material-symbols-outlined text-gray-400 text-sm"
+                                            style="">badge</span>
+                                        <span class="text-xs font-bold text-gray-600 dark:text-gray-300"
+                                            style="">Faculty: 0</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div
+                                class="p-4 bg-gray-50/50 dark:bg-gray-800/30 border-t border-gray-50 dark:border-gray-800 flex flex-col gap-2">
+                                <button
+                                    class="w-full py-2 text-xs font-bold text-primary dark:text-white border border-gray-200 dark:border-gray-600 rounded hover:bg-white dark:hover:bg-gray-700 transition-colors"
+                                    style="">View Details</button>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <button
+                                        class="py-2 text-xs font-bold bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                                        style="">Approve</button>
+                                    <button
+                                        class="py-2 text-xs font-bold bg-white dark:bg-transparent border border-red-200 dark:border-red-900/50 text-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                        style="">Reject</button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Request Card 3 -->
+                        <div
+                            class="bg-white dark:bg-[#1a2235] rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm flex flex-col">
+                            <div class="p-5 flex-1">
+                                <h3 class="text-lg font-bold text-gray-900 dark:text-white leading-tight mb-1" style="">
+                                    The Pragmatic Programmer</h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" style="">Andrew Hunt &amp;
+                                    David Thomas</p>
+                                <div
+                                    class="flex items-center gap-4 py-3 border-t border-gray-50 dark:border-gray-800 flex-wrap">
+                                    <div class="w-full mb-1"><span
+                                            class="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500"
+                                            style="">Demands:</span></div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="material-symbols-outlined text-gray-400 text-sm"
+                                            style="">school</span>
+                                        <span class="text-xs font-bold text-gray-600 dark:text-gray-300"
+                                            style="">Student: 2</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="material-symbols-outlined text-gray-400 text-sm"
+                                            style="">badge</span>
+                                        <span class="text-xs font-bold text-gray-600 dark:text-gray-300"
+                                            style="">Faculty: 1</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div
+                                class="p-4 bg-gray-50/50 dark:bg-gray-800/30 border-t border-gray-50 dark:border-gray-800 flex flex-col gap-2">
+                                <button
+                                    class="w-full py-2 text-xs font-bold text-primary dark:text-white border border-gray-200 dark:border-gray-600 rounded hover:bg-white dark:hover:bg-gray-700 transition-colors"
+                                    style="">View Details</button>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <button
+                                        class="py-2 text-xs font-bold bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                                        style="">Approve</button>
+                                    <button
+                                        class="py-2 text-xs font-bold bg-white dark:bg-transparent border border-red-200 dark:border-red-900/50 text-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                        style="">Reject</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cfd7e7;
+            border-radius: 10px;
+        }
+
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #374151;
+        }
+    </style>
+</body>
+
+</html>

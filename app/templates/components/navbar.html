@@ -1,0 +1,20 @@
+<header class="sticky top-0 z-50 flex items-center justify-between border-b border-solid border-b-[#e7ebf3] dark:border-gray-800 bg-white dark:bg-[#151c2b] px-10 py-3 shadow-sm">
+    <div class="flex items-center gap-4 text-[#0d121b] dark:text-white">
+        <div class="size-8 flex items-center justify-center text-primary">
+            <span class="material-symbols-outlined" style="font-size: 32px;">local_library</span>
+        </div>
+        <h2 class="text-[#0d121b] dark:text-white text-xl font-bold leading-tight tracking-[-0.015em]">MCST Library</h2>
+    </div>
+    <div class="flex items-center gap-8">
+        <nav class="hidden md:flex items-center gap-9">
+            <a class="text-[#0d121b] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none {% if request.endpoint == 'main.index' %}text-primary font-bold border-b-2 border-primary pb-1{% endif %}" href="{{ url_for('main.index') }}">Home</a>
+            <a class="text-[#0d121b] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none {% if request.endpoint == 'cataloging.public_catalog' %}text-primary font-bold border-b-2 border-primary pb-1{% endif %}" href="{{ url_for('cataloging.public_catalog') }}">Catalog</a>
+            {% if current_user.is_authenticated %}
+            <a class="text-[#0d121b] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none" href="{{ url_for('main.dashboard') }}">Dashboard</a>
+            <a class="text-[#0d121b] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none" href="{{ url_for('auth.logout') }}">Logout</a>
+            {% else %}
+            <a class="text-[#0d121b] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none {% if request.endpoint == 'auth.login' %}text-primary font-bold border-b-2 border-primary pb-1{% endif %}" href="{{ url_for('auth.login') }}">Login</a>
+            {% endif %}
+        </nav>
+    </div>
+</header>

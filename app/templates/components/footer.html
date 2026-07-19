@@ -1,0 +1,9 @@
+<footer class="bg-white dark:bg-[#151c2b] border-t border-[#e7ebf3] dark:border-gray-800 py-6 px-10">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+        <p class="text-sm text-gray-500 dark:text-gray-400">&copy; {{ now().year if now is defined else "2026" }} MCST Library. All rights reserved.</p>
+        <div class="flex items-center gap-6">
+            <a href="{{ url_for('main.index') }}" class="text-sm text-gray-500 dark:text-gray-400 hover:text-primary transition-colors">Home</a>
+            <a href="{{ url_for('cataloging.public_catalog') }}" class="text-sm text-gray-500 dark:text-gray-400 hover:text-primary transition-colors">Catalog</a>
+        </div>
+    </div>
+</footer>

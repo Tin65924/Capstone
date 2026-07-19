@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics & Reporting | MCST Library</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,1" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#191a1d",
+                        "background-light": "#f7f7f7",
+                        "background-dark": "#18191a"
+                    },
+                    fontFamily: {
+                        display: "Manrope"
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        :root {
+            --primary: #191a1d;
+            --primary-light: #374151;
+            --primary-dark: #0f1012;
+            --secondary: #0ea5e9;
+            --bg-body: #f8fafc;
+            --bg-card: #ffffff;
+            --border-color: #e2e8f0;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --sidebar-width: 256px;
+            --radius: 12px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Manrope', sans-serif;
+        }
+
+        h1,
+        h2,
+        h3,
+        .font-outfit {
+            font-family: 'Manrope', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            display: flex;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Sidebar Styles */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cfd7e7;
+            border-radius: 10px;
+        }
+
+        /* Main Content Adjustments */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .top-bar {
+            height: 72px;
+            background: white;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 2rem;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        /* Dashboard Workspace */
+        .workspace-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            background: #f1f5f9;
+        }
+
+        /* KPI Library Panel */
+        .kpi-panel {
+            width: 280px;
+            background: white;
+            border-right: 1px solid var(--border-color);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            overflow-y: auto;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }
+
+        .kpi-panel.collapsed {
+            width: 0;
+            padding: 0;
+            overflow: hidden;
+            border-right: none;
+        }
+
+        .kpi-item {
+            background: var(--bg-body);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1rem;
+            cursor: grab;
+            user-select: none;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .kpi-item:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: white;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+
+        /* Dashboard Grid */
+        .dashboard-grid {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-auto-rows: min-content;
+            gap: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        /* KPI Cards */
+        .kpi-card {
+            background: white;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            animation: fadeIn 0.3s ease-out;
+            position: relative;
+        }
+
+        .kpi-card-header {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: default;
+        }
+
+        .drag-handle {
+            cursor: grab;
+            color: var(--text-muted);
+            opacity: 0.5;
+        }
+
+        .drag-handle:hover {
+            opacity: 1;
+        }
+
+        .kpi-card-body {
+            padding: 1.5rem;
+            flex: 1;
+        }
+
+        /* Chart-like Visuals */
+        .progress-bar-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .bar-row {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .bar-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-muted);
+        }
+
+        .bar-container {
+            height: 10px;
+            background: #f1f5f9;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            background: var(--primary);
+            border-radius: 5px;
+        }
+
+        .utilization-ring {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: conic-gradient(var(--primary) 68%, #f1f5f9 0);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .utilization-ring::after {
+            content: '';
+            width: 90px;
+            height: 90px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+        }
+
+        .utilization-value {
+            position: relative;
+            z-index: 1;
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--text-main);
+        }
+
+        /* Drop Zone Highlighting */
+        .drop-zone-active {
+            border: 2px dashed var(--primary) !important;
+            background: rgba(99, 102, 241, 0.05) !important;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.98);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Main Navigation Sidebar -->
+    <div
+        class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0 h-screen sticky top-0">
+        <div class="p-6 flex-1 flex flex-col overflow-hidden">
+
+            <!-- Logo / Title -->
+            <div class="flex items-center gap-3 mb-8 shrink-0">
+                <div class="bg-primary/10 p-2 rounded-lg text-primary">
+                    <span class="material-symbols-outlined">local_library</span>
+                </div>
+                <h1 class="text-xl font-bold tracking-tight">MCST Library</h1>
+            </div>
+
+            <!-- User Profile -->
+            <div class="flex flex-col items-center mb-6 shrink-0">
+                <div class="h-20 w-20 rounded-full bg-cover bg-center mb-3 ring-4 ring-primary/10"
+                    style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCkcv98J_6qGD7t-VqddLCYMILDlrzK6AKmcFAFZijgmQoy6GFBlTuESKfGNDh9mJMnMDBKRDEuCZBe8QJnNs85uBsvrz1LY3gROkLx5mMskEQhRJfHu8XLitpu2_2vXV3JxtK2d0p280rb_D7XqPYnHnB-nH6mYdfPwpQ6OgLwvAgVaEc99uwSs8r0oIDJL2CBkO5JrEqjz-pw3k_nUAqXphQJvfezlqXncllU7aw8bBEPek61muPCRlihYpS7HcmKChpHRbENzSg');">
+                </div>
+                <h2 class="text-lg font-bold text-center">{{ current_user.full_name }}</h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400">{{ current_user.role }}</p>
+            </div>
+
+            <!-- Navigation -->
+                            <nav class="flex flex-col gap-1 overflow-y-auto pr-2 custom-scrollbar">
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.index') }}">
+                        <span class="material-symbols-outlined">home</span>
+                        <span class="text-sm">Home</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('cataloging.public_catalog') }}">
+                        <span class="material-symbols-outlined">menu_book</span>
+                        <span class="text-sm">Catalog</span>
+                    </a>
+                    <hr class="border-gray-200 dark:border-gray-700 my-1">
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.dashboard') }}">
+                        <span class="material-symbols-outlined">dashboard</span>
+                        <span class="text-sm">Dashboard</span>
+                    </a>
+                    <hr class="border-gray-200 dark:border-gray-700 my-1">
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('requests.list_requests') }}">
+                        <span class="material-symbols-outlined">book_online</span>
+                        <span class="text-sm">Book Requests</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('circulation.reservations_page') }}">
+                        <span class="material-symbols-outlined">event_available</span>
+                        <span class="text-sm">Reservation Management</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('procurement.procurement_dashboard') }}">
+                        <span class="material-symbols-outlined">shopping_cart</span>
+                        <span class="text-sm">Procurement Management</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('cataloging.cataloging_page') }}">
+                        <span class="material-symbols-outlined">library_books</span>
+                        <span class="text-sm">Cataloging</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('circulation.circulation_page') }}">
+                        <span class="material-symbols-outlined">sync_alt</span>
+                        <span class="text-sm">Circulation Management</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('inventory.inventory_page') }}">
+                        <span class="material-symbols-outlined">inventory_2</span>
+                        <span class="text-sm">Inventory Monitoring</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors bg-primary/10 text-primary" href="{{ url_for('analytics.analytics_page') }}">
+                        <span class="material-symbols-outlined">analytics</span>
+                        <span class="text-sm">Reports & Analytics</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('auth.admin_users') }}">
+                        <span class="material-symbols-outlined">manage_accounts</span>
+                        <span class="text-sm leading-tight">User Management & Access Control</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('backup.backup_page') }}">
+                        <span class="material-symbols-outlined">settings_backup_restore</span>
+                        <span class="text-sm">Backup & Recovery</span>
+                    </a>
+                </nav>
+
+        </div>
+
+        <!-- Logout -->
+        <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
+            <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-gray-800 transition-colors">
+                <span class="material-symbols-outlined text-[18px]">logout</span>
+                <span>Log Out</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <main>
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <div class="flex items-center gap-4">
+                <span class="material-symbols-outlined text-primary">analytics</span>
+                <h2 class="text-xl font-bold font-outfit">Reporting Dashboard</h2>
+                <div class="flex gap-2 ml-4">
+                    <select
+                        class="bg-gray-100 border-none text-xs font-bold rounded-lg px-3 py-1.5 outline-none focus:ring-0">
+                        <option>2nd Semester 2024</option>
+                        <option>1st Semester 2024</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <button
+                    class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all">
+                    <span class="material-symbols-outlined text-lg">download</span>
+                    Export ▼
+                </button>
+                <div class="w-[1px] h-6 bg-gray-200 mx-1"></div>
+                <button id="toggle-library"
+                    class="bg-primary text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-primary-dark transition-all flex items-center gap-2">
+                    <span class="material-symbols-outlined text-lg">add</span>
+                    Add KPI
+                </button>
+            </div>
+        </div>
+
+        <!-- Workspace Wrapper -->
+        <div class="workspace-container">
+            <!-- KPI Library Sidebar -->
+            <div class="kpi-panel" id="library-panel">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-xs font-black uppercase text-gray-400 tracking-widest">KPI Library</h3>
+                </div>
+
+                <div class="kpi-item" draggable="true" data-type="borrowing-trends" data-name="Borrowing Trends">
+                    <span class="material-symbols-outlined text-indigo-500">show_chart</span>
+                    Borrowing Trends
+                </div>
+                <div class="kpi-item" draggable="true" data-type="resource-utilization" data-name="Resource Utilization">
+                    <span class="material-symbols-outlined text-emerald-500">pie_chart</span>
+                    Resource Utilization
+                </div>
+                <div class="kpi-item" draggable="true" data-type="program-usage" data-name="Program-based Usage">
+                    <span class="material-symbols-outlined text-amber-500">stacked_bar_chart</span>
+                    Program-based Usage
+                </div>
+                <div class="kpi-item" draggable="true" data-type="top-titles" data-name="Most Borrowed Titles">
+                    <span class="material-symbols-outlined text-rose-500">format_list_numbered</span>
+                    Most Borrowed Titles
+                </div>
+            </div>
+
+            <!-- Dashboard Grid -->
+            <div class="dashboard-grid" id="drop-zone">
+                <div class="kpi-card" draggable="true">
+                    <div class="kpi-card-header">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-indigo-500 text-lg cursor-grab">⠿</span>
+                            <span class="text-sm font-bold">Borrowing Trends</span>
+                        </div>
+                        <button class="remove-kpi text-gray-400 hover:text-red-500 transition-colors">
+                            <span class="material-symbols-outlined text-lg">close</span>
+                        </button>
+                    </div>
+                    <div class="kpi-card-body">
+                        <div class="flex items-end justify-between mb-2">
+                            <div>
+                                <div class="text-2xl font-bold text-indigo-600">2,840</div>
+                                <div class="text-[10px] text-emerald-500 font-bold flex items-center">
+                                    <span class="material-symbols-outlined text-xs">trending_up</span> 12.5% increase
+                                </div>
+                            </div>
+                            <div class="text-right text-[10px] text-gray-400 font-bold uppercase">Total Borrows</div>
+                        </div>
+                        <div class="h-32 w-full mt-2">
+                            <svg viewBox="0 0 100 40" class="w-full h-full overflow-visible">
+                                <defs>
+                                    <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stop-color="#191a1d" stop-opacity="0.2" />
+                                        <stop offset="100%" stop-color="#191a1d" stop-opacity="0" />
+                                    </linearGradient>
+                                </defs>
+                                <path d="M0,35 Q10,32 20,20 T40,15 T60,25 T80,10 T100,5 V40 H0 Z"
+                                    fill="url(#trendGradient)" />
+                                <path d="M0,35 Q10,32 20,20 T40,15 T60,25 T80,10 T100,5" fill="none" stroke="#191a1d"
+                                    stroke-width="2" stroke-linecap="round" />
+                                <circle cx="100" cy="5" r="2" fill="#191a1d" />
+                            </svg>
+                        </div>
+                        <div
+                            class="flex justify-between text-[10px] font-bold text-gray-400 mt-2 uppercase tracking-tighter">
+                            <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="kpi-card" draggable="true">
+                    <div class="kpi-card-header">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-rose-500 text-lg cursor-grab">⠿</span>
+                            <span class="text-sm font-bold">Most Borrowed Titles</span>
+                        </div>
+                        <button class="remove-kpi text-gray-400 hover:text-red-500 transition-colors">
+                            <span class="material-symbols-outlined text-lg">close</span>
+                        </button>
+                    </div>
+                    <div class="kpi-card-body">
+                        <div class="space-y-3">
+                            <div class="flex items-center gap-3">
+                                <div
+                                    class="w-8 h-10 bg-indigo-50 rounded flex items-center justify-center text-xs font-bold text-indigo-400">
+                                    1</div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="text-xs font-bold truncate">Intro. to Algorithms</div>
+                                    <div class="text-[10px] text-gray-400 font-medium">Cormen et al.</div>
+                                </div>
+                                <div class="text-xs font-black text-gray-600">142</div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div
+                                    class="w-8 h-10 bg-emerald-50 rounded flex items-center justify-center text-xs font-bold text-emerald-400">
+                                    2</div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="text-xs font-bold truncate">Clean Code</div>
+                                    <div class="text-[10px] text-gray-400 font-medium">Robert C. Martin</div>
+                                </div>
+                                <div class="text-xs font-black text-gray-600">128</div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div
+                                    class="w-8 h-10 bg-amber-50 rounded flex items-center justify-center text-xs font-bold text-amber-400">
+                                    3</div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="text-xs font-bold truncate">Filipino Literature</div>
+                                    <div class="text-[10px] text-gray-400 font-medium">Dr. J. Cruz</div>
+                                </div>
+                                <div class="text-xs font-black text-gray-600">95</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let draggedCard = null;
+
+        /**
+         * Toggles the visibility of the KPI library sidebar.
+         */
+        function toggleLibrary() {
+            const panel = document.getElementById('library-panel');
+            panel.classList.toggle('collapsed');
+        }
+
+        /**
+         * Handles the start of a drag operation on a KPI item from the library.
+         */
+        function handleDragStart(event) {
+            const kpiItem = event.currentTarget;
+            event.dataTransfer.setData('kpi-type', kpiItem.getAttribute('data-type'));
+            event.dataTransfer.setData('kpi-name', kpiItem.getAttribute('data-name') || kpiItem.innerText.trim());
+            event.dataTransfer.setData('source', 'library');
+            kpiItem.style.opacity = '0.5';
+        }
+
+        /**
+         * Handles the start of a drag operation on an existing KPI card.
+         */
+        function handleCardDragStart(event) {
+            draggedCard = event.currentTarget;
+            event.dataTransfer.setData('source', 'workspace');
+            event.dataTransfer.effectAllowed = 'move';
+
+            // Add a preview style to the dragged card
+            // We use a timeout so the drag image is created from the original style
+            setTimeout(() => {
+                draggedCard.classList.add('opacity-40', 'border-dashed', 'border-primary', 'shadow-none');
+            }, 0);
+        }
+
+        /**
+         * Handles the end of a drag operation.
+         */
+        function handleDragEnd(event) {
+            const card = event.currentTarget;
+            card.style.opacity = '1';
+
+            // Reset all potential drag-related classes
+            card.classList.remove('opacity-40', 'opacity-0', 'opacity-50', 'border-dashed', 'border-primary', 'shadow-none');
+
+            if (draggedCard) {
+                draggedCard.classList.remove('opacity-40', 'opacity-0', 'opacity-50', 'border-dashed', 'border-primary', 'shadow-none');
+                draggedCard = null;
+            }
+
+            const dropZone = document.getElementById('drop-zone');
+            dropZone.classList.remove('drop-zone-active');
+        }
+
+        /**
+         * Allows dropping and provides visual feedback.
+         */
+        function handleDragOver(event) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+
+            const dropZone = document.getElementById('drop-zone');
+            if (!dropZone.classList.contains('drop-zone-active')) {
+                dropZone.classList.add('drop-zone-active');
+            }
+        }
+
+        /**
+         * Handles the dragenter event on cards to perform reordering.
+         */
+        function handleCardDragEnter(event) {
+            const targetCard = event.currentTarget;
+
+            // Only reorder if we are dragging an existing card and entering a different one
+            if (draggedCard && targetCard !== draggedCard) {
+                const dropZone = document.getElementById('drop-zone');
+                const cards = [...dropZone.querySelectorAll('.kpi-card')];
+                const draggedIndex = cards.indexOf(draggedCard);
+                const targetIndex = cards.indexOf(targetCard);
+
+                if (draggedIndex < targetIndex) {
+                    // Moving forward/down: insert after the target
+                    dropZone.insertBefore(draggedCard, targetCard.nextElementSibling);
+                } else {
+                    // Moving backward/up: insert before the target
+                    dropZone.insertBefore(draggedCard, targetCard);
+                }
+            }
+        }
+
+        /**
+         * Visual feedback when a draggable enters the drop zone.
+         */
+        function handleDragEnter(event) {
+            event.preventDefault();
+            const dropZone = document.getElementById('drop-zone');
+            dropZone.classList.add('drop-zone-active');
+        }
+
+        /**
+         * Visual feedback when a draggable leaves the drop zone.
+         */
+        function handleDragLeave(event) {
+            const dropZone = document.getElementById('drop-zone');
+            // Check if we are really leaving the zone and not just moving over a child
+            if (event.relatedTarget === null || !dropZone.contains(event.relatedTarget)) {
+                dropZone.classList.remove('drop-zone-active');
+            }
+        }
+
+        /**
+         * Handles the drop event.
+         */
+        function handleDrop(event) {
+            event.preventDefault();
+            const dropZone = document.getElementById('drop-zone');
+            dropZone.classList.remove('drop-zone-active');
+
+            const source = event.dataTransfer.getData('source');
+
+            if (source === 'library') {
+                const kpiType = event.dataTransfer.getData('kpi-type');
+                const kpiName = event.dataTransfer.getData('kpi-name');
+                if (kpiType) {
+                    createNewKPICard(kpiType, kpiName);
+                }
+            }
+        }
+
+        /**
+         * Creates and appends a new KPI card to the dashboard.
+         */
+        function createNewKPICard(type, name) {
+            const dropZone = document.getElementById('drop-zone');
+            const card = document.createElement('div');
+            card.className = 'kpi-card';
+            card.draggable = true;
+
+            card.innerHTML = getKPICardTemplate(type, name);
+            attachCardEvents(card);
+            dropZone.appendChild(card);
+        }
+
+        /**
+         * Helper to attach all necessary events to a KPI card.
+         */
+        function attachCardEvents(card) {
+            card.addEventListener('dragstart', handleCardDragStart);
+            card.addEventListener('dragend', handleDragEnd);
+            card.addEventListener('dragenter', handleCardDragEnter);
+        }
+
+        /**
+         * Returns the HTML template for a KPI card based on its type.
+         */
+        function getKPICardTemplate(type, name) {
+            const header = `
+                <div class="kpi-card-header">
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary text-lg cursor-grab">⠿</span>
+                        <span class="text-sm font-bold">${name}</span>
+                    </div>
+                    <button class="remove-kpi text-gray-400 hover:text-red-500 transition-colors">
+                        <span class="material-symbols-outlined text-lg">close</span>
+                    </button>
+                </div>
+            `;
+
+            if (type === 'borrowing-trends') {
+                return `
+                    ${header}
+                    <div class="kpi-card-body">
+                        <div class="flex items-end justify-between mb-2">
+                            <div>
+                                <div class="text-2xl font-bold text-indigo-600">2,840</div>
+                                <div class="text-[10px] text-emerald-500 font-bold flex items-center">
+                                    <span class="material-symbols-outlined text-xs">trending_up</span> 12.5% increase
+                                </div>
+                            </div>
+                            <div class="text-right text-[10px] text-gray-400 font-bold uppercase">Total Borrows</div>
+                        </div>
+                        <div class="h-32 w-full mt-2">
+                            <svg viewBox="0 0 100 40" class="w-full h-full overflow-visible">
+                                <defs>
+                                    <linearGradient id="grad-${Math.random()}" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stop-color="#191a1d" stop-opacity="0.2"/>
+                                        <stop offset="100%" stop-color="#191a1d" stop-opacity="0"/>
+                                    </linearGradient>
+                                </defs>
+                                <path d="M0,35 Q10,32 20,20 T40,15 T60,25 T80,10 T100,5 V40 H0 Z" fill="url(#grad-${Math.random()})"/>
+                                <path d="M0,35 Q10,32 20,20 T40,15 T60,25 T80,10 T100,5" fill="none" stroke="#191a1d" stroke-width="2" stroke-linecap="round"/>
+                                <circle cx="100" cy="5" r="2" fill="#191a1d"/>
+                            </svg>
+                        </div>
+                        <div class="flex justify-between text-[10px] font-bold text-gray-400 mt-2 uppercase tracking-tighter">
+                            <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (type === 'resource-utilization') {
+                return `
+                    ${header}
+                    <div class="kpi-card-body flex items-center gap-6">
+                        <div class="utilization-ring flex-shrink-0" style="background: conic-gradient(var(--success) 84%, #f1f5f9 0);">
+                            <div class="utilization-value text-emerald-600">84%</div>
+                        </div>
+                        <div class="flex-1 space-y-3">
+                            <div>
+                                <div class="flex justify-between text-[10px] font-bold mb-1">
+                                    <span class="text-gray-400 uppercase">Physical</span>
+                                    <span>72%</span>
+                                </div>
+                                <div class="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                                    <div class="h-full bg-primary" style="width: 72%"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-[10px] font-bold mb-1">
+                                    <span class="text-gray-400 uppercase">Digital</span>
+                                    <span>96%</span>
+                                </div>
+                                <div class="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                                    <div class="h-full bg-emerald-500" style="width: 96%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (type === 'program-usage') {
+                return `
+                    ${header}
+                    <div class="kpi-card-body">
+                        <div class="flex items-end gap-2 h-32 pt-4">
+                            <div class="flex-1 h-full flex flex-col justify-end items-center gap-2">
+                                <div class="w-full bg-indigo-500 rounded-t-sm relative group" style="height: 85%">
+                                    <div class="absolute -top-6 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[8px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">320</div>
+                                </div>
+                                <span class="text-[9px] font-black text-gray-400">BSIT</span>
+                            </div>
+                            <div class="flex-1 h-full flex flex-col justify-end items-center gap-2">
+                                <div class="w-full bg-sky-500 rounded-t-sm relative group" style="height: 55%">
+                                    <div class="absolute -top-6 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[8px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">210</div>
+                                </div>
+                                <span class="text-[9px] font-black text-gray-400">BSBA</span>
+                            </div>
+                            <div class="flex-1 h-full flex flex-col justify-end items-center gap-2">
+                                <div class="w-full bg-emerald-500 rounded-t-sm relative group" style="height: 45%">
+                                    <div class="absolute -top-6 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[8px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">180</div>
+                                </div>
+                                <span class="text-[9px] font-black text-gray-400">BSHM</span>
+                            </div>
+                            <div class="flex-1 h-full flex flex-col justify-end items-center gap-2">
+                                <div class="w-full bg-amber-500 rounded-t-sm relative group" style="height: 35%">
+                                    <div class="absolute -top-6 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[8px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">140</div>
+                                </div>
+                                <span class="text-[9px] font-black text-gray-400">EDUC</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (type === 'top-titles') {
+                return `
+                    ${header}
+                    <div class="kpi-card-body">
+                        <div class="space-y-3">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-10 bg-indigo-50 rounded flex items-center justify-center text-xs font-bold text-indigo-400">1</div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="text-xs font-bold truncate">Intro. to Algorithms</div>
+                                    <div class="text-[10px] text-gray-400 font-medium">Cormen et al.</div>
+                                </div>
+                                <div class="text-xs font-black text-gray-600">142</div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-10 bg-emerald-50 rounded flex items-center justify-center text-xs font-bold text-emerald-400">2</div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="text-xs font-bold truncate">Clean Code</div>
+                                    <div class="text-[10px] text-gray-400 font-medium">Robert C. Martin</div>
+                                </div>
+                                <div class="text-xs font-black text-gray-600">128</div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-10 bg-amber-50 rounded flex items-center justify-center text-xs font-bold text-amber-400">3</div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="text-xs font-bold truncate">Filipino Literature</div>
+                                    <div class="text-[10px] text-gray-400 font-medium">Dr. J. Cruz</div>
+                                </div>
+                                <div class="text-xs font-black text-gray-600">95</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            return `
+                ${header}
+                <div class="kpi-card-body flex items-center justify-center min-h-[150px]">
+                    <div class="text-center">
+                        <span class="material-symbols-outlined text-4xl text-gray-200">monitoring</span>
+                        <p class="text-xs text-gray-400 mt-2">Analytical Data for ${name}...</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Initialize event listeners
+        document.getElementById('toggle-library').addEventListener('click', toggleLibrary);
+
+        const kpiItems = document.querySelectorAll('.kpi-item');
+        kpiItems.forEach(item => {
+            item.addEventListener('dragstart', handleDragStart);
+            item.addEventListener('dragend', handleDragEnd);
+        });
+
+        const existingCards = document.querySelectorAll('.kpi-card');
+        existingCards.forEach(card => {
+            attachCardEvents(card);
+        });
+
+        const dropZone = document.getElementById('drop-zone');
+        dropZone.addEventListener('dragover', handleDragOver);
+        dropZone.addEventListener('dragenter', handleDragEnter);
+        dropZone.addEventListener('dragleave', handleDragLeave);
+        dropZone.addEventListener('drop', handleDrop);
+
+        dropZone.addEventListener('click', (e) => {
+            const removeBtn = e.target.closest('.remove-kpi');
+            if (removeBtn) {
+                const card = removeBtn.closest('.kpi-card');
+                card.style.transform = 'scale(0.95)';
+                card.style.opacity = '0';
+                setTimeout(() => {
+                    card.remove();
+                }, 200);
+            }
+        });
+    </script>
+</body>
+
+</html>

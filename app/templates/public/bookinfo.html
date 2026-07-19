@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}{{ book[1] }} - MCST Library{% endblock %}
+{% block extra_head %}
+<style type="text/tailwindcss">
+    @layer base {
+        body { @apply font-display bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100; }
+    }
+    .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+    <nav aria-label="Breadcrumb" class="flex mb-6 text-xs font-medium text-slate-500 uppercase tracking-wider">
+        <ol class="flex items-center space-x-2">
+            <li><a class="hover:text-primary" href="{{ url_for('cataloging.public_catalog') }}">Catalog</a></li>
+            <li><span class="material-icons text-xs">chevron_right</span></li>
+            <li class="text-slate-900 dark:text-slate-100">{{ book[1] }}</li>
+        </ol>
+    </nav>
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-8 mb-8">
+        <div class="flex flex-col md:flex-row justify-between items-start gap-6">
+            <div class="flex-grow">
+                <div class="flex items-center gap-4 mb-2">
+                    <h2 class="text-3xl font-extrabold text-slate-900 dark:text-white leading-tight">
+                        {{ book[1] }}
+                    </h2>
+                </div>
+                <p class="text-lg text-slate-600 dark:text-slate-400 font-medium">{{ book[2] }}</p>
+            </div>
+            <div class="flex flex-col items-end gap-4 min-w-[240px]">
+                {% if book[11] == 'active' %}
+                <span class="inline-flex bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-4 py-2 rounded font-bold uppercase tracking-wider text-xs items-center gap-2 border border-green-200 dark:border-green-800">
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                    Available in Library
+                </span>
+                {% else %}
+                <span class="inline-flex bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-4 py-2 rounded font-bold uppercase tracking-wider text-xs items-center gap-2 border border-amber-200 dark:border-amber-800">
+                    <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                    {{ book[11] }}
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        <hr class="my-8 border-slate-100 dark:border-slate-800">
+        <div class="space-y-8">
+            {% if book[10] %}
+            <div>
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Description</h3>
+                <p class="text-slate-700 dark:text-slate-300 leading-relaxed text-sm max-w-4xl">{{ book[10] }}</p>
+            </div>
+            {% endif %}
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-6">
+                <div>
+                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Copyright Year</h4>
+                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[5] if book[5] else '—' }}</p>
+                </div>
+                <div>
+                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">ISBN</h4>
+                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[8] if book[8] else '—' }}</p>
+                </div>
+                <div>
+                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Material Type</h4>
+                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[9] }}</p>
+                </div>
+                <div>
+                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Edition</h4>
+                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[3] if book[3] else '—' }}</p>
+                </div>
+                <div>
+                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Publisher</h4>
+                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[4] if book[4] else '—' }}</p>
+                </div>
+                <div>
+                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">LOC Classification</h4>
+                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[7] if book[7] else '—' }}</p>
+                </div>
+                <div>
+                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Subject Classification</h4>
+                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[6] if book[6] else '—' }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% if accessions %}
+    <div class="mt-12">
+        <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
+            <span class="material-icons text-slate-400">layers</span>
+            Copies / Accessions
+        </h3>
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden shadow-sm">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Accession Number</th>
+                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Copy No.</th>
+                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Source</th>
+                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Date Accessioned</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                    {% for a in accessions %}
+                    <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td class="px-6 py-4 text-sm font-medium font-mono">{{ a[1] }}</td>
+                        <td class="px-6 py-4 text-sm">{{ a[3] if a[3] else '—' }}</td>
+                        <td class="px-6 py-4 text-sm">{{ a[6] if a[6] else '—' }}</td>
+                        <td class="px-6 py-4 text-sm">{{ a[5] if a[5] else '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</main>
+{% endblock %}
