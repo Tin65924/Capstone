@@ -276,7 +276,6 @@ def change_user_role(user_id):
 @admin_required
 def reset_db():
     import psycopg2
-    from app.database import db as db_instance
     dsn = current_app.config['DATABASE_URL']
     schema_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'schema.sql')
     conn = psycopg2.connect(dsn)
@@ -297,10 +296,6 @@ def reset_db():
                 CHECK (account_status IN ('active', 'disabled', 'pending'));
             """)
         conn.close()
-        # Reinitialize pool with fresh connections
-        db_instance._pool.closeall()
-        db_instance._pool = psycopg2.pool.ThreadedConnectionPool(
-            minconn=1, maxconn=10, dsn=dsn)
         current_app.logger.info('Database reset complete.')
     except Exception as e:
         current_app.logger.error('Database reset failed: %s', e)
