@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS user_accounts (
     full_name      VARCHAR(150) NOT NULL,
     role_id        INT NOT NULL REFERENCES roles(role_id),
     account_status VARCHAR(20) NOT NULL DEFAULT 'active'
-                   CHECK (account_status IN ('active', 'disabled')),
+                   CHECK (account_status IN ('active', 'disabled', 'pending')),
     created_at     TIMESTAMP NOT NULL DEFAULT NOW()
 );
 

@@ -343,11 +343,23 @@
 
         <!-- Users Table -->
         <div class="card animate-in" style="animation-delay: 0.2s;">
-            <div class="p-4 border-b border-gray-100 flex items-center gap-4 bg-gray-50/20">
-                <div class="relative flex-1 max-w-md">
-                    <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-lg">search</span>
-                    <input type="text" placeholder="Search by name, ID or email..." class="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
-                </div>
+            <div class="p-4 border-b border-gray-100 flex items-center gap-2 bg-gray-50/20">
+                <a href="{{ url_for('auth.admin_users') }}"
+                   class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors {% if not status_filter %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
+                    All
+                </a>
+                <a href="{{ url_for('auth.admin_users', status='active') }}"
+                   class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors {% if status_filter == 'active' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
+                    Active
+                </a>
+                <a href="{{ url_for('auth.admin_users', status='disabled') }}"
+                   class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors {% if status_filter == 'disabled' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
+                    Suspended
+                </a>
+                <a href="{{ url_for('auth.admin_users', status='pending') }}"
+                   class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors {% if status_filter == 'pending' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
+                    Pending
+                </a>
             </div>
             <div class="overflow-x-auto">
                 <table>

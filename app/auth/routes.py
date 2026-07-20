@@ -223,6 +223,9 @@ def role_select():
 def admin_users():
     users = get_all_users()
     pending = get_pending_users()
+    status_filter = request.args.get('status', '')
+    if status_filter:
+        users = [u for u in users if u[4] == status_filter]
     total = len(users)
     active = sum(1 for u in users if u[4] == 'active')
     students = sum(1 for u in users if u[3] == 'Student')
@@ -231,7 +234,8 @@ def admin_users():
                            users=users, roles=get_roles(),
                            pending=pending, total=total,
                            active=active, students=students,
-                           suspended=suspended)
+                           suspended=suspended,
+                           status_filter=status_filter)
 
 
 @auth_bp.route('/admin/users/<int:user_id>/approve', methods=['POST'])

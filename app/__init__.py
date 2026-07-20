@@ -3,7 +3,6 @@ from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 from .config import Config
 from .extensions import login_manager
-from .database import init_db
 
 def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
@@ -15,6 +14,7 @@ def create_app(test_config=None):
     if test_config:
         app.config.update(test_config)
 
+    from .database import init_db
     init_db(app)
 
     login_manager.init_app(app)

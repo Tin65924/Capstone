@@ -228,7 +228,7 @@ class TestLogout:
 class TestUserManagement:
     USERS_TABLE = [
         (1, 'alice@mcst.edu.ph', 'Alice', 'Student', 'active', datetime(2024, 1, 15), '2024-0001', 'BSIT'),
-        (2, 'bob@mcst.edu.ph', 'Bob', 'Faculty', 'disabled', datetime(2024, 2, 20), '2024-1001', 'CS'),
+        (2, 'bob@mcst.edu.ph', 'Bob', 'Faculty', 'pending', datetime(2024, 2, 20), '2024-1001', 'CS'),
         (3, 'carol@mcst.edu.ph', 'Carol', 'Librarian', 'active', datetime(2024, 3, 10), '2024-2001', 'Library'),
     ]
     ROLES = [(1, 'Student'), (2, 'Faculty'), (3, 'Librarian'), (4, 'Admin')]
@@ -240,13 +240,13 @@ class TestUserManagement:
 
     def test_admin_users_librarian_allowed(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = (4,)
-        mock_db['fetch_all'].side_effect = lambda q, p=None: [] if 'disabled' in q else self.USERS_TABLE
+        mock_db['fetch_all'].side_effect = lambda q, p=None: [] if 'pending' in q else self.USERS_TABLE
         resp = librarian_client.get('/admin/users')
         assert resp.status_code == 200
 
     def test_admin_users_admin_allowed(self, admin_client, mock_db):
         mock_db['fetch_one'].return_value = (4,)
-        mock_db['fetch_all'].side_effect = lambda q, p=None: [] if 'disabled' in q else self.USERS_TABLE
+        mock_db['fetch_all'].side_effect = lambda q, p=None: [] if 'pending' in q else self.USERS_TABLE
         resp = admin_client.get('/admin/users')
         assert resp.status_code == 200
 

@@ -44,7 +44,7 @@ def create_pending_user(email, oauth_sub, full_name, role_id):
     row = db.fetch_one(
         '''INSERT INTO user_accounts (email, oauth_sub, full_name, role_id, account_status, created_at)
            VALUES (%s, %s, %s, %s, %s, NOW()) RETURNING user_id''',
-        (email, oauth_sub, full_name, role_id, 'disabled')
+        (email, oauth_sub, full_name, role_id, 'pending')
     )
     return row[0] if row else None
 
@@ -92,7 +92,7 @@ def get_pending_users():
            FROM user_accounts u
            JOIN roles r ON u.role_id = r.role_id
            LEFT JOIN borrowers b ON u.user_id = b.user_id
-           WHERE u.account_status = 'disabled'
+           WHERE u.account_status = 'pending'
            ORDER BY u.created_at ASC'''
     )
 

@@ -61,6 +61,16 @@ def run_schema(app):
         with conn.cursor() as cur:
             with open(schema_path, 'r') as f:
                 cur.execute(f.read())
+        # Migration: add 'pending' to account_status check constraint
+        cur.execute("""
+            ALTER TABLE user_accounts
+            DROP CONSTRAINT IF EXISTS user_accounts_account_status_check;
+        """)
+        cur.execute("""
+            ALTER TABLE user_accounts
+            ADD CONSTRAINT user_accounts_account_status_check
+            CHECK (account_status IN ('active', 'disabled', 'pending'));
+        """)
         conn.commit()
         app.logger.info('Database schema initialized successfully.')
     except Exception as e:
