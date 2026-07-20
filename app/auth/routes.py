@@ -270,7 +270,7 @@ def change_user_role(user_id):
     return redirect(url_for('auth.admin_users'))
 
 
-@auth_bp.route('/admin/reset-db', methods=['POST'])
+@auth_bp.route('/admin/reset-db', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def reset_db():
