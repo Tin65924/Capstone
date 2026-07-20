@@ -1,3 +1,4 @@
+import os
 import secrets
 from flask import render_template, redirect, url_for, request, flash, session, abort, current_app
 from flask_login import login_user, logout_user, login_required, current_user
@@ -274,21 +275,37 @@ def change_user_role(user_id):
 @login_required
 @admin_required
 def reset_db():
-    from app.database import db as db_instance, run_schema
-    conn = db_instance._pool.getconn()
+    import psycopg2
+    from app.database import db as db_instance
+    dsn = current_app.config['DATABASE_URL']
+    schema_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'schema.sql')
+    conn = psycopg2.connect(dsn)
+    conn.autocommit = True
     try:
         with conn.cursor() as cur:
             cur.execute('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
-        conn.commit()
-        run_schema(current_app)
-        app.logger.info('Database reset complete.')
+            if os.path.isfile(schema_path):
+                with open(schema_path, 'r') as f:
+                    cur.execute(f.read())
+            cur.execute("""
+                ALTER TABLE user_accounts
+                DROP CONSTRAINT IF EXISTS user_accounts_account_status_check;
+            """)
+            cur.execute("""
+                ALTER TABLE user_accounts
+                ADD CONSTRAINT user_accounts_account_status_check
+                CHECK (account_status IN ('active', 'disabled', 'pending'));
+            """)
+        conn.close()
+        # Reinitialize pool with fresh connections
+        db_instance._pool.closeall()
+        db_instance._pool = psycopg2.pool.ThreadedConnectionPool(
+            minconn=1, maxconn=10, dsn=dsn)
+        current_app.logger.info('Database reset complete.')
     except Exception as e:
-        conn.rollback()
         current_app.logger.error('Database reset failed: %s', e)
-        flash('Reset failed. Check logs.', 'error')
+        flash('Reset failed: ' + str(e), 'error')
         return redirect(url_for('auth.admin_users'))
-    finally:
-        db_instance._pool.putconn(conn)
     logout_user()
     flash('Database reset. Please log in again.', 'info')
     return redirect(url_for('auth.login'))
