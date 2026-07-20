@@ -270,6 +270,30 @@ def change_user_role(user_id):
     return redirect(url_for('auth.admin_users'))
 
 
+@auth_bp.route('/admin/reset-db', methods=['POST'])
+@login_required
+@admin_required
+def reset_db():
+    from app.database import db as db_instance, run_schema
+    conn = db_instance._pool.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
+        conn.commit()
+        run_schema(current_app)
+        app.logger.info('Database reset complete.')
+    except Exception as e:
+        conn.rollback()
+        current_app.logger.error('Database reset failed: %s', e)
+        flash('Reset failed. Check logs.', 'error')
+        return redirect(url_for('auth.admin_users'))
+    finally:
+        db_instance._pool.putconn(conn)
+    logout_user()
+    flash('Database reset. Please log in again.', 'info')
+    return redirect(url_for('auth.login'))
+
+
 @auth_bp.route('/logout')
 @login_required
 def logout():
