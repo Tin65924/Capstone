@@ -1,3 +1,4 @@
+import os
 import psycopg2
 from psycopg2 import pool
 from flask import current_app, g
@@ -49,5 +50,26 @@ class Database:
 
 db = Database()
 
+
+def run_schema(app):
+    schema_path = os.path.join(os.path.dirname(__file__), 'schema.sql')
+    if not os.path.isfile(schema_path):
+        app.logger.warning('schema.sql not found — skipping schema initialization')
+        return
+    conn = db._pool.getconn()
+    try:
+        with conn.cursor() as cur:
+            with open(schema_path, 'r') as f:
+                cur.execute(f.read())
+        conn.commit()
+        app.logger.info('Database schema initialized successfully.')
+    except Exception as e:
+        conn.rollback()
+        app.logger.warning('Schema initialization skipped (may already exist): %s', e)
+    finally:
+        db._pool.putconn(conn)
+
+
 def init_db(app):
     db.init_app(app)
+    run_schema(app)
