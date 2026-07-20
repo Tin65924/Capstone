@@ -1,5 +1,6 @@
 import os
 from flask import Flask
+from werkzeug.middleware.proxy_fix import ProxyFix
 from .config import Config
 from .extensions import login_manager
 from .database import init_db
@@ -7,6 +8,9 @@ from .database import init_db
 def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_object(Config)
+
+    # Trust Render's proxy headers (X-Forwarded-Proto for HTTPS)
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
     if test_config:
         app.config.update(test_config)
