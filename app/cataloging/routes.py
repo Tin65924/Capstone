@@ -5,7 +5,7 @@ from . import cataloging_bp
 from app.auth.decorators import librarian_required
 from app.cataloging.models import (
     get_all_books, search_books, get_book_by_id, create_book,
-    update_book, update_book_status, create_accession,
+    update_book, update_book_status, delete_book, create_accession,
     get_accessions_by_book, get_accession_by_number,
     search_books_paginated
 )
@@ -59,10 +59,15 @@ def _decode_csv(raw):
 def cataloging_page():
     query = request.args.get('q', '').strip()
     field = request.args.get('field', '')
+    status_filter = request.args.get('status', '')
     page = request.args.get('page', 1, type=int)
     per_page = 20
 
-    if query:
+    if status_filter:
+        from app.cataloging.models import get_books_by_status
+        books = get_books_by_status(status_filter)
+        total = len(books)
+    elif query:
         books, total = search_books_paginated(query, field, page, per_page)
     else:
         books = get_all_books()
@@ -70,7 +75,8 @@ def cataloging_page():
 
     return render_template('cataloging/cataloging.html', books=books,
                            total=total, search_query=query,
-                           search_field=field, page=page, per_page=per_page)
+                           search_field=field, status_filter=status_filter,
+                           page=page, per_page=per_page)
 
 
 @cataloging_bp.route('/cataloging/add', methods=['POST'])
@@ -124,6 +130,23 @@ def edit_book(book_id):
     )
     log_activity(current_user.id, f'cataloging:edit_book:{book_id}')
     flash('Book updated.', 'success')
+    return redirect(url_for('cataloging.cataloging_page'))
+
+
+@cataloging_bp.route('/cataloging/<int:book_id>/delete', methods=['POST'])
+@login_required
+@librarian_required
+def delete_book_route(book_id):
+    book = get_book_by_id(book_id)
+    if not book:
+        flash('Book not found.', 'error')
+        return redirect(url_for('cataloging.cataloging_page'))
+    if book[11] != 'archived':
+        flash('Book must be archived before deletion.', 'error')
+        return redirect(url_for('cataloging.cataloging_page'))
+    delete_book(book_id)
+    log_activity(current_user.id, f'cataloging:delete_book:{book_id}')
+    flash('Book permanently deleted.', 'success')
     return redirect(url_for('cataloging.cataloging_page'))
 
 

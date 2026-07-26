@@ -4,6 +4,9 @@ from flask import Flask
 from unittest.mock import patch, MagicMock
 import sys
 
+# Ensure app.database is importable (needed for patching)
+import app.database
+
 # Must patch before ANY app imports happen
 patcher_init_db = patch('app.database.init_db', return_value=None)
 patcher_db_pool = patch('app.database.db.init_app', return_value=None)

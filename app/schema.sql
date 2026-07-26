@@ -1,9 +1,3 @@
--- ============================================================
--- LMS Database Schema — PostgreSQL
--- Run after CREATE DATABASE library_db;
--- ============================================================
-
--- 1. Identity & Access (Module 6)
 CREATE TABLE IF NOT EXISTS roles (
     role_id   SERIAL PRIMARY KEY,
     role_name VARCHAR(50) UNIQUE NOT NULL,
@@ -17,7 +11,7 @@ CREATE TABLE IF NOT EXISTS user_accounts (
     full_name      VARCHAR(150) NOT NULL,
     role_id        INT NOT NULL REFERENCES roles(role_id),
     account_status VARCHAR(20) NOT NULL DEFAULT 'active'
-                   CHECK (account_status IN ('active', 'disabled', 'pending')),
+                   CHECK (account_status IN ('active', 'disabled', 'pending', 'archived')),
     created_at     TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
@@ -29,7 +23,6 @@ CREATE TABLE IF NOT EXISTS audit_trail (
     log_timestamp TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- 2. Borrowers (extension of user_accounts — Students & Faculty only)
 CREATE TABLE IF NOT EXISTS borrowers (
     borrower_id     SERIAL PRIMARY KEY,
     user_id         INT UNIQUE NOT NULL REFERENCES user_accounts(user_id),
@@ -39,7 +32,6 @@ CREATE TABLE IF NOT EXISTS borrowers (
                     CHECK (borrower_status IN ('active', 'blocked'))
 );
 
--- 3. Cataloging & Accessioning (Module 2)
 CREATE TABLE IF NOT EXISTS book_catalog (
     book_id               SERIAL PRIMARY KEY,
     title                 VARCHAR(255) NOT NULL,
@@ -67,7 +59,6 @@ CREATE TABLE IF NOT EXISTS accession_log (
     source           VARCHAR(20) CHECK (source IN ('purchase', 'donation'))
 );
 
--- 4. Request Management (Module 1A) — depends on book_catalog, borrowers
 CREATE TABLE IF NOT EXISTS request_records (
     request_id     SERIAL PRIMARY KEY,
     requester_id   INT NOT NULL REFERENCES borrowers(borrower_id),
@@ -84,7 +75,6 @@ CREATE TABLE IF NOT EXISTS request_records (
     review_date    TIMESTAMP
 );
 
--- 5. Procurement (Module 1B) — depends on request_records, book_catalog
 CREATE TABLE IF NOT EXISTS procurement_log (
     procurement_id SERIAL PRIMARY KEY,
     request_id     INT NOT NULL REFERENCES request_records(request_id),
@@ -99,7 +89,6 @@ CREATE TABLE IF NOT EXISTS procurement_log (
     remarks        VARCHAR(255)
 );
 
--- 6. Circulation (Module 3)
 CREATE TABLE IF NOT EXISTS circulation_records (
     circulation_id     SERIAL PRIMARY KEY,
     book_id            INT NOT NULL REFERENCES book_catalog(book_id),
@@ -120,7 +109,6 @@ CREATE TABLE IF NOT EXISTS circulation_records (
                        CHECK (transaction_status IN ('active', 'returned', 'overdue'))
 );
 
--- 7. Inventory Monitoring (Module 4)
 CREATE TABLE IF NOT EXISTS inventory_status (
     inventory_id     SERIAL PRIMARY KEY,
     accession_id     INT NOT NULL REFERENCES accession_log(accession_id),
@@ -132,7 +120,6 @@ CREATE TABLE IF NOT EXISTS inventory_status (
     last_checked_date DATE NOT NULL
 );
 
--- 8. Inventory Sessions (Module 4 — session tracking)
 CREATE TABLE IF NOT EXISTS inventory_sessions (
     session_id     SERIAL PRIMARY KEY,
     librarian_id   INT NOT NULL REFERENCES user_accounts(user_id),
@@ -144,7 +131,6 @@ CREATE TABLE IF NOT EXISTS inventory_sessions (
     ended_at       TIMESTAMP
 );
 
--- 9. Reservations
 CREATE TABLE IF NOT EXISTS reservation_queue (
     reservation_id     SERIAL PRIMARY KEY,
     book_id            INT NOT NULL REFERENCES book_catalog(book_id),
@@ -166,7 +152,6 @@ CREATE TABLE IF NOT EXISTS notification_log (
     date_sent       TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- 10. User Favorites / Wishlist
 CREATE TABLE IF NOT EXISTS user_favorites (
     favorite_id SERIAL PRIMARY KEY,
     user_id     INT NOT NULL REFERENCES user_accounts(user_id),
@@ -175,7 +160,6 @@ CREATE TABLE IF NOT EXISTS user_favorites (
     UNIQUE (user_id, book_id)
 );
 
--- 11. Analytics Cache (Module 5)
 CREATE TABLE IF NOT EXISTS analytics_cache (
     cache_id       SERIAL PRIMARY KEY,
     report_type    VARCHAR(40) NOT NULL
@@ -190,9 +174,6 @@ CREATE TABLE IF NOT EXISTS analytics_cache (
     generated_date TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- ============================================================
--- Seed Data
--- ============================================================
 INSERT INTO roles (role_name) VALUES
     ('Student'),
     ('Faculty'),

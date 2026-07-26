@@ -125,19 +125,8 @@
         
         <!-- Logo / Title -->
         <div class="flex items-center gap-3 mb-8 shrink-0">
-          <div class="bg-primary/10 p-2 rounded-lg text-primary">
-            <span class="material-symbols-outlined">local_library</span>
-          </div>
+          <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
           <h1 class="text-xl font-bold tracking-tight">MCST Library</h1>
-        </div>
-
-        <!-- User Profile -->
-        <div class="flex flex-col items-center mb-6 shrink-0">
-          <div class="h-20 w-20 rounded-full bg-cover bg-center mb-3 ring-4 ring-primary/10"
-            style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCkcv98J_6qGD7t-VqddLCYMILDlrzK6AKmcFAFZijgmQoy6GFBlTuESKfGNDh9mJMnMDBKRDEuCZBe8QJnNs85uBsvrz1LY3gROkLx5mMskEQhRJfHu8XLitpu2_2vXV3JxtK2d0p280rb_D7XqPYnHnB-nH6mYdfPwpQ6OgLwvAgVaEc99uwSs8r0oIDJL2CBkO5JrEqjz-pw3k_nUAqXphQJvfezlqXncllU7aw8bBEPek61muPCRlihYpS7HcmKChpHRbENzSg');">
-          </div>
-          <h2 class="text-lg font-bold text-center">{{ current_user.full_name }}</h2>
-          <p class="text-sm text-gray-500 dark:text-gray-400">{{ current_user.role }}</p>
         </div>
 
         <!-- Navigation -->
@@ -150,6 +139,7 @@
                         <span class="material-symbols-outlined">menu_book</span>
                         <span class="text-sm">Catalog</span>
                     </a>
+                    <hr class="border-gray-200 dark:border-gray-700 my-1">
                     <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors bg-primary/10 text-primary" href="{{ url_for('main.dashboard') }}">
                         <span class="material-symbols-outlined">dashboard</span>
                         <span class="text-sm">Dashboard</span>
@@ -195,7 +185,10 @@
       </div>
       <!-- Logout -->
       <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
-        <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-gray-800 transition-colors">
+                <div class="flex flex-col items-center mb-4">
+          <h2 class="text-lg font-bold text-center">{{ current_user.full_name }}</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">{{ current_user.role }}</p>
+        </div>        <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-gray-800 transition-colors">
           <span class="material-symbols-outlined text-[18px]">logout</span>
           <span>Log Out</span>
         </a>
@@ -206,29 +199,29 @@
     <main>
         <div class="mb-10 animate-in">
             <h1 class="text-4xl font-extrabold font-outfit text-gray-900 tracking-tight">System Overview</h1>
-            <p class="text-gray-500 mt-2 font-medium">Hello, Justin. Here's what's happening in the library today.</p>
+            <p class="text-gray-500 mt-2 font-medium">Hello, {{ current_user.full_name.split()[0] }}. Here's what's happening in the library today.</p>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10 animate-in" style="animation-delay: 0.1s;">
             <div class="card border-l-4 border-l-indigo-500">
                 <div class="text-indigo-500 mb-2"><span class="material-symbols-outlined">menu_book</span></div>
                 <div class="stat-label">Total Collection</div>
-                <div class="stat-value">12,482</div>
+                <div class="stat-value">{{ stats.total_collection }}</div>
             </div>
             <div class="card border-l-4 border-l-emerald-500">
                 <div class="text-emerald-500 mb-2"><span class="material-symbols-outlined">sync_alt</span></div>
                 <div class="stat-label">Active Loans</div>
-                <div class="stat-value">1,842</div>
+                <div class="stat-value">{{ stats.active_loans }}</div>
             </div>
             <div class="card border-l-4 border-l-amber-500">
                 <div class="text-amber-500 mb-2"><span class="material-symbols-outlined">pending_actions</span></div>
                 <div class="stat-label">Open Requests</div>
-                <div class="stat-value">48</div>
+                <div class="stat-value">{{ stats.open_requests }}</div>
             </div>
             <div class="card border-l-4 border-l-rose-500">
                 <div class="text-rose-500 mb-2"><span class="material-symbols-outlined">report_problem</span></div>
                 <div class="stat-label">Overdue Items</div>
-                <div class="stat-value">12</div>
+                <div class="stat-value">{{ stats.overdue_items }}</div>
             </div>
         </div>
 
@@ -238,15 +231,24 @@
                     <span class="material-symbols-outlined text-primary">analytics</span> Borrowing Trends
                 </h3>
                 <div class="h-48 w-full bg-gray-50 rounded-lg flex items-end justify-between p-6 overflow-hidden">
-                    <div class="w-8 bg-indigo-200 rounded-t h-[40%]"></div>
-                    <div class="w-8 bg-indigo-300 rounded-t h-[60%]"></div>
-                    <div class="w-8 bg-indigo-400 rounded-t h-[85%]"></div>
-                    <div class="w-8 bg-indigo-500 rounded-t h-[70%]"></div>
-                    <div class="w-8 bg-indigo-600 rounded-t h-[95%]"></div>
-                    <div class="w-8 bg-indigo-400 rounded-t h-[50%]"></div>
+                    {% if daily %}
+                        {% set max_val = daily|map(attribute=1)|max %}
+                        {% for d, cnt in daily %}
+                        <div class="w-8 rounded-t {% if loop.index == 6 %}bg-indigo-600{% elif loop.index == 5 %}bg-indigo-500{% elif loop.index == 4 %}bg-indigo-400{% elif loop.index == 3 %}bg-indigo-400{% elif loop.index == 2 %}bg-indigo-300{% else %}bg-indigo-200{% endif %}"
+                             style="height: {{ (cnt / max_val * 80)|round|int + 10 }}%"></div>
+                        {% endfor %}
+                    {% else %}
+                        {% for i in range(6) %}
+                        <div class="w-8 bg-indigo-200 rounded-t h-[20%]"></div>
+                        {% endfor %}
+                    {% endif %}
                 </div>
                 <div class="flex justify-between mt-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest px-2">
+                    {% for d, cnt in daily %}
+                    <span>{{ d.strftime('%a') }}</span>
+                    {% else %}
                     <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+                    {% endfor %}
                 </div>
             </div>
 
@@ -255,26 +257,22 @@
                     <span class="material-symbols-outlined text-primary">history</span> Recent Activity
                 </h3>
                 <div class="space-y-4">
-                    <div class="flex items-center justify-between pb-3 border-b border-gray-50">
+                    {% if activity %}
+                    {% for a in activity %}
+                    <div class="flex items-center justify-between {% if not loop.last %}pb-3 border-b border-gray-50{% endif %}">
                         <div class="flex gap-3 items-center">
-                            <div class="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-xs">JD</div>
+                            <div class="w-8 h-8 rounded-full {% if a[2] == 'Borrowed' %}bg-indigo-50 text-indigo-600{% else %}bg-emerald-50 text-emerald-600{% endif %} flex items-center justify-center font-bold text-xs">{{ a[0][:2]|upper }}</div>
                             <div>
-                                <div class="text-sm font-bold">Juan Dela Cruz</div>
-                                <div class="text-[10px] text-gray-400">Returned 'Intro to Algorithms'</div>
+                                <div class="text-sm font-bold">{{ a[0] }}</div>
+                                <div class="text-[10px] text-gray-400">{{ a[2] }} '{{ a[3] }}'</div>
                             </div>
                         </div>
-                        <div class="text-[10px] text-gray-400 font-bold">2m ago</div>
+                        <div class="text-[10px] text-gray-400 font-bold">{{ a[4].strftime('%b %d') if a[4] else '' }}</div>
                     </div>
-                    <div class="flex items-center justify-between">
-                        <div class="flex gap-3 items-center">
-                            <div class="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">MS</div>
-                            <div>
-                                <div class="text-sm font-bold">Maria Santos</div>
-                                <div class="text-[10px] text-gray-400">Borrowed 'Basic Economics'</div>
-                            </div>
-                        </div>
-                        <div class="text-[10px] text-gray-400 font-bold">15m ago</div>
-                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="text-center text-gray-400 py-8 text-sm">No recent activity</div>
+                    {% endif %}
                 </div>
             </div>
         </div>

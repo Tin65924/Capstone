@@ -111,17 +111,51 @@ def update_user_role(user_id, role_id):
     )
 
 
+def update_user_details(user_id, full_name, id_number, department):
+    db.execute(
+        'UPDATE user_accounts SET full_name = %s WHERE user_id = %s',
+        (full_name, user_id)
+    )
+    db.execute(
+        'UPDATE borrowers SET id_number = %s, department = %s WHERE user_id = %s',
+        (id_number, department, user_id)
+    )
+
+
 def toggle_user_status(user_id):
     cur = db.fetch_one(
         'SELECT account_status FROM user_accounts WHERE user_id = %s',
         (user_id,)
     )
     if cur:
-        new_status = 'disabled' if cur[0] == 'active' else 'active'
+        if cur[0] == 'active':
+            new_status = 'disabled'
+        elif cur[0] == 'disabled':
+            new_status = 'active'
+        else:
+            return
         db.execute(
             'UPDATE user_accounts SET account_status = %s WHERE user_id = %s',
             (new_status, user_id)
         )
+
+
+def delete_user(user_id):
+    db.execute('DELETE FROM user_accounts WHERE user_id = %s', (user_id,))
+
+
+def archive_user(user_id):
+    db.execute(
+        'UPDATE user_accounts SET account_status = %s WHERE user_id = %s',
+        ('archived', user_id)
+    )
+
+
+def unarchive_user(user_id):
+    db.execute(
+        'UPDATE user_accounts SET account_status = %s WHERE user_id = %s',
+        ('active', user_id)
+    )
 
 
 def get_admin_count():

@@ -1,6 +1,7 @@
 from flask import render_template, redirect, url_for
 from flask_login import login_required, current_user
 from . import main_bp
+from .models import get_dashboard_stats, get_recent_activity, get_daily_borrows
 from app.cataloging.models import get_recent_books
 
 
@@ -15,7 +16,11 @@ def index():
 def dashboard():
     if current_user.role in ('Student', 'Faculty'):
         return redirect(url_for('main.user_profile'))
-    return render_template('dashboard/dashboard.html')
+    stats = get_dashboard_stats()
+    activity = get_recent_activity(5)
+    daily = get_daily_borrows(6)
+    return render_template('dashboard/dashboard.html', stats=stats,
+                           activity=activity, daily=daily)
 
 
 @main_bp.route('/users')

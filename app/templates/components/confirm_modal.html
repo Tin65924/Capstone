@@ -1,0 +1,36 @@
+<div id="confirmModal" class="fixed inset-0 z-50 hidden bg-black/40 flex items-center justify-center">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 p-6 animate-in">
+        <div class="text-center">
+            <span class="material-symbols-outlined text-5xl text-amber-500 mb-4" id="confirmIcon">warning</span>
+            <h3 class="text-lg font-bold mb-2 text-gray-900" id="confirmTitle">Are you sure?</h3>
+            <p class="text-sm text-gray-500 mb-6" id="confirmMessage">This action cannot be undone.</p>
+        </div>
+        <div class="flex justify-center gap-3">
+            <button type="button" onclick="closeConfirmModal()"
+                class="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
+            <form method="POST" id="confirmForm" style="display:inline">
+                <button type="submit" class="px-4 py-2 text-sm font-bold text-white rounded-lg transition-colors" id="confirmButton">Confirm</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function openConfirmModal(title, message, actionUrl, buttonText, buttonClass, icon) {
+    document.getElementById('confirmTitle').textContent = title || 'Are you sure?';
+    document.getElementById('confirmMessage').textContent = message || 'This action cannot be undone.';
+    document.getElementById('confirmForm').action = actionUrl;
+    var btn = document.getElementById('confirmButton');
+    btn.textContent = buttonText || 'Confirm';
+    btn.className = 'px-4 py-2 text-sm font-bold text-white rounded-lg transition-colors ' + (buttonClass || 'bg-red-600 hover:bg-red-700');
+    document.getElementById('confirmIcon').textContent = icon || 'warning';
+    document.getElementById('confirmModal').classList.remove('hidden');
+}
+function closeConfirmModal() {
+    document.getElementById('confirmModal').classList.add('hidden');
+}
+document.addEventListener('click', function(e) {
+    var m = document.getElementById('confirmModal');
+    if (e.target === m) closeConfirmModal();
+});
+</script>

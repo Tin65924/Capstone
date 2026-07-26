@@ -38,18 +38,15 @@
         {% endif %}
         {% endwith %}
         <div class="bg-white dark:bg-slate-900 shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden p-8 md:p-10">
-            <div class="text-center mb-10">
-                <div class="inline-flex items-center justify-center w-16 h-16 bg-primary/10 dark:bg-primary/20 rounded-xl mb-6">
-                    <span class="material-icons text-primary text-4xl">account_balance</span>
-                </div>
+            <div class="text-center mb-6">
+                <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="w-16 h-16 rounded-xl object-cover mb-4 mx-auto">
                 <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">MCST Library Management System</h1>
-                <p class="mt-2 text-slate-500 dark:text-slate-400 font-medium">Institutional Knowledge Portal</p>
             </div>
             <div class="mb-8 space-y-4">
-                <div class="flex items-start gap-3 p-4 bg-primary/5 dark:bg-primary/10 rounded-lg border border-primary/10">
-                    <span class="material-icons text-primary text-xl mt-0.5">info</span>
+                <div class="flex items-center justify-center gap-3 p-4 bg-primary/5 dark:bg-primary/10 rounded-lg border border-primary/10 text-center">
+                    <span class="material-icons text-primary text-xl">info</span>
                     <p class="text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-                        Access is restricted. <span class="font-bold text-slate-900 dark:text-white">Please use your institutional Gmail account</span> to sign in to the library catalog and digital resources.
+                        Access is restricted. <span class="font-bold text-slate-900 dark:text-white">Please use your institutional Gmail account.</span>
                     </p>
                 </div>
             </div>

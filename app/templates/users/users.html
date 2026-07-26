@@ -121,19 +121,6 @@
             gap: 1rem;
         }
 
-        .user-avatar {
-            width: 36px;
-            height: 36px;
-            border-radius: 10px;
-            background: var(--primary-light);
-            color: var(--primary);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 0.875rem;
-        }
-
         .badge {
             padding: 0.25rem 0.625rem;
             border-radius: 6px;
@@ -181,19 +168,8 @@
         
         <!-- Logo / Title -->
         <div class="flex items-center gap-3 mb-8 shrink-0">
-          <div class="bg-primary/10 p-2 rounded-lg text-primary">
-            <span class="material-symbols-outlined">local_library</span>
-          </div>
+          <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
           <h1 class="text-xl font-bold tracking-tight">MCST Library</h1>
-        </div>
-
-        <!-- User Profile -->
-        <div class="flex flex-col items-center mb-6 shrink-0">
-          <div class="h-20 w-20 rounded-full bg-cover bg-center mb-3 ring-4 ring-primary/10"
-            style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCkcv98J_6qGD7t-VqddLCYMILDlrzK6AKmcFAFZijgmQoy6GFBlTuESKfGNDh9mJMnMDBKRDEuCZBe8QJnNs85uBsvrz1LY3gROkLx5mMskEQhRJfHu8XLitpu2_2vXV3JxtK2d0p280rb_D7XqPYnHnB-nH6mYdfPwpQ6OgLwvAgVaEc99uwSs8r0oIDJL2CBkO5JrEqjz-pw3k_nUAqXphQJvfezlqXncllU7aw8bBEPek61muPCRlihYpS7HcmKChpHRbENzSg');">
-          </div>
-          <h2 class="text-lg font-bold text-center">{{ current_user.full_name }}</h2>
-          <p class="text-sm text-gray-500 dark:text-gray-400">{{ current_user.role }}</p>
         </div>
 
         <!-- Navigation -->
@@ -211,7 +187,6 @@
                         <span class="material-symbols-outlined">dashboard</span>
                         <span class="text-sm">Dashboard</span>
                     </a>
-                    <hr class="border-gray-200 dark:border-gray-700 my-1">
                     <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('requests.list_requests') }}">
                         <span class="material-symbols-outlined">book_online</span>
                         <span class="text-sm">Book Requests</span>
@@ -254,7 +229,10 @@
 
       <!-- Logout -->
       <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
-        <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-gray-800 transition-colors">
+                <div class="flex flex-col items-center mb-4">
+          <h2 class="text-lg font-bold text-center">{{ current_user.full_name }}</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">{{ current_user.role }}</p>
+        </div>        <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-gray-800 transition-colors">
           <span class="material-symbols-outlined text-[18px]">logout</span>
           <span>Log Out</span>
         </a>
@@ -271,10 +249,10 @@
         </div>
 
 
-        <div class="grid grid-cols-1 xl:grid-cols-4 gap-6 mb-8 animate-in" style="animation-delay: 0.1s;">
+        <div class="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-8 animate-in" style="animation-delay: 0.1s;">
             <div class="card p-4 flex items-center gap-4">
                 <div class="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center"><span class="material-symbols-outlined">group</span></div>
-                <div><div class="text-sm text-gray-400 font-bold uppercase tracking-wider">Total Users</div><div class="text-xl font-bold">{{ total }}</div></div>
+                <div><div class="text-sm text-gray-400 font-bold uppercase tracking-wider">Total</div><div class="text-xl font-bold">{{ total }}</div></div>
             </div>
             <div class="card p-4 flex items-center gap-4">
                 <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><span class="material-symbols-outlined">verified_user</span></div>
@@ -286,7 +264,15 @@
             </div>
             <div class="card p-4 flex items-center gap-4">
                 <div class="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center"><span class="material-symbols-outlined">person_off</span></div>
-                <div><div class="text-sm text-gray-400 font-bold uppercase tracking-wider">Suspended</div><div class="text-xl font-bold">{{ suspended }}</div></div>
+                <div><div class="text-sm text-gray-400 font-bold uppercase tracking-wider">Inactive</div><div class="text-xl font-bold">{{ inactive }}</div></div>
+            </div>
+            <div class="card p-4 flex items-center gap-4">
+                <div class="w-10 h-10 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center"><span class="material-symbols-outlined">archive</span></div>
+                <div><div class="text-sm text-gray-400 font-bold uppercase tracking-wider">Archived</div><div class="text-xl font-bold">{{ archived }}</div></div>
+            </div>
+            <div class="card p-4 flex items-center gap-4">
+                <div class="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center"><span class="material-symbols-outlined">pending_actions</span></div>
+                <div><div class="text-sm text-gray-400 font-bold uppercase tracking-wider">Pending</div><div class="text-xl font-bold">{{ pending|length }}</div></div>
             </div>
         </div>
 
@@ -315,7 +301,6 @@
                         <tr>
                             <td>
                                 <div class="user-cell">
-                                    <div class="user-avatar">{{ p[2][:2]|upper }}</div>
                                     <div>
                                         <div class="font-bold text-sm">{{ p[2] }}</div>
                                         <div class="text-[11px] text-gray-400">{{ p[1] }}</div>
@@ -354,11 +339,15 @@
                 </a>
                 <a href="{{ url_for('auth.admin_users', status='disabled') }}"
                    class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors {% if status_filter == 'disabled' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
-                    Suspended
+                    Inactive
                 </a>
                 <a href="{{ url_for('auth.admin_users', status='pending') }}"
                    class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors {% if status_filter == 'pending' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Pending
+                </a>
+                <a href="{{ url_for('auth.admin_users', status='archived') }}"
+                   class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors {% if status_filter == 'archived' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
+                    Archived
                 </a>
             </div>
             <div class="overflow-x-auto">
@@ -368,7 +357,7 @@
                             <th>User Details</th>
                             <th>User ID</th>
                             <th>Role</th>
-                            <th>Registration Date</th>
+                            <th>Department / Program</th>
                             <th>Status</th>
                             <th>Actions</th>
                         </tr>
@@ -378,7 +367,6 @@
                         <tr>
                             <td>
                                 <div class="user-cell">
-                                    <div class="user-avatar">{{ u[2][:2]|upper }}</div>
                                     <div>
                                         <div class="font-bold text-sm">{{ u[2] }}</div>
                                         <div class="text-[11px] text-gray-400">{{ u[1] }}</div>
@@ -387,27 +375,53 @@
                             </td>
                             <td class="font-mono text-xs">{{ u[6] or '—' }}</td>
                             <td><span class="badge badge-role">{{ u[3] }}</span></td>
-                            <td class="text-gray-500 text-sm">{{ u[5].strftime('%b %d, %Y') }}</td>
+                            <td class="text-sm text-gray-500">{{ u[7] or '—' }}</td>
                             <td>
                                 {% if u[4] == 'active' %}
                                 <span class="badge badge-active">Active</span>
-                                {% else %}
-                                <span class="badge badge-suspended">Suspended</span>
+                                {% elif u[4] == 'disabled' %}
+                                <span class="badge badge-suspended">Inactive</span>
+                                {% elif u[4] == 'archived' %}
+                                <span class="badge" style="background:#f1f5f9;color:#64748b;">Archived</span>
                                 {% endif %}
                             </td>
                             <td>
-                                <div class="flex gap-2">
-                                    <form method="POST" action="{{ url_for('auth.toggle_user_status_route', user_id=u[0]) }}" style="display:inline">
-                                        {% if u[4] == 'active' %}
-                                        <button class="btn-action hover:border-rose-500 hover:text-rose-500" title="Suspend">
-                                            <span class="material-symbols-outlined text-lg">person_off</span>
-                                        </button>
-                                        {% else %}
-                                        <button class="btn-action text-emerald-600 border-emerald-600 bg-emerald-50" title="Activate">
-                                            <span class="material-symbols-outlined text-lg">person_check</span>
-                                        </button>
-                                        {% endif %}
-                                    </form>
+                                <div class="flex gap-2 items-center">
+                                    <button onclick="openEditModal({{ u[0] }}, '{{ u[2]|escape }}', '{{ u[6] or '' }}', '{{ u[7] or '' }}')"
+                                        class="btn-action hover:border-blue-500 hover:text-blue-500" title="Edit">
+                                        <span class="material-symbols-outlined text-lg">edit</span>
+                                    </button>
+                                    {% if u[4] == 'active' %}
+                                    <button class="btn-action hover:border-rose-500 hover:text-rose-500"
+                                        onclick="openConfirmModal('Deactivate User','Are you sure you want to deactivate &quot;{{ u[2] }}&quot;?','{{ url_for('auth.toggle_user_status_route', user_id=u[0]) }}','Deactivate','bg-rose-600 hover:bg-rose-700','person_off')"
+                                        title="Deactivate">
+                                        <span class="material-symbols-outlined text-lg">person_off</span>
+                                    </button>
+                                    {% elif u[4] == 'disabled' %}
+                                    <button class="btn-action text-emerald-600 border-emerald-600 bg-emerald-50"
+                                        onclick="openConfirmModal('Activate User','Are you sure you want to activate &quot;{{ u[2] }}&quot;?','{{ url_for('auth.toggle_user_status_route', user_id=u[0]) }}','Activate','bg-emerald-600 hover:bg-emerald-700','person_check')"
+                                        title="Activate">
+                                        <span class="material-symbols-outlined text-lg">person_check</span>
+                                    </button>
+                                    {% endif %}
+                                    {% if u[4] != 'archived' %}
+                                    <button class="btn-action hover:border-gray-500 hover:text-gray-500"
+                                        onclick="openConfirmModal('Archive User','Are you sure you want to archive &quot;{{ u[2] }}&quot;?','{{ url_for('auth.archive_user_route', user_id=u[0]) }}','Archive','bg-gray-600 hover:bg-gray-700','archive')"
+                                        title="Archive">
+                                        <span class="material-symbols-outlined text-lg">archive</span>
+                                    </button>
+                                    {% else %}
+                                    <button class="btn-action text-blue-600 border-blue-600 bg-blue-50"
+                                        onclick="openConfirmModal('Restore User','Are you sure you want to restore &quot;{{ u[2] }}&quot;?','{{ url_for('auth.unarchive_user_route', user_id=u[0]) }}','Restore','bg-blue-600 hover:bg-blue-700','unarchive')"
+                                        title="Restore">
+                                        <span class="material-symbols-outlined text-lg">unarchive</span>
+                                    </button>
+                                    <button class="btn-action hover:border-red-500 hover:text-red-500"
+                                        onclick="openConfirmModal('Delete User','Are you sure you want to permanently delete &quot;{{ u[2] }}&quot;? This cannot be undone.','{{ url_for('auth.delete_user_route', user_id=u[0]) }}','Delete','bg-red-600 hover:bg-red-700','delete_forever')"
+                                        title="Delete">
+                                        <span class="material-symbols-outlined text-lg">delete_forever</span>
+                                    </button>
+                                    {% endif %}
                                     <form method="POST" action="{{ url_for('auth.change_user_role', user_id=u[0]) }}" style="display:inline">
                                         <select name="role_id" onchange="this.form.submit()" class="text-xs border border-gray-200 rounded px-2 py-1">
                                             {% for r in roles %}
@@ -425,5 +439,60 @@
         </div>
     </main>
 
+<div id="editModal" class="fixed inset-0 z-50 hidden bg-black/40 flex items-center justify-center">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 p-6 animate-in">
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-lg font-bold">Edit User</h3>
+            <button onclick="closeEditModal()" class="text-gray-400 hover:text-gray-600">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        <form method="POST" action="" id="editForm">
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs font-bold uppercase tracking-wider text-gray-500">Full Name</label>
+                    <input type="text" name="full_name" id="editName" required
+                        class="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+                </div>
+                <div>
+                    <label class="text-xs font-bold uppercase tracking-wider text-gray-500">ID Number</label>
+                    <input type="text" name="id_number" id="editIdNumber"
+                        class="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+                </div>
+                <div>
+                    <label class="text-xs font-bold uppercase tracking-wider text-gray-500">Department</label>
+                    <input type="text" name="department" id="editDepartment"
+                        class="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+                <button type="button" onclick="closeEditModal()"
+                    class="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
+                <button type="submit"
+                    class="px-4 py-2 text-sm font-bold text-white bg-primary rounded-lg hover:bg-gray-800 transition-colors">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openEditModal(userId, name, idNumber, department) {
+    document.getElementById('editForm').action = '/admin/users/' + userId + '/edit';
+    document.getElementById('editName').value = name;
+    document.getElementById('editIdNumber').value = idNumber;
+    document.getElementById('editDepartment').value = department;
+    document.getElementById('editModal').classList.remove('hidden');
+}
+
+function closeEditModal() {
+    document.getElementById('editModal').classList.add('hidden');
+}
+
+document.getElementById('editModal').addEventListener('click', function(e) {
+    if (e.target === this) closeEditModal();
+});
+</script>
+
+{% include 'components/confirm_modal.html' %}
 </body>
 </html>

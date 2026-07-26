@@ -42,16 +42,10 @@
             class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0">
             <div class="p-6">
                 <div class="flex items-center gap-3 mb-8">
-                    <div class="bg-primary/10 p-2 rounded-lg text-primary">
-                        <span class="material-symbols-outlined" style="">local_library</span>
-                    </div>
+                    <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
                     <h1 class="text-xl font-bold tracking-tight" style="">Profile</h1>
                 </div>
                 <div class="flex flex-col items-center mb-6">
-                    <div class="h-20 w-20 rounded-full bg-cover bg-center mb-3 ring-4 ring-primary/10"
-                        data-alt="Portrait of Alice Student"
-                        style="background-image: url(&quot;https://lh3.googleusercontent.com/aida-public/AB6AXuCkcv98J_6qGD7t-VqddLCYMILDlrzK6AKmcFAFZijgmQoy6GFBlTuESKfGNDh9mJMnMDBKRDEuCZBe8QJnNs85uBsvrz1LY3gROkLx5mMskEQhRJfHu8XLitpu2_2vXV3JxtK2d0p280rb_D7XqPYnHnB-nH6mYdfPwpQ6OgLwvAgVaEc99uwSs8r0oIDJL2CBkO5JrEqjz-pw3k_nUAqXphQJvfezlqXncllU7aw8bBEPek61muPCRlihYpS7HcmKChpHRbENzSg&quot;);">
-                    </div>
                     <h2 class="text-lg font-bold" style="">{{ user_data[3] if user_data else current_user.full_name }} | {{ user_data[2] if user_data else current_user.role }}</h2>
                     <p class="text-sm text-gray-500 dark:text-gray-400" style="">{{ current_user.email }}</p>
                 </div>

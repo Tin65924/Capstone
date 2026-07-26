@@ -277,3 +277,55 @@ class TestUserManagement:
     def test_change_role_librarian_forbidden(self, librarian_client, mock_db):
         resp = librarian_client.post('/admin/users/1/role', data={'role_id': '3'})
         assert resp.status_code == 403
+
+    def test_archive_user_admin(self, admin_client, mock_db):
+        mock_db['execute'].return_value = 1
+        resp = admin_client.post('/admin/users/1/archive')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count >= 1
+        call_args = mock_db['execute'].call_args_list[0]
+        assert 'UPDATE user_accounts' in call_args[0][0]
+
+    def test_archive_user_librarian_forbidden(self, librarian_client, mock_db):
+        resp = librarian_client.post('/admin/users/1/archive')
+        assert resp.status_code == 403
+
+    def test_unarchive_user_admin(self, admin_client, mock_db):
+        mock_db['execute'].return_value = 1
+        resp = admin_client.post('/admin/users/1/unarchive')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count >= 1
+
+    def test_unarchive_user_librarian_forbidden(self, librarian_client, mock_db):
+        resp = librarian_client.post('/admin/users/1/unarchive')
+        assert resp.status_code == 403
+
+    def test_delete_user_archived_success(self, admin_client, mock_db):
+        mock_db['fetch_one'].return_value = ('archived',)
+        mock_db['execute'].return_value = 1
+        resp = admin_client.post('/admin/users/1/delete')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count >= 1
+        call_args = mock_db['execute'].call_args_list[0]
+        assert 'DELETE FROM user_accounts' in call_args[0][0]
+
+    def test_delete_user_not_archived_fails(self, admin_client, mock_db):
+        mock_db['fetch_one'].return_value = ('active',)
+        resp = admin_client.post('/admin/users/1/delete')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_delete_user_not_found(self, admin_client, mock_db):
+        mock_db['fetch_one'].return_value = None
+        resp = admin_client.post('/admin/users/999/delete')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_delete_user_librarian_forbidden(self, librarian_client, mock_db):
+        resp = librarian_client.post('/admin/users/1/delete')
+        assert resp.status_code == 403
+
+    def test_delete_user_unauthenticated(self, client, mock_db):
+        resp = client.post('/admin/users/1/delete')
+        assert resp.status_code == 302
+        assert '/login' in resp.location

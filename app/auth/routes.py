@@ -6,11 +6,13 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from google_auth_oauthlib.flow import Flow
 from . import auth_bp
+from app.database import db
 from .models import (
     get_user_by_email, get_user_by_oauth_sub, create_user,
     create_pending_user, create_borrower, get_roles, get_role_by_name,
     log_activity, get_all_users, get_pending_users,
-    approve_user, update_user_role, toggle_user_status, get_admin_count
+    approve_user, update_user_role, toggle_user_status,
+    update_user_details, archive_user, unarchive_user, delete_user, get_admin_count, get_user_by_id
 )
 from .user import User
 from .decorators import librarian_required, admin_required
@@ -230,12 +232,13 @@ def admin_users():
     total = len(users)
     active = sum(1 for u in users if u[4] == 'active')
     students = sum(1 for u in users if u[3] == 'Student')
-    suspended = sum(1 for u in users if u[4] == 'disabled')
+    inactive = sum(1 for u in users if u[4] == 'disabled')
+    archived = sum(1 for u in users if u[4] == 'archived')
     return render_template('users/users.html',
                            users=users, roles=get_roles(),
                            pending=pending, total=total,
                            active=active, students=students,
-                           suspended=suspended,
+                           inactive=inactive, archived=archived,
                            status_filter=status_filter)
 
 
@@ -259,6 +262,47 @@ def toggle_user_status_route(user_id):
     return redirect(url_for('auth.admin_users'))
 
 
+@auth_bp.route('/admin/users/<int:user_id>/archive', methods=['POST'])
+@login_required
+@admin_required
+def archive_user_route(user_id):
+    archive_user(user_id)
+    log_activity(current_user.id, f'archived_user:{user_id}')
+    flash('User archived.', 'success')
+    return redirect(url_for('auth.admin_users'))
+
+
+@auth_bp.route('/admin/users/<int:user_id>/unarchive', methods=['POST'])
+@login_required
+@admin_required
+def unarchive_user_route(user_id):
+    unarchive_user(user_id)
+    log_activity(current_user.id, f'unarchived_user:{user_id}')
+    flash('User restored.', 'success')
+    return redirect(url_for('auth.admin_users'))
+
+
+@auth_bp.route('/admin/users/<int:user_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_user_route(user_id):
+    user = get_user_by_id(user_id)
+    if not user:
+        flash('User not found.', 'error')
+        return redirect(url_for('auth.admin_users'))
+    status = db.fetch_one(
+        'SELECT account_status FROM user_accounts WHERE user_id = %s',
+        (user_id,)
+    )
+    if status and status[0] != 'archived':
+        flash('User must be archived before deletion.', 'error')
+        return redirect(url_for('auth.admin_users'))
+    delete_user(user_id)
+    log_activity(current_user.id, f'deleted_user:{user_id}')
+    flash('User permanently deleted.', 'success')
+    return redirect(url_for('auth.admin_users'))
+
+
 @auth_bp.route('/admin/users/<int:user_id>/role', methods=['POST'])
 @login_required
 @admin_required
@@ -268,6 +312,20 @@ def change_user_role(user_id):
         update_user_role(user_id, role_id)
         log_activity(current_user.id, f'changed_role:{user_id}_to_{role_id}')
         flash('User role updated.', 'success')
+    return redirect(url_for('auth.admin_users'))
+
+
+@auth_bp.route('/admin/users/<int:user_id>/edit', methods=['POST'])
+@login_required
+@admin_required
+def edit_user_route(user_id):
+    full_name = request.form.get('full_name', '').strip()
+    id_number = request.form.get('id_number', '').strip()
+    department = request.form.get('department', '').strip()
+    if full_name:
+        update_user_details(user_id, full_name, id_number or None, department or None)
+        log_activity(current_user.id, f'edited_user:{user_id}')
+        flash('User details updated.', 'success')
     return redirect(url_for('auth.admin_users'))
 
 

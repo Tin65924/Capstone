@@ -255,19 +255,8 @@
         
         <!-- Logo / Title -->
         <div class="flex items-center gap-3 mb-8 shrink-0">
-          <div class="bg-primary/10 p-2 rounded-lg text-primary">
-            <span class="material-symbols-outlined">local_library</span>
-          </div>
+          <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
           <h1 class="text-xl font-bold tracking-tight">MCST Library</h1>
-        </div>
-
-        <!-- User Profile -->
-        <div class="flex flex-col items-center mb-6 shrink-0">
-          <div class="h-20 w-20 rounded-full bg-cover bg-center mb-3 ring-4 ring-primary/10"
-            style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCkcv98J_6qGD7t-VqddLCYMILDlrzK6AKmcFAFZijgmQoy6GFBlTuESKfGNDh9mJMnMDBKRDEuCZBe8QJnNs85uBsvrz1LY3gROkLx5mMskEQhRJfHu8XLitpu2_2vXV3JxtK2d0p280rb_D7XqPYnHnB-nH6mYdfPwpQ6OgLwvAgVaEc99uwSs8r0oIDJL2CBkO5JrEqjz-pw3k_nUAqXphQJvfezlqXncllU7aw8bBEPek61muPCRlihYpS7HcmKChpHRbENzSg');">
-          </div>
-          <h2 class="text-lg font-bold text-center">{{ current_user.full_name }}</h2>
-          <p class="text-sm text-gray-500 dark:text-gray-400">{{ current_user.role }}</p>
         </div>
 
         <!-- Navigation -->
@@ -285,7 +274,6 @@
                         <span class="material-symbols-outlined">dashboard</span>
                         <span class="text-sm">Dashboard</span>
                     </a>
-                    <hr class="border-gray-200 dark:border-gray-700 my-1">
                     <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('requests.list_requests') }}">
                         <span class="material-symbols-outlined">book_online</span>
                         <span class="text-sm">Book Requests</span>
@@ -328,7 +316,10 @@
 
       <!-- Logout -->
       <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
-        <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-gray-800 transition-colors">
+                <div class="flex flex-col items-center mb-4">
+          <h2 class="text-lg font-bold text-center">{{ current_user.full_name }}</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">{{ current_user.role }}</p>
+        </div>        <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-gray-800 transition-colors">
           <span class="material-symbols-outlined text-[18px]">logout</span>
           <span>Log Out</span>
         </a>

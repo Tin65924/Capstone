@@ -115,6 +115,17 @@ def update_book(book_id, title, author, edition, publisher, year_published,
     )
 
 
+def get_books_by_status(status):
+    return db.fetch_all(
+        'SELECT * FROM book_catalog WHERE catalog_status = %s ORDER BY title',
+        (status,)
+    )
+
+
+def delete_book(book_id):
+    db.execute('DELETE FROM book_catalog WHERE book_id = %s', (book_id,))
+
+
 def update_book_status(book_id, status):
     return db.execute(
         'UPDATE book_catalog SET catalog_status=%s WHERE book_id=%s',

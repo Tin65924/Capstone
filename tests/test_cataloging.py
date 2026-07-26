@@ -109,6 +109,40 @@ class TestCatalogingCRUD:
         resp = librarian_client.post('/cataloging/999/status')
         assert resp.status_code == 302
 
+    def test_delete_book_archived_success(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = SAMPLE_BOOKS[2]
+        mock_db['execute'].return_value = 1
+        resp = librarian_client.post('/cataloging/3/delete')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count >= 1
+        call_args = mock_db['execute'].call_args_list[0]
+        assert 'DELETE FROM book_catalog' in call_args[0][0]
+
+    def test_delete_book_not_archived_fails(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
+        resp = librarian_client.post('/cataloging/1/delete')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_delete_book_not_found(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = None
+        resp = librarian_client.post('/cataloging/999/delete')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_delete_book_rbac_student_forbidden(self, student_client, mock_db):
+        resp = student_client.post('/cataloging/3/delete')
+        assert resp.status_code == 403
+
+    def test_delete_book_rbac_faculty_forbidden(self, faculty_client, mock_db):
+        resp = faculty_client.post('/cataloging/3/delete')
+        assert resp.status_code == 403
+
+    def test_delete_book_unauthenticated(self, client, mock_db):
+        resp = client.post('/cataloging/3/delete')
+        assert resp.status_code == 302
+        assert '/login' in resp.location
+
     def test_add_accession_success(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [SAMPLE_BOOKS[0], None]
         mock_db['execute'].return_value = 1
