@@ -1,21 +1,111 @@
-title,author,edition,publisher,year_published,subject_classification,call_number,isbn,material_type,description
-Design Systems,Alla Kholmatova,1,Smashing Magazine,2017,Web Design,QA76.76.H94 K46 2017,978-3-945749-58-2,Book,A practical guide to creating design systems for digital products.
-The Art of Code,Michael Feathers,2,Pearson,2021,Software Engineering,QA76.76.D47 F43 2021,978-0-13-117705-5,Book,Exploring the craft and creativity behind software development.
-Abstract Algebra,David S. Dummit,3,Wiley,2003,Mathematics,QA162 .D86 2003,978-0-471-43334-7,Book,A comprehensive introduction to abstract algebra.
-Legal Frameworks,Sarah Mitchell,1,Oxford University Press,2020,Law,KF385 .M58 2020,978-0-19-092526-8,Book,An overview of foundational legal principles and frameworks.
-Principles of Macroeconomics,Gregory Mankiw,8,Cengage Learning,2020,Economics,HB172.5 .M36 2020,978-1-337-09687-5,Book,Clear and engaging introduction to macroeconomic theory.
-Algorithms and Data Structures: A Modern Approach,Dr. Sarah L. Jenkins,1,Springer,2023,Computer Science,QA76.9.A43 J46 2023,978-3-16-148410-0,Book,Modern techniques in algorithm design and data structures.
-Neural Networks and Deep Learning Fundamentals,Prof. Michael Zhang,2,MIT Press,2022,Artificial Intelligence,Q325.5 .Z43 2022,978-0-26-203561-3,Book,Foundational concepts of neural networks and deep learning.
-Enterprise Software Architecture: Patterns and Practice,Elena Rodriguez & David Kemp,1,O'Reilly Media,2024,Software Architecture,QA76.754 .R63 2024,978-1-491-95029-6,Book,Practical patterns for enterprise software architecture.
-Cybersecurity in the Age of Quantum Computing,Dr. Alan Turing III,1,CRC Press,2023,Cybersecurity,QA76.9.A25 T87 2023,978-0-12-384860-4,Book,Cybersecurity challenges and solutions in the quantum era.
-Principles of Database Systems,Jeffrey D. Ullman,7,Pearson,2021,Database Systems,QA76.9.D3 U45 2021,978-0-13-110362-7,E-Book,Classic textbook on database system principles.
-Introduction to Machine Learning,Ethem Alpaydin,4,MIT Press,2020,Machine Learning,Q325.5 .A47 2020,978-0-26-204379-3,Book,A broad introduction to machine learning techniques.
-The Pragmatic Programmer,David Thomas & Andrew Hunt,2,Addison-Wesley,2019,Software Engineering,QA76.6 .T46 2019,978-0-13-595705-9,Book,Timeless tips for becoming a better software developer.
-Clean Code,Robert C. Martin,1,Prentice Hall,2008,Software Engineering,QA76.76.D47 M37 2008,978-0-13-235088-4,Book,Principles of writing clean and maintainable code.
-Introduction to Quantum Mechanics,David J. Griffiths,3,Cambridge University Press,2018,Physics,QC174.12 .G75 2018,978-1-107-18963-8,Book,Standard textbook for undergraduate quantum mechanics.
-Organic Chemistry,Paula Yurkanis Bruice,8,Pearson,2020,Chemistry,QD251.3 .B78 2020,978-0-13-519221-4,Book,Comprehensive guide to organic chemistry concepts.
-Campbell Biology,Lisa A. Urry et al.,12,Pearson,2020,Biology,QH308.2 .C36 2020,978-0-13-598804-6,Book,Definitive introductory biology textbook.
-Principles of Economics,N. Gregory Mankiw,9,Cengage Learning,2020,Economics,HB171.5 .M36 2020,978-0-357-13378-9,Book,Foundational principles of micro and macroeconomics.
-The Art of War,Sun Tzu,1,Shambhala,2005,Philosophy,U101 .S95 2005,978-1-59030-200-6,Book,Ancient Chinese military treatise on strategy and tactics.
-Thinking, Fast and Slow,Daniel Kahneman,1,Farrar, Straus and Giroux,2011,Psychology,BF441 .K34 2011,978-0-374-27563-1,Book,Exploration of the two systems that drive human thought.
-Sapiens: A Brief History of Humankind,Yuval Noah Harari,1,Harper,2015,Anthropology,CB113.H4 H37 2015,978-0-06-231609-7,Book,A sweeping history of the human species.
+title,author,isbn,edition,publisher,year,subject,call_number,material_type,description
+Introduction to Algorithms,Thomas H. Cormen,978-0262033848,3rd,MIT Press,2009,Computer Science,QA76.6.C66,Book,Comprehensive textbook on algorithms and data structures
+Clean Code,Robert C. Martin,978-0132350884,1st,Prentice Hall,2008,Software Engineering,QA76.76.R63,Book,A handbook of agile software craftsmanship
+The Pragmatic Programmer,David Thomas,978-0201616224,2nd,Addison-Wesley,2019,Software Engineering,QA76.6.T45,Book,Timeless tips for software developers
+Design Patterns,Erich Gamma,978-0201633610,1st,Addison-Wesley,1994,Software Engineering,QA76.64.G36,Book,Gang of Four design patterns catalog
+Artificial Intelligence: A Modern Approach,Stuart Russell,978-0134610993,4th,Pearson,2020,Artificial Intelligence,Q335.R87,Book,Comprehensive AI textbook
+Computer Networking: A Top-Down Approach,James Kurose,978-0133594140,7th,Pearson,2016,Computer Science,TK5105.875.I57 K87,Book,Top-down approach to computer networking
+Database System Concepts,Abraham Silberschatz,978-0078022159,7th,McGraw-Hill,2019,Computer Science,QA76.9.D3 S55,Book,Fundamentals of database systems
+Operating System Concepts,Abraham Silberschatz,978-0470487341,8th,Wiley,2018,Computer Science,QA76.76.O63 S55,Book,OS fundamentals textbook
+The C Programming Language,Brian Kernighan,978-0131103627,2nd,Prentice Hall,1988,Computer Science,QA76.73.C15 K47,Book,Classic C programming reference
+Structure and Interpretation of Computer Programs,Harold Abelson,978-0262510875,2nd,MIT Press,1996,Computer Science,QA76.6.A24,Book,Foundational CS text using Scheme
+Don Quixote,Miguel de Cervantes,978-0060934347,1st,Harper Perennial,2005,Literature,PQ6329.A1 2005,Book,Spanish literary classic
+One Hundred Years of Solitude,Gabriel García Márquez,978-0060883287,1st,Harper Perennial,2006,Literature,PQ8180.17.A73,Book,Magical realism masterpiece
+The Great Gatsby,F. Scott Fitzgerald,978-0743273565,1st,Scribner,2004,Literature,PS3511.I9 G7,Book,American literary classic
+To Kill a Mockingbird,Harper Lee,978-0061120084,1st,Harper Perennial,2006,Literature,PS3562.E33 T6,Book,American novel about racial injustice
+1984,George Orwell,978-0451524935,1st,Signet,1950,Literature,PR6029.R8 N6,Book,Dystopian political fiction
+Pride and Prejudice,Jane Austen,978-0141439518,1st,Penguin,2002,Literature,PR4034.P7,Book,Classic romance novel
+The Catcher in the Rye,J.D. Salinger,978-0316769488,1st,Little Brown,1991,Literature,PS3537.A426 C3,Book,Coming-of-age novel
+Moby-Dick,Herman Melville,978-0142437247,1st,Penguin,2002,Literature,PS2384.M6,Book,American epic whaling novel
+War and Peace,Leo Tolstoy,978-0199232765,1st,Oxford UP,2008,Literature,PG3366.V6 2008,Book,Russian historical novel
+The Odyssey,Homer,978-0140268867,1st,Penguin,1999,Literature,PA4025.A5 O3,Book,Ancient Greek epic poem
+Calculus: Early Transcendentals,James Stewart,978-1285741550,8th,Cengage,2015,Mathematics,QA303.2.S74,Book,Standard calculus textbook
+Linear Algebra Done Right,Sheldon Axler,978-3319110790,3rd,Springer,2015,Mathematics,QA184.2.A95,Book,Undergraduate linear algebra text
+Introduction to Probability,Dimitri Bertsekas,978-1886529403,2nd,Athena Scientific,2008,Mathematics,QA273.B48,Book,Probability theory fundamentals
+The Feynman Lectures on Physics,Richard Feynman,978-0465023820,1st,Basic Books,2010,Physics,QC21.2.F49,Book,Classic physics lecture series
+University Physics,Young and Freedman,978-0133969290,14th,Pearson,2015,Physics,QC21.3.Y68,Book,Standard university physics textbook
+Introduction to Electrodynamics,David J. Griffiths,978-0321856562,4th,Pearson,2017,Physics,QC631.G75,Book,Electrodynamics textbook
+Classical Mechanics,John R. Taylor,978-1891389221,1st,University Science Books,2005,Physics,QA807.T39,Book,Undergraduate classical mechanics
+Thermal Physics,Charles Kittel,978-0716710882,2nd,W.H. Freeman,1980,Physics,QC311.K58,Book,Thermodynamics and statistical mechanics
+Organic Chemistry,Paula Yurkanis Bruice,978-1260475678,8th,Pearson,2020,Chemistry,QD251.3.B78,Book,Organic chemistry textbook
+Physical Chemistry,Peter Atkins,978-0198769866,11th,Oxford UP,2018,Chemistry,QD453.3.A85,Book,Physical chemistry fundamentals
+Biochemistry,Jeremy M. Berg,978-1319114671,9th,W.H. Freeman,2019,Biochemistry,QP514.2.B47,Book,Biochemistry textbook
+Molecular Biology of the Cell,Bruce Alberts,978-0815344322,6th,Garland Science,2014,Biology,QH581.2.A43,Book,Cell biology reference
+Campbell Biology,Lisa Urry,978-0134093413,12th,Pearson,2020,Biology,QH308.2.C36,Book,General biology textbook
+Principles of Economics,N. Gregory Mankiw,978-1285165875,9th,Cengage,2020,Economics,HB171.5.M36,Book,Introductory economics textbook
+Microeconomics,Robert Pindyck,978-0134184241,9th,Pearson,2017,Economics,HB172.P56,Book,Intermediate microeconomics
+The Wealth of Nations,Adam Smith,978-0553585971,1st,Bantam,2003,Economics,HB161.S65,Book,Foundational economics text
+A Brief History of Time,Stephen Hawking,978-0553380163,1st,Bantam,1998,Physics,QB981.H38,Book,Popular science on cosmology
+The Selfish Gene,Richard Dawkins,978-0199291151,1st,Oxford UP,2006,Biology,QH437.D39,Book,Evolutionary biology classic
+On the Origin of Species,Charles Darwin,978-0451529060,1st,Penguin,2003,Biology,QH365.O8 2003,Book,Foundational evolutionary biology
+Silent Spring,Rachel Carson,978-0618249060,1st,Mariner Books,2002,Environmental Science,QH545.P4 C37,Book,Environmental science classic
+Fundamentals of Thermodynamics,Richard E. Sonntag,978-1118131992,8th,Wiley,2013,Engineering,TJ265.S66,Book,Engineering thermodynamics
+Fluid Mechanics,Frank M. White,978-0073398273,8th,McGraw-Hill,2015,Engineering,TA357.W48,Book,Engineering fluid mechanics
+Introduction to Robotics,John J. Craig,978-0201543612,3rd,Pearson,2005,Engineering,TJ211.C67,Book,Robotics fundamentals
+Engineering Mechanics: Dynamics,R.C. Hibbeler,978-0133915389,14th,Pearson,2015,Engineering,TA352.H53,Book,Dynamics textbook
+Digital Design,M. Morris Mano,978-0134549897,6th,Pearson,2018,Engineering,TK7888.3.M36,Book,Digital logic design
+Microelectronic Circuits,Adel S. Sedra,978-0190853549,8th,Oxford UP,2020,Engineering,TK7867.S43,Book,Analog and digital circuits
+Thermodynamics: An Engineering Approach,Yunus Cengel,978-0073398174,9th,McGraw-Hill,2019,Engineering,TJ265.C46,Book,Engineering thermodynamics
+Control Systems Engineering,Norman S. Nise,978-1119474227,8th,Wiley,2019,Engineering,TJ213.N57,Book,Control systems analysis and design
+The Art of Electronics,Paul Horowitz,978-0521809269,3rd,Cambridge UP,2015,Engineering,TK7815.H67,Book,Practical electronics reference
+Signals and Systems,Alan V. Oppenheim,978-0138147570,2nd,Pearson,1996,Engineering,TK5102.9.O66,Book,Signals and systems fundamentals
+Introduction to Algorithms for Data Mining,Weiss,978-0768091110,2nd,CRC Press,2020,Computer Science,QA76.9.D3 W45,Book,Data mining algorithms
+Compilers: Principles Techniques and Tools,Alfred V. Aho,978-0321486813,2nd,Addison-Wesley,2006,Computer Science,QA76.6.A37,Book,Dragon book on compilers
+Computer Architecture: A Quantitative Approach,John L. Hennessy,978-0128119051,6th,Morgan Kaufmann,2017,Computer Science,QA76.9.A73 H46,Book,Computer architecture reference
+Programming Pearls,Jon Bentley,978-0201657883,2nd,Addison-Wesley,1999,Computer Science,QA76.6.B45,Book,Algorithmic problem solving
+The Mythical Man-Month,Frederick Brooks,978-0201835953,1st,Addison-Wesley,1995,Software Engineering,QA76.6.B76,Book,Software project management classic
+Code Complete,Steve McConnell,978-0735619678,2nd,Microsoft Press,2004,Software Engineering,QA76.76.D47 M33,Book,Practical software construction
+Refactoring,Martin Fowler,978-0134757599,2nd,Addison-Wesley,2018,Software Engineering,QA76.76.R42 F69,Book,Improving existing code
+The Art of Computer Programming,Donald E. Knuth,978-0201896831,3rd,Addison-Wesley,1997,Computer Science,QA76.6.K64,Book,Encyclopedic algorithms reference
+Concrete Mathematics,Ronald L. Graham,978-0201558029,2nd,Addison-Wesley,1994,Mathematics,QA39.2.G73,Book,Mathematical foundations for CS
+Networking,Andrew S. Tanenbaum,978-0133594140,5th,Pearson,2010,Computer Science,TK5105.5.T36,Book,Computer network textbook
+The Sociopath Next Door,Martha Stout,978-0767915823,1st,Broadway Books,2005,Psychology,RC555.S76,Book,Understanding antisocial personality
+Thinking Fast and Slow,Daniel Kahneman,978-0374533557,1st,Farrar Straus,2013,Psychology,BF441.K34,Book,Cognitive biases and decision making
+The Power of Habit,Charles Duhigg,978-0812981605,1st,Random House,2014,Psychology,BF335.D85,Book,Science of habit formation
+Sapiens: A Brief History of Humankind,Yuval Noah Harari,978-0062316097,1st,Harper,2015,History,CB113.H37,Book,Human history overview
+The Guns of August,Barbara Tuchman,978-0345476098,1st,Ballantine,2004,History,D530.T83,Book,World War I origins
+A People's History of the United States,Howard Zinn,978-0062397348,1st,Harper Perennial,2015,History,E178.Z56,Book,Alternative US history
+The Elements of Style,William Strunk Jr.,978-0205309023,4th,Pearson,1999,Language,PE1408.S77,Book,English writing style guide
+The Art of War,Sun Tzu,978-1590302255,1st,Shambhala,2005,Philosophy,U101.S95,Book,Ancient military strategy
+Meditations,Marcus Aurelius,978-0140449334,1st,Penguin,2006,Philosophy,BD161.A8 2006,Book,Stoic philosophy reflections
+Thus Spoke Zarathustra,Friedrich Nietzsche,978-0140441185,1st,Penguin,1969,Philosophy,B3313.A4 1969,Book,Nietzsche philosophical novel
+Sophie's World,Jostein Gaarder,978-0374530716,1st,Farrar Straus,2007,Philosophy,BD21.G33,Book,History of philosophy novel
+Atomic Habits,James Clear,978-0735211292,1st,Penguin,2018,Psychology,BF335.C53,Book,Small habits big results
+Educated,Tara Westover,978-0399590504,1st,Random House,2018,Autobiography,CT3262.W47,Book,Memoir of self-education
+The Alchemist,Paulo Coelho,978-0062315007,1st,Harper,2014,Literature,PQ9698.13.O35 A45,Book,Inspirational allegorical novel
+The Little Prince,Antoine de Saint-Exupéry,978-0156012195,1st,Mariner Books,2000,Literature,PQ2637.A274 P48,Book,Philosophical children's tale
+Crime and Punishment,Fyodor Dostoevsky,978-0486415871,1st,Dover,2001,Literature,PG3326.P7 2001,Book,Russian psychological novel
+Brave New World,Aldous Huxley,978-0060850524,1st,Harper Perennial,2006,Literature,PR6015.U9 B7,Book,Dystopian sci-fi classic
+Frankenstein,Mary Shelley,978-0486282114,1st,Dover,1994,Literature,PR5397.F7,Book,Gothic science fiction novel
+Dracula,Bram Stoker,978-0486411095,1st,Dover,2000,Literature,PR6037.T617 D7,Book,Gothic horror classic
+The Adventures of Huckleberry Finn,Mark Twain,978-0486280615,1st,Dover,1994,Literature,PS1305.A1 1994,Book,American adventure novel
+Wuthering Heights,Emily Brontë,978-0141439556,1st,Penguin,2002,Literature,PR4172.W7,Book,Victorian Gothic romance
+Jane Eyre,Charlotte Brontë,978-0142437209,1st,Penguin,2003,Literature,PR4167.J3 2003,Book,Victorian coming-of-age novel
+The Hobbit,J.R.R. Tolkien,978-0547928227,1st,Mariner Books,2012,Literature,PR6039.O32 H6,Book,Fantasy adventure classic
+Fahrenheit 451,Ray Bradbury,978-1451673319,1st,Simon Schuster,2012,Literature,PS3503.R167 F3,Book,Dystopian novel about censorship
+The Book Thief,Markus Zusak,978-0375842207,1st,Knopf,2007,Literature,PZ7.Z83 B6,Book,WWII historical fiction
+Life of Pi,Yann Martel,978-0156027328,1st,Mariner Books,2003,Literature,PR9199.3.M3855 L54,Book,Survival and faith novel
+The Kite Runner,Khaled Hosseini,978-1594480003,1st,Riverhead,2004,Literature,PS3608.O832 K58,Book,Afghan historical fiction
+Guns Germs and Steel,Jared Diamond,978-0393317558,1st,W.W. Norton,2005,History,HM206.D53,Book,Civilization development factors
+A Short History of Nearly Everything,Bill Bryson,978-0767908184,1st,Broadway,2004,Science,Q162.B88,Book,Popular science overview
+Cosmos,Carl Sagan,978-0345539434,1st,Ballantine,2013,Science,QB44.3.S24,Book,Universe exploration popular science
+The Elegant Universe,Brian Greene,978-0393338102,1st,W.W. Norton,2003,Physics,QC794.6.S85 G74,Book,String theory popular science
+The Gene: An Intimate History,Siddhartha Mukherjee,978-1476733500,1st,Scribner,2016,Biology,QH431.M95,Book,History of genetics
+The Immortal Life of Henrietta Lacks,Rebecca Skloot,978-1400052189,1st,Crown,2010,Biology,RC265.6.L35 S55,Book,Medical ethics and cell research
+Outliers: The Story of Success,Malcolm Gladwell,978-0316017930,1st,Little Brown,2008,Psychology,BF637.S8 G53,Book,Success factors analysis
+Freakonomics,Steven Levitt,978-0061245138,1st,Harper,2009,Economics,HB74.P8 L48,Book,Economics of everyday things
+The Tipping Point,Malcolm Gladwell,978-0316346627,1st,Little Brown,2002,Sociology,HM1033.G53,Book,Sociological change theory
+Steve Jobs,Walter Isaacson,978-1501127625,1th,Simon Schuster,2015,Biography,QA76.2.J63 I83,Book,Steve Jobs biography
+Elon Musk,Ashlee Vance,978-0062301253,1st,Ecco,2015,Biography,HC102.5.M88 V36,Book,Elon Musk biography
+Long Walk to Freedom,Nelson Mandela,978-0316548182,1st,Little Brown,1995,Autobiography,DT1974.M35,Book,Nelson Mandela autobiography
+I Know Why the Caged Bird Sings,Maya Angelou,978-0345514400,1st,Ballantine,2009,Autobiography,PS3551.N464 I2,Book,Maya Angelou memoir
+The Diary of a Young Girl,Anne Frank,978-0553577129,1st,Bantam,1997,Autobiography,DS134.5.F7 1997,Book,Holocaust diary
+Digital Minimalism,Cal Newport,978-0525536512,1st,Portfolio,2019,Technology,HM851.N49,Book,Digital declutter strategies
+The Innovators,Walter Isaacson,978-1476708706,1st,Simon Schuster,2014,Technology,HD9696.2.U6 I83,Book,History of the digital revolution
+The Phoenix Project,Gene Kim,978-1942788294,3rd,IT Revolution,2018,Software Engineering,HD30.2.K56,Book,DevOps IT novel
+The Lean Startup,Eric Ries,978-0307887894,1st,Crown Business,2011,Business,HD62.5.R54,Book,Startup methodology
+Good to Great,Jim Collins,978-0066620992,1st,Harper Business,2001,Business,HD57.C65,Book,Business management study
+Zero to One,Peter Thiel,978-0804139298,1st,Crown Business,2014,Business,HD62.5.T45,Book,Startup philosophy
+Deep Work,Cal Newport,978-1455586691,1st,Grand Central,2016,Psychology,BF323.D5 N49,Book,Focused work strategies
+The 7 Habits of Highly Effective People,Stephen Covey,978-1982137274,1st,Simon Schuster,2020,Self-Help,BJ1581.C66,Book,Personal effectiveness guide
+How to Win Friends and Influence People,Dale Carnegie,978-0671027032,1st,Pocket Books,1998,Self-Help,BJ1581.C37,Book,Interpersonal skills classic
