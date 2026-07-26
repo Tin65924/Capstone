@@ -342,13 +342,6 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                     _import_jobs[job_id]['done'] = imported + len(errors)
                 continue
 
-            existing_acc = get_accession_by_number(accession_number)
-            if existing_acc:
-                errors.append(f'Row {i}: accession number {accession_number} already exists')
-                with _import_lock:
-                    _import_jobs[job_id]['done'] = imported + len(errors)
-                continue
-
             isbn = book_data.get('isbn', '')
             if isbn:
                 existing_book = db.fetch_one(
@@ -360,6 +353,18 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                     'SELECT book_id FROM book_catalog WHERE title = %s AND author = %s AND isbn IS NULL',
                     (title, author)
                 )
+
+            existing_acc = get_accession_by_number(accession_number)
+            if existing_acc:
+                if existing_book and existing_acc[2] == existing_book[0]:
+                    imported += 1
+                    with _import_lock:
+                        _import_jobs[job_id]['done'] = imported + len(errors)
+                    continue
+                errors.append(f'Row {i}: accession number {accession_number} already exists')
+                with _import_lock:
+                    _import_jobs[job_id]['done'] = imported + len(errors)
+                continue
 
             if existing_book:
                 book_id = existing_book[0]
