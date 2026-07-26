@@ -1,7 +1,67 @@
-{% extends "base.html" %}
-{% block title %}{{ book[1] }} - Book Detail{% endblock %}
-{% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>{{ book[1] }} - Book Detail</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+    tailwind.config = {
+        darkMode: "class",
+        theme: {
+            extend: {
+                colors: {
+                    primary: "#191a1d",
+                    "background-light": "#f7f7f7",
+                    "background-dark": "#18191a"
+                },
+                fontFamily: {
+                    display: "Manrope"
+                },
+                borderRadius: {
+                    DEFAULT: "0.125rem",
+                    lg: "0.25rem",
+                    xl: "0.5rem",
+                    full: "0.75rem"
+                }
+            }
+        }
+    };
+</script>
+<style type="text/tailwindcss">
+    @layer base {
+        body { @apply font-display bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100; }
+    }
+    .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+</style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+<header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+            <div class="w-8 h-8 bg-primary rounded flex items-center justify-center text-white">
+                <span class="material-icons text-xl">account_balance</span>
+            </div>
+            <h1 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white">MCST <span class="text-primary">Library</span></h1>
+        </div>
+        <nav class="hidden md:flex items-center gap-6">
+            <a class="text-sm font-medium text-slate-500 hover:text-primary transition-colors" href="{{ url_for('main.index') }}">Home</a>
+            <a class="text-sm font-medium text-primary border-b-2 border-primary pb-1" href="{{ url_for('cataloging.public_catalog') }}">Catalog</a>
+            <a class="text-sm font-medium text-slate-500 hover:text-primary transition-colors flex items-center gap-1"
+               href="{{ url_for('main.profile') if current_user.is_authenticated else url_for('auth.login') }}" title="Profile">
+                <span class="material-symbols-outlined text-lg">account_circle</span>
+            </a>
+        </nav>
+    </div>
+</header>
+
+<main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
     <nav aria-label="Breadcrumb" class="flex mb-6 text-xs font-medium text-slate-500 uppercase tracking-wider">
         <ol class="flex items-center space-x-2">
             <li><a class="hover:text-primary" href="{{ url_for('cataloging.public_catalog') }}">Catalog</a></li>
@@ -13,6 +73,7 @@
             <li class="text-slate-900 dark:text-slate-100">Book Details</li>
         </ol>
     </nav>
+
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-8 mb-8">
         <div class="flex flex-col md:flex-row justify-between items-start gap-6">
             <div class="flex-grow">
@@ -29,13 +90,9 @@
                     {% endif %}
                 </div>
                 <p class="text-lg text-slate-600 dark:text-slate-400 font-medium">{{ book[2] }}</p>
-                {% if book[3] %}
-                <p class="text-sm text-slate-400 mt-1">{{ book[3] }} ed.</p>
-                {% endif %}
             </div>
             <div class="flex flex-col items-end gap-4 min-w-[240px]">
-                {% set available = accessions|selectattr('6', 'equalto', 'purchase')|list|length %}
-                {% if available > 0 %}
+                {% if accessions %}
                 <span class="inline-flex bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-4 py-2 rounded font-bold uppercase tracking-wider text-xs items-center gap-2 border border-green-200 dark:border-green-800">
                     <span class="w-2 h-2 rounded-full bg-green-500"></span>
                     Available in Library
@@ -46,9 +103,16 @@
                     Not Available
                 </span>
                 {% endif %}
+                <div class="flex gap-2 w-full">
+                    <button class="flex-1 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded font-bold text-sm transition-all flex items-center justify-center gap-2">
+                        Reserve
+                    </button>
+                </div>
             </div>
         </div>
+
         <hr class="my-8 border-slate-100 dark:border-slate-800">
+
         <div class="space-y-8">
             <div>
                 <h3 class="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Description</h3>
@@ -82,6 +146,7 @@
             </div>
         </div>
     </div>
+
     <div class="mt-12">
         <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
             <span class="material-icons text-slate-400">layers</span>
@@ -91,32 +156,34 @@
             <table class="w-full text-left border-collapse">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Accession Number</th>
-                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">LOC Classification</th>
-                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Copy No.</th>
-                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Source</th>
-                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status</th>
+                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest" style="">Accession Number</th>
+                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest" style="">LOC Classification</th>
+                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest" style="">Copy No.</th>
+                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest" style="">Status</th>
+                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right" style="">Action</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                     {% for acc in accessions %}
                     <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                        <td class="px-6 py-4 text-sm font-medium">{{ acc[1] }}</td>
-                        <td class="px-6 py-4">
-                            <div class="text-sm text-slate-900 dark:text-slate-100 font-semibold">{{ book[7] or '—' }}</div>
+                        <td class="px-6 py-4 text-sm font-medium" style="">{{ acc[1] }}</td>
+                        <td class="px-6 py-4" style="">
+                            <div class="text-sm text-slate-900 dark:text-slate-100 font-semibold" style="">{{ book[7] or '—' }}</div>
                         </td>
-                        <td class="px-6 py-4 text-sm">Copy {{ acc[3] or '?' }}</td>
-                        <td class="px-6 py-4 text-sm">{{ acc[6]|title if acc[6] else '—' }}</td>
-                        <td class="px-6 py-4">
-                            <span class="inline-flex items-center gap-1 text-green-600 dark:text-green-400 text-xs font-bold uppercase tracking-tight">
+                        <td class="px-6 py-4 text-sm" style="">Copy {{ acc[3] or '?' }}</td>
+                        <td class="px-6 py-4" style="">
+                            <span class="inline-flex items-center gap-1 text-green-600 dark:text-green-400 text-xs font-bold uppercase tracking-tight" style="">
                                 <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                                 Available
                             </span>
                         </td>
+                        <td class="px-6 py-4 text-right" style="">
+                            <button class="text-primary hover:underline text-xs font-bold" style="">Reserve</button>
+                        </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" class="px-6 py-8 text-center text-sm text-slate-400">
+                        <td colspan="5" class="px-6 py-8 text-center text-sm text-slate-400" style="">
                             No copies available for this title.
                         </td>
                     </tr>
@@ -125,5 +192,25 @@
             </table>
         </div>
     </div>
-</div>
-{% endblock %}
+</main>
+
+<footer class="mt-auto py-8 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 bg-slate-200 dark:bg-slate-800 rounded flex items-center justify-center text-slate-600 dark:text-slate-400">
+                    <span class="material-icons text-sm">account_balance</span>
+                </div>
+                <p class="text-sm text-slate-500 font-medium">© 2024 University Academic Library. All Rights Reserved.</p>
+            </div>
+            <nav class="flex items-center gap-6">
+                <a class="text-xs text-slate-400 hover:text-primary" href="#">Terms of Use</a>
+                <a class="text-xs text-slate-400 hover:text-primary" href="#">Privacy Policy</a>
+                <a class="text-xs text-slate-400 hover:text-primary" href="#">Help Desk</a>
+            </nav>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>

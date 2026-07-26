@@ -14,33 +14,35 @@ def create_book(title, author, edition, publisher, year_published, subject_class
     return rows[0][0] if rows else None
 
 
+DISTINCT_ORDER = 'title, author, COALESCE(isbn, \'\')'
+
 def search_books(query, field=None):
     pattern = f'%{query}%'
     if field == 'title':
         return db.fetch_all(
-            'SELECT * FROM book_catalog WHERE title ILIKE %s ORDER BY title',
+            f'SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog WHERE title ILIKE %s ORDER BY {DISTINCT_ORDER}',
             (pattern,)
         )
     elif field == 'author':
         return db.fetch_all(
-            'SELECT * FROM book_catalog WHERE author ILIKE %s ORDER BY title',
+            f'SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog WHERE author ILIKE %s ORDER BY {DISTINCT_ORDER}',
             (pattern,)
         )
     elif field == 'isbn':
         return db.fetch_all(
-            'SELECT * FROM book_catalog WHERE isbn ILIKE %s ORDER BY title',
+            f'SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog WHERE isbn ILIKE %s ORDER BY {DISTINCT_ORDER}',
             (pattern,)
         )
     elif field == 'category':
         return db.fetch_all(
-            'SELECT * FROM book_catalog WHERE subject_classification ILIKE %s ORDER BY title',
+            f'SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog WHERE subject_classification ILIKE %s ORDER BY {DISTINCT_ORDER}',
             (pattern,)
         )
     return db.fetch_all(
-        '''SELECT * FROM book_catalog
+        f'''SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog
            WHERE title ILIKE %s OR author ILIKE %s OR isbn ILIKE %s
               OR subject_classification ILIKE %s
-           ORDER BY title''',
+           ORDER BY {DISTINCT_ORDER}''',
         (pattern, pattern, pattern, pattern)
     )
 
@@ -50,12 +52,12 @@ def get_book_by_id(book_id):
 
 
 def get_all_books():
-    return db.fetch_all('SELECT * FROM book_catalog ORDER BY title')
+    return db.fetch_all(f'SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog ORDER BY {DISTINCT_ORDER}')
 
 
 def get_recent_books(limit=5):
     return db.fetch_all(
-        'SELECT * FROM book_catalog ORDER BY date_added DESC LIMIT %s',
+        f'SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog ORDER BY {DISTINCT_ORDER}, date_added DESC LIMIT %s',
         (limit,)
     )
 
@@ -169,12 +171,12 @@ def search_books_paginated(query, field, page, per_page):
         args = ()
 
     count_row = db.fetch_one(
-        f'SELECT COUNT(*) FROM book_catalog {where}', args
+        f'SELECT COUNT(*) FROM (SELECT DISTINCT ON ({DISTINCT_ORDER}) 1 FROM book_catalog {where}) sub', args
     )
     total = count_row[0] if count_row else 0
 
     rows = db.fetch_all(
-        f'''SELECT * FROM book_catalog {where} ORDER BY date_added DESC, title LIMIT %s OFFSET %s''',
+        f'''SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog {where} ORDER BY {DISTINCT_ORDER}, date_added DESC LIMIT %s OFFSET %s''',
         args + (per_page, offset)
     )
     return rows, total
