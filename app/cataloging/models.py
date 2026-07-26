@@ -7,7 +7,7 @@ def create_book(title, author, edition, publisher, year_published, subject_class
         '''INSERT INTO book_catalog (title, author, edition, publisher, year_published,
            subject_classification, call_number, isbn, material_type, description, catalog_status)
            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-           RETURNING id''',
+           RETURNING book_id''',
         (title, author, edition, publisher, year_published, subject_classification,
          call_number, isbn, material_type, description, 'active')
     )
