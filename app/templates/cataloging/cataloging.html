@@ -217,6 +217,7 @@
         {% endif %}
         {% endwith %}
 
+
         <div class="flex justify-between items-center mb-8 animate-in">
             <div>
                 <h1 class="text-3xl font-bold">Cataloging Module</h1>
@@ -543,7 +544,7 @@
                 <h2 class="text-xl font-bold">Bulk Import Books</h2>
                 <button onclick="closeModal(null, 'bulkImportModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
             </div>
-            <form method="POST" action="{{ url_for('cataloging.bulk_import') }}" enctype="multipart/form-data" class="p-6 space-y-4">
+            <form onsubmit="return bulkImport(event)" enctype="multipart/form-data" class="p-6 space-y-4">
                 <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
                     <strong>CSV Format:</strong> Upload a CSV file with headers like
                     <code class="bg-blue-100 px-1 rounded">title</code>,
@@ -557,12 +558,17 @@
                 </div>
                 <div>
                     <label class="form-label">Select CSV File</label>
-                    <input type="file" name="file" accept=".csv" required
+                    <input type="file" id="bulkFileInput" name="file" accept=".csv" required
                            class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-gray-800 cursor-pointer">
                 </div>
                 <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
                     <button type="button" class="btn btn-outline" onclick="closeModal(null, 'bulkImportModal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary"><span class="material-symbols-outlined">upload</span> Import</button>
+                    <button type="submit" id="bulkImportBtn" class="btn btn-primary"><span class="material-symbols-outlined">upload</span> Import</button>
+                </div>
+                <div id="importProgress" class="hidden -mx-6 -mb-6 mt-6">
+                    <div class="h-1 bg-blue-100 rounded-b-xl overflow-hidden">
+                        <div id="importBar" class="h-full bg-blue-500 transition-all duration-300" style="width: 0%"></div>
+                    </div>
                 </div>
             </form>
         </div>
@@ -611,6 +617,58 @@
                 });
             }
         });
+
+        // Async Bulk Import with inline progress bar
+        function bulkImport(e) {
+            e.preventDefault();
+            var fileInput = document.getElementById('bulkFileInput');
+            if (!fileInput.files || !fileInput.files[0]) return false;
+
+            var btn = document.getElementById('bulkImportBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="material-symbols-outlined animate-spin">sync</span> Uploading...';
+
+            var fd = new FormData(e.target);
+            fetch('{{ url_for("cataloging.bulk_import") }}', { method: 'POST', body: fd })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.error) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<span class="material-symbols-outlined">upload</span> Import';
+                        alert(data.error);
+                        return;
+                    }
+                    document.getElementById('importProgress').classList.remove('hidden');
+                    pollImport(data.job_id);
+                })
+                .catch(function() {
+                    btn.disabled = false;
+                    btn.innerHTML = '<span class="material-symbols-outlined">upload</span> Import';
+                    alert('Upload failed. Please try again.');
+                });
+            return false;
+        }
+
+        function pollImport(jobId) {
+            var bar = document.getElementById('importBar');
+
+            function poll() {
+                fetch('/cataloging/bulk-import/status/' + jobId)
+                    .then(function(r) { return r.json(); })
+                    .then(function(job) {
+                        if (job.status === 'not_found') return;
+                        var pct = job.total > 0 ? Math.round(job.done / job.total * 100) : 100;
+                        bar.style.width = pct + '%';
+                        if (job.status === 'done') {
+                            setTimeout(function() { location.reload(); }, 600);
+                        } else {
+                            setTimeout(poll, 500);
+                        }
+                    })
+                    .catch(function() { setTimeout(poll, 2000); });
+            }
+            poll();
+        }
     </script>
     {% include 'components/confirm_modal.html' %}
 </body>
