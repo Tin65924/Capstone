@@ -316,6 +316,7 @@ def _get_current_app():
 def _bulk_import_worker(app, job_id, rows, column_map, user_id):
     with app.app_context():
         from app.cataloging.models import create_book, create_accession, get_accession_by_number
+        from app.database import db
         from app.auth.models import log_activity
         imported = 0
         errors = []
@@ -341,17 +342,30 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                     _import_jobs[job_id]['done'] = imported + len(errors)
                 continue
 
-            existing = get_accession_by_number(accession_number)
-            if existing:
+            existing_acc = get_accession_by_number(accession_number)
+            if existing_acc:
                 errors.append(f'Row {i}: accession number {accession_number} already exists')
                 with _import_lock:
                     _import_jobs[job_id]['done'] = imported + len(errors)
                 continue
 
-            year_str = book_data.get('year_published', '')
-            year = int(year_str) if year_str and year_str.isdigit() else None
+            isbn = book_data.get('isbn', '')
+            if isbn:
+                existing_book = db.fetch_one(
+                    'SELECT book_id FROM book_catalog WHERE title = %s AND author = %s AND isbn = %s',
+                    (title, author, isbn)
+                )
+            else:
+                existing_book = db.fetch_one(
+                    'SELECT book_id FROM book_catalog WHERE title = %s AND author = %s AND isbn IS NULL',
+                    (title, author)
+                )
 
-            try:
+            if existing_book:
+                book_id = existing_book[0]
+            else:
+                year_str = book_data.get('year_published', '')
+                year = int(year_str) if year_str and year_str.isdigit() else None
                 book_id = create_book(
                     title=title,
                     author=author,
@@ -360,10 +374,12 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                     year_published=year,
                     subject_classification=book_data.get('subject_classification') or None,
                     call_number=book_data.get('call_number') or None,
-                    isbn=book_data.get('isbn') or None,
+                    isbn=isbn or None,
                     material_type=book_data.get('material_type', 'Book') or 'Book',
                     description=book_data.get('description') or None,
                 )
+
+            try:
                 copy_str = book_data.get('copy_number', '')
                 copy_number = int(copy_str) if copy_str and copy_str.isdigit() else None
                 source = book_data.get('source', '') or None
