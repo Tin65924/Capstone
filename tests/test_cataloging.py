@@ -45,19 +45,50 @@ class TestCatalogingAccess:
 
 class TestCatalogingCRUD:
     def test_add_book_success(self, librarian_client, mock_db):
-        mock_db['execute'].return_value = 1
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
         resp = librarian_client.post('/cataloging/add', data={
             'title': 'New Book',
             'author': 'New Author',
             'isbn': '978-1234567890',
             'material_type': 'Book',
             'year_published': '2024',
+            'accession_number': '2025-0001',
+            'copy_number': '1',
+            'source': 'purchase',
+        })
+        assert resp.status_code == 302
+        assert '/cataloging' in resp.location
+        assert mock_db['execute'].call_count >= 2
+        call_args = mock_db['execute'].call_args_list[0]
+        assert 'INSERT INTO book_catalog' in call_args[0][0]
+        call_args2 = mock_db['execute'].call_args_list[1]
+        assert 'INSERT INTO accession_log' in call_args2[0][0]
+
+    def test_add_book_without_accession(self, librarian_client, mock_db):
+        mock_db['execute'].return_value = [(1,)]
+        resp = librarian_client.post('/cataloging/add', data={
+            'title': 'New Book',
+            'author': 'New Author',
+            'isbn': '978-1234567890',
+            'material_type': 'Book',
         })
         assert resp.status_code == 302
         assert '/cataloging' in resp.location
         assert mock_db['execute'].call_count >= 1
         call_args = mock_db['execute'].call_args_list[0]
         assert 'INSERT INTO book_catalog' in call_args[0][0]
+
+    def test_add_book_duplicate_accession(self, librarian_client, mock_db):
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = ('2025-0001',)
+        resp = librarian_client.post('/cataloging/add', data={
+            'title': 'New Book',
+            'author': 'New Author',
+            'accession_number': '2025-0001',
+        })
+        assert resp.status_code == 302
+        assert '/cataloging' in resp.location
 
     def test_add_book_missing_title(self, librarian_client, mock_db):
         resp = librarian_client.post('/cataloging/add', data={
@@ -247,14 +278,15 @@ def _csv_file(content, filename='books.csv'):
 class TestBulkImport:
     """Bulk CSV import: header detection, encoding, validation, RBAC, edge cases."""
 
-    VALID_ROW = ('Book A', 'Author A', '978-1', '1st', 'Pub A', 2023,
-                 'CS', 'QA100', 'Book', 'Desc A')
+    VALID_ROW = ('Book A', 'Author A', 'ACC-001', '978-1', '1st', 'Pub A', 2023,
+                 'CS', 'QA100', 'Book', 'Desc A', '1', 'purchase')
 
     @staticmethod
     def _make_csv(rows, headers=None):
         if headers is None:
-            headers = ['title', 'author', 'isbn', 'edition', 'publisher',
-                       'year', 'subject', 'call_number', 'material_type', 'description']
+            headers = ['title', 'author', 'accession_number', 'isbn', 'edition', 'publisher',
+                       'year', 'subject', 'call_number', 'material_type', 'description',
+                       'copy_number', 'source']
         out = io.StringIO()
         w = csv.writer(out)
         w.writerow(headers)
@@ -318,7 +350,7 @@ class TestBulkImport:
 
     def test_bulk_import_headers_only(self, librarian_client, mock_db):
         resp = librarian_client.post('/cataloging/bulk-import', data={
-            'file': _csv_file('title,author,year\n'),
+            'file': _csv_file('title,author,accession_number,year\n'),
         })
         self._assert_job(resp)
 
@@ -328,13 +360,20 @@ class TestBulkImport:
         })
         self._assert_error(resp, 400)
 
+    def test_bulk_import_missing_accession_column(self, librarian_client, mock_db):
+        resp = librarian_client.post('/cataloging/bulk-import', data={
+            'file': _csv_file(self._make_csv([('Title', 'Author')], headers=['title', 'author'])),
+        })
+        self._assert_error(resp, 400)
+
     def test_bulk_import_success(self, librarian_client, mock_db):
-        mock_db['execute'].return_value = 1
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
         csv_content = self._make_csv([
-            ('Title One', 'Author One', '978-111', '2nd', 'Pub1', 2020,
-             'Science', 'Q1', 'Book', 'First book'),
-            ('Title Two', 'Author Two', '978-222', '', 'Pub2', 2021,
-             'Math', 'Q2', 'Book', ''),
+            ('Title One', 'Author One', 'ACC-001', '978-111', '2nd', 'Pub1', 2020,
+             'Science', 'Q1', 'Book', 'First book', '1', 'purchase'),
+            ('Title Two', 'Author Two', 'ACC-002', '978-222', '', 'Pub2', 2021,
+             'Math', 'Q2', 'Book', '', '', ''),
         ])
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
@@ -342,10 +381,11 @@ class TestBulkImport:
         self._assert_job(resp)
 
     def test_bulk_import_headers_random_order(self, librarian_client, mock_db):
-        mock_db['execute'].return_value = 1
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
         csv_content = self._make_csv(
-            [('Author X', 'Title X', '2022', '978-333')],
-            headers=['author', 'title', 'year', 'isbn'],
+            [('Author X', 'Title X', 'ACC-003', '2022', '978-333')],
+            headers=['author', 'title', 'accession_number', 'year', 'isbn'],
         )
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
@@ -353,10 +393,11 @@ class TestBulkImport:
         self._assert_job(resp)
 
     def test_bulk_import_header_synonyms(self, librarian_client, mock_db):
-        mock_db['execute'].return_value = 1
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
         csv_content = self._make_csv(
-            [('Synonym Book', 'Synonym Author')],
-            headers=['Book Title', 'Author(s)'],
+            [('Synonym Book', 'Synonym Author', 'ACC-004')],
+            headers=['Book Title', 'Author(s)', 'Accession Number'],
         )
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
@@ -364,12 +405,13 @@ class TestBulkImport:
         self._assert_job(resp)
 
     def test_bulk_import_partial_errors(self, librarian_client, mock_db):
-        mock_db['execute'].return_value = 1
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
         csv_content = self._make_csv([
-            ('Valid Title', 'Valid Author', '978-555'),
-            ('', 'NoTitleAuthor', ''),
-            ('OnlyTitle', '', ''),
-            ('Another Valid', 'Another Author', '978-666'),
+            ('Valid Title', 'Valid Author', 'ACC-005', '978-555'),
+            ('', 'NoTitleAuthor', '', ''),
+            ('OnlyTitle', '', '', ''),
+            ('Another Valid', 'Another Author', 'ACC-006', '978-666'),
         ])
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
@@ -377,28 +419,31 @@ class TestBulkImport:
         self._assert_job(resp)
 
     def test_bulk_import_utf8_bom(self, librarian_client, mock_db):
-        mock_db['execute'].return_value = 1
-        csv_content = self._make_csv([('BOM Book', 'BOM Author')])
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
+        csv_content = self._make_csv([('BOM Book', 'BOM Author', 'ACC-007')])
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': (io.BytesIO(csv_content.encode('utf-8-sig')), 'books.csv'),
         })
         self._assert_job(resp)
 
     def test_bulk_import_latin1_encoding(self, librarian_client, mock_db):
-        mock_db['execute'].return_value = 1
-        csv_content = self._make_csv([('José García', 'François')],
-                                     headers=['title', 'author'])
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
+        csv_content = self._make_csv([('José García', 'François', 'ACC-008')],
+                                     headers=['title', 'author', 'accession_number'])
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': (io.BytesIO(csv_content.encode('latin-1')), 'books.csv'),
         })
         self._assert_job(resp)
 
     def test_bulk_import_unicode_titles(self, librarian_client, mock_db):
-        mock_db['execute'].return_value = 1
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
         csv_content = self._make_csv([
-            ('日本語の本', '著者名'),
-            ('Русская книга', 'Автор'),
-            ('中文图书', '作者'),
+            ('日本語の本', '著者名', 'ACC-009'),
+            ('Русская книга', 'Автор', 'ACC-010'),
+            ('中文图书', '作者', 'ACC-011'),
         ])
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
@@ -413,10 +458,11 @@ class TestBulkImport:
         self._assert_error(resp, 400)
 
     def test_bulk_import_whitespace_headers(self, librarian_client, mock_db):
-        mock_db['execute'].return_value = 1
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
         csv_content = self._make_csv(
-            [('Whitespace Book', 'Whitespace Author')],
-            headers=['  title  ', '  author  '],
+            [('Whitespace Book', 'Whitespace Author', 'ACC-012')],
+            headers=['  title  ', '  author  ', '  accession_number  '],
         )
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
@@ -424,19 +470,21 @@ class TestBulkImport:
         self._assert_job(resp)
 
     def test_bulk_import_large_file(self, librarian_client, mock_db):
-        mock_db['execute'].return_value = 1
-        rows = [(f'Book {i}', f'Author {i}', f'978-{i:06d}') for i in range(500)]
-        csv_content = self._make_csv(rows, headers=['title', 'author', 'isbn'])
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
+        rows = [(f'Book {i}', f'Author {i}', f'ACC-{i:04d}', f'978-{i:06d}') for i in range(500)]
+        csv_content = self._make_csv(rows, headers=['title', 'author', 'accession_number', 'isbn'])
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
         })
         self._assert_job(resp)
 
     def test_bulk_import_extra_unknown_headers(self, librarian_client, mock_db):
-        mock_db['execute'].return_value = 1
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
         csv_content = self._make_csv(
-            [('Extra Book', 'Extra Author', 'ShelfA', 'Donated')],
-            headers=['title', 'author', 'location', 'source'],
+            [('Extra Book', 'Extra Author', 'ACC-013', 'ShelfA', 'Donated')],
+            headers=['title', 'author', 'accession_number', 'location', 'source'],
         )
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),

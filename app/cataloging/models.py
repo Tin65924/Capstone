@@ -3,13 +3,15 @@ from app.database import db
 
 def create_book(title, author, edition, publisher, year_published, subject_classification,
                 call_number, isbn, material_type, description):
-    return db.execute(
+    rows = db.execute(
         '''INSERT INTO book_catalog (title, author, edition, publisher, year_published,
            subject_classification, call_number, isbn, material_type, description, catalog_status)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+           RETURNING id''',
         (title, author, edition, publisher, year_published, subject_classification,
          call_number, isbn, material_type, description, 'active')
     )
+    return rows[0][0] if rows else None
 
 
 def search_books(query, field=None):
@@ -59,6 +61,12 @@ def get_recent_books(limit=5):
 
 
 def create_accession(accession_number, book_id, librarian_id, source=None, copy_number=None):
+    if copy_number is None:
+        row = db.fetch_one(
+            'SELECT GREATEST(COALESCE(MAX(copy_number), 0), COUNT(*)) + 1 FROM accession_log WHERE book_id = %s',
+            (book_id,)
+        )
+        copy_number = row[0] if row else 1
     return db.execute(
         '''INSERT INTO accession_log (accession_number, book_id, librarian_id, source, copy_number)
            VALUES (%s, %s, %s, %s, %s)''',

@@ -36,6 +36,10 @@ HEADER_MAP = {
     'material type': 'material_type', 'material_type': 'material_type',
     'type': 'material_type', 'material': 'material_type', 'format': 'material_type',
     'description': 'description', 'desc': 'description',
+    'accession number': 'accession_number', 'accession_number': 'accession_number',
+    'accession': 'accession_number', 'accession no': 'accession_number',
+    'copy number': 'copy_number', 'copy_number': 'copy_number', 'copy': 'copy_number',
+    'source': 'source', 'acquisition source': 'source', 'acquisition_source': 'source',
 }
 
 
@@ -98,7 +102,7 @@ def add_book():
         flash('Title and author are required.', 'error')
         return redirect(url_for('cataloging.cataloging_page'))
 
-    create_book(
+    book_id = create_book(
         title=title,
         author=author,
         edition=request.form.get('edition', '').strip() or None,
@@ -110,6 +114,19 @@ def add_book():
         material_type=request.form.get('material_type', 'Book'),
         description=request.form.get('description', '').strip() or None,
     )
+    accession_number = request.form.get('accession_number', '').strip()
+    if accession_number:
+        existing = get_accession_by_number(accession_number)
+        if existing:
+            flash(f'Accession number {accession_number} already exists.', 'error')
+            return redirect(url_for('cataloging.cataloging_page'))
+        create_accession(
+            accession_number=accession_number,
+            book_id=book_id,
+            librarian_id=current_user.id,
+            source=request.form.get('source', '').strip() or None,
+            copy_number=request.form.get('copy_number', type=int) or None,
+        )
     log_activity(current_user.id, 'cataloging:add_book')
     flash('Book added to catalog.', 'success')
     return redirect(url_for('cataloging.cataloging_page'))
@@ -137,6 +154,19 @@ def edit_book(book_id):
         material_type=request.form.get('material_type', 'Book'),
         description=request.form.get('description', '').strip() or None,
     )
+    accession_number = request.form.get('edit_accession_number', '').strip()
+    if accession_number:
+        existing = get_accession_by_number(accession_number)
+        if existing:
+            flash(f'Accession number {accession_number} already exists.', 'error')
+        else:
+            create_accession(
+                accession_number=accession_number,
+                book_id=book_id,
+                librarian_id=current_user.id,
+                source=request.form.get('edit_source', '').strip() or None,
+                copy_number=request.form.get('edit_copy_number', type=int) or None,
+            )
     log_activity(current_user.id, f'cataloging:edit_book:{book_id}')
     flash('Book updated.', 'success')
     return redirect(url_for('cataloging.cataloging_page'))
@@ -237,6 +267,8 @@ def bulk_import():
     mapped = set(column_map.values())
     if 'title' not in mapped or 'author' not in mapped:
         return jsonify({'error': 'CSV must contain at least "title" and "author" columns.'}), 400
+    if 'accession_number' not in mapped:
+        return jsonify({'error': 'CSV must contain an "accession_number" column.'}), 400
 
     rows = list(reader)
     job_id = str(uuid.uuid4())
@@ -283,7 +315,7 @@ def _get_current_app():
 
 def _bulk_import_worker(app, job_id, rows, column_map, user_id):
     with app.app_context():
-        from app.cataloging.models import create_book
+        from app.cataloging.models import create_book, create_accession, get_accession_by_number
         from app.auth.models import log_activity
         imported = 0
         errors = []
@@ -297,8 +329,21 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
 
             title = book_data.get('title', '')
             author = book_data.get('author', '')
+            accession_number = book_data.get('accession_number', '')
             if not title or not author:
                 errors.append(f'Row {i}: missing title or author')
+                with _import_lock:
+                    _import_jobs[job_id]['done'] = imported + len(errors)
+                continue
+            if not accession_number:
+                errors.append(f'Row {i}: missing accession_number')
+                with _import_lock:
+                    _import_jobs[job_id]['done'] = imported + len(errors)
+                continue
+
+            existing = get_accession_by_number(accession_number)
+            if existing:
+                errors.append(f'Row {i}: accession number {accession_number} already exists')
                 with _import_lock:
                     _import_jobs[job_id]['done'] = imported + len(errors)
                 continue
@@ -307,7 +352,7 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
             year = int(year_str) if year_str and year_str.isdigit() else None
 
             try:
-                create_book(
+                book_id = create_book(
                     title=title,
                     author=author,
                     edition=book_data.get('edition') or None,
@@ -318,6 +363,20 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                     isbn=book_data.get('isbn') or None,
                     material_type=book_data.get('material_type', 'Book') or 'Book',
                     description=book_data.get('description') or None,
+                )
+                copy_str = book_data.get('copy_number', '')
+                copy_number = int(copy_str) if copy_str and copy_str.isdigit() else None
+                source = book_data.get('source', '') or None
+                if source:
+                    source = source.lower()
+                    if source not in ('purchase', 'donation'):
+                        source = None
+                create_accession(
+                    accession_number=accession_number,
+                    book_id=book_id,
+                    librarian_id=user_id,
+                    source=source,
+                    copy_number=copy_number,
                 )
                 imported += 1
             except Exception as e:
