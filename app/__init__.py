@@ -8,8 +8,8 @@ def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_object(Config)
 
-    # Trust Render's proxy headers (X-Forwarded-Proto for HTTPS)
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+    # Trust Render's proxy headers (X-Forwarded-Proto for HTTPS, X-Forwarded-For for IP)
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     if test_config:
         app.config.update(test_config)
