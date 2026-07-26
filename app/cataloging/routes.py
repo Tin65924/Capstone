@@ -1,5 +1,10 @@
 import csv
-from flask import render_template, request, redirect, url_for, flash
+import json
+import threading
+import uuid
+import time
+from datetime import datetime, timedelta
+from flask import render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from . import cataloging_bp
 from app.auth.decorators import librarian_required
@@ -10,6 +15,10 @@ from app.cataloging.models import (
     search_books_paginated
 )
 from app.auth.models import log_activity
+
+_import_jobs = {}
+_import_lock = threading.Lock()
+_IMPORT_EXPIRY = timedelta(minutes=10)
 
 HEADER_MAP = {
     'title': 'title', 'book title': 'title', 'book_title': 'title', 'name': 'title',
@@ -199,90 +208,152 @@ def add_accession(book_id):
 @librarian_required
 def bulk_import():
     if 'file' not in request.files:
-        flash('No file selected.', 'error')
-        return redirect(url_for('cataloging.cataloging_page'))
+        return jsonify({'error': 'No file selected.'}), 400
 
     f = request.files['file']
     if f.filename == '':
-        flash('No file selected.', 'error')
-        return redirect(url_for('cataloging.cataloging_page'))
+        return jsonify({'error': 'No file selected.'}), 400
 
     if not f.filename.lower().endswith('.csv'):
-        flash('Please upload a CSV file.', 'error')
-        return redirect(url_for('cataloging.cataloging_page'))
+        return jsonify({'error': 'Please upload a CSV file.'}), 400
 
     raw = f.read()
     if len(raw) > 10 * 1024 * 1024:
-        flash('File too large. Maximum size is 10MB.', 'error')
-        return redirect(url_for('cataloging.cataloging_page'))
+        return jsonify({'error': 'File too large. Maximum size is 10MB.'}), 400
 
     content = _decode_csv(raw)
     if content is None:
-        flash('Unable to read file. Please ensure it is a valid CSV file.', 'error')
-        return redirect(url_for('cataloging.cataloging_page'))
+        return jsonify({'error': 'Unable to read file. Ensure it is a valid CSV file.'}), 400
 
     lines = content.splitlines()
     if not lines:
-        flash('CSV file is empty.', 'error')
-        return redirect(url_for('cataloging.cataloging_page'))
+        return jsonify({'error': 'CSV file is empty.'}), 400
 
     reader = csv.DictReader(lines)
     if not reader.fieldnames:
-        flash('CSV file has no headers.', 'error')
-        return redirect(url_for('cataloging.cataloging_page'))
+        return jsonify({'error': 'CSV file has no headers.'}), 400
 
     column_map = _map_headers(reader.fieldnames)
-    mapped_columns = set(column_map.values())
-    if 'title' not in mapped_columns or 'author' not in mapped_columns:
-        flash('CSV must contain at least "title" and "author" columns.', 'error')
-        return redirect(url_for('cataloging.cataloging_page'))
+    mapped = set(column_map.values())
+    if 'title' not in mapped or 'author' not in mapped:
+        return jsonify({'error': 'CSV must contain at least "title" and "author" columns.'}), 400
 
-    imported = 0
-    errors = []
-    for i, row in enumerate(reader, start=2):
-        book_data = {}
-        for csv_col, db_col in column_map.items():
-            if db_col:
-                book_data[db_col] = (row.get(csv_col) or '').strip()
+    rows = list(reader)
+    job_id = str(uuid.uuid4())
+    _import_jobs[job_id] = {
+        'status': 'processing',
+        'total': len(rows),
+        'done': 0,
+        'errors': [],
+        'message': None,
+    }
 
-        title = book_data.get('title', '')
-        author = book_data.get('author', '')
+    app = _get_current_app()
+    t = threading.Thread(
+        target=_bulk_import_worker,
+        args=(app, job_id, rows, column_map, current_user.id),
+        daemon=True,
+    )
+    t.start()
 
-        if not title or not author:
-            errors.append(f'Row {i}: missing title or author')
-            continue
+    return jsonify({'job_id': job_id, 'redirect': url_for('cataloging.cataloging_page')})
 
-        year_str = book_data.get('year_published', '')
-        year = int(year_str) if year_str and year_str.isdigit() else None
+
+@cataloging_bp.route('/cataloging/bulk-import/status/<job_id>')
+@login_required
+@librarian_required
+def bulk_import_status(job_id):
+    _cleanup_old_jobs()
+    job = _import_jobs.get(job_id)
+    if not job:
+        return jsonify({'status': 'not_found'}), 404
+    return jsonify({
+        'status': job['status'],
+        'total': job['total'],
+        'done': job['done'],
+        'message': job.get('message'),
+        'errors': job.get('errors', []),
+    })
+
+
+def _get_current_app():
+    from flask import current_app
+    return current_app._get_current_object()
+
+
+def _bulk_import_worker(app, job_id, rows, column_map, user_id):
+    with app.app_context():
+        from app.cataloging.models import create_book
+        from app.auth.models import log_activity
+        imported = 0
+        errors = []
+        total = len(rows)
+
+        for i, row in enumerate(rows, start=2):
+            book_data = {}
+            for csv_col, db_col in column_map.items():
+                if db_col:
+                    book_data[db_col] = (row.get(csv_col) or '').strip()
+
+            title = book_data.get('title', '')
+            author = book_data.get('author', '')
+            if not title or not author:
+                errors.append(f'Row {i}: missing title or author')
+                with _import_lock:
+                    _import_jobs[job_id]['done'] = imported + len(errors)
+                continue
+
+            year_str = book_data.get('year_published', '')
+            year = int(year_str) if year_str and year_str.isdigit() else None
+
+            try:
+                create_book(
+                    title=title,
+                    author=author,
+                    edition=book_data.get('edition') or None,
+                    publisher=book_data.get('publisher') or None,
+                    year_published=year,
+                    subject_classification=book_data.get('subject_classification') or None,
+                    call_number=book_data.get('call_number') or None,
+                    isbn=book_data.get('isbn') or None,
+                    material_type=book_data.get('material_type', 'Book') or 'Book',
+                    description=book_data.get('description') or None,
+                )
+                imported += 1
+            except Exception as e:
+                errors.append(f'Row {i}: {e}')
+
+            with _import_lock:
+                _import_jobs[job_id]['done'] = imported + len(errors)
 
         try:
-            create_book(
-                title=title,
-                author=author,
-                edition=book_data.get('edition') or None,
-                publisher=book_data.get('publisher') or None,
-                year_published=year,
-                subject_classification=book_data.get('subject_classification') or None,
-                call_number=book_data.get('call_number') or None,
-                isbn=book_data.get('isbn') or None,
-                material_type=book_data.get('material_type', 'Book') or 'Book',
-                description=book_data.get('description') or None,
-            )
-            imported += 1
-        except Exception as e:
-            errors.append(f'Row {i}: {e}')
+            log_activity(user_id,
+                         f'cataloging:bulk_import:{imported}_success_{len(errors)}_errors')
+        except Exception:
+            pass
 
-    log_activity(current_user.id,
-                 f'cataloging:bulk_import:{imported}_success_{len(errors)}_errors')
+        message = f'Successfully imported {imported} book(s).'
+        if errors:
+            if len(errors) <= 10:
+                message += ' ' + ' '.join(errors[:10])
+            else:
+                message += ' ' + ' '.join(errors[:10]) + f' ... and {len(errors) - 10} more error(s).'
 
-    if imported:
-        flash(f'Successfully imported {imported} book(s).', 'success')
-    for err in errors[:10]:
-        flash(err, 'error')
-    if len(errors) > 10:
-        flash(f'... and {len(errors) - 10} more error(s).', 'error')
+        with _import_lock:
+            _import_jobs[job_id].update({
+                'status': 'done',
+                'done': total,
+                'message': message,
+                'errors': errors[:10],
+            })
 
-    return redirect(url_for('cataloging.cataloging_page'))
+
+def _cleanup_old_jobs():
+    cutoff = datetime.now() - _IMPORT_EXPIRY
+    stale = [jid for jid, j in _import_jobs.items()
+             if j.get('updated_at') and j['updated_at'] < cutoff]
+    for jid in stale:
+        _import_jobs.pop(jid, None)
 
 
 @cataloging_bp.route('/catalog')

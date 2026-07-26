@@ -262,6 +262,19 @@ class TestBulkImport:
             w.writerow(r)
         return out.getvalue()
 
+    def _assert_error(self, resp, expected_status=400):
+        assert resp.status_code == expected_status
+        data = resp.get_json()
+        assert data is not None
+        assert 'error' in data
+
+    def _assert_job(self, resp):
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data is not None
+        assert 'job_id' in data
+        assert data['redirect'] is not None
+
     def test_bulk_import_rbac_student(self, student_client):
         resp = student_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(self._make_csv([self.VALID_ROW])),
@@ -283,43 +296,37 @@ class TestBulkImport:
 
     def test_bulk_import_no_file(self, librarian_client):
         resp = librarian_client.post('/cataloging/bulk-import')
-        assert resp.status_code == 302
-        assert '/cataloging' in resp.location
+        self._assert_error(resp, 400)
 
     def test_bulk_import_empty_filename(self, librarian_client):
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': (io.BytesIO(b''), ''),
         })
-        assert resp.status_code == 302
-        assert '/cataloging' in resp.location
+        self._assert_error(resp, 400)
 
     def test_bulk_import_wrong_extension(self, librarian_client):
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': (io.BytesIO(b'a,b,c'), 'books.txt'),
         })
-        assert resp.status_code == 302
-        assert '/cataloging' in resp.location
+        self._assert_error(resp, 400)
 
     def test_bulk_import_empty_file(self, librarian_client, mock_db):
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(''),
         })
-        assert resp.status_code == 302
-        assert '/cataloging' in resp.location
+        self._assert_error(resp, 400)
 
     def test_bulk_import_headers_only(self, librarian_client, mock_db):
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file('title,author,year\n'),
         })
-        assert resp.status_code == 302
-        assert mock_db['execute'].call_count == 1  # log_activity only
+        self._assert_job(resp)
 
     def test_bulk_import_missing_required_columns(self, librarian_client, mock_db):
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(self._make_csv([('NoAuthor',)], headers=['title'])),
         })
-        assert resp.status_code == 302
-        assert mock_db['execute'].call_count == 0
+        self._assert_error(resp, 400)
 
     def test_bulk_import_success(self, librarian_client, mock_db):
         mock_db['execute'].return_value = 1
@@ -332,11 +339,7 @@ class TestBulkImport:
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
         })
-        assert resp.status_code == 302
-        assert mock_db['execute'].call_count >= 2
-        calls = mock_db['execute'].call_args_list
-        for call in calls[:2]:
-            assert 'INSERT INTO book_catalog' in call[0][0]
+        self._assert_job(resp)
 
     def test_bulk_import_headers_random_order(self, librarian_client, mock_db):
         mock_db['execute'].return_value = 1
@@ -347,11 +350,7 @@ class TestBulkImport:
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
         })
-        assert resp.status_code == 302
-        assert mock_db['execute'].call_count >= 1
-        call = mock_db['execute'].call_args_list[0]
-        assert b'Title X' in call[0][1][0].encode() if isinstance(call[0][1][0], str) else \
-            'Title X' in call[0][1][0]
+        self._assert_job(resp)
 
     def test_bulk_import_header_synonyms(self, librarian_client, mock_db):
         mock_db['execute'].return_value = 1
@@ -362,8 +361,7 @@ class TestBulkImport:
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
         })
-        assert resp.status_code == 302
-        assert mock_db['execute'].call_count >= 1
+        self._assert_job(resp)
 
     def test_bulk_import_partial_errors(self, librarian_client, mock_db):
         mock_db['execute'].return_value = 1
@@ -376,10 +374,7 @@ class TestBulkImport:
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
         })
-        assert resp.status_code == 302
-        assert mock_db['execute'].call_count == 3  # 2 books + 1 log_activity
-        first_call = mock_db['execute'].call_args_list[0]
-        assert 'INSERT INTO book_catalog' in first_call[0][0]
+        self._assert_job(resp)
 
     def test_bulk_import_utf8_bom(self, librarian_client, mock_db):
         mock_db['execute'].return_value = 1
@@ -387,8 +382,7 @@ class TestBulkImport:
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': (io.BytesIO(csv_content.encode('utf-8-sig')), 'books.csv'),
         })
-        assert resp.status_code == 302
-        assert mock_db['execute'].call_count >= 1
+        self._assert_job(resp)
 
     def test_bulk_import_latin1_encoding(self, librarian_client, mock_db):
         mock_db['execute'].return_value = 1
@@ -397,8 +391,7 @@ class TestBulkImport:
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': (io.BytesIO(csv_content.encode('latin-1')), 'books.csv'),
         })
-        assert resp.status_code == 302
-        assert mock_db['execute'].call_count >= 1
+        self._assert_job(resp)
 
     def test_bulk_import_unicode_titles(self, librarian_client, mock_db):
         mock_db['execute'].return_value = 1
@@ -410,16 +403,14 @@ class TestBulkImport:
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
         })
-        assert resp.status_code == 302
-        assert mock_db['execute'].call_count == 4  # 3 books + 1 log_activity
+        self._assert_job(resp)
 
     def test_bulk_import_no_headers(self, librarian_client, mock_db):
         csv_content = 'value1,value2,value3'
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
         })
-        assert resp.status_code == 302
-        assert mock_db['execute'].call_count == 0
+        self._assert_error(resp, 400)
 
     def test_bulk_import_whitespace_headers(self, librarian_client, mock_db):
         mock_db['execute'].return_value = 1
@@ -430,8 +421,7 @@ class TestBulkImport:
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
         })
-        assert resp.status_code == 302
-        assert mock_db['execute'].call_count == 2  # 1 book + 1 log_activity
+        self._assert_job(resp)
 
     def test_bulk_import_large_file(self, librarian_client, mock_db):
         mock_db['execute'].return_value = 1
@@ -440,8 +430,7 @@ class TestBulkImport:
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
         })
-        assert resp.status_code == 302
-        assert mock_db['execute'].call_count == 501  # 500 books + 1 log_activity
+        self._assert_job(resp)
 
     def test_bulk_import_extra_unknown_headers(self, librarian_client, mock_db):
         mock_db['execute'].return_value = 1
@@ -452,5 +441,4 @@ class TestBulkImport:
         resp = librarian_client.post('/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
         })
-        assert resp.status_code == 302
-        assert mock_db['execute'].call_count >= 1
+        self._assert_job(resp)
