@@ -393,32 +393,57 @@
                                     </button>
                                     {% if u[4] == 'active' %}
                                     <button class="btn-action hover:border-rose-500 hover:text-rose-500"
-                                        onclick="openConfirmModal('Deactivate User','Are you sure you want to deactivate &quot;{{ u[2] }}&quot;?','{{ url_for('auth.toggle_user_status_route', user_id=u[0]) }}','Deactivate','bg-rose-600 hover:bg-rose-700','person_off')"
-                                        title="Deactivate">
+                                        data-confirm-title="Deactivate User"
+                                        data-confirm-message="Are you sure you want to deactivate &#34;{{ u[2] }}&#34;?"
+                                        data-confirm-action="{{ url_for('auth.toggle_user_status_route', user_id=u[0]) }}"
+                                        data-confirm-button="Deactivate"
+                                        data-confirm-class="bg-rose-600 hover:bg-rose-700"
+                                        data-confirm-icon="person_off"
+                                        onclick="confirmFromData(this)" title="Deactivate">
                                         <span class="material-symbols-outlined text-lg">person_off</span>
                                     </button>
                                     {% elif u[4] == 'disabled' %}
                                     <button class="btn-action text-emerald-600 border-emerald-600 bg-emerald-50"
-                                        onclick="openConfirmModal('Activate User','Are you sure you want to activate &quot;{{ u[2] }}&quot;?','{{ url_for('auth.toggle_user_status_route', user_id=u[0]) }}','Activate','bg-emerald-600 hover:bg-emerald-700','person_check')"
-                                        title="Activate">
+                                        data-confirm-title="Activate User"
+                                        data-confirm-message="Are you sure you want to activate &#34;{{ u[2] }}&#34;?"
+                                        data-confirm-action="{{ url_for('auth.toggle_user_status_route', user_id=u[0]) }}"
+                                        data-confirm-button="Activate"
+                                        data-confirm-class="bg-emerald-600 hover:bg-emerald-700"
+                                        data-confirm-icon="person_check"
+                                        onclick="confirmFromData(this)" title="Activate">
                                         <span class="material-symbols-outlined text-lg">person_check</span>
                                     </button>
                                     {% endif %}
                                     {% if u[4] != 'archived' %}
                                     <button class="btn-action hover:border-gray-500 hover:text-gray-500"
-                                        onclick="openConfirmModal('Archive User','Are you sure you want to archive &quot;{{ u[2] }}&quot;?','{{ url_for('auth.archive_user_route', user_id=u[0]) }}','Archive','bg-gray-600 hover:bg-gray-700','archive')"
-                                        title="Archive">
+                                        data-confirm-title="Archive User"
+                                        data-confirm-message="Are you sure you want to archive &#34;{{ u[2] }}&#34;?"
+                                        data-confirm-action="{{ url_for('auth.archive_user_route', user_id=u[0]) }}"
+                                        data-confirm-button="Archive"
+                                        data-confirm-class="bg-gray-600 hover:bg-gray-700"
+                                        data-confirm-icon="archive"
+                                        onclick="confirmFromData(this)" title="Archive">
                                         <span class="material-symbols-outlined text-lg">archive</span>
                                     </button>
                                     {% else %}
                                     <button class="btn-action text-blue-600 border-blue-600 bg-blue-50"
-                                        onclick="openConfirmModal('Restore User','Are you sure you want to restore &quot;{{ u[2] }}&quot;?','{{ url_for('auth.unarchive_user_route', user_id=u[0]) }}','Restore','bg-blue-600 hover:bg-blue-700','unarchive')"
-                                        title="Restore">
+                                        data-confirm-title="Restore User"
+                                        data-confirm-message="Are you sure you want to restore &#34;{{ u[2] }}&#34;?"
+                                        data-confirm-action="{{ url_for('auth.unarchive_user_route', user_id=u[0]) }}"
+                                        data-confirm-button="Restore"
+                                        data-confirm-class="bg-blue-600 hover:bg-blue-700"
+                                        data-confirm-icon="unarchive"
+                                        onclick="confirmFromData(this)" title="Restore">
                                         <span class="material-symbols-outlined text-lg">unarchive</span>
                                     </button>
                                     <button class="btn-action hover:border-red-500 hover:text-red-500"
-                                        onclick="openConfirmModal('Delete User','Are you sure you want to permanently delete &quot;{{ u[2] }}&quot;? This cannot be undone.','{{ url_for('auth.delete_user_route', user_id=u[0]) }}','Delete','bg-red-600 hover:bg-red-700','delete_forever')"
-                                        title="Delete">
+                                        data-confirm-title="Delete User"
+                                        data-confirm-message="Are you sure you want to permanently delete &#34;{{ u[2] }}&#34;? This cannot be undone."
+                                        data-confirm-action="{{ url_for('auth.delete_user_route', user_id=u[0]) }}"
+                                        data-confirm-button="Delete"
+                                        data-confirm-class="bg-red-600 hover:bg-red-700"
+                                        data-confirm-icon="delete_forever"
+                                        onclick="confirmFromData(this)" title="Delete">
                                         <span class="material-symbols-outlined text-lg">delete_forever</span>
                                     </button>
                                     {% endif %}

@@ -26,6 +26,16 @@ function openConfirmModal(title, message, actionUrl, buttonText, buttonClass, ic
     document.getElementById('confirmIcon').textContent = icon || 'warning';
     document.getElementById('confirmModal').classList.remove('hidden');
 }
+function confirmFromData(btn) {
+    openConfirmModal(
+        btn.getAttribute('data-confirm-title'),
+        btn.getAttribute('data-confirm-message'),
+        btn.getAttribute('data-confirm-action'),
+        btn.getAttribute('data-confirm-button'),
+        btn.getAttribute('data-confirm-class'),
+        btn.getAttribute('data-confirm-icon')
+    );
+}
 function closeConfirmModal() {
     document.getElementById('confirmModal').classList.add('hidden');
 }

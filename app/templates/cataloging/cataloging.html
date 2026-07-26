@@ -303,26 +303,24 @@
                                         <span class="material-symbols-outlined text-[18px]">edit</span>
                                     </button>
                                     <button class="p-1.5 rounded-lg border border-gray-100 hover:bg-white hover:border-amber-500 hover:text-amber-500 transition-all"
-                                        onclick="openConfirmModal(
-                                            '{{ 'Archive' if book[11] == 'active' else 'Activate' }} Book',
-                                            'Are you sure you want to {{ 'archive' if book[11] == 'active' else 'activate' }} &quot;{{ book[1] }}&quot;?',
-                                            '{{ url_for('cataloging.toggle_book_status', book_id=book[0]) }}',
-                                            '{{ 'Archive' if book[11] == 'active' else 'Activate' }}',
-                                            '{{ 'bg-amber-600 hover:bg-amber-700' if book[11] == 'active' else 'bg-emerald-600 hover:bg-emerald-700' }}',
-                                            '{{ 'archive' if book[11] == 'active' else 'unarchive' }}'
-                                        )" title="{{ 'Archive' if book[11] == 'active' else 'Activate' }}">
+                                        data-confirm-title="{{ 'Archive' if book[11] == 'active' else 'Activate' }} Book"
+                                        data-confirm-message="Are you sure you want to {{ 'archive' if book[11] == 'active' else 'activate' }} &#34;{{ book[1] }}&#34;?"
+                                        data-confirm-action="{{ url_for('cataloging.toggle_book_status', book_id=book[0]) }}"
+                                        data-confirm-button="{{ 'Archive' if book[11] == 'active' else 'Activate' }}"
+                                        data-confirm-class="{{ 'bg-amber-600 hover:bg-amber-700' if book[11] == 'active' else 'bg-emerald-600 hover:bg-emerald-700' }}"
+                                        data-confirm-icon="{{ 'archive' if book[11] == 'active' else 'unarchive' }}"
+                                        onclick="confirmFromData(this)" title="{{ 'Archive' if book[11] == 'active' else 'Activate' }}">
                                         <span class="material-symbols-outlined text-[18px]">{{ 'archive' if book[11] == 'active' else 'unarchive' }}</span>
                                     </button>
                                     {% if book[11] == 'archived' %}
                                     <button class="p-1.5 rounded-lg border border-gray-100 hover:bg-white hover:border-red-500 hover:text-red-500 transition-all"
-                                        onclick="openConfirmModal(
-                                            'Delete Book',
-                                            'Are you sure you want to permanently delete &quot;{{ book[1] }}&quot;? This cannot be undone.',
-                                            '{{ url_for('cataloging.delete_book_route', book_id=book[0]) }}',
-                                            'Delete',
-                                            'bg-red-600 hover:bg-red-700',
-                                            'delete_forever'
-                                        )" title="Delete">
+                                        data-confirm-title="Delete Book"
+                                        data-confirm-message="Are you sure you want to permanently delete &#34;{{ book[1] }}&#34;? This cannot be undone."
+                                        data-confirm-action="{{ url_for('cataloging.delete_book_route', book_id=book[0]) }}"
+                                        data-confirm-button="Delete"
+                                        data-confirm-class="bg-red-600 hover:bg-red-700"
+                                        data-confirm-icon="delete_forever"
+                                        onclick="confirmFromData(this)" title="Delete">
                                         <span class="material-symbols-outlined text-[18px]">delete_forever</span>
                                     </button>
                                     {% endif %}
@@ -565,12 +563,11 @@
                     <button type="button" class="btn btn-outline" onclick="closeModal(null, 'bulkImportModal')">Cancel</button>
                     <button type="submit" id="bulkImportBtn" class="btn btn-primary"><span class="material-symbols-outlined">upload</span> Import</button>
                 </div>
-                <div id="importProgress" class="hidden -mx-6 -mb-6 mt-6">
-                    <div class="h-1 bg-blue-100 rounded-b-xl overflow-hidden">
-                        <div id="importBar" class="h-full bg-blue-500 transition-all duration-300" style="width: 0%"></div>
-                    </div>
-                </div>
             </form>
+            <div id="importMsg" class="hidden text-sm text-blue-600 bg-blue-50 border-t border-blue-100 px-6 py-3 flex items-center gap-2">
+                <span class="material-symbols-outlined animate-spin text-[18px]">sync</span>
+                <span>Processing bulk import of books...</span>
+            </div>
         </div>
     </div>
 
@@ -618,7 +615,7 @@
             }
         });
 
-        // Async Bulk Import with inline progress bar
+        // Async Bulk Import with processing message
         function bulkImport(e) {
             e.preventDefault();
             var fileInput = document.getElementById('bulkFileInput');
@@ -638,7 +635,8 @@
                         alert(data.error);
                         return;
                     }
-                    document.getElementById('importProgress').classList.remove('hidden');
+                    document.getElementById('importMsg').classList.remove('hidden');
+                    btn.innerHTML = '<span class="material-symbols-outlined">upload</span> Import';
                     pollImport(data.job_id);
                 })
                 .catch(function() {
@@ -650,18 +648,15 @@
         }
 
         function pollImport(jobId) {
-            var bar = document.getElementById('importBar');
-
+            var msg = document.getElementById('importMsg');
             function poll() {
                 fetch('/cataloging/bulk-import/status/' + jobId)
                     .then(function(r) { return r.json(); })
                     .then(function(job) {
-                        if (job.status === 'not_found') return;
-                        var pct = job.total > 0 ? Math.round(job.done / job.total * 100) : 100;
-                        bar.style.width = pct + '%';
                         if (job.status === 'done') {
-                            setTimeout(function() { location.reload(); }, 600);
-                        } else {
+                            msg.innerHTML = '<span class="material-symbols-outlined text-green-600 text-[18px]">check_circle</span> <span>' + (job.message || 'Import complete') + '</span>';
+                            setTimeout(function() { location.reload(); }, 1500);
+                        } else if (job.status !== 'not_found') {
                             setTimeout(poll, 500);
                         }
                     })
