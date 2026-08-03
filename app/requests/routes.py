@@ -12,7 +12,24 @@ from app.auth.decorators import librarian_required
 @login_required
 @librarian_required
 def list_requests():
-    return render_template('requests/requests.html')
+    pending = get_requests(status='pending_review')
+    requests_with_demand = [
+        (r, get_demand_count(r[2])) for r in pending
+    ]
+    return render_template('requests/requests.html', requests=requests_with_demand)
+
+@requests_bp.route('/librarian/requests/<int:request_id>/<action>', methods=['POST'])
+@login_required
+@librarian_required
+def review_request(request_id, action):
+    if action not in ('approve', 'reject'):
+        flash('Invalid action.', 'error')
+        return redirect(url_for('requests.list_requests'))
+
+    status = 'approved' if action == 'approve' else 'rejected'
+    update_request_status(request_id, status, reviewer_id=current_user.id)
+    flash(f'Request {status}.', 'success')
+    return redirect(url_for('requests.list_requests'))
 
 
 from flask import redirect, url_for, flash
