@@ -15,9 +15,9 @@
             theme: {
                 extend: {
                     colors: {
-                        primary: "#191a1d",
+                        primary: "#1e3a8a",
                         "background-light": "#f7f7f7",
-                        "background-dark": "#18191a"
+                        "background-dark": "#0f172a"
                     },
                     fontFamily: {
                         display: "Manrope"
@@ -28,9 +28,9 @@
     </script>
     <style>
         :root {
-            --primary: #191a1d;
-            --primary-light: #374151;
-            --primary-dark: #0f1012;
+            --primary: #1e3a8a;
+            --primary-light: #1d4ed8;
+            --primary-dark: #172554;
             --secondary: #0ea5e9;
             --bg-body: #f8fafc;
             --bg-card: #ffffff;
@@ -157,51 +157,13 @@
           <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
           <h1 class="text-xl font-bold tracking-tight">MCST Library</h1>
         </div>
-        <nav class="flex flex-col gap-1 overflow-y-auto pr-2 custom-scrollbar">
-            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.index') }}">
-                <span class="material-symbols-outlined">home</span><span class="text-sm">Home</span>
-            </a>
-            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('cataloging.public_catalog') }}">
-                <span class="material-symbols-outlined">menu_book</span><span class="text-sm">Catalog</span>
-            </a>
-            <hr class="border-gray-200 dark:border-gray-700 my-1">
-            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.dashboard') }}">
-                <span class="material-symbols-outlined">dashboard</span><span class="text-sm">Dashboard</span>
-            </a>
-            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('requests.list_requests') }}">
-                <span class="material-symbols-outlined">book_online</span><span class="text-sm">Book Requests</span>
-            </a>
-            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('circulation.reservations_page') }}">
-                <span class="material-symbols-outlined">event_available</span><span class="text-sm">Reservation Management</span>
-            </a>
-            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('procurement.procurement_dashboard') }}">
-                <span class="material-symbols-outlined">shopping_cart</span><span class="text-sm">Procurement Management</span>
-            </a>
-            <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors bg-primary/10 text-primary" href="{{ url_for('cataloging.cataloging_page') }}">
-                <span class="material-symbols-outlined">library_books</span><span class="text-sm">Cataloging</span>
-            </a>
-            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('circulation.circulation_page') }}">
-                <span class="material-symbols-outlined">sync_alt</span><span class="text-sm">Circulation Management</span>
-            </a>
-            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('inventory.inventory_page') }}">
-                <span class="material-symbols-outlined">inventory_2</span><span class="text-sm">Inventory Monitoring</span>
-            </a>
-            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('analytics.analytics_page') }}">
-                <span class="material-symbols-outlined">analytics</span><span class="text-sm">Reports & Analytics</span>
-            </a>
-            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('auth.admin_users') }}">
-                <span class="material-symbols-outlined">manage_accounts</span><span class="text-sm leading-tight">User Management & Access Control</span>
-            </a>
-            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('backup.backup_page') }}">
-                <span class="material-symbols-outlined">settings_backup_restore</span><span class="text-sm">Backup & Recovery</span>
-            </a>
-        </nav>
+        {% include 'components/librarian_sidebar_nav.html' %}
       </div>
       <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
                 <div class="flex flex-col items-center mb-4">
           <h2 class="text-lg font-bold text-center">{{ current_user.full_name }}</h2>
           <p class="text-sm text-gray-500 dark:text-gray-400">{{ current_user.role }}</p>
-        </div>        <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-gray-800 transition-colors">
+        </div>        <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors">
           <span class="material-symbols-outlined text-[18px]">logout</span><span>Log Out</span>
         </a>
       </div>
@@ -209,13 +171,7 @@
 
     <!-- Main Content -->
     <main>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-        {% for category, message in messages %}
-        <div class="flash-msg flash-{{ category }}">{{ message }}</div>
-        {% endfor %}
-        {% endif %}
-        {% endwith %}
+        {% include 'components/flash_messages.html' %}
 
 
         <div class="flex justify-between items-center mb-8 animate-in">
@@ -587,7 +543,7 @@
         // Edit Book (data stored in data-book attribute via |tojson)
         function editBook(btn) {
             var b = JSON.parse(btn.getAttribute('data-book'));
-            document.getElementById('editBookForm').action = '/cataloging/' + b[0] + '/edit';
+            document.getElementById('editBookForm').action = '/librarian/cataloging/' + b[0] + '/edit';
             document.getElementById('edit_title').value = b[1];
             document.getElementById('edit_author').value = b[2];
             document.getElementById('edit_edition').value = b[3] || '';
@@ -648,7 +604,7 @@
         function pollImport(jobId) {
             var msg = document.getElementById('importMsg');
             function poll() {
-                fetch('/cataloging/bulk-import/status/' + jobId)
+                fetch('/librarian/cataloging/bulk-import/status/' + jobId)
                     .then(function(r) { return r.json(); })
                     .then(function(job) {
                         if (job.status === 'done') {

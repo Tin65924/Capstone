@@ -34,15 +34,15 @@ class TestDashboard:
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
-    def test_dashboard_librarian_allowed(self, librarian_client, mock_db):
-        mock_db['fetch_all'].return_value = []
+    def test_dashboard_redirects_librarian_to_profile(self, librarian_client):
         resp = librarian_client.get('/dashboard')
-        assert resp.status_code == 200
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
 
-    def test_dashboard_admin_allowed(self, admin_client, mock_db):
-        mock_db['fetch_all'].return_value = []
+    def test_dashboard_redirects_admin_to_profile(self, admin_client):
         resp = admin_client.get('/dashboard')
-        assert resp.status_code == 200
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
 
 
 class TestUserProfile:
@@ -61,15 +61,39 @@ class TestUserProfile:
         resp = faculty_client.get('/user/profile')
         assert resp.status_code == 200
 
-    def test_profile_librarian_redirects_to_dashboard(self, librarian_client):
+    def test_profile_librarian_allowed(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (3, 'librarian@mcst.edu.ph', 'Librarian', 'Test Librarian')
         resp = librarian_client.get('/user/profile')
-        assert resp.status_code == 302
-        assert '/dashboard' in resp.location
+        assert resp.status_code == 200
 
-    def test_profile_admin_redirects_to_dashboard(self, admin_client):
+    def test_profile_admin_allowed(self, admin_client, mock_db):
+        mock_db['fetch_one'].return_value = (4, 'admin@mcst.edu.ph', 'Admin', 'Test Admin')
         resp = admin_client.get('/user/profile')
-        assert resp.status_code == 302
-        assert '/dashboard' in resp.location
+        assert resp.status_code == 200
+
+    def test_profile_does_not_show_admin_tools(self, admin_client, mock_db):
+        mock_db['fetch_one'].return_value = (4, 'admin@mcst.edu.ph', 'Admin', 'Test Admin')
+        resp = admin_client.get('/user/profile')
+        assert b'Backup' not in resp.data
+        assert b'Cataloging' not in resp.data
+
+    def test_profile_shows_admin_dashboard_button(self, admin_client, mock_db):
+        mock_db['fetch_one'].return_value = (4, 'admin@mcst.edu.ph', 'Admin', 'Test Admin')
+        resp = admin_client.get('/user/profile')
+        assert b'Admin Dashboard' in resp.data
+        assert b'Librarian Dashboard' in resp.data
+
+    def test_profile_shows_librarian_dashboard_button(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (3, 'librarian@mcst.edu.ph', 'Librarian', 'Test Librarian')
+        resp = librarian_client.get('/user/profile')
+        assert b'Librarian Dashboard' in resp.data
+        assert b'Admin Dashboard' not in resp.data
+
+    def test_profile_student_has_no_dashboard_buttons(self, student_client, mock_db):
+        mock_db['fetch_one'].return_value = (1, 'student@mcst.edu.ph', 'Student', 'Test Student')
+        resp = student_client.get('/user/profile')
+        assert b'Admin Dashboard' not in resp.data
+        assert b'Librarian Dashboard' not in resp.data
 
 
 class TestUserHistory:
@@ -87,8 +111,39 @@ class TestUserHistory:
         assert resp.status_code == 200
 
 
-class TestUsersRedirect:
-    def test_users_route_redirects_to_admin_users(self, admin_client):
-        resp = admin_client.get('/users')
+class TestRoleDashboards:
+    def test_librarian_dashboard_librarian_allowed(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian')
+        assert resp.status_code == 200
+
+    def test_librarian_dashboard_admin_allowed(self, admin_client, mock_db):
+        mock_db['fetch_all'].return_value = []
+        resp = admin_client.get('/librarian')
+        assert resp.status_code == 200
+        assert b'Admin Dashboard' in resp.data
+
+    def test_librarian_dashboard_student_forbidden(self, student_client):
+        resp = student_client.get('/librarian')
         assert resp.status_code == 302
-        assert '/admin/users' in resp.location
+        assert '/user/profile' in resp.location
+
+    def test_admin_dashboard_admin_allowed(self, admin_client, mock_db):
+        mock_db['fetch_all'].return_value = []
+        resp = admin_client.get('/admin')
+        assert resp.status_code == 200
+
+    def test_admin_dashboard_librarian_forbidden(self, librarian_client):
+        resp = librarian_client.get('/admin')
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
+
+    def test_admin_dashboard_student_forbidden(self, student_client):
+        resp = student_client.get('/admin')
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
+
+    def test_admin_dashboard_unauthenticated_redirects(self, client):
+        resp = client.get('/admin')
+        assert resp.status_code == 302
+        assert '/login' in resp.location

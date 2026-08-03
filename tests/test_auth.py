@@ -112,7 +112,7 @@ class TestGoogleCallback:
                                 mock_create.return_value = 1
                                 resp = client.get('/login/google/callback', query_string={'state': 'test-state', 'code': 'auth-code'})
                                 assert resp.status_code == 302
-                                assert 'dashboard' in resp.location
+                                assert '/user/profile' in resp.location
 
     def test_second_user_goes_to_role_select(self, client):
         with client.session_transaction() as sess:
@@ -173,7 +173,7 @@ class TestRoleSelect:
                 'department': 'BSIT',
             })
             assert resp.status_code == 302
-            assert 'dashboard' in resp.location
+            assert '/user/profile' in resp.location
 
     def test_role_select_post_faculty_pending(self, client, mock_db):
         with client.session_transaction() as sess:
@@ -235,29 +235,31 @@ class TestUserManagement:
 
     def test_admin_users_student_forbidden(self, student_client, mock_db):
         mock_db['fetch_all'].return_value = self.USERS_TABLE
-        resp = student_client.get('/admin/users')
-        assert resp.status_code == 403
+        resp = student_client.get('/librarian/users')
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
 
     def test_admin_users_librarian_allowed(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = (4,)
         mock_db['fetch_all'].side_effect = lambda q, p=None: [] if 'pending' in q else self.USERS_TABLE
-        resp = librarian_client.get('/admin/users')
+        resp = librarian_client.get('/librarian/users')
         assert resp.status_code == 200
 
     def test_admin_users_admin_allowed(self, admin_client, mock_db):
         mock_db['fetch_one'].return_value = (4,)
         mock_db['fetch_all'].side_effect = lambda q, p=None: [] if 'pending' in q else self.USERS_TABLE
-        resp = admin_client.get('/admin/users')
+        resp = admin_client.get('/librarian/users')
         assert resp.status_code == 200
 
     def test_approve_user_librarian(self, librarian_client, mock_db):
         mock_db['execute'].return_value = 1
-        resp = librarian_client.post('/admin/users/2/approve')
+        resp = librarian_client.post('/librarian/users/2/approve')
         assert resp.status_code == 302
 
     def test_approve_user_student_forbidden(self, student_client, mock_db):
-        resp = student_client.post('/admin/users/2/approve')
-        assert resp.status_code == 403
+        resp = student_client.post('/librarian/users/2/approve')
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
 
     @patch('app.auth.routes.log_activity')
     def test_toggle_status_admin(self, mock_log, admin_client, mock_db):
@@ -267,7 +269,8 @@ class TestUserManagement:
 
     def test_toggle_status_librarian_forbidden(self, librarian_client, mock_db):
         resp = librarian_client.post('/admin/users/1/toggle-status')
-        assert resp.status_code == 403
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
 
     def test_change_role_admin(self, admin_client, mock_db):
         mock_db['execute'].return_value = 1
@@ -276,7 +279,8 @@ class TestUserManagement:
 
     def test_change_role_librarian_forbidden(self, librarian_client, mock_db):
         resp = librarian_client.post('/admin/users/1/role', data={'role_id': '3'})
-        assert resp.status_code == 403
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
 
     def test_archive_user_admin(self, admin_client, mock_db):
         mock_db['execute'].return_value = 1
@@ -288,7 +292,8 @@ class TestUserManagement:
 
     def test_archive_user_librarian_forbidden(self, librarian_client, mock_db):
         resp = librarian_client.post('/admin/users/1/archive')
-        assert resp.status_code == 403
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
 
     def test_unarchive_user_admin(self, admin_client, mock_db):
         mock_db['execute'].return_value = 1
@@ -298,7 +303,8 @@ class TestUserManagement:
 
     def test_unarchive_user_librarian_forbidden(self, librarian_client, mock_db):
         resp = librarian_client.post('/admin/users/1/unarchive')
-        assert resp.status_code == 403
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
 
     def test_delete_user_archived_success(self, admin_client, mock_db):
         mock_db['fetch_one'].return_value = ('archived',)
@@ -323,7 +329,8 @@ class TestUserManagement:
 
     def test_delete_user_librarian_forbidden(self, librarian_client, mock_db):
         resp = librarian_client.post('/admin/users/1/delete')
-        assert resp.status_code == 403
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
 
     def test_delete_user_unauthenticated(self, client, mock_db):
         resp = client.post('/admin/users/1/delete')

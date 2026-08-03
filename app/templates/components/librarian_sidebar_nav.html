@@ -1,0 +1,58 @@
+        <nav class="flex flex-col gap-1 overflow-y-auto pr-2 custom-scrollbar">
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.index') }}">
+                <span class="material-symbols-outlined">home</span>
+                <span class="text-sm">Home</span>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('cataloging.public_catalog') }}">
+                <span class="material-symbols-outlined">menu_book</span>
+                <span class="text-sm">Catalog</span>
+            </a>
+            <hr class="border-gray-200 dark:border-gray-700 my-1">
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'main.librarian_dashboard' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('main.librarian_dashboard') }}">
+                <span class="material-symbols-outlined">overview</span>
+                <span class="text-sm">Overview</span>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'requests.list_requests' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('requests.list_requests') }}">
+                <span class="material-symbols-outlined">book_online</span>
+                <span class="text-sm">Book Requests</span>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'circulation.reservations_page' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('circulation.reservations_page') }}">
+                <span class="material-symbols-outlined">event_available</span>
+                <span class="text-sm">Reservation Management</span>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'procurement.procurement_dashboard' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('procurement.procurement_dashboard') }}">
+                <span class="material-symbols-outlined">shopping_cart</span>
+                <span class="text-sm">Procurement Management</span>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint and 'cataloging' in request.endpoint %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('cataloging.cataloging_page') }}">
+                <span class="material-symbols-outlined">library_books</span>
+                <span class="text-sm">Cataloging</span>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'circulation.circulation_page' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('circulation.circulation_page') }}">
+                <span class="material-symbols-outlined">sync_alt</span>
+                <span class="text-sm">Circulation Management</span>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'inventory.inventory_page' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('inventory.inventory_page') }}">
+                <span class="material-symbols-outlined">inventory_2</span>
+                <span class="text-sm">Inventory Monitoring</span>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'analytics.analytics_page' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('analytics.analytics_page') }}">
+                <span class="material-symbols-outlined">analytics</span>
+                <span class="text-sm">Reports & Analytics</span>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'auth.admin_users' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('auth.admin_users') }}">
+                <span class="material-symbols-outlined">manage_accounts</span>
+                <span class="text-sm leading-tight">User Management & Access Control</span>
+            </a>
+            <hr class="border-gray-200 dark:border-gray-700 my-1">
+            {% if current_user.role == 'Admin' %}
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'main.admin_dashboard' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('main.admin_dashboard') }}">
+                <span class="material-symbols-outlined">shield_person</span>
+                <span class="text-sm">Admin Dashboard</span>
+            </a>
+            {% endif %}
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.user_profile') }}">
+                <span class="material-symbols-outlined">person</span>
+                <span class="text-sm">My Profile</span>
+            </a>
+        </nav>

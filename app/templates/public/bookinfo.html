@@ -14,9 +14,9 @@
         theme: {
             extend: {
                 colors: {
-                    primary: "#191a1d",
+                    primary: "#1e3a8a",
                     "background-light": "#f7f7f7",
-                    "background-dark": "#18191a"
+                    "background-dark": "#0f172a"
                 },
                 fontFamily: {
                     display: "Manrope"
@@ -53,9 +53,9 @@
         <nav class="hidden md:flex items-center gap-6">
             <a class="text-sm font-medium text-slate-500 hover:text-primary transition-colors" href="{{ url_for('main.index') }}">Home</a>
             <a class="text-sm font-medium text-primary border-b-2 border-primary pb-1" href="{{ url_for('cataloging.public_catalog') }}">Catalog</a>
-            <a class="text-sm font-medium text-slate-500 hover:text-primary transition-colors flex items-center gap-1"
-               href="{{ url_for('main.user_profile') if current_user.is_authenticated else url_for('auth.login') }}" title="Profile">
-                <span class="material-symbols-outlined text-lg">account_circle</span>
+            <a class="text-sm font-medium text-slate-500 hover:text-primary transition-colors flex items-center gap-1.5"
+               href="{{ url_for('main.user_profile') if current_user.is_authenticated else url_for('auth.login') }}">
+                <span>Profile</span>
             </a>
         </nav>
     </div>
@@ -116,13 +116,17 @@
                     {{ book[10] or 'No description available.' }}
                 </p>
             </div>
-            <div class="grid grid-cols-2 md:grid-cols-5 gap-6">
+            <div class="grid grid-cols-2 md:grid-cols-6 gap-6">
                 {% if book[5] %}
                 <div>
                     <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Copyright Year</h4>
                     <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[5] }}</p>
                 </div>
                 {% endif %}
+                <div>
+                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Edition</h4>
+                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[3] or '—' }}</p>
+                </div>
                 <div>
                     <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Publisher</h4>
                     <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[4] or '—' }}</p>

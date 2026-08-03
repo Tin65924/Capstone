@@ -18,27 +18,29 @@ SAMPLE_BOOKS = [
 
 class TestCatalogingAccess:
     def test_cataloging_student_forbidden(self, student_client):
-        resp = student_client.get('/cataloging')
-        assert resp.status_code == 403
+        resp = student_client.get('/librarian/cataloging')
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
 
     def test_cataloging_faculty_forbidden(self, faculty_client):
-        resp = faculty_client.get('/cataloging')
-        assert resp.status_code == 403
+        resp = faculty_client.get('/librarian/cataloging')
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
 
     def test_cataloging_librarian_allowed(self, librarian_client, mock_db):
         mock_db['fetch_all'].return_value = SAMPLE_BOOKS
-        resp = librarian_client.get('/cataloging')
+        resp = librarian_client.get('/librarian/cataloging')
         assert resp.status_code == 200
         assert b'Cataloging' in resp.data
 
     def test_cataloging_admin_allowed(self, admin_client, mock_db):
         mock_db['fetch_all'].return_value = SAMPLE_BOOKS
-        resp = admin_client.get('/cataloging')
+        resp = admin_client.get('/librarian/cataloging')
         assert resp.status_code == 200
         assert b'Cataloging' in resp.data
 
     def test_cataloging_unauthenticated_redirects(self, client):
-        resp = client.get('/cataloging')
+        resp = client.get('/librarian/cataloging')
         assert resp.status_code == 302
         assert '/login' in resp.location
 
@@ -47,7 +49,7 @@ class TestCatalogingCRUD:
     def test_add_book_success(self, librarian_client, mock_db):
         mock_db['execute'].return_value = [(1,)]
         mock_db['fetch_one'].return_value = None
-        resp = librarian_client.post('/cataloging/add', data={
+        resp = librarian_client.post('/librarian/cataloging/add', data={
             'title': 'New Book',
             'author': 'New Author',
             'isbn': '978-1234567890',
@@ -58,7 +60,7 @@ class TestCatalogingCRUD:
             'source': 'purchase',
         })
         assert resp.status_code == 302
-        assert '/cataloging' in resp.location
+        assert '/librarian/cataloging' in resp.location
         assert mock_db['execute'].call_count >= 2
         call_args = mock_db['execute'].call_args_list[0]
         assert 'INSERT INTO book_catalog' in call_args[0][0]
@@ -67,14 +69,14 @@ class TestCatalogingCRUD:
 
     def test_add_book_without_accession(self, librarian_client, mock_db):
         mock_db['execute'].return_value = [(1,)]
-        resp = librarian_client.post('/cataloging/add', data={
+        resp = librarian_client.post('/librarian/cataloging/add', data={
             'title': 'New Book',
             'author': 'New Author',
             'isbn': '978-1234567890',
             'material_type': 'Book',
         })
         assert resp.status_code == 302
-        assert '/cataloging' in resp.location
+        assert '/librarian/cataloging' in resp.location
         assert mock_db['execute'].call_count >= 1
         call_args = mock_db['execute'].call_args_list[0]
         assert 'INSERT INTO book_catalog' in call_args[0][0]
@@ -82,23 +84,23 @@ class TestCatalogingCRUD:
     def test_add_book_duplicate_accession(self, librarian_client, mock_db):
         mock_db['execute'].return_value = [(1,)]
         mock_db['fetch_one'].return_value = ('2025-0001',)
-        resp = librarian_client.post('/cataloging/add', data={
+        resp = librarian_client.post('/librarian/cataloging/add', data={
             'title': 'New Book',
             'author': 'New Author',
             'accession_number': '2025-0001',
         })
         assert resp.status_code == 302
-        assert '/cataloging' in resp.location
+        assert '/librarian/cataloging' in resp.location
 
     def test_add_book_missing_title(self, librarian_client, mock_db):
-        resp = librarian_client.post('/cataloging/add', data={
+        resp = librarian_client.post('/librarian/cataloging/add', data={
             'title': '',
             'author': 'Some Author',
         })
         assert resp.status_code == 302
 
     def test_add_book_missing_author(self, librarian_client, mock_db):
-        resp = librarian_client.post('/cataloging/add', data={
+        resp = librarian_client.post('/librarian/cataloging/add', data={
             'title': 'Some Title',
             'author': '',
         })
@@ -107,7 +109,7 @@ class TestCatalogingCRUD:
     def test_edit_book_success(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
         mock_db['execute'].return_value = 1
-        resp = librarian_client.post('/cataloging/1/edit', data={
+        resp = librarian_client.post('/librarian/cataloging/1/edit', data={
             'title': 'Updated Title',
             'author': 'Updated Author',
         })
@@ -118,17 +120,17 @@ class TestCatalogingCRUD:
 
     def test_edit_book_not_found(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = None
-        resp = librarian_client.post('/cataloging/999/edit', data={
+        resp = librarian_client.post('/librarian/cataloging/999/edit', data={
             'title': 'Ghost',
             'author': 'Ghost',
         })
         assert resp.status_code == 302
-        assert '/cataloging' in resp.location
+        assert '/librarian/cataloging' in resp.location
 
     def test_toggle_book_status_archive(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
         mock_db['execute'].return_value = 1
-        resp = librarian_client.post('/cataloging/1/status')
+        resp = librarian_client.post('/librarian/cataloging/1/status')
         assert resp.status_code == 302
         assert mock_db['execute'].call_count >= 1
         call_args = mock_db['execute'].call_args_list[0]
@@ -137,13 +139,13 @@ class TestCatalogingCRUD:
 
     def test_toggle_book_status_not_found(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = None
-        resp = librarian_client.post('/cataloging/999/status')
+        resp = librarian_client.post('/librarian/cataloging/999/status')
         assert resp.status_code == 302
 
     def test_delete_book_archived_success(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = SAMPLE_BOOKS[2]
         mock_db['execute'].return_value = 1
-        resp = librarian_client.post('/cataloging/3/delete')
+        resp = librarian_client.post('/librarian/cataloging/3/delete')
         assert resp.status_code == 302
         assert mock_db['execute'].call_count >= 1
         call_args = mock_db['execute'].call_args_list[0]
@@ -151,33 +153,35 @@ class TestCatalogingCRUD:
 
     def test_delete_book_not_archived_fails(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
-        resp = librarian_client.post('/cataloging/1/delete')
+        resp = librarian_client.post('/librarian/cataloging/1/delete')
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
 
     def test_delete_book_not_found(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = None
-        resp = librarian_client.post('/cataloging/999/delete')
+        resp = librarian_client.post('/librarian/cataloging/999/delete')
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
 
     def test_delete_book_rbac_student_forbidden(self, student_client, mock_db):
-        resp = student_client.post('/cataloging/3/delete')
-        assert resp.status_code == 403
+        resp = student_client.post('/librarian/cataloging/3/delete')
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
 
     def test_delete_book_rbac_faculty_forbidden(self, faculty_client, mock_db):
-        resp = faculty_client.post('/cataloging/3/delete')
-        assert resp.status_code == 403
+        resp = faculty_client.post('/librarian/cataloging/3/delete')
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
 
     def test_delete_book_unauthenticated(self, client, mock_db):
-        resp = client.post('/cataloging/3/delete')
+        resp = client.post('/librarian/cataloging/3/delete')
         assert resp.status_code == 302
         assert '/login' in resp.location
 
     def test_add_accession_success(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [SAMPLE_BOOKS[0], None]
         mock_db['execute'].return_value = 1
-        resp = librarian_client.post('/cataloging/1/accession/add', data={
+        resp = librarian_client.post('/librarian/cataloging/1/accession/add', data={
             'accession_number': '2025-0001',
             'copy_number': '1',
             'source': 'purchase',
@@ -190,14 +194,14 @@ class TestCatalogingCRUD:
     def test_add_accession_duplicate(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [SAMPLE_BOOKS[0], ('2025-0001',)]
         mock_db['execute'].return_value = 1
-        resp = librarian_client.post('/cataloging/1/accession/add', data={
+        resp = librarian_client.post('/librarian/cataloging/1/accession/add', data={
             'accession_number': '2025-0001',
         })
         assert resp.status_code == 302
 
     def test_add_accession_missing_number(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
-        resp = librarian_client.post('/cataloging/1/accession/add', data={
+        resp = librarian_client.post('/librarian/cataloging/1/accession/add', data={
             'accession_number': '',
         })
         assert resp.status_code == 302
@@ -207,26 +211,26 @@ class TestCatalogingSearch:
     def test_search_by_title(self, librarian_client, mock_db):
         mock_db['fetch_all'].return_value = [SAMPLE_BOOKS[0]]
         mock_db['fetch_one'].return_value = (1,)
-        resp = librarian_client.get('/cataloging?q=Algorithms&field=title')
+        resp = librarian_client.get('/librarian/cataloging?q=Algorithms&field=title')
         assert resp.status_code == 200
         assert b'Algorithms' in resp.data
 
     def test_search_by_author(self, librarian_client, mock_db):
         mock_db['fetch_all'].return_value = [SAMPLE_BOOKS[1]]
         mock_db['fetch_one'].return_value = (1,)
-        resp = librarian_client.get('/cataloging?q=Martin&field=author')
+        resp = librarian_client.get('/librarian/cataloging?q=Martin&field=author')
         assert resp.status_code == 200
 
     def test_search_no_results(self, librarian_client, mock_db):
         mock_db['fetch_all'].return_value = []
         mock_db['fetch_one'].return_value = (0,)
-        resp = librarian_client.get('/cataloging?q=zzzxxx')
+        resp = librarian_client.get('/librarian/cataloging?q=zzzxxx')
         assert resp.status_code == 200
 
     def test_pagination(self, librarian_client, mock_db):
         mock_db['fetch_all'].return_value = SAMPLE_BOOKS
         mock_db['fetch_one'].return_value = (3,)
-        resp = librarian_client.get('/cataloging?page=1')
+        resp = librarian_client.get('/librarian/cataloging?page=1')
         assert resp.status_code == 200
         assert b'Showing' in resp.data
 
@@ -247,6 +251,63 @@ class TestPublicCatalog:
         mock_db['fetch_all'].return_value = []
         resp = client.get('/catalog?q=nonexistent')
         assert resp.status_code == 200
+
+    def test_public_catalog_filters(self, client, mock_db):
+        mock_db['fetch_all'].side_effect = [
+            SAMPLE_BOOKS,                # search_books_filtered books
+            [('Fiction',), ('Reference',)],  # get_distinct_categories
+        ]
+        resp = client.get('/catalog?q=harry&sort_by=title&category=Fiction&material_type=ebook&availability=available&year_from=2000&year_to=2026')
+        assert resp.status_code == 200
+        body = resp.get_data(as_text=True)
+        assert 'Sort by relevance' in body
+        assert 'Fiction' in body
+        assert 'E-Books' in body
+        assert 'Physical books' in body
+        assert 'Active filters' in body
+
+    def test_public_catalog_filter_params_passed(self, client, mock_db):
+        mock_db['fetch_all'].side_effect = [
+            [],                            # search_books_filtered books
+            [],                            # get_distinct_categories
+        ]
+        resp = client.get('/catalog?category=Fiction&material_type=physical&availability=borrowed&sort_by=year_desc&year_from=2010&year_to=2020')
+        assert resp.status_code == 200
+        assert b'No books found' in resp.data
+
+    def test_public_catalog_sidebar_sections(self, client, mock_db):
+        mock_db['fetch_all'].side_effect = [
+            SAMPLE_BOOKS,                  # search_books_filtered books
+            [],                            # get_distinct_categories
+        ]
+        resp = client.get('/catalog')
+        assert resp.status_code == 200
+        body = resp.get_data(as_text=True)
+        for label in ['Sort', 'Category', 'Type', 'Availability', 'Year']:
+            assert label in body, f'missing sidebar section: {label}'
+
+    def test_public_catalog_pagination(self, client, mock_db):
+        many_books = [
+            (i, f'Book {i}', 'Author', None, None, 2000 + i,
+             'Fiction', None, None, 'Book',
+             None, 'active', '2024-01-01')
+            for i in range(1, 121)
+        ]
+        mock_db['fetch_all'].side_effect = [
+            many_books,                  # search_books_filtered books (120)
+            [],                          # get_distinct_categories
+        ]
+        resp = client.get('/catalog')
+        assert resp.status_code == 200
+        body = resp.get_data(as_text=True)
+        assert '>1 - 50</span> of <span class="font-medium text-slate-900 dark:text-slate-100">120</span>' in body
+        assert 'Next' in body
+
+        mock_db['fetch_all'].side_effect = [many_books, []]
+        resp2 = client.get('/catalog?page=3')
+        assert resp2.status_code == 200
+        body2 = resp2.get_data(as_text=True)
+        assert '>101 - 120</span> of <span class="font-medium text-slate-900 dark:text-slate-100">120</span>' in body2
 
     def test_book_info_found(self, client, mock_db):
         mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
@@ -308,60 +369,62 @@ class TestBulkImport:
         assert data['redirect'] is not None
 
     def test_bulk_import_rbac_student(self, student_client):
-        resp = student_client.post('/cataloging/bulk-import', data={
+        resp = student_client.post('/librarian/cataloging/bulk-import', data={
             'file': _csv_file(self._make_csv([self.VALID_ROW])),
         })
-        assert resp.status_code == 403
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
 
     def test_bulk_import_rbac_faculty(self, faculty_client):
-        resp = faculty_client.post('/cataloging/bulk-import', data={
+        resp = faculty_client.post('/librarian/cataloging/bulk-import', data={
             'file': _csv_file(self._make_csv([self.VALID_ROW])),
         })
-        assert resp.status_code == 403
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
 
     def test_bulk_import_unauthenticated(self, client):
-        resp = client.post('/cataloging/bulk-import', data={
+        resp = client.post('/librarian/cataloging/bulk-import', data={
             'file': _csv_file(self._make_csv([self.VALID_ROW])),
         })
         assert resp.status_code == 302
         assert '/login' in resp.location
 
     def test_bulk_import_no_file(self, librarian_client):
-        resp = librarian_client.post('/cataloging/bulk-import')
+        resp = librarian_client.post('/librarian/cataloging/bulk-import')
         self._assert_error(resp, 400)
 
     def test_bulk_import_empty_filename(self, librarian_client):
-        resp = librarian_client.post('/cataloging/bulk-import', data={
+        resp = librarian_client.post('/librarian/cataloging/bulk-import', data={
             'file': (io.BytesIO(b''), ''),
         })
         self._assert_error(resp, 400)
 
     def test_bulk_import_wrong_extension(self, librarian_client):
-        resp = librarian_client.post('/cataloging/bulk-import', data={
+        resp = librarian_client.post('/librarian/cataloging/bulk-import', data={
             'file': (io.BytesIO(b'a,b,c'), 'books.txt'),
         })
         self._assert_error(resp, 400)
 
     def test_bulk_import_empty_file(self, librarian_client, mock_db):
-        resp = librarian_client.post('/cataloging/bulk-import', data={
+        resp = librarian_client.post('/librarian/cataloging/bulk-import', data={
             'file': _csv_file(''),
         })
         self._assert_error(resp, 400)
 
     def test_bulk_import_headers_only(self, librarian_client, mock_db):
-        resp = librarian_client.post('/cataloging/bulk-import', data={
+        resp = librarian_client.post('/librarian/cataloging/bulk-import', data={
             'file': _csv_file('title,author,accession_number,year\n'),
         })
         self._assert_job(resp)
 
     def test_bulk_import_missing_required_columns(self, librarian_client, mock_db):
-        resp = librarian_client.post('/cataloging/bulk-import', data={
+        resp = librarian_client.post('/librarian/cataloging/bulk-import', data={
             'file': _csv_file(self._make_csv([('NoAuthor',)], headers=['title'])),
         })
         self._assert_error(resp, 400)
 
     def test_bulk_import_missing_accession_column(self, librarian_client, mock_db):
-        resp = librarian_client.post('/cataloging/bulk-import', data={
+        resp = librarian_client.post('/librarian/cataloging/bulk-import', data={
             'file': _csv_file(self._make_csv([('Title', 'Author')], headers=['title', 'author'])),
         })
         self._assert_error(resp, 400)
@@ -375,7 +438,7 @@ class TestBulkImport:
             ('Title Two', 'Author Two', 'ACC-002', '978-222', '', 'Pub2', 2021,
              'Math', 'Q2', 'Book', '', '', ''),
         ])
-        resp = librarian_client.post('/cataloging/bulk-import', data={
+        resp = librarian_client.post('/librarian/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
         })
         self._assert_job(resp)
@@ -387,7 +450,7 @@ class TestBulkImport:
             [('Author X', 'Title X', 'ACC-003', '2022', '978-333')],
             headers=['author', 'title', 'accession_number', 'year', 'isbn'],
         )
-        resp = librarian_client.post('/cataloging/bulk-import', data={
+        resp = librarian_client.post('/librarian/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
         })
         self._assert_job(resp)
@@ -399,7 +462,7 @@ class TestBulkImport:
             [('Synonym Book', 'Synonym Author', 'ACC-004')],
             headers=['Book Title', 'Author(s)', 'Accession Number'],
         )
-        resp = librarian_client.post('/cataloging/bulk-import', data={
+        resp = librarian_client.post('/librarian/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
         })
         self._assert_job(resp)
@@ -413,7 +476,7 @@ class TestBulkImport:
             ('OnlyTitle', '', '', ''),
             ('Another Valid', 'Another Author', 'ACC-006', '978-666'),
         ])
-        resp = librarian_client.post('/cataloging/bulk-import', data={
+        resp = librarian_client.post('/librarian/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
         })
         self._assert_job(resp)
@@ -422,7 +485,7 @@ class TestBulkImport:
         mock_db['execute'].return_value = [(1,)]
         mock_db['fetch_one'].return_value = None
         csv_content = self._make_csv([('BOM Book', 'BOM Author', 'ACC-007')])
-        resp = librarian_client.post('/cataloging/bulk-import', data={
+        resp = librarian_client.post('/librarian/cataloging/bulk-import', data={
             'file': (io.BytesIO(csv_content.encode('utf-8-sig')), 'books.csv'),
         })
         self._assert_job(resp)
@@ -432,7 +495,7 @@ class TestBulkImport:
         mock_db['fetch_one'].return_value = None
         csv_content = self._make_csv([('José García', 'François', 'ACC-008')],
                                      headers=['title', 'author', 'accession_number'])
-        resp = librarian_client.post('/cataloging/bulk-import', data={
+        resp = librarian_client.post('/librarian/cataloging/bulk-import', data={
             'file': (io.BytesIO(csv_content.encode('latin-1')), 'books.csv'),
         })
         self._assert_job(resp)
@@ -445,14 +508,14 @@ class TestBulkImport:
             ('Русская книга', 'Автор', 'ACC-010'),
             ('中文图书', '作者', 'ACC-011'),
         ])
-        resp = librarian_client.post('/cataloging/bulk-import', data={
+        resp = librarian_client.post('/librarian/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
         })
         self._assert_job(resp)
 
     def test_bulk_import_no_headers(self, librarian_client, mock_db):
         csv_content = 'value1,value2,value3'
-        resp = librarian_client.post('/cataloging/bulk-import', data={
+        resp = librarian_client.post('/librarian/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
         })
         self._assert_error(resp, 400)
@@ -464,7 +527,7 @@ class TestBulkImport:
             [('Whitespace Book', 'Whitespace Author', 'ACC-012')],
             headers=['  title  ', '  author  ', '  accession_number  '],
         )
-        resp = librarian_client.post('/cataloging/bulk-import', data={
+        resp = librarian_client.post('/librarian/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
         })
         self._assert_job(resp)
@@ -474,7 +537,7 @@ class TestBulkImport:
         mock_db['fetch_one'].return_value = None
         rows = [(f'Book {i}', f'Author {i}', f'ACC-{i:04d}', f'978-{i:06d}') for i in range(500)]
         csv_content = self._make_csv(rows, headers=['title', 'author', 'accession_number', 'isbn'])
-        resp = librarian_client.post('/cataloging/bulk-import', data={
+        resp = librarian_client.post('/librarian/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
         })
         self._assert_job(resp)
@@ -486,7 +549,7 @@ class TestBulkImport:
             [('Extra Book', 'Extra Author', 'ACC-013', 'ShelfA', 'Donated')],
             headers=['title', 'author', 'accession_number', 'location', 'source'],
         )
-        resp = librarian_client.post('/cataloging/bulk-import', data={
+        resp = librarian_client.post('/librarian/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
         })
         self._assert_job(resp)

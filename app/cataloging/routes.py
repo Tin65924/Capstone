@@ -66,7 +66,7 @@ def _decode_csv(raw):
     return None
 
 
-@cataloging_bp.route('/cataloging')
+@cataloging_bp.route('/librarian/cataloging')
 @login_required
 @librarian_required
 def cataloging_page():
@@ -92,7 +92,7 @@ def cataloging_page():
                            page=page, per_page=per_page)
 
 
-@cataloging_bp.route('/cataloging/add', methods=['POST'])
+@cataloging_bp.route('/librarian/cataloging/add', methods=['POST'])
 @login_required
 @librarian_required
 def add_book():
@@ -132,7 +132,7 @@ def add_book():
     return redirect(url_for('cataloging.cataloging_page'))
 
 
-@cataloging_bp.route('/cataloging/<int:book_id>/edit', methods=['POST'])
+@cataloging_bp.route('/librarian/cataloging/<int:book_id>/edit', methods=['POST'])
 @login_required
 @librarian_required
 def edit_book(book_id):
@@ -172,7 +172,7 @@ def edit_book(book_id):
     return redirect(url_for('cataloging.cataloging_page'))
 
 
-@cataloging_bp.route('/cataloging/<int:book_id>/delete', methods=['POST'])
+@cataloging_bp.route('/librarian/cataloging/<int:book_id>/delete', methods=['POST'])
 @login_required
 @librarian_required
 def delete_book_route(book_id):
@@ -189,7 +189,7 @@ def delete_book_route(book_id):
     return redirect(url_for('cataloging.cataloging_page'))
 
 
-@cataloging_bp.route('/cataloging/<int:book_id>/status', methods=['POST'])
+@cataloging_bp.route('/librarian/cataloging/<int:book_id>/status', methods=['POST'])
 @login_required
 @librarian_required
 def toggle_book_status(book_id):
@@ -205,7 +205,7 @@ def toggle_book_status(book_id):
     return redirect(url_for('cataloging.cataloging_page'))
 
 
-@cataloging_bp.route('/cataloging/<int:book_id>/accession/add', methods=['POST'])
+@cataloging_bp.route('/librarian/cataloging/<int:book_id>/accession/add', methods=['POST'])
 @login_required
 @librarian_required
 def add_accession(book_id):
@@ -233,7 +233,7 @@ def add_accession(book_id):
     return redirect(url_for('cataloging.cataloging_page'))
 
 
-@cataloging_bp.route('/cataloging/bulk-import', methods=['POST'])
+@cataloging_bp.route('/librarian/cataloging/bulk-import', methods=['POST'])
 @login_required
 @librarian_required
 def bulk_import():
@@ -291,7 +291,7 @@ def bulk_import():
     return jsonify({'job_id': job_id, 'redirect': url_for('cataloging.cataloging_page')})
 
 
-@cataloging_bp.route('/cataloging/bulk-import/status/<job_id>')
+@cataloging_bp.route('/librarian/cataloging/bulk-import/status/<job_id>')
 @login_required
 @librarian_required
 def bulk_import_status(job_id):
@@ -440,12 +440,53 @@ def _cleanup_old_jobs():
 def public_catalog():
     query = request.args.get('q', '').strip()
     field = request.args.get('field', '')
-    if query:
-        books = search_books(query, field=field if field else None)
-    else:
-        books = get_all_books()
+    year_preset = request.args.get('year_preset', '').strip()
+    year_from = request.args.get('year_from', '').strip()
+    year_to = request.args.get('year_to', '').strip()
+    sort_by = request.args.get('sort_by', '').strip()
+    category = request.args.get('category', '').strip()
+    material_type = request.args.get('material_type', '').strip()
+    availability = request.args.get('availability', '').strip()
+
+    current_year = datetime.now().year
+    if year_preset == 'since_this_year':
+        year_from = str(current_year)
+        year_to = ''
+    elif year_preset == 'since_last_year':
+        year_from = str(current_year - 1)
+        year_to = ''
+    elif year_preset == 'since_2023':
+        year_from = '2023'
+        year_to = ''
+    elif year_preset == 'any':
+        year_from = ''
+        year_to = ''
+
+    from app.cataloging.models import search_books_filtered, get_distinct_categories
+    books = search_books_filtered(
+        query, field=field if field else None,
+        year_from=year_from or None, year_to=year_to or None,
+        sort_by=sort_by or None, category=category or None,
+        material_type=material_type or None, availability=availability or None
+    )
+    categories = [row[0] for row in get_distinct_categories()]
+
+    per_page = 50
+    total = len(books)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(request.args.get('page', 1, type=int), total_pages))
+    start = (page - 1) * per_page
+    books = books[start:start + per_page]
+
     return render_template('public/catalog.html', books=books,
-                           search_query=query, search_field=field)
+                           search_query=query, search_field=field,
+                           year_preset=year_preset,
+                           year_from=year_from, year_to=year_to,
+                           sort_by=sort_by, category=category,
+                           material_type=material_type, availability=availability,
+                           current_year=current_year,
+                           categories=categories,
+                           page=page, total_pages=total_pages, total=total, per_page=per_page)
 
 
 @cataloging_bp.route('/book/<int:book_id>')

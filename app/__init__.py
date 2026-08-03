@@ -1,5 +1,5 @@
 import os
-from flask import Flask
+from flask import Flask, render_template, request, redirect, flash, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 from .config import Config
 from .extensions import login_manager
@@ -40,4 +40,35 @@ def create_app(test_config=None):
     app.register_blueprint(backup_bp)
     app.register_blueprint(main_bp)
 
+    register_error_handlers(app)
+
     return app
+
+
+def register_error_handlers(app):
+    @app.errorhandler(404)
+    def not_found(e):
+        return render_template('errors/error.html',
+                               code=404, title='Page Not Found',
+                               message='The page you are looking for does not exist or may have been moved.'), 404
+
+    @app.errorhandler(403)
+    def forbidden(e):
+        return render_template('errors/error.html',
+                               code=403, title='Access Denied',
+                               message='You do not have permission to access this page.'), 403
+
+    @app.errorhandler(401)
+    def unauthorized(e):
+        if request.path.startswith(('/admin', '/librarian')):
+            flash('Please sign in to access this page.', 'info')
+            return redirect(url_for('auth.login', next=request.path))
+        return render_template('errors/error.html',
+                               code=401, title='Unauthorized',
+                               message='Please sign in to continue.'), 401
+
+    @app.errorhandler(500)
+    def internal_error(e):
+        return render_template('errors/error.html',
+                               code=500, title='Something Went Wrong',
+                               message='An unexpected error occurred. Please try again later.'), 500

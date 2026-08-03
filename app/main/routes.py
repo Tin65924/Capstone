@@ -3,6 +3,7 @@ from flask_login import login_required, current_user
 from . import main_bp
 from .models import get_dashboard_stats, get_recent_activity, get_daily_borrows
 from app.cataloging.models import get_recent_books
+from app.auth.decorators import librarian_required, admin_required
 
 
 @main_bp.route('/')
@@ -14,26 +15,12 @@ def index():
 @main_bp.route('/dashboard')
 @login_required
 def dashboard():
-    if current_user.role in ('Student', 'Faculty'):
-        return redirect(url_for('main.user_profile'))
-    stats = get_dashboard_stats()
-    activity = get_recent_activity(5)
-    daily = get_daily_borrows(6)
-    return render_template('dashboard/dashboard.html', stats=stats,
-                           activity=activity, daily=daily)
-
-
-@main_bp.route('/users')
-@login_required
-def user_management():
-    return redirect(url_for('auth.admin_users'))
+    return redirect(url_for('main.user_profile'))
 
 
 @main_bp.route('/user/profile')
 @login_required
 def user_profile():
-    if current_user.role in ('Librarian', 'Admin'):
-        return redirect(url_for('main.dashboard'))
     from app.auth.models import get_user_by_id
     user_data = get_user_by_id(current_user.id)
     return render_template('users/user_profile.html', user_data=user_data)
@@ -43,3 +30,27 @@ def user_profile():
 @login_required
 def user_history():
     return render_template('users/user_history.html')
+
+
+@main_bp.route('/librarian')
+@login_required
+@librarian_required
+def librarian_dashboard():
+    stats = get_dashboard_stats()
+    activity = get_recent_activity(5)
+    daily = get_daily_borrows(6)
+    return render_template('dashboard/dashboard.html', stats=stats,
+                           activity=activity, daily=daily,
+                           sidebar='components/librarian_sidebar_nav.html')
+
+
+@main_bp.route('/admin')
+@login_required
+@admin_required
+def admin_dashboard():
+    stats = get_dashboard_stats()
+    activity = get_recent_activity(5)
+    daily = get_daily_borrows(6)
+    return render_template('dashboard/dashboard.html', stats=stats,
+                           activity=activity, daily=daily,
+                           sidebar='components/admin_sidebar_nav.html')

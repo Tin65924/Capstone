@@ -16,9 +16,9 @@
             theme: {
                 extend: {
                     colors: {
-                        primary: "#191a1d",
+                        primary: "#1e3a8a",
                         "background-light": "#f7f7f7",
-                        "background-dark": "#18191a"
+                        "background-dark": "#0f172a"
                     },
                     fontFamily: {
                         display: "Manrope"
@@ -35,7 +35,7 @@
     </script>
 </head>
 
-<body class="bg-background-light dark:bg-background-dark text-[#0d121b] dark:text-white font-display overflow-hidden">
+<body class="bg-background-light dark:bg-background-dark text-[#0f172a] dark:text-white font-display overflow-hidden">
     <div class="flex h-screen w-full flex-row">
         <!-- Sidebar -->
         <div
@@ -45,39 +45,24 @@
                     <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
                     <h1 class="text-xl font-bold tracking-tight" style="">Profile</h1>
                 </div>
-                <div class="flex flex-col items-center mb-6">
-                    <h2 class="text-lg font-bold" style="">Alice | Student</h2>
-                    <p class="text-sm text-gray-500 dark:text-gray-400" style="">ID: 8934201</p>
-                </div>
-                <nav class="flex flex-col gap-2">
-                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors"
-                        href="{{ url_for('main.user_profile') }}" style="">
-                        <span class="material-symbols-outlined" style="">dashboard</span>
-                        <span class="" style="">Dashboard</span>
-                    </a>
-                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg bg-primary/10 text-primary font-medium"
-                        href="{{ url_for('requests.user_request_book') }}" style="">
-                        <span class="material-symbols-outlined" style="">book_online</span>
-                        <span class="" style="">Request Book</span>
-                    </a>
-                    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors"
-                        href="{{ url_for('main.user_history') }}" style="">
-                        <span class="material-symbols-outlined" style="">history</span>
-                        <span class="" style="">History</span>
-                    </a>
-                </nav>
+                {% include 'components/user_sidebar_nav.html' %}
             </div>
             <div class="mt-auto p-6 border-t border-[#cfd7e7] dark:border-gray-700">
-                <button
+                <div class="flex flex-col items-center mb-4">
+                    <h2 class="text-lg font-bold text-center" style="">{{ current_user.full_name }} | {{ current_user.role }}</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400" style="">{{ current_user.email }}</p>
+                </div>
+                <a href="{{ url_for('auth.logout') }}"
                     class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-700 transition-colors"
                     style="">
                     <span class="material-symbols-outlined text-[18px]" style="">logout</span>
                     <span class="" style="">Log Out</span>
-                </button>
+                </a>
             </div>
         </div>
         <!-- Main Content -->
         <main class="flex-1 h-full overflow-y-auto bg-background-light dark:bg-background-dark">
+            {% include 'components/flash_messages.html' %}
             <div class="max-w-4xl mx-auto px-6 py-12">
                 <!-- Book Procurement Header -->
                 <div class="mb-10">
@@ -115,7 +100,7 @@
                         <!-- Submit Button -->
                         <div class="pt-4">
                             <button
-                                class="w-full sm:w-auto px-8 py-3.5 bg-primary text-white font-bold rounded-lg hover:bg-gray-800 transition-colors shadow-lg active:transform active:scale-[0.98]"
+                                class="w-full sm:w-auto px-8 py-3.5 bg-primary text-white font-bold rounded-lg hover:bg-blue-800 transition-colors shadow-lg active:transform active:scale-[0.98]"
                                 type="submit" style="">
                                 Submit Request
                             </button>

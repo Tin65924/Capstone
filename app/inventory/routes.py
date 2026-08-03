@@ -4,7 +4,7 @@ from . import inventory_bp
 from app.auth.decorators import librarian_required
 
 
-@inventory_bp.route('/inventory')
+@inventory_bp.route('/librarian/inventory')
 @login_required
 @librarian_required
 def inventory_page():

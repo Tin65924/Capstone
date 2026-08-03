@@ -4,7 +4,7 @@ from . import backup_bp
 from app.auth.decorators import admin_required
 
 
-@backup_bp.route('/backup')
+@backup_bp.route('/admin/backup')
 @login_required
 @admin_required
 def backup_page():

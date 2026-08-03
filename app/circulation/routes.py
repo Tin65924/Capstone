@@ -4,14 +4,14 @@ from . import circulation_bp
 from app.auth.decorators import librarian_required
 
 
-@circulation_bp.route('/circulation')
+@circulation_bp.route('/librarian/circulation')
 @login_required
 @librarian_required
 def circulation_page():
     return render_template('circulation/circulation.html')
 
 
-@circulation_bp.route('/reservations')
+@circulation_bp.route('/librarian/reservations')
 @login_required
 @librarian_required
 def reservations_page():

@@ -4,7 +4,7 @@ from . import analytics_bp
 from app.auth.decorators import librarian_required
 
 
-@analytics_bp.route('/analytics')
+@analytics_bp.route('/librarian/analytics')
 @login_required
 @librarian_required
 def analytics_page():

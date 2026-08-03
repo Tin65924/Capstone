@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "github": {
+      "type": "local",
+      "command": ["gh", "mcp"],
+      "enabled": true,
+      "environment": {
+        "GITHUB_READ_ONLY": "1",
+        "GITHUB_TOOLSETS": "repos,issues,pull_requests"
+      }
+    }
+  }
+}

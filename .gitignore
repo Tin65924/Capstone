@@ -1,3 +1,10 @@
+## Development Stuff
+dev/PROJECT_STATUS.md
+dev/New_Schema.md
+dev/PlannedModules.txt
+
+Project_Tracker_Site/*
+
 __pycache__/
 *.py[cod]
 *$py.class

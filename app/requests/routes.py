@@ -8,8 +8,9 @@ from .models import (
 from app.auth.decorators import librarian_required
 
 
-@requests_bp.route('/requests')
+@requests_bp.route('/librarian/requests')
 @login_required
+@librarian_required
 def list_requests():
     return render_template('requests/requests.html')
 

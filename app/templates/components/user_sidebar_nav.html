@@ -1,0 +1,36 @@
+<nav class="flex flex-col gap-1 overflow-y-auto pr-2 custom-scrollbar">
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.index') }}">
+                <span class="material-symbols-outlined">home</span>
+                <span class="text-sm">Home</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('cataloging.public_catalog') }}">
+        <span class="material-symbols-outlined">menu_book</span>
+        <span class="text-sm">Catalog</span>
+    </a>
+    <hr class="border-gray-200 dark:border-gray-700 my-1">
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'main.user_profile' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('main.user_profile') }}">
+        <span class="material-symbols-outlined">Overview</span>
+        <span class="text-sm">Overview</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'requests.user_request_book' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('requests.user_request_book') }}">
+        <span class="material-symbols-outlined">book_online</span>
+        <span class="text-sm">Request Book</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'main.user_history' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('main.user_history') }}">
+        <span class="material-symbols-outlined">history</span>
+        <span class="text-sm">History</span>
+    </a>
+    {% if current_user.role == 'Admin' %}
+    <hr class="border-gray-200 dark:border-gray-700 my-1">
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'main.admin_dashboard' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('main.admin_dashboard') }}">
+        <span class="material-symbols-outlined">shield_person</span>
+        <span class="text-sm">Admin Dashboard</span>
+    </a>
+    {% endif %}
+    {% if current_user.role in ('Admin', 'Librarian') %}
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'main.librarian_dashboard' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('main.librarian_dashboard') }}">
+        <span class="material-symbols-outlined">badge</span>
+        <span class="text-sm">Librarian Dashboard</span>
+    </a>
+    {% endif %}
+</nav>

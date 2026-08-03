@@ -14,9 +14,9 @@
             theme: {
                 extend: {
                     colors: {
-                        primary: "#191a1d",
+                        primary: "#1e3a8a",
                         "background-light": "#f7f7f7",
-                        "background-dark": "#18191a"
+                        "background-dark": "#0f172a"
                     },
                     fontFamily: {
                         display: "Manrope"
@@ -33,10 +33,11 @@
     </script>
     {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-background-light dark:bg-background-dark text-[#0d121b] dark:text-gray-100 font-display min-h-screen flex flex-col">
+<body class="bg-background-light dark:bg-background-dark text-[#0f172a] dark:text-gray-100 font-display min-h-screen flex flex-col">
     {% include 'components/navbar.html' %}
 
     <main class="flex-grow">
+        {% include 'components/flash_messages.html' %}
         {% block content %}{% endblock %}
     </main>
 

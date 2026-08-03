@@ -55,6 +55,85 @@ def get_all_books():
     return db.fetch_all(f'SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog ORDER BY {DISTINCT_ORDER}')
 
 
+def get_distinct_categories():
+    return db.fetch_all(
+        'SELECT DISTINCT subject_classification FROM book_catalog WHERE subject_classification IS NOT NULL AND subject_classification != \'\' ORDER BY subject_classification'
+    )
+
+
+def search_books_filtered(query, field=None, year_from=None, year_to=None, sort_by=None,
+                          category=None, material_type=None, availability=None):
+    conditions = ["catalog_status = 'active'"]
+    args = []
+    pattern = f'%{query}%' if query else None
+
+    if query:
+        if field == 'title':
+            conditions.append('title ILIKE %s')
+            args.append(pattern)
+        elif field == 'author':
+            conditions.append('author ILIKE %s')
+            args.append(pattern)
+        elif field == 'isbn':
+            conditions.append('isbn ILIKE %s')
+            args.append(pattern)
+        elif field == 'category':
+            conditions.append('subject_classification ILIKE %s')
+            args.append(pattern)
+        else:
+            conditions.append('(title ILIKE %s OR author ILIKE %s OR isbn ILIKE %s OR subject_classification ILIKE %s)')
+            args.extend([pattern, pattern, pattern, pattern])
+
+    if year_from:
+        conditions.append('year_published >= %s')
+        args.append(int(year_from))
+    if year_to:
+        conditions.append('year_published <= %s')
+        args.append(int(year_to))
+    if category:
+        conditions.append('subject_classification = %s')
+        args.append(category)
+    if material_type:
+        if material_type == 'ebook':
+            conditions.append('material_type = %s')
+            args.append('E-Book')
+        elif material_type == 'physical':
+            conditions.append('material_type IS NULL OR material_type != %s')
+            args.append('E-Book')
+    if availability == 'available':
+        conditions.append(
+            "NOT EXISTS (SELECT 1 FROM circulation_records c WHERE c.book_id = book_catalog.book_id "
+            "AND c.transaction_status IN ('active', 'overdue'))"
+        )
+    elif availability == 'borrowed':
+        conditions.append(
+            "EXISTS (SELECT 1 FROM circulation_records c WHERE c.book_id = book_catalog.book_id "
+            "AND c.transaction_status IN ('active', 'overdue'))"
+        )
+
+    where = 'WHERE ' + ' AND '.join(conditions)
+
+    availability_col = (
+        "CASE WHEN EXISTS (SELECT 1 FROM circulation_records c WHERE c.book_id = book_catalog.book_id "
+        "AND c.transaction_status IN ('active', 'overdue')) THEN 'borrowed' ELSE 'available' END AS availability"
+    )
+
+    if sort_by == 'title':
+        order = 'ORDER BY title ASC'
+    elif sort_by == 'year_desc':
+        order = 'ORDER BY year_published DESC NULLS LAST, title ASC'
+    else:
+        order = f'ORDER BY {DISTINCT_ORDER}'
+
+    base = f'SELECT DISTINCT ON ({DISTINCT_ORDER}) book_catalog.*, {availability_col} FROM book_catalog {where} ORDER BY {DISTINCT_ORDER}'
+    if sort_by in ('title', 'year_desc'):
+        return db.fetch_all(
+            f'SELECT * FROM ({base}) AS deduped {order}',
+            tuple(args)
+        )
+    return db.fetch_all(base, tuple(args))
+
+
 def get_recent_books(limit=5):
     return db.fetch_all(
         f'SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog ORDER BY {DISTINCT_ORDER}, date_added DESC LIMIT %s',

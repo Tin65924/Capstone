@@ -128,7 +128,7 @@ def google_callback():
         user = User(*existing_user)
         login_user(user)
         log_activity(user.id, 'login', None)
-        next_page = session.pop('next', url_for('main.dashboard'))
+        next_page = session.pop('next', url_for('main.user_profile'))
         return redirect(next_page)
 
     existing_email = get_user_by_email(email)
@@ -145,7 +145,7 @@ def google_callback():
             login_user(user)
             log_activity(user_id, 'first_login')
             flash('Welcome! You are the first admin.', 'success')
-            return redirect(url_for('main.dashboard'))
+            return redirect(url_for('main.user_profile'))
         flash('Failed to create admin account.', 'error')
         return redirect(url_for('auth.login'))
 
@@ -188,7 +188,7 @@ def role_select():
             login_user(user)
             log_activity(user.id, 'login')
             flash('Welcome back!', 'success')
-            return redirect(url_for('main.dashboard'))
+            return redirect(url_for('main.user_profile'))
 
         if get_admin_count() == 0:
             role_name = 'Admin'
@@ -214,13 +214,13 @@ def role_select():
         user = User(user_id, email, role_name, full_name)
         login_user(user)
         log_activity(user_id, 'first_login')
-        next_page = session.pop('next', url_for('main.dashboard'))
+        next_page = session.pop('next', url_for('main.user_profile'))
         return redirect(next_page)
 
     return render_template('auth/role_select.html')
 
 
-@auth_bp.route('/admin/users')
+@auth_bp.route('/librarian/users')
 @login_required
 @librarian_required
 def admin_users():
@@ -242,7 +242,7 @@ def admin_users():
                            status_filter=status_filter)
 
 
-@auth_bp.route('/admin/users/<int:user_id>/approve', methods=['POST'])
+@auth_bp.route('/librarian/users/<int:user_id>/approve', methods=['POST'])
 @login_required
 @librarian_required
 def approve_user_route(user_id):

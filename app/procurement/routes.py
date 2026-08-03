@@ -4,7 +4,7 @@ from . import procurement_bp
 from app.auth.decorators import librarian_required
 
 
-@procurement_bp.route('/procurement')
+@procurement_bp.route('/librarian/procurement')
 @login_required
 @librarian_required
 def procurement_dashboard():
