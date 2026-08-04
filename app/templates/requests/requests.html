@@ -93,8 +93,9 @@
                                     <form method="POST" action="{{ url_for('requests.review_request', request_id=req[0], action='approve') }}">
                                         <button type="submit" class="w-full py-2 text-xs font-bold bg-green-600 text-white rounded hover:bg-green-700 transition-colors">Approve</button>
                                     </form>
-                                    <form method="POST" action="{{ url_for('requests.review_request', request_id=req[0], action='reject') }}">
-                                        <button type="submit" class="w-full py-2 text-xs font-bold bg-white dark:bg-transparent border border-red-200 dark:border-red-900/50 text-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">Reject</button>
+                                    <form method="POST" id="reject-form-{{ req[0] }}" action="{{ url_for('requests.review_request', request_id=req[0], action='reject') }}">
+                                        <input type="hidden" name="remarks" id="remarks-{{ req[0] }}">
+                                        <button type="button" onclick="submitReject({{ req[0] }})" class="w-full py-2 text-xs font-bold bg-white dark:bg-transparent border border-red-200 dark:border-red-900/50 text-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">Reject</button>
                                     </form>
                                 </div>
                             </div>
@@ -125,6 +126,17 @@
             background: #1d4ed8;
         }
     </style>
+
+    <script>
+function submitReject(id) {
+    const reason = prompt('Reason for rejection (optional):');
+    if (reason !== null) {
+        document.getElementById('remarks-' + id).value = reason;
+        document.getElementById('reject-form-' + id).submit();
+    }
+}
+</script>
 </body>
 
 </html>
+

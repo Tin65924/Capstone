@@ -36,15 +36,15 @@ def get_request_by_id(request_id):
     )
 
 
-def update_request_status(request_id, status, reviewer_id=None):
+def update_request_status(request_id, status, reviewer_id=None, remarks=None):
     if reviewer_id:
         return db.execute(
-            'UPDATE request_records SET request_status = %s, reviewed_by = %s, review_date = NOW() WHERE request_id = %s',
-            (status, reviewer_id, request_id)
+            'UPDATE request_records SET request_status = %s, reviewed_by = %s, review_date = NOW(), remarks = %s WHERE request_id = %s',
+            (status, reviewer_id, remarks, request_id)
         )
     return db.execute(
-        'UPDATE request_records SET request_status = %s WHERE request_id = %s',
-        (status, request_id)
+        'UPDATE request_records SET request_status = %s, remarks = %s WHERE request_id = %s',
+        (status, remarks, request_id)
     )
 
 
