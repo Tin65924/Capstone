@@ -1,3 +1,4 @@
+from app.procurement.models import create_procurement
 from app.auth.models import log_activity
 from flask import render_template, request, jsonify
 from flask_login import login_required, current_user
@@ -29,16 +30,21 @@ def review_request(request_id, action):
         return redirect(url_for('requests.list_requests'))
 
     status = 'approved' if action == 'approve' else 'rejected'
+    update_request_status(request_id, status, reviewer_id=current_user.id)
+
+    if action == 'approve':
+        create_procurement(request_id)
+
     log_activity(current_user.id, f'requests:{action}:{request_id}')
     flash(f'Request {status}.', 'success')
     return redirect(url_for('requests.list_requests'))
-
 
 from flask import redirect, url_for, flash
 from .models import get_borrower_by_user
 
 @requests_bp.route('/user/request-book', methods=['GET', 'POST'])
 @login_required
+
 def user_request_book():
     if request.method == 'POST':
         book_title = request.form.get('book-title', '').strip()
