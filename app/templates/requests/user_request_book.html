@@ -107,6 +107,36 @@
                         </div>
                     </form>
                 </div>
+                    <!-- My Requests Section -->
+                    <div class="mt-12">
+                        <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">My Requests</h2>
+                        {% if my_requests %}
+                        <div class="space-y-3">
+                            {% for req in my_requests %}
+                            <div class="bg-white dark:bg-[#1a2235] rounded-lg border border-gray-100 dark:border-gray-700 p-4 flex items-center justify-between">
+                                <div>
+                                    <p class="font-bold text-gray-900 dark:text-white">{{ req[1] }}</p>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">{{ req[2] or 'Author unknown' }} &middot; {{ req[4].strftime('%b %d, %Y') }}</p>
+                                    {% if req[5] %}
+                                    <p class="text-xs text-gray-400 mt-1">Note: {{ req[5] }}</p>
+                                    {% endif %}
+                                </div>
+                                <span class="text-xs font-bold px-3 py-1 rounded-full
+                                    {% if req[3] == 'pending_review' %}bg-yellow-100 text-yellow-700
+                                    {% elif req[3] == 'approved' %}bg-green-100 text-green-700
+                                    {% elif req[3] == 'rejected' %}bg-red-100 text-red-700
+                                    {% elif req[3] == 'existing_in_collection' %}bg-blue-100 text-blue-700
+                                    {% else %}bg-gray-100 text-gray-700{% endif %}">
+                                    {{ req[3].replace('_', ' ').title() }}
+                                </span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-gray-500 dark:text-gray-400">You haven't submitted any requests yet.</p>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </main>
     </div>

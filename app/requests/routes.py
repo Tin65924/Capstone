@@ -6,7 +6,7 @@ from . import requests_bp
 from .models import (
     create_request, get_requests, get_request_by_id,
     update_request_status, get_demand_count, get_borrower_by_user,
-    check_duplicate_request, get_requests_with_details
+    check_duplicate_request, get_requests_with_details,get_requests_by_borrower
 )
 from app.auth.decorators import librarian_required
 
@@ -69,4 +69,6 @@ def user_request_book():
         flash('Your request has been submitted!', 'success')
         return redirect(url_for('requests.user_request_book'))
 
-    return render_template('requests/user_request_book.html')
+    borrower_id = get_borrower_by_user(current_user.id)
+    my_requests = get_requests_by_borrower(borrower_id) if borrower_id else []
+    return render_template('requests/user_request_book.html', my_requests=my_requests)
