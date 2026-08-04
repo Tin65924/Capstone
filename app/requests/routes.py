@@ -5,7 +5,7 @@ from flask_login import login_required, current_user
 from . import requests_bp
 from .models import (
     create_request, get_requests, get_request_by_id,
-    update_request_status, get_demand_count, get_borrower_by_user,
+    update_request_status, get_demand_by_role, get_borrower_by_user,
     check_duplicate_request, get_requests_with_details,get_requests_by_borrower
 )
 from app.auth.decorators import librarian_required
@@ -16,8 +16,14 @@ from app.auth.decorators import librarian_required
 @librarian_required
 def list_requests():
     pending = get_requests_with_details(status='pending_review')
+
+    demand_rows = get_demand_by_role()
+    demand_by_title = {}
+    for title, role_name, count in demand_rows:
+        demand_by_title.setdefault(title, {})[role_name] = count
+
     requests_with_demand = [
-        (r, get_demand_count(r[2])) for r in pending
+        (r, demand_by_title.get(r[2], {})) for r in pending
     ]
     return render_template('requests/requests.html', requests=requests_with_demand)
 
