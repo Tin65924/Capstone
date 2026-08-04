@@ -5,11 +5,13 @@ def create_request(requester_id, book_title, author=None):
     matched_book_id = check_existing_in_collection(book_title)
     status = 'existing_in_collection' if matched_book_id else 'pending_review'
 
-    return db.execute(
+    rows = db.execute(
         '''INSERT INTO request_records (requester_id, book_title, author, request_status, matched_book_id)
-           VALUES (%s, %s, %s, %s, %s)''',
+           VALUES (%s, %s, %s, %s, %s)
+           RETURNING request_id''',
         (requester_id, book_title, author, status, matched_book_id)
     )
+    return rows[0][0]
 
 def get_borrower_by_user(user_id):
     row = db.fetch_one(
