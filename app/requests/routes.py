@@ -6,7 +6,7 @@ from . import requests_bp
 from .models import (
     create_request, get_requests, get_request_by_id,
     update_request_status, get_demand_count, get_borrower_by_user,
-    check_duplicate_request
+    check_duplicate_request, get_requests_with_details
 )
 from app.auth.decorators import librarian_required
 
@@ -15,7 +15,7 @@ from app.auth.decorators import librarian_required
 @login_required
 @librarian_required
 def list_requests():
-    pending = get_requests(status='pending_review')
+    pending = get_requests_with_details(status='pending_review')
     requests_with_demand = [
         (r, get_demand_count(r[2])) for r in pending
     ]

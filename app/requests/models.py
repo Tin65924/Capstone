@@ -28,6 +28,20 @@ def get_requests(status=None):
         )
     return db.fetch_all('SELECT * FROM request_records ORDER BY request_date DESC')
 
+def get_requests_with_details(status=None):
+    base_query = '''
+        SELECT r.request_id, r.requester_id, r.book_title, r.author,
+               r.matched_book_id, r.request_status, r.request_date,
+               r.reviewed_by, r.review_date, r.remarks,
+               u.full_name, ro.role_name, b.department
+        FROM request_records r
+        JOIN borrowers b ON b.borrower_id = r.requester_id
+        JOIN user_accounts u ON u.user_id = b.user_id
+        JOIN roles ro ON ro.role_id = u.role_id
+    '''
+    if status:
+        return db.fetch_all(base_query + ' WHERE r.request_status = %s ORDER BY r.request_date DESC', (status,))
+    return db.fetch_all(base_query + ' ORDER BY r.request_date DESC', ())
 
 def get_request_by_id(request_id):
     return db.fetch_one(
