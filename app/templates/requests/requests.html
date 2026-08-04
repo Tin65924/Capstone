@@ -68,6 +68,27 @@
                     <h1 class="text-3xl font-bold text-gray-900 dark:text-white" style="">Book Requests</h1>
                     <p class="text-gray-500 dark:text-gray-400 mt-1" style=""><br></p>
                 </div>
+                
+                <div class="flex gap-2 mb-6 flex-wrap">
+                    {% for tab_value, tab_label in [
+                        ('pending_review', 'Pending'),
+                        ('approved', 'Approved'),
+                        ('rejected', 'Rejected'),
+                        ('existing_in_collection', 'Existing'),
+                        ('procured', 'Procured'),
+                        ('all', 'All')
+                    ] %}
+                    <a href="{{ url_for('requests.list_requests', status=tab_value) }}"
+                       class="px-4 py-2 rounded-lg text-sm font-bold transition-colors
+                       {% if (current_status == tab_value) or (current_status is none and tab_value == 'all') %}
+                       bg-primary text-white
+                       {% else %}
+                       bg-white dark:bg-[#1a2235] text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700
+                       {% endif %}">
+                        {{ tab_label }}
+                    </a>
+                    {% endfor %}
+                </div>
                 <!-- Recent Book Requests Section -->
                 <section class="mb-8">
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -11,11 +11,19 @@ from .models import (
 from app.auth.decorators import librarian_required
 
 
+VALID_STATUSES = ['pending_review', 'approved', 'rejected', 'existing_in_collection', 'procured']
+
 @requests_bp.route('/librarian/requests')
 @login_required
 @librarian_required
 def list_requests():
-    pending = get_requests_with_details(status='pending_review')
+    status = request.args.get('status', 'pending_review')
+    if status == 'all':
+        status = None
+    elif status not in VALID_STATUSES:
+        status = 'pending_review'
+
+    items = get_requests_with_details(status=status)
 
     demand_rows = get_demand_by_role()
     demand_by_title = {}
@@ -23,9 +31,9 @@ def list_requests():
         demand_by_title.setdefault(title, {})[role_name] = count
 
     requests_with_demand = [
-        (r, demand_by_title.get(r[2], {})) for r in pending
+        (r, demand_by_title.get(r[2], {})) for r in items
     ]
-    return render_template('requests/requests.html', requests=requests_with_demand)
+    return render_template('requests/requests.html', requests=requests_with_demand, current_status=status)
 
 @requests_bp.route('/librarian/requests/<int:request_id>/<action>', methods=['POST'])
 @login_required
