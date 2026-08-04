@@ -81,6 +81,11 @@ def get_demand_by_role():
            GROUP BY rr.book_title, r.role_name'''
     )
 
+def get_requests_by_borrower(borrower_id):
+    return db.fetch_all(
+        'SELECT request_id, book_title, author, request_status, request_date, remarks FROM request_records WHERE requester_id = %s ORDER BY request_date DESC',
+        (borrower_id,)
+    )
 
 def check_duplicate_request(requester_id, book_title):
     row = db.fetch_one(
