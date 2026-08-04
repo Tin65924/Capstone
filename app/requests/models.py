@@ -2,12 +2,21 @@ from app.database import db
 
 
 def create_request(requester_id, book_title, author=None):
+    matched_book_id = check_existing_in_collection(book_title)
+    status = 'existing_in_collection' if matched_book_id else 'pending_review'
+
     return db.execute(
-        '''INSERT INTO request_records (requester_id, book_title, author, request_status)
-           VALUES (%s, %s, %s, %s)''',
-        (requester_id, book_title, author, 'pending_review')
+        '''INSERT INTO request_records (requester_id, book_title, author, request_status, matched_book_id)
+           VALUES (%s, %s, %s, %s, %s)''',
+        (requester_id, book_title, author, status, matched_book_id)
     )
 
+def get_borrower_by_user(user_id):
+    row = db.fetch_one(
+        'SELECT borrower_id FROM borrowers WHERE user_id = %s',
+        (user_id,)
+    )
+    return row[0] if row else None
 
 def get_requests(status=None):
     if status:
@@ -70,4 +79,4 @@ def check_existing_in_collection(book_title):
         'SELECT book_id FROM book_catalog WHERE title = %s',
         (book_title,)
     )
-    return row is not None
+    return row[0] if row else None
