@@ -4,7 +4,8 @@ from flask_login import login_required, current_user
 from . import requests_bp
 from .models import (
     create_request, get_requests, get_request_by_id,
-    update_request_status, get_demand_count
+    update_request_status, get_demand_count, get_borrower_by_user,
+    check_duplicate_request
 )
 from app.auth.decorators import librarian_required
 
@@ -50,6 +51,10 @@ def user_request_book():
         borrower_id = get_borrower_by_user(current_user.id)
         if not borrower_id:
             flash('Only registered borrowers can submit requests.', 'error')
+            return redirect(url_for('requests.user_request_book'))
+
+        if check_duplicate_request(borrower_id, book_title):
+            flash('You already requested this book.', 'error')
             return redirect(url_for('requests.user_request_book'))
 
         new_request_id = create_request(borrower_id, book_title, author)
