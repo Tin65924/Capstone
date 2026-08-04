@@ -72,8 +72,11 @@ CREATE TABLE IF NOT EXISTS request_records (
                    )),
     request_date   TIMESTAMP NOT NULL DEFAULT NOW(),
     reviewed_by    INT REFERENCES user_accounts(user_id),
-    review_date    TIMESTAMP
+    review_date    TIMESTAMP,
+    remarks        VARCHAR(255)
 );
+
+ALTER TABLE request_records ADD COLUMN IF NOT EXISTS remarks VARCHAR(255);
 
 CREATE TABLE IF NOT EXISTS procurement_log (
     procurement_id SERIAL PRIMARY KEY,

@@ -30,7 +30,8 @@ def review_request(request_id, action):
         return redirect(url_for('requests.list_requests'))
 
     status = 'approved' if action == 'approve' else 'rejected'
-    update_request_status(request_id, status, reviewer_id=current_user.id)
+    remarks = request.form.get('remarks', '').strip() or None
+    update_request_status(request_id, status, reviewer_id=current_user.id, remarks=remarks)
 
     if action == 'approve':
         create_procurement(request_id)
