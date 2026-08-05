@@ -86,10 +86,18 @@
                                     <div class="w-full mb-1">
                                         <span class="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500">Demand:</span>
                                     </div>
-                                    <div class="flex items-center gap-1.5">
-                                        <span class="material-symbols-outlined text-gray-400 text-sm">groups</span>
-                                        <span class="text-xs font-bold text-gray-600 dark:text-gray-300">{{ demand }} request{{ 's' if demand != 1 else '' }}</span>
+                                    {% if demand %}
+                                    <div class="flex items-center gap-3 flex-wrap">
+                                        {% for role_name, count in demand.items() %}
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="material-symbols-outlined text-gray-400 text-sm">groups</span>
+                                            <span class="text-xs font-bold text-gray-600 dark:text-gray-300">{{ role_name }}: {{ count }}</span>
+                                        </div>
+                                        {% endfor %}
                                     </div>
+                                    {% else %}
+                                    <span class="text-xs text-gray-400">No other pending/approved requests for this title</span>
+                                    {% endif %}
                                 </div>
                             </div>
                             <div class="p-4 bg-gray-50/50 dark:bg-gray-800/30 border-t border-gray-50 dark:border-gray-800 flex flex-col gap-2">
