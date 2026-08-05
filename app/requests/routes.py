@@ -1,6 +1,6 @@
 from app.procurement.models import create_procurement
 from app.auth.models import log_activity
-from flask import render_template, request, jsonify
+from flask import render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
 from . import requests_bp
 from .models import (
@@ -39,9 +39,6 @@ def review_request(request_id, action):
     log_activity(current_user.id, f'requests:{action}:{request_id}')
     flash(f'Request {status}.', 'success')
     return redirect(url_for('requests.list_requests'))
-
-from flask import redirect, url_for, flash
-from .models import get_borrower_by_user
 
 @requests_bp.route('/user/request-book', methods=['GET', 'POST'])
 @login_required
