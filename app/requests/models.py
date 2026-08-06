@@ -28,7 +28,7 @@ def get_requests(status=None):
         )
     return db.fetch_all('SELECT * FROM request_records ORDER BY request_date DESC')
 
-def get_requests_with_details(status=None):
+def get_requests_with_details(status=None, search=None):
     base_query = '''
         SELECT r.request_id, r.requester_id, r.book_title, r.author,
                r.matched_book_id, r.request_status, r.request_date,
@@ -39,9 +39,22 @@ def get_requests_with_details(status=None):
         JOIN user_accounts u ON u.user_id = b.user_id
         JOIN roles ro ON ro.role_id = u.role_id
     '''
+    conditions = []
+    params = []
+
     if status:
-        return db.fetch_all(base_query + ' WHERE r.request_status = %s ORDER BY r.request_date DESC', (status,))
-    return db.fetch_all(base_query + ' ORDER BY r.request_date DESC', ())
+        conditions.append('r.request_status = %s')
+        params.append(status)
+
+    if search:
+        conditions.append('r.book_title ILIKE %s')
+        params.append(f'%{search}%')
+
+    if conditions:
+        base_query += ' WHERE ' + ' AND '.join(conditions)
+
+    base_query += ' ORDER BY r.request_date DESC'
+    return db.fetch_all(base_query, tuple(params))
 
 def get_request_by_id(request_id):
     return db.fetch_one(

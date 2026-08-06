@@ -69,26 +69,34 @@
                     <p class="text-gray-500 dark:text-gray-400 mt-1" style=""><br></p>
                 </div>
                 
-                <div class="flex gap-2 mb-6 flex-wrap">
-                    {% for tab_value, tab_label in [
-                        ('pending_review', 'Pending'),
-                        ('approved', 'Approved'),
-                        ('rejected', 'Rejected'),
-                        ('existing_in_collection', 'Existing'),
-                        ('procured', 'Procured'),
-                        ('all', 'All')
-                    ] %}
-                    <a href="{{ url_for('requests.list_requests', status=tab_value) }}"
-                       class="px-4 py-2 rounded-lg text-sm font-bold transition-colors
-                       {% if (current_status == tab_value) or (current_status is none and tab_value == 'all') %}
-                       bg-primary text-white
-                       {% else %}
-                       bg-white dark:bg-[#1a2235] text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700
-                       {% endif %}">
-                        {{ tab_label }}
-                    </a>
-                    {% endfor %}
-                </div>
+                <form method="GET" action="{{ url_for('requests.list_requests') }}" class="flex gap-3 mb-6 flex-wrap items-center">
+    <div class="relative flex-1 min-w-[240px]">
+        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-lg">search</span>
+        <input type="text" name="search" value="{{ current_search or '' }}" placeholder="Search by book title..."
+            class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a2235] text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none">
+    </div>
+
+    <select name="status"
+        class="px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a2235] text-gray-900 dark:text-white text-sm">
+        {% for status_value, status_label in [
+            ('pending_review', 'Pending'),
+            ('approved', 'Approved'),
+            ('rejected', 'Rejected'),
+            ('existing_in_collection', 'Existing'),
+            ('procured', 'Procured'),
+            ('all', 'All')
+        ] %}
+        <option value="{{ status_value }}"
+            {% if (current_status == status_value) or (current_status is none and status_value == 'all') %}selected{% endif %}>
+            {{ status_label }}
+        </option>
+        {% endfor %}
+    </select>
+
+    <button type="submit" class="px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors">
+        Filter
+    </button>
+</form>
                 <!-- Recent Book Requests Section -->
                 <section class="mb-8">
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

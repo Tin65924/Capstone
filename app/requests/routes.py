@@ -23,7 +23,9 @@ def list_requests():
     elif status not in VALID_STATUSES:
         status = 'pending_review'
 
-    items = get_requests_with_details(status=status)
+    search = request.args.get('search', '').strip() or None
+
+    items = get_requests_with_details(status=status, search=search)
 
     demand_rows = get_demand_by_role()
     demand_by_title = {}
@@ -33,7 +35,7 @@ def list_requests():
     requests_with_demand = [
         (r, demand_by_title.get(r[2], {})) for r in items
     ]
-    return render_template('requests/requests.html', requests=requests_with_demand, current_status=status)
+    return render_template('requests/requests.html', requests=requests_with_demand, current_status=status, current_search=search)
 
 @requests_bp.route('/librarian/requests/<int:request_id>/<action>', methods=['POST'])
 @login_required
