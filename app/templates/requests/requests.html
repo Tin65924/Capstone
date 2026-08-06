@@ -160,15 +160,48 @@
         }
     </style>
 
+    <!-- Reject Modal -->
+    <div id="reject-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="bg-white dark:bg-[#1a2235] rounded-xl shadow-lg w-full max-w-md mx-4 p-6">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Reject Request</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Reason for rejection (optional):</p>
+            <textarea id="reject-modal-textarea" rows="3"
+                class="w-full text-sm p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white resize-none mb-6"
+                placeholder="e.g. Not relevant to curriculum"></textarea>
+            <div class="flex justify-end gap-3">
+                <button type="button" onclick="closeRejectModal()"
+                    class="px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">Cancel</button>
+                <button type="button" onclick="confirmReject()"
+                    class="px-4 py-2 text-sm font-bold bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">Reject</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-function submitReject(id) {
-    const reason = prompt('Reason for rejection (optional):');
-    if (reason !== null) {
-        document.getElementById('remarks-' + id).value = reason;
-        document.getElementById('reject-form-' + id).submit();
-    }
-}
-</script>
+        let pendingRejectId = null;
+            
+        function submitReject(id) {
+            pendingRejectId = id;
+            document.getElementById('reject-modal-textarea').value = '';
+            const modal = document.getElementById('reject-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+        
+        function closeRejectModal() {
+            pendingRejectId = null;
+            const modal = document.getElementById('reject-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+        
+        function confirmReject() {
+            if (pendingRejectId === null) return;
+            const reason = document.getElementById('reject-modal-textarea').value;
+            document.getElementById('remarks-' + pendingRejectId).value = reason;
+            document.getElementById('reject-form-' + pendingRejectId).submit();
+        }
+    </script>
 </body>
 
 </html>
