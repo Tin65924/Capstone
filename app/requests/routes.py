@@ -1,25 +1,39 @@
 from app.procurement.models import create_procurement
 from app.auth.models import log_activity
-from flask import render_template, request, jsonify
+from flask import render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
 from . import requests_bp
 from .models import (
     create_request, get_requests, get_request_by_id,
-    update_request_status, get_demand_count, get_borrower_by_user,
+    update_request_status, get_demand_by_role, get_borrower_by_user,
     check_duplicate_request, get_requests_with_details,get_requests_by_borrower
 )
 from app.auth.decorators import librarian_required
 
 
+VALID_STATUSES = ['pending_review', 'approved', 'rejected', 'existing_in_collection', 'procured']
+
 @requests_bp.route('/librarian/requests')
 @login_required
 @librarian_required
 def list_requests():
-    pending = get_requests_with_details(status='pending_review')
+    status = request.args.get('status', 'pending_review')
+    if status == 'all':
+        status = None
+    elif status not in VALID_STATUSES:
+        status = 'pending_review'
+
+    items = get_requests_with_details(status=status)
+
+    demand_rows = get_demand_by_role()
+    demand_by_title = {}
+    for title, role_name, count in demand_rows:
+        demand_by_title.setdefault(title, {})[role_name] = count
+
     requests_with_demand = [
-        (r, get_demand_count(r[2])) for r in pending
+        (r, demand_by_title.get(r[2], {})) for r in items
     ]
-    return render_template('requests/requests.html', requests=requests_with_demand)
+    return render_template('requests/requests.html', requests=requests_with_demand, current_status=status)
 
 @requests_bp.route('/librarian/requests/<int:request_id>/<action>', methods=['POST'])
 @login_required
@@ -39,9 +53,6 @@ def review_request(request_id, action):
     log_activity(current_user.id, f'requests:{action}:{request_id}')
     flash(f'Request {status}.', 'success')
     return redirect(url_for('requests.list_requests'))
-
-from flask import redirect, url_for, flash
-from .models import get_borrower_by_user
 
 @requests_bp.route('/user/request-book', methods=['GET', 'POST'])
 @login_required

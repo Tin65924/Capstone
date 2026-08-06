@@ -68,6 +68,27 @@
                     <h1 class="text-3xl font-bold text-gray-900 dark:text-white" style="">Book Requests</h1>
                     <p class="text-gray-500 dark:text-gray-400 mt-1" style=""><br></p>
                 </div>
+                
+                <div class="flex gap-2 mb-6 flex-wrap">
+                    {% for tab_value, tab_label in [
+                        ('pending_review', 'Pending'),
+                        ('approved', 'Approved'),
+                        ('rejected', 'Rejected'),
+                        ('existing_in_collection', 'Existing'),
+                        ('procured', 'Procured'),
+                        ('all', 'All')
+                    ] %}
+                    <a href="{{ url_for('requests.list_requests', status=tab_value) }}"
+                       class="px-4 py-2 rounded-lg text-sm font-bold transition-colors
+                       {% if (current_status == tab_value) or (current_status is none and tab_value == 'all') %}
+                       bg-primary text-white
+                       {% else %}
+                       bg-white dark:bg-[#1a2235] text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700
+                       {% endif %}">
+                        {{ tab_label }}
+                    </a>
+                    {% endfor %}
+                </div>
                 <!-- Recent Book Requests Section -->
                 <section class="mb-8">
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -77,7 +98,7 @@
                                 <h3 class="text-lg font-bold text-gray-900 dark:text-white leading-tight mb-1">
                                     {{ req[2] }}
                                 </h3>
-                                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Author:{{ req[3] or 'Author unknown' }}</p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">{{ req[3] or 'Author unknown' }}</p>
                                 <p class="text-xs text-gray-400 dark:text-gray-500 mb-4">
                                     Requested by <span class="font-semibold">{{ req[10] }}</span>
                                     <span class="italic">({{ req[11] }}{{ ', ' + req[12] if req[12] else '' }})</span>
@@ -86,10 +107,18 @@
                                     <div class="w-full mb-1">
                                         <span class="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500">Demand:</span>
                                     </div>
-                                    <div class="flex items-center gap-1.5">
-                                        <span class="material-symbols-outlined text-gray-400 text-sm">groups</span>
-                                        <span class="text-xs font-bold text-gray-600 dark:text-gray-300">{{ demand }} request{{ 's' if demand != 1 else '' }}</span>
+                                    {% if demand %}
+                                    <div class="flex items-center gap-3 flex-wrap">
+                                        {% for role_name, count in demand.items() %}
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="material-symbols-outlined text-gray-400 text-sm">groups</span>
+                                            <span class="text-xs font-bold text-gray-600 dark:text-gray-300">{{ role_name }}: {{ count }}</span>
+                                        </div>
+                                        {% endfor %}
                                     </div>
+                                    {% else %}
+                                    <span class="text-xs text-gray-400">No other pending/approved requests for this title</span>
+                                    {% endif %}
                                 </div>
                             </div>
                             <div class="p-4 bg-gray-50/50 dark:bg-gray-800/30 border-t border-gray-50 dark:border-gray-800 flex flex-col gap-2">
