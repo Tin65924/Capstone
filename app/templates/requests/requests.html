@@ -146,6 +146,26 @@
                         {% endfor %}
                     </div>
                 </section>
+
+                {% if total_pages > 1 %}
+                <div class="flex items-center justify-center gap-2 mb-8">
+                    <a href="{{ url_for('requests.list_requests', status=(current_status or 'all'), search=current_search, page=current_page - 1) if current_page > 1 else '#' }}"
+                       class="px-4 py-2 rounded-lg text-sm font-bold border border-gray-200 dark:border-gray-700
+                       {% if current_page <= 1 %}text-gray-300 dark:text-gray-600 pointer-events-none{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800{% endif %}">
+                        Previous
+                    </a>
+
+                    <span class="text-sm text-gray-500 dark:text-gray-400 px-2">
+                        Page {{ current_page }} of {{ total_pages }}
+                    </span>
+
+                    <a href="{{ url_for('requests.list_requests', status=(current_status or 'all'), search=current_search, page=current_page + 1) if current_page < total_pages else '#' }}"
+                       class="px-4 py-2 rounded-lg text-sm font-bold border border-gray-200 dark:border-gray-700
+                       {% if current_page >= total_pages %}text-gray-300 dark:text-gray-600 pointer-events-none{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800{% endif %}">
+                        Next
+                    </a>
+                </div>
+                {% endif %}
             </div>
         </main>
     </div>

@@ -43,7 +43,9 @@ def get_requests(status=None):
         )
     return db.fetch_all('SELECT * FROM request_records ORDER BY request_date DESC')
 
-def get_requests_with_details(status=None, search=None):
+PER_PAGE = 50
+
+def get_requests_with_details(status=None, search=None, page=1):
     base_query = '''
         SELECT r.request_id, r.requester_id, r.book_title, r.author,
                r.matched_book_id, r.request_status, r.request_date,
@@ -68,8 +70,31 @@ def get_requests_with_details(status=None, search=None):
     if conditions:
         base_query += ' WHERE ' + ' AND '.join(conditions)
 
-    base_query += ' ORDER BY r.request_date DESC'
+    base_query += ' ORDER BY r.request_date DESC LIMIT %s OFFSET %s'
+    params.append(PER_PAGE)
+    params.append((page - 1) * PER_PAGE)
+
     return db.fetch_all(base_query, tuple(params))
+
+
+def count_requests(status=None, search=None):
+    base_query = 'SELECT COUNT(*) FROM request_records r'
+    conditions = []
+    params = []
+
+    if status:
+        conditions.append('r.request_status = %s')
+        params.append(status)
+
+    if search:
+        conditions.append('r.book_title ILIKE %s')
+        params.append(f'%{search}%')
+
+    if conditions:
+        base_query += ' WHERE ' + ' AND '.join(conditions)
+
+    row = db.fetch_one(base_query, tuple(params))
+    return row[0] if row else 0
 
 def get_request_by_id(request_id):
     return db.fetch_one(
