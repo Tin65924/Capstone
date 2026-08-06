@@ -119,13 +119,20 @@ def check_duplicate_request(requester_id, book_title):
 
 def check_existing_in_collection(book_title):
     normalized = normalize_title(book_title)
-    rows = db.fetch_all('SELECT book_id, title FROM book_catalog')
 
-    for book_id, title in rows:
-        if normalize_title(title) == normalized:
-            return book_id
+    exact = db.fetch_one(
+        'SELECT book_id FROM book_catalog WHERE LOWER(title) = LOWER(%s)',
+        (book_title,)
+    )
+    if exact:
+        return exact[0]
 
-    for book_id, title in rows:
+    first_word = normalized.split(' ')[0] if normalized else ''
+    candidates = db.fetch_all(
+        "SELECT book_id, title FROM book_catalog WHERE LOWER(title) LIKE LOWER(%s)",
+        (first_word + '%',)
+    )
+    for book_id, title in candidates:
         if SequenceMatcher(None, normalize_title(title), normalized).ratio() >= 0.85:
             return book_id
 
