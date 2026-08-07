@@ -92,6 +92,8 @@ class TestRequestSubmission:
 
 class TestLibrarianReview:
     def test_librarian_approves_request(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (7, 1, 'Some Book', None, None, 'pending_review', None, None, None, None)
+
         resp = librarian_client.post('/librarian/requests/7/approve')
 
         assert resp.status_code == 302
@@ -102,6 +104,8 @@ class TestLibrarianReview:
         assert 'UPDATE request_records' in call_args[0][0]
 
     def test_librarian_rejects_request_with_remarks(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (7, 1, 'Some Book', None, None, 'pending_review', None, None, None, None)
+
         resp = librarian_client.post('/librarian/requests/7/reject', data={
             'remarks': 'Not relevant to curriculum',
         })
@@ -118,5 +122,21 @@ class TestLibrarianReview:
 
     def test_invalid_action_rejected(self, librarian_client, mock_db):
         resp = librarian_client.post('/librarian/requests/7/nonsense')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_cannot_approve_already_reviewed_request(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (7, 1, 'Some Book', None, None, 'approved', None, None, None, None)
+
+        resp = librarian_client.post('/librarian/requests/7/approve')
+
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_request_not_found_returns_error(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = None
+
+        resp = librarian_client.post('/librarian/requests/999/approve')
+
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0

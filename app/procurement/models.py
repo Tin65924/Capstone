@@ -18,8 +18,10 @@ def get_procurement_items(status=None):
 
 def create_procurement(request_id):
     return db.execute(
-        'INSERT INTO procurement_log (request_id, order_status, order_date) VALUES (%s, %s, %s)',
-        (request_id, 'for_ordering', date.today())
+        '''INSERT INTO procurement_log (request_id, order_status, order_date)
+           SELECT %s, %s, %s
+           WHERE NOT EXISTS (SELECT 1 FROM procurement_log WHERE request_id = %s)''',
+        (request_id, 'for_ordering', date.today(), request_id)
     )
 
 

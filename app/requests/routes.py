@@ -59,6 +59,15 @@ def review_request(request_id, action):
         flash('Invalid action.', 'error')
         return redirect(url_for('requests.list_requests'))
 
+    existing = get_request_by_id(request_id)
+    if not existing:
+        flash('Request not found.', 'error')
+        return redirect(url_for('requests.list_requests'))
+
+    if existing[5] != 'pending_review':
+        flash('This request has already been reviewed.', 'error')
+        return redirect(url_for('requests.list_requests'))
+
     status = 'approved' if action == 'approve' else 'rejected'
     remarks = request.form.get('remarks', '').strip() or None
     update_request_status(request_id, status, reviewer_id=current_user.id, remarks=remarks)
