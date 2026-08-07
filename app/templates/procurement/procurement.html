@@ -72,83 +72,46 @@
                 <!-- Recent Book Requests Section -->
                 <section class="mb-8">
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <!-- Request Card 1 -->
-                        <div
-                            class="bg-white dark:bg-[#1a2235] rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm flex flex-col">
+                        {% for item in items %}
+                        <div class="bg-white dark:bg-[#1a2235] rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm flex flex-col">
                             <div class="p-5 flex-1">
-                                <h3 class="text-lg font-bold text-gray-900 dark:text-white leading-tight mb-1" style="">
-                                    Introduction to Algorithms</h3>
-                                <p class="text-sm text-gray-500 dark:text-gray-400 mb-3" style="">Thomas H. Cormen, et
-                                    al.</p>
+                                <h3 class="text-lg font-bold text-gray-900 dark:text-white leading-tight mb-1">
+                                    {{ item[7] }}
+                                </h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">{{ item[8] or 'Author unknown' }}</p>
                                 <div class="mb-4">
-                                    <span
-                                        class="inline-block px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-                                        style="">For Ordering</span>
+                                    <span class="inline-block px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded
+                                        {% if item[2] == 'for_ordering' %}bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400
+                                        {% elif item[2] == 'ordered' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
+                                        {% elif item[2] == 'procured' %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400
+                                        {% elif item[2] in ('cancelled', 'out_of_stock') %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400
+                                        {% else %}bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400{% endif %}">
+                                        {{ item[2].replace('_', ' ').title() }}
+                                    </span>
                                 </div>
-                                <div class="">
-                                    <label
-                                        class="block text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-2"
-                                        style="">Update Status</label>
-                                    <select
-                                        class="w-full text-sm rounded-lg border-gray-200 dark:border-gray-700 dark:bg-[#111827] focus:ring-primary focus:border-primary transition-all">
-                                        <option selected="">For Ordering</option>
-                                        <option>Ordered</option>
-                                        <option>Procured</option>
-                                    </select>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-2">Update Status</label>
+                                    <form method="POST" action="{{ url_for('procurement.update_status', procurement_id=item[0]) }}">
+                                        <select name="order_status" onchange="this.form.submit()"
+                                            class="w-full text-sm rounded-lg border-gray-200 dark:border-gray-700 dark:bg-[#111827] focus:ring-primary focus:border-primary transition-all">
+                                            {% for status_value, status_label in [
+                                                ('for_ordering', 'For Ordering'),
+                                                ('ordered', 'Ordered'),
+                                                ('delivered', 'Delivered'),
+                                                ('procured', 'Procured'),
+                                                ('cancelled', 'Cancelled'),
+                                                ('out_of_stock', 'Out of Stock')
+                                            ] %}
+                                            <option value="{{ status_value }}" {% if item[2] == status_value %}selected{% endif %}>{{ status_label }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </form>
                                 </div>
                             </div>
                         </div>
-                        <!-- Request Card 2 -->
-                        <div
-                            class="bg-white dark:bg-[#1a2235] rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm flex flex-col">
-                            <div class="p-5 flex-1">
-                                <h3 class="text-lg font-bold text-gray-900 dark:text-white leading-tight mb-1" style="">
-                                    Clean Code</h3>
-                                <p class="text-sm text-gray-500 dark:text-gray-400 mb-3" style="">Robert C. Martin</p>
-                                <div class="mb-4">
-                                    <span
-                                        class="inline-block px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                                        style="">Ordered</span>
-                                </div>
-                                <div class="">
-                                    <label
-                                        class="block text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-2"
-                                        style="">Update Status</label>
-                                    <select
-                                        class="w-full text-sm rounded-lg border-gray-200 dark:border-gray-700 dark:bg-[#111827] focus:ring-primary focus:border-primary transition-all">
-                                        <option>For Ordering</option>
-                                        <option selected="">Ordered</option>
-                                        <option>Procured</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        <!-- Request Card 3 -->
-                        <div
-                            class="bg-white dark:bg-[#1a2235] rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm flex flex-col">
-                            <div class="p-5 flex-1">
-                                <h3 class="text-lg font-bold text-gray-900 dark:text-white leading-tight mb-1" style="">
-                                    The Pragmatic Programmer</h3>
-                                <p class="text-sm text-gray-500 dark:text-gray-400 mb-3" style="">Andrew Hunt &amp;
-                                    David Thomas</p>
-                                <div class="mb-4">
-                                    <span
-                                        class="inline-block px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                        style="">Procured</span>
-                                </div>
-                                <div class="">
-                                    <label
-                                        class="block text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-2"
-                                        style="">Update Status</label>
-                                    <select
-                                        class="w-full text-sm rounded-lg border-gray-200 dark:border-gray-700 dark:bg-[#111827] focus:ring-primary focus:border-primary transition-all">
-                                        <option>For Ordering</option>
-                                        <option>Ordered</option>
-                                        <option selected="">Procured</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
+                        {% else %}
+                        <p class="text-gray-500 dark:text-gray-400 col-span-full">No procurement items yet.</p>
+                        {% endfor %}
                     </div>
                 </section>
             </div>
