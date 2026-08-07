@@ -1,5 +1,20 @@
+import re
+from difflib import SequenceMatcher
 from app.database import db
 
+ABBREVIATIONS = {
+    'intro': 'introduction',
+    'prog': 'programming',
+    'comp': 'computer',
+    'sci': 'science',
+    'admin': 'administration',
+}
+
+def normalize_title(title):
+    title = title.lower()
+    title = re.sub(r'[^\w\s]', '', title)
+    words = [ABBREVIATIONS.get(w, w) for w in title.split()]
+    return ' '.join(words)
 
 def create_request(requester_id, book_title, author=None):
     matched_book_id = check_existing_in_collection(book_title)
@@ -88,16 +103,37 @@ def get_requests_by_borrower(borrower_id):
     )
 
 def check_duplicate_request(requester_id, book_title):
-    row = db.fetch_one(
-        'SELECT request_id FROM request_records WHERE requester_id = %s AND book_title = %s',
-        (requester_id, book_title)
+    normalized = normalize_title(book_title)
+    rows = db.fetch_all(
+        'SELECT book_title FROM request_records WHERE requester_id = %s',
+        (requester_id,)
     )
-    return row is not None
+
+    for (title,) in rows:
+        existing_normalized = normalize_title(title)
+        if existing_normalized == normalized or SequenceMatcher(None, existing_normalized, normalized).ratio() >= 0.85:
+            return True
+
+    return False
 
 
 def check_existing_in_collection(book_title):
-    row = db.fetch_one(
-        'SELECT book_id FROM book_catalog WHERE title = %s',
+    normalized = normalize_title(book_title)
+
+    exact = db.fetch_one(
+        'SELECT book_id FROM book_catalog WHERE LOWER(title) = LOWER(%s)',
         (book_title,)
     )
-    return row[0] if row else None
+    if exact:
+        return exact[0]
+
+    first_word = normalized.split(' ')[0] if normalized else ''
+    candidates = db.fetch_all(
+        "SELECT book_id, title FROM book_catalog WHERE LOWER(title) LIKE LOWER(%s)",
+        (first_word + '%',)
+    )
+    for book_id, title in candidates:
+        if SequenceMatcher(None, normalize_title(title), normalized).ratio() >= 0.85:
+            return book_id
+
+    return None

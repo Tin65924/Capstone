@@ -1,5 +1,57 @@
 """Tests for the Requests module: submission, review, RBAC."""
 
+from app.requests.models import normalize_title, check_duplicate_request, check_existing_in_collection
+
+
+class TestTitleNormalization:
+    def test_normalize_lowercases(self):
+        assert normalize_title('HARRY POTTER') == 'harry potter'
+
+    def test_normalize_strips_punctuation(self):
+        assert normalize_title("David Jone's Locker!") == 'david jones locker'
+
+    def test_normalize_expands_abbreviations(self):
+        assert normalize_title('Intro to Comp Sci') == 'introduction to computer science'
+
+    def test_normalize_collapses_whitespace(self):
+        assert normalize_title('Harry   Potter') == 'harry potter'
+
+
+class TestCheckDuplicateRequest:
+    def test_exact_normalized_duplicate_blocked(self, mock_db):
+        mock_db['fetch_all'].return_value = [('1984',)]
+        assert check_duplicate_request(5, '1984') is True
+
+    def test_fuzzy_duplicate_blocked(self, mock_db):
+        mock_db['fetch_all'].return_value = [('Introduction to Programming',)]
+        assert check_duplicate_request(5, 'Intro to Programming') is True
+
+    def test_distinct_titles_allowed(self, mock_db):
+        mock_db['fetch_all'].return_value = [('Introduction to Biology',)]
+        assert check_duplicate_request(5, 'Introduction to Programming') is False
+
+    def test_no_prior_requests_allowed(self, mock_db):
+        mock_db['fetch_all'].return_value = []
+        assert check_duplicate_request(5, 'Anything') is False
+
+
+class TestCheckExistingInCollection:
+    def test_exact_match_returns_book_id(self, mock_db):
+        mock_db['fetch_one'].return_value = (42,)
+        result = check_existing_in_collection('1984')
+        assert result == 42
+
+    def test_fuzzy_fallback_returns_book_id(self, mock_db):
+        mock_db['fetch_one'].return_value = None
+        mock_db['fetch_all'].return_value = [(7, 'Introduction to Programming')]
+        result = check_existing_in_collection('Intro to Programming')
+        assert result == 7
+
+    def test_no_match_returns_none(self, mock_db):
+        mock_db['fetch_one'].return_value = None
+        mock_db['fetch_all'].return_value = []
+        result = check_existing_in_collection('Some Totally New Book')
+        assert result is None
 
 class TestRequestSubmission:
     def test_student_submits_request_success(self, student_client, mock_db):
