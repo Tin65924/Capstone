@@ -13,12 +13,22 @@ class TestLoginPage:
 
 class TestGoogleLogin:
     def test_google_login_redirects(self, client, mock_oauth_flow):
+        mock_oauth_flow.code_verifier = 'test-verifier'
         mock_oauth_flow.authorization_url.return_value = ('https://accounts.google.com/o/oauth2/auth?state=xyz', 'xyz')
         resp = client.get('/login/google')
         assert resp.status_code == 302
         assert resp.location.startswith('https://accounts.google.com/')
         with client.session_transaction() as sess:
             assert '_oauth_state' in sess
+            assert sess['_oauth_code_verifier'] == 'test-verifier'
+
+    def test_google_login_no_verifier_not_stored(self, client, mock_oauth_flow):
+        mock_oauth_flow.authorization_url.return_value = ('https://accounts.google.com/o/oauth2/auth?state=xyz', 'xyz')
+        resp = client.get('/login/google')
+        assert resp.status_code == 302
+        with client.session_transaction() as sess:
+            assert '_oauth_state' in sess
+            assert '_oauth_code_verifier' not in sess
 
     def test_google_login_handles_exception(self, client):
         from unittest.mock import patch
@@ -65,6 +75,32 @@ class TestGoogleCallback:
 
                     assert resp.status_code == 302
                     assert mock_login.called
+
+    def test_callback_restores_code_verifier(self, client, mock_oauth_flow):
+        with client.session_transaction() as sess:
+            sess['_oauth_state'] = 'test-state'
+            sess['_oauth_code_verifier'] = 'test-verifier'
+
+        mock_oauth_flow.code_verifier = None
+        mock_oauth_flow.fetch_token.return_value = None
+        mock_oauth_flow.credentials.id_token = 'fake-id-token'
+
+        import app.auth.routes as auth_routes
+        with patch.object(auth_routes, 'id_token') as mock_id_token:
+            mock_id_token.verify_oauth2_token.return_value = {
+                'iss': 'accounts.google.com',
+                'email': 'user@mcst.edu.ph',
+                'sub': 'google-sub-123',
+                'name': 'Test User',
+            }
+            with patch('app.auth.routes.get_user_by_oauth_sub') as mock_get:
+                mock_get.return_value = ('1', 'user@mcst.edu.ph', 'Student', 'Test User')
+                with patch('app.auth.routes.login_user'):
+                    resp = client.get('/login/google/callback', query_string={'state': 'test-state', 'code': 'auth-code'})
+                    assert resp.status_code == 302
+                    assert mock_oauth_flow.code_verifier == 'test-verifier'
+                    with client.session_transaction() as sess:
+                        assert '_oauth_code_verifier' not in sess
 
     def test_callback_blocked_domain(self, client):
         with client.session_transaction() as sess:

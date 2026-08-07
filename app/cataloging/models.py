@@ -16,6 +16,13 @@ def create_book(title, author, edition, publisher, year_published, subject_class
 
 DISTINCT_ORDER = 'title, author, COALESCE(isbn, \'\')'
 
+# Trailing column appended by the cataloging-page list queries; a book can
+# have multiple accessions, so they are comma-joined.
+ACCESSION_SUBQUERY = (
+    "(SELECT COALESCE(string_agg(accession_number, ', ' ORDER BY accession_id), '') "
+    "FROM accession_log WHERE accession_log.book_id = book_catalog.book_id)"
+)
+
 def search_books(query, field=None):
     pattern = f'%{query}%'
     if field == 'title':
@@ -51,8 +58,66 @@ def get_book_by_id(book_id):
     return db.fetch_one('SELECT * FROM book_catalog WHERE book_id = %s', (book_id,))
 
 
+def get_book_by_title_author_isbn(title, author, isbn):
+    if isbn:
+        return db.fetch_one(
+            'SELECT book_id FROM book_catalog WHERE title = %s AND author = %s AND isbn = %s',
+            (title, author, isbn)
+        )
+    return db.fetch_one(
+        'SELECT book_id FROM book_catalog WHERE title = %s AND author = %s AND isbn IS NULL',
+        (title, author)
+    )
+
+
+def suggest_book_values(field, prefix, limit=8):
+    """Distinct existing values matching a prefix for autosuggestions."""
+    pattern = f'{prefix}%'
+    if field == 'title':
+        return db.fetch_all(
+            'SELECT DISTINCT title FROM book_catalog WHERE title ILIKE %s ORDER BY title LIMIT %s',
+            (pattern, limit)
+        )
+    if field == 'author':
+        return db.fetch_all(
+            'SELECT DISTINCT author FROM book_catalog WHERE author ILIKE %s ORDER BY author LIMIT %s',
+            (pattern, limit)
+        )
+    if field == 'publisher':
+        return db.fetch_all(
+            "SELECT DISTINCT publisher FROM book_catalog WHERE publisher IS NOT NULL AND publisher != '' "
+            "AND publisher ILIKE %s ORDER BY publisher LIMIT %s",
+            (pattern, limit)
+        )
+    if field == 'subject':
+        return db.fetch_all(
+            "SELECT DISTINCT subject_classification FROM book_catalog WHERE subject_classification IS NOT NULL "
+            "AND subject_classification != '' AND subject_classification ILIKE %s "
+            "ORDER BY subject_classification LIMIT %s",
+            (pattern, limit)
+        )
+    if field == 'isbn':
+        return db.fetch_all(
+            "SELECT DISTINCT isbn FROM book_catalog WHERE isbn IS NOT NULL AND isbn != '' "
+            "AND isbn ILIKE %s ORDER BY isbn LIMIT %s",
+            (pattern, limit)
+        )
+    # 'search' — the catalog search box matches any of these columns
+    return db.fetch_all(
+        "SELECT DISTINCT value FROM ("
+        "SELECT title AS value FROM book_catalog WHERE title ILIKE %s "
+        "UNION SELECT author FROM book_catalog WHERE author ILIKE %s "
+        "UNION SELECT subject_classification FROM book_catalog WHERE subject_classification IS NOT NULL "
+        "AND subject_classification != '' AND subject_classification ILIKE %s "
+        "UNION SELECT isbn FROM book_catalog WHERE isbn IS NOT NULL AND isbn != '' AND isbn ILIKE %s"
+        ") s WHERE value IS NOT NULL AND value != '' ORDER BY value LIMIT %s",
+        (pattern, pattern, pattern, pattern, limit)
+    )
+
+
 def get_all_books():
-    return db.fetch_all(f'SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog ORDER BY {DISTINCT_ORDER}')
+    return db.fetch_all(
+        f'SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog ORDER BY {DISTINCT_ORDER}')
 
 
 def get_distinct_categories():
@@ -141,23 +206,17 @@ def get_recent_books(limit=5):
     )
 
 
-def create_accession(accession_number, book_id, librarian_id, source=None, copy_number=None):
-    if copy_number is None:
-        row = db.fetch_one(
-            'SELECT GREATEST(COALESCE(MAX(copy_number), 0), COUNT(*)) + 1 FROM accession_log WHERE book_id = %s',
-            (book_id,)
-        )
-        copy_number = row[0] if row else 1
+def create_accession(accession_number, book_id, librarian_id, source=None):
     return db.execute(
-        '''INSERT INTO accession_log (accession_number, book_id, librarian_id, source, copy_number)
-           VALUES (%s, %s, %s, %s, %s)''',
-        (accession_number, book_id, librarian_id, source, copy_number)
+        '''INSERT INTO accession_log (accession_number, book_id, librarian_id, source)
+           VALUES (%s, %s, %s, %s)''',
+        (accession_number, book_id, librarian_id, source)
     )
 
 
 def get_accessions_by_book(book_id):
     return db.fetch_all(
-        'SELECT * FROM accession_log WHERE book_id = %s ORDER BY copy_number',
+        'SELECT * FROM accession_log WHERE book_id = %s ORDER BY accession_id',
         (book_id,)
     )
 
@@ -167,6 +226,43 @@ def get_accession_by_number(accession_number):
         'SELECT * FROM accession_log WHERE accession_number = %s',
         (accession_number,)
     )
+
+
+def get_accession_by_id(accession_id):
+    return db.fetch_one(
+        'SELECT * FROM accession_log WHERE accession_id = %s',
+        (accession_id,)
+    )
+
+
+def get_accessions_for_books(book_ids):
+    if not book_ids:
+        return []
+    return db.fetch_all(
+        'SELECT accession_id, accession_number, book_id, source, date_accessioned '
+        'FROM accession_log WHERE book_id = ANY(%s) ORDER BY accession_id',
+        (book_ids,)
+    )
+
+
+def update_accession(accession_id, accession_number, source):
+    return db.execute(
+        'UPDATE accession_log SET accession_number=%s, source=%s WHERE accession_id=%s',
+        (accession_number, source, accession_id)
+    )
+
+
+def delete_accession(accession_id):
+    db.execute('DELETE FROM accession_log WHERE accession_id = %s', (accession_id,))
+
+
+def accession_referenced(accession_id):
+    row = db.fetch_one(
+        '''SELECT 1 WHERE EXISTS (SELECT 1 FROM circulation_records WHERE accession_id = %s)
+              OR EXISTS (SELECT 1 FROM inventory_status WHERE accession_id = %s)''',
+        (accession_id, accession_id)
+    )
+    return row is not None
 
 
 def add_favorite(user_id, book_id):
@@ -206,7 +302,7 @@ def update_book(book_id, title, author, edition, publisher, year_published,
 
 def get_books_by_status(status):
     return db.fetch_all(
-        'SELECT * FROM book_catalog WHERE catalog_status = %s ORDER BY title',
+        f'SELECT *, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog WHERE catalog_status = %s ORDER BY title',
         (status,)
     )
 
@@ -243,8 +339,9 @@ def search_books_paginated(query, field, page, per_page):
         args = (field, pattern)
     elif query:
         where = '''WHERE title ILIKE %s OR author ILIKE %s OR isbn ILIKE %s
-                      OR subject_classification ILIKE %s'''
-        args = (pattern, pattern, pattern, pattern)
+                      OR subject_classification ILIKE %s
+                      OR book_id IN (SELECT book_id FROM accession_log WHERE accession_number ILIKE %s)'''
+        args = (pattern, pattern, pattern, pattern, pattern)
     else:
         where = ''
         args = ()
@@ -255,7 +352,7 @@ def search_books_paginated(query, field, page, per_page):
     total = count_row[0] if count_row else 0
 
     rows = db.fetch_all(
-        f'''SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog {where} ORDER BY {DISTINCT_ORDER}, date_added DESC LIMIT %s OFFSET %s''',
+        f'''SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog {where} ORDER BY {DISTINCT_ORDER}, date_added DESC LIMIT %s OFFSET %s''',
         args + (per_page, offset)
     )
     return rows, total

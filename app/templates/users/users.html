@@ -338,7 +338,8 @@
                             </td>
                             <td>
                                 <div class="flex gap-2 items-center">
-                                    <button onclick="openEditModal({{ u[0] }}, '{{ u[2]|escape }}', '{{ u[6] or '' }}', '{{ u[7] or '' }}')"
+                                    <button data-user-id="{{ u[0] }}" data-user-name="{{ u[2]|escape }}" data-user-idnum="{{ u[6] or '' }}" data-user-dept="{{ u[7] or '' }}"
+                                        onclick="openEditModal(this)"
                                         class="btn-action hover:border-blue-500 hover:text-blue-500" title="Edit">
                                         <span class="material-symbols-outlined text-lg">edit</span>
                                     </button>
@@ -452,17 +453,40 @@
 </div>
 
 <script>
-function openEditModal(userId, name, idNumber, department) {
-    document.getElementById('editForm').action = '/admin/users/' + userId + '/edit';
-    document.getElementById('editName').value = name;
-    document.getElementById('editIdNumber').value = idNumber;
-    document.getElementById('editDepartment').value = department;
+function openEditModal(btn) {
+    document.getElementById('editForm').action = '/admin/users/' + btn.getAttribute('data-user-id') + '/edit';
+    document.getElementById('editName').value = btn.getAttribute('data-user-name');
+    document.getElementById('editIdNumber').value = btn.getAttribute('data-user-idnum');
+    document.getElementById('editDepartment').value = btn.getAttribute('data-user-dept');
     document.getElementById('editModal').classList.remove('hidden');
 }
 
 function closeEditModal() {
     document.getElementById('editModal').classList.add('hidden');
 }
+
+// Reopen the edit modal after a PRG redirect so flash feedback shows inside it
+(function () {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('modal') === 'editModal') {
+        var uid = params.get('user_id');
+        var btn = uid && document.querySelector('button[data-user-id="' + uid + '"]');
+        if (btn) {
+            openEditModal(btn);
+        } else {
+            document.getElementById('editModal').classList.remove('hidden');
+        }
+        var flash = document.getElementById('flash-messages');
+        var modal = document.getElementById('editModal');
+        if (flash && modal) {
+            var box = modal.querySelector('.bg-white') || modal;
+            box.insertBefore(flash, modal.querySelector('form'));
+        }
+        if (params.get('mstatus') === 'success') {
+            setTimeout(closeEditModal, 1500);
+        }
+    }
+})();
 
 document.getElementById('editModal').addEventListener('click', function(e) {
     if (e.target === this) closeEditModal();

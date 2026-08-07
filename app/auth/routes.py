@@ -7,6 +7,7 @@ from google.auth.transport import requests as google_requests
 from google_auth_oauthlib.flow import Flow
 from . import auth_bp
 from app.database import db
+from app.bloom_registry import bloom_registry
 from .models import (
     get_user_by_email, get_user_by_oauth_sub, create_user,
     create_pending_user, create_borrower, get_roles, get_role_by_name,
@@ -66,6 +67,9 @@ def google_login():
             prompt='select_account',
         )
         session['_oauth_state'] = state
+        verifier = getattr(flow, 'code_verifier', None)
+        if isinstance(verifier, str) and verifier:
+            session['_oauth_code_verifier'] = verifier
         return redirect(authorization_url)
     except Exception as e:
         current_app.logger.error('Failed to initiate Google OAuth: %s', str(e))
@@ -82,6 +86,10 @@ def google_callback():
 
     expected_redirect = url_for('auth.google_callback', _external=True)
     flow = _build_flow(expected_redirect)
+
+    verifier = session.pop('_oauth_code_verifier', None)
+    if verifier:
+        flow.code_verifier = verifier
 
     try:
         flow.fetch_token(authorization_response=request.url)
@@ -198,6 +206,7 @@ def role_select():
             user_id = create_pending_user(email, oauth_sub, full_name, role[0])
             if user_id:
                 create_borrower(user_id, id_number, department)
+                bloom_registry.mark_dirty()
                 session.pop(SESSION_OAUTH_KEY, None)
                 flash('Your account requires librarian approval before you can access the system.', 'info')
                 return render_template('auth/pending_approval.html', email=email)
@@ -210,6 +219,7 @@ def role_select():
             return render_template('auth/role_select.html')
 
         create_borrower(user_id, id_number, department)
+        bloom_registry.mark_dirty()
         session.pop(SESSION_OAUTH_KEY, None)
         user = User(user_id, email, role_name, full_name)
         login_user(user)
@@ -324,9 +334,10 @@ def edit_user_route(user_id):
     department = request.form.get('department', '').strip()
     if full_name:
         update_user_details(user_id, full_name, id_number or None, department or None)
+        bloom_registry.mark_dirty()
         log_activity(current_user.id, f'edited_user:{user_id}')
         flash('User details updated.', 'success')
-    return redirect(url_for('auth.admin_users'))
+    return redirect(url_for('auth.admin_users', modal='editModal', user_id=user_id, mstatus='success'))
 
 
 @auth_bp.route('/admin/reset-db', methods=['GET', 'POST'])

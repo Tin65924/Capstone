@@ -31,6 +31,25 @@ def get_user_by_oauth_sub(oauth_sub):
     )
 
 
+def get_user_by_id_number(id_number):
+    return db.fetch_one(
+        '''SELECT u.user_id, u.email, r.role_name, u.full_name
+           FROM user_accounts u
+           JOIN borrowers b ON u.user_id = b.user_id
+           JOIN roles r ON u.role_id = r.role_id
+           WHERE b.id_number = %s''',
+        (id_number,)
+    )
+
+
+def suggest_programs(prefix, limit=8):
+    return db.fetch_all(
+        "SELECT DISTINCT department FROM borrowers WHERE department IS NOT NULL "
+        "AND department != '' AND department ILIKE %s ORDER BY department LIMIT %s",
+        (f'{prefix}%', limit)
+    )
+
+
 def create_user(email, oauth_sub, full_name, role_id):
     row = db.fetch_one(
         '''INSERT INTO user_accounts (email, oauth_sub, full_name, role_id, account_status, created_at)

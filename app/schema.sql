@@ -53,7 +53,6 @@ CREATE TABLE IF NOT EXISTS accession_log (
     accession_id     SERIAL PRIMARY KEY,
     accession_number VARCHAR(30) UNIQUE NOT NULL,
     book_id          INT NOT NULL REFERENCES book_catalog(book_id),
-    copy_number      INT,
     librarian_id     INT NOT NULL REFERENCES user_accounts(user_id),
     date_accessioned DATE NOT NULL DEFAULT CURRENT_DATE,
     source           VARCHAR(20) CHECK (source IN ('purchase', 'donation'))

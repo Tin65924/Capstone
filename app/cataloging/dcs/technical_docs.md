@@ -22,16 +22,22 @@
 | 11 | `catalog_status` | str | `'active'` or `'archived'` |
 | 12 | `date_added` | date (str) | ISO format |
 
+> The cataloging-page list queries (`get_all_books`, `search_books_paginated`,
+> `get_books_by_status`) append a **14th** column (index 13):
+> `accession_numbers` — comma-joined accession numbers for the book (empty
+> string if it has none). The librarian cataloging table renders it. Other
+> read paths (`get_book_by_id`, `search_books_filtered`, public catalog)
+> keep the 13-column contract (public catalog appends `availability`).
+
 ### `accession_log` tuple index map (SELECT *)
 | Index | Column | Type | Notes |
 |-------|--------|------|-------|
 | 0 | `accession_id` | int | PK |
 | 1 | `accession_number` | str | UNIQUE |
 | 2 | `book_id` | int | FK → `book_catalog` |
-| 3 | `copy_number` | int\|None | |
-| 4 | `librarian_id` | int | FK → `user_accounts` |
-| 5 | `date_accessioned` | date (str) | |
-| 6 | `source` | str\|None | `'purchase'` or `'donation'` |
+| 3 | `librarian_id` | int | FK → `user_accounts` |
+| 4 | `date_accessioned` | date (str) | |
+| 5 | `source` | str\|None | `'purchase'` or `'donation'` |
 
 ## Endpoints
 
@@ -42,6 +48,8 @@
 | POST | `/cataloging/<int:book_id>/edit` | `@login_required @librarian_required` | — | Update book metadata. 404 if book not found |
 | POST | `/cataloging/<int:book_id>/status` | `@login_required @librarian_required` | — | Toggle `catalog_status` between `'active'` and `'archived'` |
 | POST | `/cataloging/<int:book_id>/accession/add` | `@login_required @librarian_required` | — | Add copy. Checks duplicate `accession_number`, validates required |
+| POST | `/cataloging/accession/<int:accession_id>/edit` | `@login_required @librarian_required` | — | Edit a copy's `accession_number`/`source`. Duplicate check excluding self |
+| POST | `/cataloging/accession/<int:accession_id>/delete` | `@login_required @librarian_required` | — | Delete a copy unless referenced by `circulation_records`/`inventory_status` |
 | POST | `/cataloging/bulk-import` | `@login_required @librarian_required` | — | CSV upload (10MB max, 30+ header synonyms, multi-encoding) |
 | GET | `/catalog` | public | `q`, `field` | Public catalog — all books / filtered search |
 | GET | `/book/<int:book_id>` | public | — | Single book detail + accession list |
@@ -51,12 +59,15 @@
 ### `cataloging_page()`
 - If `query` present, calls `search_books_paginated(query, field, page, per_page=20)` → `(books_list, total)`
 - If no query, calls `get_all_books()` → `books_list`, `total = len(books)`
+- Also calls `get_accessions_for_books(page_book_ids)` once and groups results by `book_id` into `accessions_by_book` (passed to the template for the per-copy expandable rows)
 - Renders `cataloging/cataloging.html`
 
 ### `add_book()`
-- `request.form`: `title`*, `author`*, `edition`, `publisher`, `year_published`, `subject_classification`, `call_number`, `isbn`, `material_type` (default `'Book'`), `description`
-- Empty required → flash error + redirect back
-- Calls `create_book(...)` then `log_activity(current_user.id, 'cataloging:add_book')`
+- `request.form`: `title`*, `author`*, `accession_number`, `source`, `edition`, `publisher`, `year_published`, `subject_classification`, `call_number`, `isbn`, `material_type` (default `'Book'`), `description`
+- Empty title/author → flash error + redirect back
+- Duplicate `accession_number` checked *before* creating the book (prevents orphaned rows)
+- Dedup via `get_book_by_title_author_isbn(title, author, isbn)` — on a match the accession is added as a copy of the existing book (no new `book_catalog` row); with no accession a matching title only flashes an info message
+- Otherwise calls `create_book(...)` then `log_activity(current_user.id, 'cataloging:add_book')`
 
 ### `edit_book(book_id)`
 - `get_book_by_id(book_id)` — if `None`, flash error + redirect
@@ -69,10 +80,21 @@
 - Calls `update_book_status(book_id, new_status)`
 
 ### `add_accession(book_id)`
-- `request.form`: `accession_number`*, `copy_number`, `source`
+- `request.form`: `accession_number`*, `source`
 - Validates `accession_number` not empty
 - `get_accession_by_number(accession_number)` — if truthy, duplicate error
-- Calls `create_accession(accession_number, book_id, current_user.id, source, copy_number)`
+- Calls `create_accession(accession_number, book_id, current_user.id, source)`
+
+### `edit_accession(accession_id)`
+- `get_accession_by_id(accession_id)` — if `None`, flash error + redirect
+- Validates `accession_number` not empty
+- `get_accession_by_number(accession_number)` — duplicate error unless it is the same `accession_id`
+- Calls `update_accession(accession_id, accession_number, source)` then `log_activity(..., f'cataloging:edit_accession:{accession_id}')`
+
+### `delete_accession_route(accession_id)`
+- `get_accession_by_id(accession_id)` — if `None`, flash error + redirect
+- `accession_referenced(accession_id)` — blocks delete if the copy has any `circulation_records`/`inventory_status` rows
+- Calls `delete_accession(accession_id)` then `log_activity(..., f'cataloging:delete_accession:{accession_id}')`
 
 ### `bulk_import()`
 - File validation:
@@ -103,17 +125,23 @@
 
 | Function | Returns | SQL |
 |----------|---------|-----|
-| `get_all_books()` | `list[tuple]` | `SELECT * FROM book_catalog ORDER BY title` |
+| `get_all_books()` | `list[tuple]` | `SELECT DISTINCT ON (...) *, accession_numbers FROM book_catalog ORDER BY ...` (14 cols) |
 | `get_book_by_id(book_id)` | `tuple\|None` | `SELECT * FROM book_catalog WHERE book_id = %s` |
+| `get_book_by_title_author_isbn(title, author, isbn)` | `tuple\|None` | `SELECT book_id ...` on `(title, author, isbn)` or `(title, author)` when isbn empty |
 | `search_books(query, field=None)` | `list[tuple]` | ILIKE on one or all of title/author/isbn/subject |
-| `search_books_paginated(query, field, page, per_page)` | `(list[tuple], total_count)` | Same WHERE as search + `LIMIT %s OFFSET %s` + `COUNT(*)` |
+| `search_books_paginated(query, field, page, per_page)` | `(list[tuple], total_count)` | Same WHERE as search + `LIMIT %s OFFSET %s` + `COUNT(*)`; rows include `accession_numbers` (14 cols) |
 | `get_recent_books(limit=5)` | `list[tuple]` | `ORDER BY date_added DESC LIMIT %s` |
 | `create_book(...)` | int (rowcount) | `INSERT INTO book_catalog (...)` 11 columns |
 | `update_book(book_id, ...)` | int (rowcount) | `UPDATE book_catalog SET ... WHERE book_id=%s` |
 | `update_book_status(book_id, status)` | int (rowcount) | `UPDATE book_catalog SET catalog_status=%s WHERE book_id=%s` |
-| `create_accession(acc_num, book_id, lib_id, source, copy_num)` | int (rowcount) | `INSERT INTO accession_log (...)` |
-| `get_accessions_by_book(book_id)` | `list[tuple]` | `SELECT * FROM accession_log WHERE book_id = %s ORDER BY copy_number` |
+| `create_accession(acc_num, book_id, lib_id, source)` | int (rowcount) | `INSERT INTO accession_log (...)` |
+| `get_accessions_by_book(book_id)` | `list[tuple]` | `SELECT * FROM accession_log WHERE book_id = %s ORDER BY accession_id` |
 | `get_accession_by_number(acc_number)` | `tuple\|None` | `SELECT * FROM accession_log WHERE accession_number = %s` |
+| `get_accession_by_id(accession_id)` | `tuple\|None` | `SELECT * FROM accession_log WHERE accession_id = %s` |
+| `get_accessions_for_books(book_ids)` | `list[tuple]` | `SELECT accession_id, accession_number, book_id, source, date_accessioned ... WHERE book_id = ANY(%s) ORDER BY accession_id` |
+| `update_accession(accession_id, acc_number, source)` | int (rowcount) | `UPDATE accession_log SET accession_number=%s, source=%s WHERE accession_id=%s` |
+| `delete_accession(accession_id)` | None | `DELETE FROM accession_log WHERE accession_id = %s` |
+| `accession_referenced(accession_id)` | bool | `SELECT 1 WHERE EXISTS(... circulation_records ...) OR EXISTS(... inventory_status ...)` |
 | `add_favorite(user_id, book_id)` | int (rowcount) | `INSERT ... ON CONFLICT DO NOTHING` |
 | `remove_favorite(user_id, book_id)` | int (rowcount) | `DELETE FROM user_favorites WHERE ...` |
 | `get_user_favorites(user_id)` | `list[tuple]` | JOIN `book_catalog` + `user_favorites` ORDER BY `favorites.created_at DESC` |
@@ -163,7 +191,7 @@ Returns `dict[str, str]` mapping original CSV header → db column key. Unmapped
 - `book[11]` = `catalog_status` (used in `toggle_book_status`)
 - `book[0]` = `book_id` (used in templates for URLs)
 - `book[1]` = `title`, `book[2]` = `author`
-- Accession tuple: `ac[0]` = id, `ac[1]` = accession_number, `ac[2]` = book_id, `ac[3]` = copy_number
+- Accession tuple: `ac[0]` = id, `ac[1]` = accession_number, `ac[2]` = book_id
 
 ## Test Coverage
 `tests/test_cataloging.py` — 422 lines, 45 tests:

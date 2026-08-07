@@ -158,7 +158,6 @@
                     <tr class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
                         <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest" style="">Accession Number</th>
                         <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest" style="">LOC Classification</th>
-                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest" style="">Copy No.</th>
                         <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest" style="">Status</th>
                         <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right" style="">Action</th>
                     </tr>
@@ -170,8 +169,7 @@
                         <td class="px-6 py-4" style="">
                             <div class="text-sm text-slate-900 dark:text-slate-100 font-semibold" style="">{{ book[7] or '—' }}</div>
                         </td>
-                        <td class="px-6 py-4 text-sm" style="">Copy {{ acc[3] or '?' }}</td>
-                        <td class="px-6 py-4" style="">
+                        <td class="px-6 py-4 text-sm" style="">
                             <span class="inline-flex items-center gap-1 text-green-600 dark:text-green-400 text-xs font-bold uppercase tracking-tight" style="">
                                 <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                                 Available
@@ -183,7 +181,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" class="px-6 py-8 text-center text-sm text-slate-400" style="">
+                        <td colspan="4" class="px-6 py-8 text-center text-sm text-slate-400" style="">
                             No copies available for this title.
                         </td>
                     </tr>

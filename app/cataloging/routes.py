@@ -12,9 +12,12 @@ from app.cataloging.models import (
     get_all_books, search_books, get_book_by_id, create_book,
     update_book, update_book_status, delete_book, create_accession,
     get_accessions_by_book, get_accession_by_number,
-    search_books_paginated
+    get_accession_by_id, get_accessions_for_books, update_accession,
+    delete_accession, accession_referenced,
+    get_book_by_title_author_isbn, search_books_paginated
 )
 from app.auth.models import log_activity
+from app.bloom_registry import bloom_registry
 
 _import_jobs = {}
 _import_lock = threading.Lock()
@@ -38,7 +41,6 @@ HEADER_MAP = {
     'description': 'description', 'desc': 'description',
     'accession number': 'accession_number', 'accession_number': 'accession_number',
     'accession': 'accession_number', 'accession no': 'accession_number',
-    'copy number': 'copy_number', 'copy_number': 'copy_number', 'copy': 'copy_number',
     'source': 'source', 'acquisition source': 'source', 'acquisition_source': 'source',
 }
 
@@ -86,10 +88,16 @@ def cataloging_page():
         books = get_all_books()
         total = len(books)
 
+    accessions_by_book = {}
+    if books:
+        for row in get_accessions_for_books([book[0] for book in books]):
+            accessions_by_book.setdefault(row[2], []).append(row)
+
     return render_template('cataloging/cataloging.html', books=books,
                            total=total, search_query=query,
                            search_field=field, status_filter=status_filter,
-                           page=page, per_page=per_page)
+                           page=page, per_page=per_page,
+                           accessions_by_book=accessions_by_book)
 
 
 @cataloging_bp.route('/librarian/cataloging/add', methods=['POST'])
@@ -100,7 +108,28 @@ def add_book():
     author = request.form.get('author', '').strip()
     if not title or not author:
         flash('Title and author are required.', 'error')
-        return redirect(url_for('cataloging.cataloging_page'))
+        return redirect(url_for('cataloging.cataloging_page', modal='addBookModal', mstatus='error'))
+
+    accession_number = request.form.get('accession_number', '').strip()
+    if accession_number:
+        existing = get_accession_by_number(accession_number)
+        if existing:
+            flash(f'Accession number {accession_number} already exists.', 'error')
+            return redirect(url_for('cataloging.cataloging_page', modal='addBookModal', mstatus='error'))
+
+    isbn = request.form.get('isbn', '').strip() or None
+    existing_book = get_book_by_title_author_isbn(title, author, isbn)
+    source = request.form.get('source', '').strip() or None
+    if existing_book:
+        book_id = existing_book[0]
+        if accession_number:
+            create_accession(accession_number, book_id, current_user.id, source)
+            log_activity(current_user.id, f'cataloging:add_copy:{book_id}')
+            flash(f'"{title}" already exists; accession {accession_number} added as another copy.', 'success')
+        else:
+            log_activity(current_user.id, f'cataloging:add_book_duplicate:{book_id}')
+            flash(f'"{title}" already exists in the catalog.', 'info')
+        return redirect(url_for('cataloging.cataloging_page', modal='addBookModal', mstatus='success'))
 
     book_id = create_book(
         title=title,
@@ -110,26 +139,21 @@ def add_book():
         year_published=request.form.get('year_published', type=int) or None,
         subject_classification=request.form.get('subject_classification', '').strip() or None,
         call_number=request.form.get('call_number', '').strip() or None,
-        isbn=request.form.get('isbn', '').strip() or None,
+        isbn=isbn,
         material_type=request.form.get('material_type', 'Book'),
         description=request.form.get('description', '').strip() or None,
     )
-    accession_number = request.form.get('accession_number', '').strip()
+    bloom_registry.mark_dirty()
     if accession_number:
-        existing = get_accession_by_number(accession_number)
-        if existing:
-            flash(f'Accession number {accession_number} already exists.', 'error')
-            return redirect(url_for('cataloging.cataloging_page'))
         create_accession(
             accession_number=accession_number,
             book_id=book_id,
             librarian_id=current_user.id,
-            source=request.form.get('source', '').strip() or None,
-            copy_number=request.form.get('copy_number', type=int) or None,
+            source=source,
         )
     log_activity(current_user.id, 'cataloging:add_book')
     flash('Book added to catalog.', 'success')
-    return redirect(url_for('cataloging.cataloging_page'))
+    return redirect(url_for('cataloging.cataloging_page', modal='addBookModal', mstatus='success'))
 
 
 @cataloging_bp.route('/librarian/cataloging/<int:book_id>/edit', methods=['POST'])
@@ -141,10 +165,17 @@ def edit_book(book_id):
         flash('Book not found.', 'error')
         return redirect(url_for('cataloging.cataloging_page'))
 
+    title = request.form.get('title', '').strip()
+    author = request.form.get('author', '').strip()
+    if not title or not author:
+        flash('Title and author are required.', 'error')
+        return redirect(url_for('cataloging.cataloging_page', modal='editBookModal',
+                                book_id=book_id, mstatus='error'))
+
     update_book(
         book_id=book_id,
-        title=request.form.get('title', '').strip(),
-        author=request.form.get('author', '').strip(),
+        title=title,
+        author=author,
         edition=request.form.get('edition', '').strip() or None,
         publisher=request.form.get('publisher', '').strip() or None,
         year_published=request.form.get('year_published', type=int) or None,
@@ -154,22 +185,10 @@ def edit_book(book_id):
         material_type=request.form.get('material_type', 'Book'),
         description=request.form.get('description', '').strip() or None,
     )
-    accession_number = request.form.get('edit_accession_number', '').strip()
-    if accession_number:
-        existing = get_accession_by_number(accession_number)
-        if existing:
-            flash(f'Accession number {accession_number} already exists.', 'error')
-        else:
-            create_accession(
-                accession_number=accession_number,
-                book_id=book_id,
-                librarian_id=current_user.id,
-                source=request.form.get('edit_source', '').strip() or None,
-                copy_number=request.form.get('edit_copy_number', type=int) or None,
-            )
+    bloom_registry.mark_dirty()
     log_activity(current_user.id, f'cataloging:edit_book:{book_id}')
     flash('Book updated.', 'success')
-    return redirect(url_for('cataloging.cataloging_page'))
+    return redirect(url_for('cataloging.cataloging_page', modal='editBookModal', book_id=book_id, mstatus='success'))
 
 
 @cataloging_bp.route('/librarian/cataloging/<int:book_id>/delete', methods=['POST'])
@@ -184,6 +203,7 @@ def delete_book_route(book_id):
         flash('Book must be archived before deletion.', 'error')
         return redirect(url_for('cataloging.cataloging_page'))
     delete_book(book_id)
+    bloom_registry.mark_dirty()
     log_activity(current_user.id, f'cataloging:delete_book:{book_id}')
     flash('Book permanently deleted.', 'success')
     return redirect(url_for('cataloging.cataloging_page'))
@@ -215,7 +235,39 @@ def add_accession(book_id):
         return redirect(url_for('cataloging.cataloging_page'))
 
     accession_number = request.form.get('accession_number', '').strip()
-    copy_number = request.form.get('copy_number', type=int)
+    source = request.form.get('source', '').strip() or None
+
+    if not accession_number:
+        flash('Accession number is required.', 'error')
+        return redirect(url_for('cataloging.cataloging_page', modal='addAccessionModal',
+                                action=url_for('cataloging.add_accession', book_id=book_id),
+                                mstatus='error'))
+
+    existing = get_accession_by_number(accession_number)
+    if existing:
+        flash(f'Accession number {accession_number} already exists.', 'error')
+        return redirect(url_for('cataloging.cataloging_page', modal='addAccessionModal',
+                                action=url_for('cataloging.add_accession', book_id=book_id),
+                                mstatus='error'))
+
+    create_accession(accession_number, book_id, current_user.id, source)
+    log_activity(current_user.id, f'cataloging:add_accession:{book_id}')
+    flash(f'Accession {accession_number} added.', 'success')
+    return redirect(url_for('cataloging.cataloging_page', modal='addAccessionModal',
+                            action=url_for('cataloging.add_accession', book_id=book_id),
+                            mstatus='success'))
+
+
+@cataloging_bp.route('/librarian/cataloging/accession/<int:accession_id>/edit', methods=['POST'])
+@login_required
+@librarian_required
+def edit_accession(accession_id):
+    acc = get_accession_by_id(accession_id)
+    if not acc:
+        flash('Accession copy not found.', 'error')
+        return redirect(url_for('cataloging.cataloging_page'))
+
+    accession_number = request.form.get('accession_number', '').strip()
     source = request.form.get('source', '').strip() or None
 
     if not accession_number:
@@ -223,13 +275,32 @@ def add_accession(book_id):
         return redirect(url_for('cataloging.cataloging_page'))
 
     existing = get_accession_by_number(accession_number)
-    if existing:
+    if existing and existing[0] != accession_id:
         flash(f'Accession number {accession_number} already exists.', 'error')
         return redirect(url_for('cataloging.cataloging_page'))
 
-    create_accession(accession_number, book_id, current_user.id, source, copy_number)
-    log_activity(current_user.id, f'cataloging:add_accession:{book_id}')
-    flash(f'Accession {accession_number} added.', 'success')
+    update_accession(accession_id, accession_number, source)
+    log_activity(current_user.id, f'cataloging:edit_accession:{accession_id}')
+    flash(f'Accession {accession_number} updated.', 'success')
+    return redirect(url_for('cataloging.cataloging_page'))
+
+
+@cataloging_bp.route('/librarian/cataloging/accession/<int:accession_id>/delete', methods=['POST'])
+@login_required
+@librarian_required
+def delete_accession_route(accession_id):
+    acc = get_accession_by_id(accession_id)
+    if not acc:
+        flash('Accession copy not found.', 'error')
+        return redirect(url_for('cataloging.cataloging_page'))
+
+    if accession_referenced(accession_id):
+        flash(f'Cannot delete accession {acc[1]} — it is referenced by circulation or inventory records.', 'error')
+        return redirect(url_for('cataloging.cataloging_page'))
+
+    delete_accession(accession_id)
+    log_activity(current_user.id, f'cataloging:delete_accession:{accession_id}')
+    flash(f'Accession {acc[1]} deleted.', 'success')
     return redirect(url_for('cataloging.cataloging_page'))
 
 
@@ -343,16 +414,7 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                 continue
 
             isbn = book_data.get('isbn', '')
-            if isbn:
-                existing_book = db.fetch_one(
-                    'SELECT book_id FROM book_catalog WHERE title = %s AND author = %s AND isbn = %s',
-                    (title, author, isbn)
-                )
-            else:
-                existing_book = db.fetch_one(
-                    'SELECT book_id FROM book_catalog WHERE title = %s AND author = %s AND isbn IS NULL',
-                    (title, author)
-                )
+            existing_book = get_book_by_title_author_isbn(title, author, isbn or None)
 
             existing_acc = get_accession_by_number(accession_number)
             if existing_acc:
@@ -385,8 +447,6 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                 )
 
             try:
-                copy_str = book_data.get('copy_number', '')
-                copy_number = int(copy_str) if copy_str and copy_str.isdigit() else None
                 source = book_data.get('source', '') or None
                 if source:
                     source = source.lower()
@@ -397,7 +457,6 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                     book_id=book_id,
                     librarian_id=user_id,
                     source=source,
-                    copy_number=copy_number,
                 )
                 imported += 1
             except Exception as e:
@@ -411,6 +470,8 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                          f'cataloging:bulk_import:{imported}_success_{len(errors)}_errors')
         except Exception:
             pass
+
+        bloom_registry.mark_dirty()
 
         message = f'Successfully imported {imported} book(s).'
         if errors:

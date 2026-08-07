@@ -167,7 +167,7 @@
                                 </span>
                                 <input name="q" value="{{ search_query or '' }}"
                                     class="block w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-sm placeholder-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                                    placeholder="Search by title, author, keyword, or ISBN..." type="text" />
+                                    placeholder="Search by title, author, keyword, or ISBN..." type="text" data-suggest="book_search" />
                             </div>
                             <button type="submit"
                                 class="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded font-semibold text-sm transition-all flex items-center justify-center gap-2">
@@ -293,6 +293,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/autosuggest.js') }}"></script>
 <script>
     function openCategoryModal() {
         document.getElementById('categoryModal').classList.remove('hidden');

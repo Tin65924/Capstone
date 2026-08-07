@@ -6,13 +6,13 @@ import csv
 SAMPLE_BOOKS = [
     (1, 'Introduction to Algorithms', 'Cormen', '3rd', 'MIT Press', 2022,
      'Computer Science', 'QA76.73', '978-0262033848', 'Book',
-     'A comprehensive textbook.', 'active', '2024-01-15'),
+     'A comprehensive textbook.', 'active', '2024-01-15', '2025-0001'),
     (2, 'Clean Code', 'Martin', '1st', 'Prentice Hall', 2008,
      'Software Engineering', 'QA76.76', '978-0132350884', 'Book',
-     'A handbook of agile software craftsmanship.', 'active', '2024-02-10'),
+     'A handbook of agile software craftsmanship.', 'active', '2024-02-10', '2025-0002, 2025-0003'),
     (3, 'The Great Gatsby', 'Fitzgerald', None, None, 1925,
      'Literature', None, None, 'Book',
-     None, 'archived', '2024-03-01'),
+     None, 'archived', '2024-03-01', ''),
 ]
 
 
@@ -32,6 +32,9 @@ class TestCatalogingAccess:
         resp = librarian_client.get('/librarian/cataloging')
         assert resp.status_code == 200
         assert b'Cataloging' in resp.data
+        assert b'Accession Number' in resp.data
+        assert b'2025-0001' in resp.data
+        assert b'2025-0002, 2025-0003' in resp.data
 
     def test_cataloging_admin_allowed(self, admin_client, mock_db):
         mock_db['fetch_all'].return_value = SAMPLE_BOOKS
@@ -56,7 +59,6 @@ class TestCatalogingCRUD:
             'material_type': 'Book',
             'year_published': '2024',
             'accession_number': '2025-0001',
-            'copy_number': '1',
             'source': 'purchase',
         })
         assert resp.status_code == 302
@@ -91,6 +93,46 @@ class TestCatalogingCRUD:
         })
         assert resp.status_code == 302
         assert '/librarian/cataloging' in resp.location
+
+    def test_add_book_dedup_adds_copy(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [None, (5,)]
+        mock_db['execute'].return_value = 1
+        resp = librarian_client.post('/librarian/cataloging/add', data={
+            'title': 'Existing Title',
+            'author': 'Existing Author',
+            'isbn': '978-1234567890',
+            'accession_number': '2025-0099',
+            'source': 'purchase',
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count >= 2
+        first_exec = mock_db['execute'].call_args_list[0][0][0]
+        assert 'INSERT INTO accession_log' in first_exec
+        assert all('INSERT INTO book_catalog' not in c[0][0]
+                   for c in mock_db['execute'].call_args_list)
+
+    def test_add_book_dedup_no_new_record(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (5,)
+        mock_db['execute'].return_value = 1
+        resp = librarian_client.post('/librarian/cataloging/add', data={
+            'title': 'Existing Title',
+            'author': 'Existing Author',
+        })
+        assert resp.status_code == 302
+        assert all('INSERT INTO book_catalog' not in c[0][0]
+                   for c in mock_db['execute'].call_args_list)
+
+    def test_add_book_dedup_blank_isbn_matches(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [None, (5,)]
+        mock_db['execute'].return_value = 1
+        resp = librarian_client.post('/librarian/cataloging/add', data={
+            'title': 'No ISBN Book',
+            'author': 'No ISBN Author',
+            'accession_number': '2025-0100',
+        })
+        assert resp.status_code == 302
+        dedup_call = mock_db['fetch_one'].call_args_list[1][0]
+        assert 'isbn IS NULL' in dedup_call[0]
 
     def test_add_book_missing_title(self, librarian_client, mock_db):
         resp = librarian_client.post('/librarian/cataloging/add', data={
@@ -183,7 +225,6 @@ class TestCatalogingCRUD:
         mock_db['execute'].return_value = 1
         resp = librarian_client.post('/librarian/cataloging/1/accession/add', data={
             'accession_number': '2025-0001',
-            'copy_number': '1',
             'source': 'purchase',
         })
         assert resp.status_code == 302
@@ -207,6 +248,72 @@ class TestCatalogingCRUD:
         assert resp.status_code == 302
 
 
+SAMPLE_COPIES = [
+    (21, 'ACC-0015', 1, 'purchase', '2024-01-15'),
+    (22, 'ACC-123456', 1, 'donation', '2025-06-01'),
+]
+SAMPLE_ACC_ROW = (21, 'ACC-0015', 1, 3, '2024-01-15', 'purchase')
+
+
+class TestCatalogingCopies:
+    def test_cataloging_renders_copies(self, librarian_client, mock_db):
+        mock_db['fetch_all'].side_effect = [SAMPLE_BOOKS, SAMPLE_COPIES]
+        resp = librarian_client.get('/librarian/cataloging')
+        assert resp.status_code == 200
+        assert b'ACC-0015' in resp.data
+        assert b'Edit Accession Copy' in resp.data
+        assert b'2 copy/copies for' in resp.data
+
+    def test_edit_accession_success(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [SAMPLE_ACC_ROW, None]
+        resp = librarian_client.post('/librarian/cataloging/accession/21/edit', data={
+            'accession_number': 'ACC-0099',
+            'source': 'donation',
+        })
+        assert resp.status_code == 302
+        call_args = mock_db['execute'].call_args_list[0]
+        assert 'UPDATE accession_log' in call_args[0][0]
+        assert call_args[0][1] == ('ACC-0099', 'donation', 21)
+
+    def test_edit_accession_duplicate(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [SAMPLE_ACC_ROW, (99, 'ACC-0099', 2, 3, '2025-01-01', 'purchase')]
+        resp = librarian_client.post('/librarian/cataloging/accession/21/edit', data={
+            'accession_number': 'ACC-0099',
+        })
+        assert resp.status_code == 302
+        assert all('UPDATE accession_log' not in c[0][0] for c in mock_db['execute'].call_args_list)
+
+    def test_edit_accession_missing_number(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = SAMPLE_ACC_ROW
+        resp = librarian_client.post('/librarian/cataloging/accession/21/edit', data={
+            'accession_number': '',
+        })
+        assert resp.status_code == 302
+        assert all('UPDATE accession_log' not in c[0][0] for c in mock_db['execute'].call_args_list)
+
+    def test_edit_accession_not_found(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = None
+        resp = librarian_client.post('/librarian/cataloging/accession/999/edit', data={
+            'accession_number': 'ACC-0099',
+        })
+        assert resp.status_code == 302
+        assert all('UPDATE accession_log' not in c[0][0] for c in mock_db['execute'].call_args_list)
+
+    def test_delete_accession_success(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [SAMPLE_ACC_ROW, None]
+        resp = librarian_client.post('/librarian/cataloging/accession/21/delete')
+        assert resp.status_code == 302
+        call_args = mock_db['execute'].call_args_list[0]
+        assert 'DELETE FROM accession_log' in call_args[0][0]
+        assert call_args[0][1] == (21,)
+
+    def test_delete_accession_referenced(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [SAMPLE_ACC_ROW, (1,)]
+        resp = librarian_client.post('/librarian/cataloging/accession/21/delete')
+        assert resp.status_code == 302
+        assert all('DELETE FROM accession_log' not in c[0][0] for c in mock_db['execute'].call_args_list)
+
+
 class TestCatalogingSearch:
     def test_search_by_title(self, librarian_client, mock_db):
         mock_db['fetch_all'].return_value = [SAMPLE_BOOKS[0]]
@@ -226,6 +333,19 @@ class TestCatalogingSearch:
         mock_db['fetch_one'].return_value = (0,)
         resp = librarian_client.get('/librarian/cataloging?q=zzzxxx')
         assert resp.status_code == 200
+
+    def test_search_all_fields_matches_accession(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [SAMPLE_BOOKS[0]]
+        mock_db['fetch_one'].return_value = (1,)
+        resp = librarian_client.get('/librarian/cataloging?q=ACC-123456')
+        assert resp.status_code == 200
+        search_call = next(
+            c for c in mock_db['fetch_all'].call_args_list
+            if 'LIMIT %s OFFSET %s' in c[0][0]
+        )
+        sql, args = search_call[0]
+        assert 'accession_log' in sql
+        assert args == ('%ACC-123456%', '%ACC-123456%', '%ACC-123456%', '%ACC-123456%', '%ACC-123456%', 20, 0)
 
     def test_pagination(self, librarian_client, mock_db):
         mock_db['fetch_all'].return_value = SAMPLE_BOOKS
@@ -324,7 +444,7 @@ class TestPublicCatalog:
     def test_book_info_with_accessions(self, client, mock_db):
         mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
         mock_db['fetch_all'].return_value = [
-            (1, '2025-0001', 1, 1, 4, '2025-01-10', 'purchase'),
+            (1, '2025-0001', 1, 4, '2025-01-10', 'purchase'),
         ]
         resp = client.get('/book/1')
         assert resp.status_code == 200
@@ -340,14 +460,14 @@ class TestBulkImport:
     """Bulk CSV import: header detection, encoding, validation, RBAC, edge cases."""
 
     VALID_ROW = ('Book A', 'Author A', 'ACC-001', '978-1', '1st', 'Pub A', 2023,
-                 'CS', 'QA100', 'Book', 'Desc A', '1', 'purchase')
+                 'CS', 'QA100', 'Book', 'Desc A', 'purchase')
 
     @staticmethod
     def _make_csv(rows, headers=None):
         if headers is None:
             headers = ['title', 'author', 'accession_number', 'isbn', 'edition', 'publisher',
                        'year', 'subject', 'call_number', 'material_type', 'description',
-                       'copy_number', 'source']
+                       'source']
         out = io.StringIO()
         w = csv.writer(out)
         w.writerow(headers)
@@ -434,9 +554,9 @@ class TestBulkImport:
         mock_db['fetch_one'].return_value = None
         csv_content = self._make_csv([
             ('Title One', 'Author One', 'ACC-001', '978-111', '2nd', 'Pub1', 2020,
-             'Science', 'Q1', 'Book', 'First book', '1', 'purchase'),
+             'Science', 'Q1', 'Book', 'First book', 'purchase'),
             ('Title Two', 'Author Two', 'ACC-002', '978-222', '', 'Pub2', 2021,
-             'Math', 'Q2', 'Book', '', '', ''),
+             'Math', 'Q2', 'Book', '', ''),
         ])
         resp = librarian_client.post('/librarian/cataloging/bulk-import', data={
             'file': _csv_file(csv_content),
