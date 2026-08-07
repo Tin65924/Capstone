@@ -6,7 +6,8 @@ from . import requests_bp
 from .models import (
     create_request, get_requests, get_request_by_id,
     update_request_status, get_demand_by_role, get_borrower_by_user,
-    check_duplicate_request, get_requests_with_details,get_requests_by_borrower
+    check_duplicate_request, get_requests_with_details, get_requests_by_borrower,
+    count_requests, PER_PAGE
 )
 from app.auth.decorators import librarian_required
 
@@ -25,7 +26,13 @@ def list_requests():
 
     search = request.args.get('search', '').strip() or None
 
-    items = get_requests_with_details(status=status, search=search)
+    page = request.args.get('page', 1, type=int)
+    if page < 1:
+        page = 1
+
+    items = get_requests_with_details(status=status, search=search, page=page)
+    total = count_requests(status=status, search=search)
+    total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
 
     demand_rows = get_demand_by_role()
     demand_by_title = {}
@@ -35,7 +42,14 @@ def list_requests():
     requests_with_demand = [
         (r, demand_by_title.get(r[2], {})) for r in items
     ]
-    return render_template('requests/requests.html', requests=requests_with_demand, current_status=status, current_search=search)
+    return render_template(
+        'requests/requests.html',
+        requests=requests_with_demand,
+        current_status=status,
+        current_search=search,
+        current_page=page,
+        total_pages=total_pages
+    )
 
 @requests_bp.route('/librarian/requests/<int:request_id>/<action>', methods=['POST'])
 @login_required
