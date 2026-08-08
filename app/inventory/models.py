@@ -54,7 +54,7 @@ def reconcile_inventory(session_id, scanned_accessions):
             "SELECT circulation_id FROM circulation_records WHERE accession_id = %s AND transaction_status = 'active'",
             (acc_id,)
         )
-        if acc_num in scanned_set:
+        if acc_id in scanned_set:
             state = 'borrowed' if active_loan else 'available'
             upsert_inventory_record(acc_id, state, 'annual_physical', None, session_id=session_id)
         elif active_loan:
@@ -163,4 +163,15 @@ def get_accession_status(accession_id):
            LEFT JOIN inventory_status ist ON ist.accession_id = al.accession_id
            WHERE al.accession_id = %s''',
         (accession_id,)
+    )
+
+def count_accessions():
+    row = db.fetch_one('SELECT COUNT(*) FROM accession_log')
+    return row[0] if row else 0
+
+
+def cancel_inventory_session(session_id):
+    return db.execute(
+        "UPDATE inventory_sessions SET session_status = 'cancelled', ended_at = %s WHERE session_id = %s",
+        (date.today(), session_id)
     )
