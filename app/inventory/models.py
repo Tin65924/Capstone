@@ -3,17 +3,11 @@ from app.database import db
 
 
 def mark_copy_present(accession_id):
-    return db.execute(
-        "UPDATE inventory_status SET inventory_state = 'available' WHERE accession_id = %s",
-        (accession_id,)
-    )
+    return upsert_inventory_record(accession_id, 'available', 'realtime_scan', None)
 
 
 def mark_copy_missing(accession_id):
-    return db.execute(
-        "UPDATE inventory_status SET inventory_state = 'missing' WHERE accession_id = %s",
-        (accession_id,)
-    )
+    return upsert_inventory_record(accession_id, 'missing', 'realtime_scan', None)
 
 
 def mark_copy_damaged(accession_id, notes=None):
@@ -21,10 +15,7 @@ def mark_copy_damaged(accession_id, notes=None):
 
 
 def mark_copy_lost(accession_id):
-    return db.execute(
-        "UPDATE inventory_status SET inventory_state = 'lost' WHERE accession_id = %s",
-        (accession_id,)
-    )
+    return upsert_inventory_record(accession_id, 'lost', 'realtime_scan', None)
 
 
 def upsert_inventory_record(accession_id, state, inventory_type, checked_by, session_id=None, notes=None):
@@ -174,4 +165,15 @@ def cancel_inventory_session(session_id):
     return db.execute(
         "UPDATE inventory_sessions SET session_status = 'cancelled', ended_at = %s WHERE session_id = %s",
         (date.today(), session_id)
+    )
+
+def get_session_export_rows(session_id):
+    return db.fetch_all(
+        '''SELECT al.accession_number, bc.title, ist.inventory_state, ist.last_checked_date, ist.notes
+           FROM inventory_status ist
+           JOIN accession_log al ON al.accession_id = ist.accession_id
+           JOIN book_catalog bc ON bc.book_id = al.book_id
+           WHERE ist.session_id = %s
+           ORDER BY ist.last_checked_date DESC''',
+        (session_id,)
     )
