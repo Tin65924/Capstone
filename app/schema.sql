@@ -133,6 +133,9 @@ CREATE TABLE IF NOT EXISTS inventory_sessions (
     ended_at       TIMESTAMP
 );
 
+ALTER TABLE inventory_status ADD COLUMN IF NOT EXISTS session_id INT REFERENCES inventory_sessions(session_id);
+ALTER TABLE inventory_status ADD COLUMN IF NOT EXISTS notes VARCHAR(255);
+
 CREATE TABLE IF NOT EXISTS reservation_queue (
     reservation_id     SERIAL PRIMARY KEY,
     book_id            INT NOT NULL REFERENCES book_catalog(book_id),
