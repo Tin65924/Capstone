@@ -1,4 +1,5 @@
 """Tests for the Inventory module: sessions, scanning, quick-check, damage/lost, export."""
+from app.inventory.models import reconcile_inventory, update_session_scan
 
 
 class TestInventoryAccess:
@@ -154,3 +155,56 @@ class TestExport:
         resp = librarian_client.get('/librarian/inventory/session/7/export')
 
         assert resp.status_code == 302
+
+class TestReconcileInventory:
+    def test_damaged_copy_preserved_through_reconcile(self, mock_db):
+        mock_db['fetch_all'].return_value = [
+            (1, '2026-00001', 'damaged'),
+        ]
+        mock_db['fetch_one'].return_value = None
+
+        reconcile_inventory(session_id=1, scanned_accessions=set())
+
+        for call in mock_db['execute'].call_args_list:
+            assert 'damaged' not in call[0][1] or 'inventory_status' not in call[0][0]
+
+    def test_lost_copy_preserved_through_reconcile(self, mock_db):
+        mock_db['fetch_all'].return_value = [
+            (1, '2026-00001', 'lost'),
+        ]
+        mock_db['fetch_one'].return_value = None
+
+        reconcile_inventory(session_id=1, scanned_accessions=set())
+
+        for call in mock_db['execute'].call_args_list:
+            assert 'INSERT INTO inventory_status' not in call[0][0]
+            assert 'UPDATE inventory_status' not in call[0][0]
+
+    def test_unscanned_unloaned_copy_marked_missing(self, mock_db):
+        mock_db['fetch_all'].return_value = [
+            (1, '2026-00001', 'available'),
+        ]
+        mock_db['fetch_one'].return_value = None
+
+        discrepancies = reconcile_inventory(session_id=1, scanned_accessions=set())
+
+        assert len(discrepancies) == 1
+        assert discrepancies[0]['issue'] == 'Missing'
+
+
+class TestDuplicateScanPrevention:
+    def test_first_scan_increments_counter(self, mock_db):
+        mock_db['fetch_one'].return_value = None
+
+        update_session_scan(session_id=1, accession_id=5)
+
+        assert mock_db['execute'].call_count == 1
+        call_args = mock_db['execute'].call_args_list[0]
+        assert 'scanned_count = scanned_count + 1' in call_args[0][0]
+
+    def test_repeat_scan_does_not_increment(self, mock_db):
+        mock_db['fetch_one'].return_value = (10,)
+
+        update_session_scan(session_id=1, accession_id=5)
+
+        assert mock_db['execute'].call_count == 0

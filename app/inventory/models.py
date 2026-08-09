@@ -10,12 +10,14 @@ def mark_copy_missing(accession_id):
     return upsert_inventory_record(accession_id, 'missing', 'realtime_scan', None)
 
 
-def mark_copy_damaged(accession_id, notes=None):
-    return upsert_inventory_record(accession_id, 'damaged', 'realtime_scan', None, notes=notes)
+def mark_copy_damaged(accession_id, notes=None, session_id=None):
+    inventory_type = 'annual_physical' if session_id else 'realtime_scan'
+    return upsert_inventory_record(accession_id, 'damaged', inventory_type, None, session_id=session_id, notes=notes)
 
 
-def mark_copy_lost(accession_id):
-    return upsert_inventory_record(accession_id, 'lost', 'realtime_scan', None)
+def mark_copy_lost(accession_id, session_id=None):
+    inventory_type = 'annual_physical' if session_id else 'realtime_scan'
+    return upsert_inventory_record(accession_id, 'lost', inventory_type, None, session_id=session_id)
 
 
 def upsert_inventory_record(accession_id, state, inventory_type, checked_by, session_id=None, notes=None):
@@ -36,11 +38,16 @@ def upsert_inventory_record(accession_id, state, inventory_type, checked_by, ses
 
 def reconcile_inventory(session_id, scanned_accessions):
     all_copies = db.fetch_all(
-        'SELECT al.accession_id, al.accession_number FROM accession_log al'
+        '''SELECT al.accession_id, al.accession_number, ist.inventory_state
+           FROM accession_log al
+           LEFT JOIN inventory_status ist ON ist.accession_id = al.accession_id'''
     )
     scanned_set = set(scanned_accessions)
     discrepancies = []
-    for acc_id, acc_num in all_copies:
+    for acc_id, acc_num, current_state in all_copies:
+        if current_state in ('damaged', 'lost'):
+            continue
+
         active_loan = db.fetch_one(
             "SELECT circulation_id FROM circulation_records WHERE accession_id = %s AND transaction_status = 'active'",
             (acc_id,)
@@ -89,7 +96,13 @@ def get_active_session(librarian_id):
     )
 
 
-def update_session_scan(session_id):
+def update_session_scan(session_id, accession_id):
+    already_scanned = db.fetch_one(
+        'SELECT inventory_id FROM inventory_status WHERE accession_id = %s AND session_id = %s',
+        (accession_id, session_id)
+    )
+    if already_scanned:
+        return None
     return db.execute(
         'UPDATE inventory_sessions SET scanned_count = scanned_count + 1 WHERE session_id = %s',
         (session_id,)

@@ -408,9 +408,11 @@
                                     <td class="text-gray-500">{{ row[5].strftime('%b %d, %I:%M %p') }}</td>
                                     <td class="flex gap-2">
                                         <form method="POST" action="{{ url_for('inventory.damage_accession', accession_id=row[1]) }}">
+                                            {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
                                             <button type="submit" class="text-xs font-bold text-amber-600 hover:underline">Damaged</button>
                                         </form>
                                         <form method="POST" action="{{ url_for('inventory.lost_accession', accession_id=row[1]) }}">
+                                            {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
                                             <button type="submit" class="text-xs font-bold text-gray-500 hover:underline">Lost</button>
                                         </form>
                                     </td>

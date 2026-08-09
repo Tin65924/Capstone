@@ -131,10 +131,10 @@ def scan_accession():
     state = 'borrowed' if active_loan else 'available'
     inventory_type = 'annual_physical' if session_id else 'realtime_scan'
 
-    upsert_inventory_record(accession_id, state, inventory_type, current_user.id, session_id=session_id)
-
     if session_id:
-        update_session_scan(session_id)
+        update_session_scan(session_id, accession_id)
+
+    upsert_inventory_record(accession_id, state, inventory_type, current_user.id, session_id=session_id)
 
     log_activity(current_user.id, f'inventory:scan:{accession_id}')
     flash(f'Scanned {accession_number} — {state}.', 'success')
@@ -164,20 +164,37 @@ def check_accession():
 @librarian_required
 def damage_accession(accession_id):
     notes = request.form.get('notes', '').strip() or None
-    mark_copy_damaged(accession_id, notes)
+    session_id = request.form.get('session_id', type=int)
+
+    if session_id:
+        session = get_session(session_id)
+        if not session or session[1] != int(current_user.id):
+            flash('Session not found.', 'error')
+            return redirect(url_for('inventory.inventory_page'))
+
+    mark_copy_damaged(accession_id, notes, session_id=session_id)
     log_activity(current_user.id, f'inventory:mark_damaged:{accession_id}')
     flash('Marked as damaged.', 'success')
-    return redirect(url_for('inventory.inventory_page'))
+    return redirect(url_for('inventory.inventory_page', session_id=session_id))
 
 
 @inventory_bp.route('/librarian/inventory/accession/<int:accession_id>/lost', methods=['POST'])
 @login_required
 @librarian_required
 def lost_accession(accession_id):
-    mark_copy_lost(accession_id)
+    session_id = request.form.get('session_id', type=int)
+
+    if session_id:
+        session = get_session(session_id)
+        if not session or session[1] != int(current_user.id):
+            flash('Session not found.', 'error')
+            return redirect(url_for('inventory.inventory_page'))
+
+    mark_copy_lost(accession_id, session_id=session_id)
     log_activity(current_user.id, f'inventory:mark_lost:{accession_id}')
     flash('Marked as lost.', 'success')
-    return redirect(url_for('inventory.inventory_page'))
+    return redirect(url_for('inventory.inventory_page', session_id=session_id))
+
 
 
 @inventory_bp.route('/librarian/inventory/session/<int:session_id>/export')

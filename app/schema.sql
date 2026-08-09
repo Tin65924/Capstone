@@ -119,13 +119,8 @@ CREATE TABLE IF NOT EXISTS inventory_status (
     inventory_type   VARCHAR(20) NOT NULL
                      CHECK (inventory_type IN ('realtime_scan', 'annual_physical')),
     checked_by       INT REFERENCES user_accounts(user_id),
-    last_checked_date DATE NOT NULL,
-    session_id       INT REFERENCES inventory_sessions(session_id),
-    notes            VARCHAR(255)
+    last_checked_date DATE NOT NULL
 );
-
-ALTER TABLE inventory_status ADD COLUMN IF NOT EXISTS session_id INT REFERENCES inventory_sessions(session_id);
-ALTER TABLE inventory_status ADD COLUMN IF NOT EXISTS notes VARCHAR(255);
 
 CREATE TABLE IF NOT EXISTS inventory_sessions (
     session_id     SERIAL PRIMARY KEY,
@@ -137,6 +132,9 @@ CREATE TABLE IF NOT EXISTS inventory_sessions (
     started_at     TIMESTAMP NOT NULL DEFAULT NOW(),
     ended_at       TIMESTAMP
 );
+
+ALTER TABLE inventory_status ADD COLUMN IF NOT EXISTS session_id INT REFERENCES inventory_sessions(session_id);
+ALTER TABLE inventory_status ADD COLUMN IF NOT EXISTS notes VARCHAR(255);
 
 CREATE TABLE IF NOT EXISTS reservation_queue (
     reservation_id     SERIAL PRIMARY KEY,
