@@ -284,49 +284,74 @@
             <div class="flex flex-wrap justify-between items-center gap-6">
                 <div>
                     <h1 class="text-3xl font-bold text-gray-900 mb-1">Inventory Monitoring</h1>
-                    <div class="flex gap-4 items-center mt-3">
-                        <button class="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2">
-                           <span class="material-symbols-outlined text-lg">play_arrow</span> Start New Session
-                        </button>
-                        <button class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-5 py-2.5 rounded-lg text-sm font-bold transition-all">
-                            Resume Session
-                        </button>
+                    <div class="flex gap-4 items-center mt-3 flex-wrap">
+                        {% if not session %}
+                        <form method="POST" action="{{ url_for('inventory.start_session') }}">
+                            <button type="submit" class="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2">
+                               <span class="material-symbols-outlined text-lg">play_arrow</span> Start New Session
+                            </button>
+                        </form>
+                        {% elif session[4] == 'active' %}
+                        <form method="POST" action="{{ url_for('inventory.complete_session', session_id=session[0]) }}">
+                            <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-all">
+                                Complete Session
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('inventory.cancel_session', session_id=session[0]) }}">
+                            <button type="submit" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-5 py-2.5 rounded-lg text-sm font-bold transition-all">
+                                Cancel Session
+                            </button>
+                        </form>
                         <div class="h-6 w-[1px] bg-gray-200"></div>
                         <div class="text-sm text-gray-500">
-                            <strong>Session:</strong> Started Apr 21, 9:00 AM • <strong>Librarian:</strong> Justin Case
+                            <strong>Session:</strong> Started {{ session[5].strftime('%b %d, %I:%M %p') }} • <strong>Librarian:</strong> {{ current_user.full_name }}
                         </div>
+                        {% else %}
+                        <div class="text-sm text-gray-500">
+                            <strong>Session:</strong> {{ session[4].title() }} • Started {{ session[5].strftime('%b %d, %I:%M %p') }}
+                        </div>
+                        <a href="{{ url_for('inventory.export_session', session_id=session[0]) }}" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-5 py-2.5 rounded-lg text-sm font-bold transition-all">
+                            Export CSV
+                        </a>
+                        <a href="{{ url_for('inventory.inventory_page') }}" class="text-primary text-sm font-bold hover:underline">
+                            Back to current view
+                        </a>
+                        {% endif %}
                     </div>
                 </div>
+                {% if not session or session[4] == 'active' %}
                 <!-- Scanning Hero -->
-                <div class="flex gap-2 w-full lg:w-auto">
-                    <input type="text" class="scan-input" placeholder="Enter Accession No. (e.g. 2024-00123)">
-                    <button class="btn-scan flex items-center gap-2">
+                <form method="POST" action="{{ url_for('inventory.scan_accession') }}" class="flex gap-2 w-full lg:w-auto">
+                    {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
+                    <input type="text" name="accession_number" class="scan-input" placeholder="Enter Accession No. (e.g. 2024-00123)" required>
+                    <button type="submit" class="btn-scan flex items-center gap-2">
                         <span class="material-symbols-outlined">barcode_scanner</span> Scan
                     </button>
-                </div>
+                </form>
+                {% endif %}
             </div>
         </div>
 
         <!-- Inventory Status Overview -->
         <div class="status-grid animate-in">
             <div class="status-box">
-                <div class="status-value text-emerald-600">320</div>
+                <div class="status-value text-emerald-600">{{ status_counts.get('available', 0) }}</div>
                 <div class="status-label">Present</div>
             </div>
             <div class="status-box">
-                <div class="status-value text-rose-600">15</div>
+                <div class="status-value text-rose-600">{{ status_counts.get('missing', 0) }}</div>
                 <div class="status-label">Missing</div>
             </div>
             <div class="status-box">
-                <div class="status-value text-indigo-600">45</div>
+                <div class="status-value text-indigo-600">{{ status_counts.get('borrowed', 0) }}</div>
                 <div class="status-label">Borrowed</div>
             </div>
             <div class="status-box">
-                <div class="status-value text-amber-600">05</div>
+                <div class="status-value text-amber-600">{{ status_counts.get('damaged', 0) }}</div>
                 <div class="status-label">Damaged</div>
             </div>
             <div class="status-box border-dashed border-gray-400">
-                <div class="status-value text-gray-400">03</div>
+                <div class="status-value text-gray-400">{{ status_counts.get('lost', 0) }}</div>
                 <div class="status-label">Lost</div>
             </div>
         </div>
@@ -334,14 +359,25 @@
         <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
             <!-- Left Side -->
             <div class="xl:col-span-2 space-y-8">
-                <!-- Recently Scanned -->
+                <!-- Scan History -->
                 <div class="card animate-in" style="animation-delay: 0.1s;">
                     <div class="card-header">
                         <h3 class="card-title">
                             <span class="material-symbols-outlined text-emerald-500">done_all</span>
-                            Recently Scanned Books
+                            Scan History
                         </h3>
-                        <span class="text-xs text-gray-400">Real-time confirmation feed</span>
+                    </div>
+                    <div class="px-6 py-3 border-b border-gray-100 flex gap-2 flex-wrap">
+                        {% for filter_value, filter_label in [
+                            (None, 'All'), ('available', 'Present'), ('missing', 'Missing'),
+                            ('borrowed', 'Borrowed'), ('damaged', 'Damaged'), ('lost', 'Lost')
+                        ] %}
+                        <a href="{{ url_for('inventory.inventory_page', session_id=session[0] if session else None, status=filter_value) }}"
+                           class="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors
+                           {% if current_status == filter_value %}bg-primary text-white{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">
+                            {{ filter_label }}
+                        </a>
+                        {% endfor %}
                     </div>
                     <div class="overflow-x-auto">
                         <table>
@@ -350,68 +386,50 @@
                                     <th>Accession No.</th>
                                     <th>Title</th>
                                     <th>Status</th>
-                                    <th>Time</th>
+                                    <th>Last Checked</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
+                                {% for row in scan_rows %}
                                 <tr>
-                                    <td class="font-bold">2024-00123</td>
-                                    <td class="text-gray-700">Introduction to Algorithms</td>
-                                    <td><span class="badge bg-emerald-100 text-emerald-700">Present</span></td>
-                                    <td class="text-gray-500">10:32 AM</td>
+                                    <td class="font-bold">{{ row[2] }}</td>
+                                    <td class="text-gray-700">{{ row[3] }}</td>
+                                    <td>
+                                        <span class="badge
+                                            {% if row[4] == 'available' %}bg-emerald-100 text-emerald-700
+                                            {% elif row[4] == 'borrowed' %}bg-indigo-100 text-indigo-700
+                                            {% elif row[4] == 'damaged' %}bg-amber-100 text-amber-700
+                                            {% elif row[4] == 'lost' %}bg-gray-200 text-gray-600
+                                            {% else %}bg-rose-100 text-rose-700{% endif %}">
+                                            {{ row[4].title() }}
+                                        </span>
+                                    </td>
+                                    <td class="text-gray-500">{{ row[5].strftime('%b %d, %I:%M %p') }}</td>
+                                    <td class="flex gap-2">
+                                        <form method="POST" action="{{ url_for('inventory.damage_accession', accession_id=row[1]) }}">
+                                            <button type="submit" class="text-xs font-bold text-amber-600 hover:underline">Damaged</button>
+                                        </form>
+                                        <form method="POST" action="{{ url_for('inventory.lost_accession', accession_id=row[1]) }}">
+                                            <button type="submit" class="text-xs font-bold text-gray-500 hover:underline">Lost</button>
+                                        </form>
+                                    </td>
                                 </tr>
-                                <tr>
-                                    <td class="font-bold">2024-00124</td>
-                                    <td class="text-gray-700">Basic Economics</td>
-                                    <td><span class="badge bg-emerald-100 text-emerald-700">Present</span></td>
-                                    <td class="text-gray-500">10:30 AM</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-bold">2024-00110</td>
-                                    <td class="text-gray-700">Physics Fundamentals</td>
-                                    <td><span class="badge bg-indigo-100 text-indigo-700">Borrowed</span></td>
-                                    <td class="text-gray-500">10:28 AM</td>
-                                </tr>
+                                {% else %}
+                                <tr><td colspan="5" class="text-center text-gray-400 py-6">No scans recorded yet.</td></tr>
+                                {% endfor %}
                             </tbody>
                         </table>
                     </div>
-                </div>
-
-                <!-- Discrepancies / Issues -->
-                <div class="card animate-in border-rose-100" style="animation-delay: 0.2s;">
-                    <div class="card-header bg-rose-50/50">
-                        <h3 class="card-title text-rose-700">
-                            <span class="material-symbols-outlined">report_problem</span>
-                            Discrepancies / Issues
-                        </h3>
-                        <span class="badge bg-rose-600 text-white">02 Alerts</span>
+                    {% if total_pages > 1 %}
+                    <div class="flex items-center justify-center gap-2 py-4 border-t border-gray-100">
+                        <a href="{{ url_for('inventory.inventory_page', session_id=session[0] if session else None, status=current_status, page=current_page - 1) if current_page > 1 else '#' }}"
+                           class="px-3 py-1.5 rounded-lg text-xs font-bold {% if current_page <= 1 %}text-gray-300 pointer-events-none{% else %}text-gray-600 hover:bg-gray-100{% endif %}">Previous</a>
+                        <span class="text-xs text-gray-500 px-2">Page {{ current_page }} of {{ total_pages }}</span>
+                        <a href="{{ url_for('inventory.inventory_page', session_id=session[0] if session else None, status=current_status, page=current_page + 1) if current_page < total_pages else '#' }}"
+                           class="px-3 py-1.5 rounded-lg text-xs font-bold {% if current_page >= total_pages %}text-gray-300 pointer-events-none{% else %}text-gray-600 hover:bg-gray-100{% endif %}">Next</a>
                     </div>
-                    <div class="overflow-x-auto">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Accession No.</th>
-                                    <th>Title</th>
-                                    <th>Issue</th>
-                                    <th>Flag</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td class="font-bold text-rose-600">2024-00098</td>
-                                    <td class="text-gray-700">Data Structures</td>
-                                    <td><span class="text-rose-600 font-semibold">Missing from shelf</span></td>
-                                    <td class="italic text-xs text-gray-500">Manual verification needed</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-bold text-rose-600">2024-00077</td>
-                                    <td class="text-gray-700">Rizal Works</td>
-                                    <td><span class="text-gray-500">Not Scanned</span></td>
-                                    <td class="italic text-xs text-gray-500">Pending scan</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                    {% endif %}
                 </div>
             </div>
 
@@ -423,27 +441,31 @@
                         <span class="material-symbols-outlined text-primary">analytics</span>
                         Session Progress
                     </h3>
+                    {% if session %}
                     <div class="flex justify-between items-end mb-2">
                         <div class="text-sm font-semibold text-gray-500">Progress Tracking</div>
-                        <div class="text-2xl font-bold text-primary">64%</div>
+                        <div class="text-2xl font-bold text-primary">{{ (session[3] / session[2] * 100) | round | int if session[2] else 0 }}%</div>
                     </div>
                     <div class="progress-container">
-                        <div class="progress-fill"></div>
+                        <div class="progress-fill" style="width: {{ (session[3] / session[2] * 100) | round | int if session[2] else 0 }}%;"></div>
                     </div>
                     <div class="mt-6 space-y-4">
                         <div class="flex justify-between text-sm">
                             <span class="text-gray-500">Total Books in System</span>
-                            <span class="font-bold">500</span>
+                            <span class="font-bold">{{ session[2] }}</span>
                         </div>
                         <div class="flex justify-between text-sm">
                             <span class="text-gray-500">Successfully Scanned</span>
-                            <span class="font-bold text-emerald-600">320</span>
+                            <span class="font-bold text-emerald-600">{{ session[3] }}</span>
                         </div>
                         <div class="flex justify-between text-sm border-t pt-3">
                             <span class="text-gray-500">Remaining items</span>
-                            <span class="font-bold text-rose-600">180</span>
+                            <span class="font-bold text-rose-600">{{ session[2] - session[3] }}</span>
                         </div>
                     </div>
+                    {% else %}
+                    <p class="text-sm text-gray-400">No active session. Start one to track physical inventory progress.</p>
+                    {% endif %}
                 </div>
 
                 <!-- Quick Status Check -->
@@ -453,24 +475,11 @@
                         Quick Status Check
                     </h3>
                     <p class="text-xs text-gray-500 mb-4">Check a book's status without opening a full session.</p>
-                    <div class="flex gap-2 mb-6">
-                        <input type="text" class="scan-input" style="flex: 1; padding: 0.5rem 1rem; font-size: 0.875rem;" placeholder="Accession No.">
-                        <button class="bg-indigo-600 text-white px-4 rounded-lg font-bold text-xs">Check</button>
-                    </div>
-                    
-                    <div class="bg-white rounded-lg p-4 border border-indigo-100 shadow-sm">
-                        <h4 class="text-xs font-bold text-indigo-600 uppercase mb-2">Result:</h4>
-                        <div class="space-y-2">
-                            <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Title:</span>
-                                <span class="font-semibold">Database Systems</span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Status:</span>
-                                <span class="badge bg-rose-100 text-rose-700">Missing</span>
-                            </div>
-                        </div>
-                    </div>
+                    <form method="POST" action="{{ url_for('inventory.check_accession') }}" class="flex gap-2">
+                        {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
+                        <input type="text" name="accession_number" class="scan-input" style="flex: 1; padding: 0.5rem 1rem; font-size: 0.875rem;" placeholder="Accession No." required>
+                        <button type="submit" class="bg-indigo-600 text-white px-4 rounded-lg font-bold text-xs">Check</button>
+                    </form>
                 </div>
             </div>
         </div>

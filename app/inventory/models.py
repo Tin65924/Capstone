@@ -111,7 +111,7 @@ def get_scanned_in_session(session_id):
 
 def get_scan_history(page=1, per_page=10, status_filter=None):
     base_query = '''
-        SELECT ist.inventory_id, al.accession_number, bc.title, ist.inventory_state,
+        SELECT ist.inventory_id, ist.accession_id, al.accession_number, bc.title, ist.inventory_state,
                ist.last_checked_date, ist.notes
         FROM inventory_status ist
         JOIN accession_log al ON al.accession_id = ist.accession_id

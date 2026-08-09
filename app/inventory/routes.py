@@ -8,12 +8,16 @@ from .models import (
     get_status_summary, count_accessions, reconcile_inventory,
     get_scanned_in_session, cancel_inventory_session,
     upsert_inventory_record, get_accession_status, mark_copy_damaged,
-    mark_copy_lost, update_session_scan, get_session_export_rows
+    mark_copy_lost, update_session_scan, get_session_export_rows, get_scan_history,
+    count_scan_history
 )
 from app.cataloging.models import get_accession_by_number
 from app.circulation.models import get_active_loan_by_accession
 from app.auth.decorators import librarian_required
 from app.auth.models import log_activity
+
+
+VALID_STATES = ['available', 'borrowed', 'lost', 'damaged', 'missing']
 
 
 @inventory_bp.route('/librarian/inventory')
@@ -22,8 +26,31 @@ from app.auth.models import log_activity
 def inventory_page():
     session_id = request.args.get('session_id', type=int)
     session = get_session(session_id) if session_id else get_active_session(current_user.id)
+
     status_summary = get_status_summary()
-    return render_template('inventory/inventory.html', session=session, status_summary=status_summary)
+    status_counts = {state: count for state, count in status_summary}
+
+    status_filter = request.args.get('status')
+    if status_filter not in VALID_STATES:
+        status_filter = None
+
+    page = request.args.get('page', 1, type=int)
+    if page < 1:
+        page = 1
+
+    scan_rows = get_scan_history(page=page, per_page=10, status_filter=status_filter)
+    total_scans = count_scan_history(status_filter=status_filter)
+    total_pages = max(1, (total_scans + 9) // 10)
+
+    return render_template(
+        'inventory/inventory.html',
+        session=session,
+        status_counts=status_counts,
+        scan_rows=scan_rows,
+        current_status=status_filter,
+        current_page=page,
+        total_pages=total_pages
+    )
 
 
 @inventory_bp.route('/librarian/inventory/session/start', methods=['POST'])
@@ -48,7 +75,7 @@ def start_session():
 @librarian_required
 def complete_session(session_id):
     session = get_session(session_id)
-    if not session or session[1] != current_user.id:
+    if not session or session[1] != int(current_user.id):
         flash('Session not found.', 'error')
         return redirect(url_for('inventory.inventory_page'))
 
@@ -62,7 +89,7 @@ def complete_session(session_id):
 
     log_activity(current_user.id, f'inventory:complete_session:{session_id}')
     flash(f'Session completed — {len(discrepancies)} discrepancies found.', 'success')
-    return redirect(url_for('inventory.inventory_page'))
+    return redirect(url_for('inventory.inventory_page', session_id=session_id))
 
 
 @inventory_bp.route('/librarian/inventory/session/<int:session_id>/cancel', methods=['POST'])
@@ -70,7 +97,7 @@ def complete_session(session_id):
 @librarian_required
 def cancel_session(session_id):
     session = get_session(session_id)
-    if not session or session[1] != current_user.id:
+    if not session or session[1] != int(current_user.id):
         flash('Session not found.', 'error')
         return redirect(url_for('inventory.inventory_page'))
 
@@ -158,7 +185,7 @@ def lost_accession(accession_id):
 @librarian_required
 def export_session(session_id):
     session = get_session(session_id)
-    if not session or session[1] != current_user.id:
+    if not session or session[1] != int(current_user.id):
         flash('Session not found.', 'error')
         return redirect(url_for('inventory.inventory_page'))
 
