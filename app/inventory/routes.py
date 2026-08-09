@@ -117,6 +117,12 @@ def scan_accession():
     accession_number = request.form.get('accession_number', '').strip()
     session_id = request.form.get('session_id', type=int)
 
+    if session_id:
+        session = get_session(session_id)
+        if not session or session[1] != int(current_user.id) or session[4] != 'active':
+            flash('Session not found or not active.', 'error')
+            return redirect(url_for('inventory.inventory_page'))
+
     if not accession_number:
         flash('Accession number is required.', 'error')
         return redirect(url_for('inventory.inventory_page', session_id=session_id))
@@ -205,6 +211,10 @@ def export_session(session_id):
     if not session or session[1] != int(current_user.id):
         flash('Session not found.', 'error')
         return redirect(url_for('inventory.inventory_page'))
+
+    if session[4] != 'completed':
+        flash('Only completed sessions can be exported.', 'error')
+        return redirect(url_for('inventory.inventory_page', session_id=session_id))
 
     rows = get_session_export_rows(session_id)
 

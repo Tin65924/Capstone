@@ -208,3 +208,50 @@ class TestDuplicateScanPrevention:
         update_session_scan(session_id=1, accession_id=5)
 
         assert mock_db['execute'].call_count == 0
+
+class TestScanSessionOwnership:
+    def test_scan_rejects_unowned_session(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (5, 99, 10, 3, 'active', None, None)
+
+        resp = librarian_client.post('/librarian/inventory/scan', data={
+            'accession_number': '2026-00001',
+            'session_id': 5,
+        })
+
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_scan_rejects_inactive_session(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (5, 3, 10, 3, 'completed', None, None)
+
+        resp = librarian_client.post('/librarian/inventory/scan', data={
+            'accession_number': '2026-00001',
+            'session_id': 5,
+        })
+
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_scan_without_session_id_still_works(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (1, '2026-00001', 5, 1, 3, None, None),  # get_accession_by_number
+            None,  # get_active_loan_by_accession
+            None,  # upsert existing-row check
+        ]
+
+        resp = librarian_client.post('/librarian/inventory/scan', data={
+            'accession_number': '2026-00001',
+        })
+
+        assert resp.status_code == 302
+        call_args = mock_db['execute'].call_args_list[0]
+        assert 'INSERT INTO inventory_status' in call_args[0][0]
+
+
+class TestExportGuard:
+    def test_export_rejects_active_session(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (7, 3, 10, 5, 'active', None, None)
+
+        resp = librarian_client.get('/librarian/inventory/session/7/export')
+
+        assert resp.status_code == 302
