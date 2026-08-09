@@ -559,9 +559,10 @@ def book_info(book_id):
     accessions = get_accessions_by_book(book_id)
 
     from app.auth.models import get_user_by_id
-    from app.circulation.models import get_active_loan_by_accession
+    from app.circulation.models import get_active_loan_accession_ids_by_book
+    borrowed_ids = get_active_loan_accession_ids_by_book(book_id)
     accessions_with_status = [
-        (acc, get_active_loan_by_accession(acc[0]) is None) for acc in accessions
+        (acc, acc[0] not in borrowed_ids) for acc in accessions
     ]
     any_available = any(is_available for _, is_available in accessions_with_status)
 

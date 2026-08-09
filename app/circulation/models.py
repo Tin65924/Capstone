@@ -29,7 +29,7 @@ def get_active_loans_by_borrower(borrower_id):
 
 def get_active_loan_by_accession(accession_id):
     return db.fetch_one(
-        "SELECT * FROM circulation_records WHERE accession_id = %s AND transaction_status = 'active'",
+        "SELECT * FROM circulation_records WHERE accession_id = %s AND transaction_status IN ('active', 'overdue')",
         (accession_id,)
     )
 
@@ -85,3 +85,10 @@ def get_due_within_days(days=2):
         "SELECT * FROM circulation_records WHERE due_date = %s AND transaction_status = 'active'",
         (target,)
     )
+
+def get_active_loan_accession_ids_by_book(book_id):
+    rows = db.fetch_all(
+        "SELECT accession_id FROM circulation_records WHERE book_id = %s AND transaction_status IN ('active', 'overdue')",
+        (book_id,)
+    )
+    return {row[0] for row in rows}

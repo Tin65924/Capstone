@@ -450,6 +450,28 @@ class TestPublicCatalog:
         assert resp.status_code == 200
         assert b'2025-0001' in resp.data
 
+    def test_book_info_shows_borrow_when_available(self, client, mock_db):
+        mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
+        mock_db['fetch_all'].side_effect = [
+            [(1, '2025-0001', 1, 4, '2025-01-10', 'purchase')],
+            [],
+        ]
+        resp = client.get('/book/1')
+        assert resp.status_code == 200
+        assert b'Borrow' in resp.data
+        assert b'Available in Library' in resp.data
+
+    def test_book_info_shows_reserve_when_borrowed(self, client, mock_db):
+        mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
+        mock_db['fetch_all'].side_effect = [
+            [(1, '2025-0001', 1, 4, '2025-01-10', 'purchase')],
+            [(1,)],
+        ]
+        resp = client.get('/book/1')
+        assert resp.status_code == 200
+        assert b'Reserve' in resp.data
+        assert b'Not Available' in resp.data
+
 
 def _csv_file(content, filename='books.csv'):
     """Build a Werkzeug FileStorage-like upload from a CSV string."""
@@ -673,3 +695,13 @@ class TestBulkImport:
             'file': _csv_file(csv_content),
         })
         self._assert_job(resp)
+
+class TestActiveLoanIncludesOverdue:
+    def test_get_active_loan_by_accession_includes_overdue(self, mock_db):
+        from app.circulation.models import get_active_loan_by_accession
+        mock_db['fetch_one'].return_value = None
+
+        get_active_loan_by_accession(1)
+
+        call_args = mock_db['fetch_one'].call_args_list[0]
+        assert 'overdue' in call_args[0][0]
