@@ -557,7 +557,15 @@ def book_info(book_id):
         flash('Book not found.', 'error')
         return redirect(url_for('cataloging.public_catalog'))
     accessions = get_accessions_by_book(book_id)
+
     from app.auth.models import get_user_by_id
+    from app.circulation.models import get_active_loan_by_accession
+    accessions_with_status = [
+        (acc, get_active_loan_by_accession(acc[0]) is None) for acc in accessions
+    ]
+    any_available = any(is_available for _, is_available in accessions_with_status)
+
     user_data = get_user_by_id(current_user.id) if current_user.is_authenticated else None
     return render_template('public/bookinfo.html', book=book,
-                           accessions=accessions, user_data=user_data)
+                           accessions=accessions_with_status, any_available=any_available,
+                           user_data=user_data)
