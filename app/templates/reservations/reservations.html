@@ -122,23 +122,41 @@
             font-weight: 700;
         }
 
-        .btn-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 6px;
-            display: flex;
+        .badge-waiting { background: #fef3c7; color: #92400e; }
+        .badge-allocated { background: #dbeafe; color: #1e40af; }
+        .badge-claimed { background: #dcfce7; color: #166534; }
+        .badge-expired { background: #e2e8f0; color: #475569; }
+        .badge-count { background: #eef2ff; color: #4338ca; }
+
+        .btn-action {
+            display: inline-flex;
             align-items: center;
-            justify-content: center;
-            border: 1px solid var(--border-color);
-            color: var(--text-muted);
-            transition: all 0.2s;
+            gap: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.375rem 0.75rem;
+            border-radius: 6px;
+            transition: background 0.15s;
         }
 
-        .btn-icon:hover {
-            border-color: var(--primary);
-            color: var(--primary);
-            background: var(--primary-light);
+        .btn-allocate { background: #dbeafe; color: #1e40af; }
+        .btn-allocate:hover { background: #bfdbfe; }
+        .btn-claim { background: #dcfce7; color: #166534; }
+        .btn-claim:hover { background: #bbf7d0; }
+        .btn-expire { background: #fee2e2; color: #991b1b; }
+        .btn-expire:hover { background: #fecaca; }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            border-radius: 8px;
+            padding: 0.625rem 1.25rem;
+            font-size: 0.875rem;
+            font-weight: 700;
+            transition: background 0.15s;
         }
+
+        .btn-primary:hover { background: var(--primary-dark); }
 
         @keyframes slideIn {
             from { opacity: 0; transform: translateX(20px); }
@@ -148,6 +166,16 @@
         .animate-in {
             animation: slideIn 0.3s ease-out forwards;
         }
+
+        .status-label-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
     </style>
 </head>
 <body>
@@ -155,7 +183,7 @@
     <!-- Sidebar -->
     <div class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0 h-screen sticky top-0">
       <div class="p-6 flex-1 flex flex-col overflow-hidden">
-        
+
         <!-- Logo / Title -->
         <div class="flex items-center gap-3 mb-8 shrink-0">
           <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
@@ -191,15 +219,15 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 animate-in" style="animation-delay: 0.1s;">
             <div class="card p-4 flex items-center gap-4">
                 <div class="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center"><span class="material-symbols-outlined">calendar_month</span></div>
-                <div><div class="text-xs text-gray-400 font-bold uppercase tracking-wider">Active Reservations</div><div class="text-xl font-bold">24</div></div>
+                <div><div class="text-xs text-gray-400 font-bold uppercase tracking-wider">Active Reservations</div><div class="text-xl font-bold">{{ stats.active }}</div></div>
             </div>
             <div class="card p-4 flex items-center gap-4">
                 <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><span class="material-symbols-outlined">check_circle</span></div>
-                <div><div class="text-xs text-gray-400 font-bold uppercase tracking-wider">Ready for Pickup</div><div class="text-xl font-bold">12</div></div>
+                <div><div class="text-xs text-gray-400 font-bold uppercase tracking-wider">Ready for Pickup</div><div class="text-xl font-bold">{{ stats.ready }}</div></div>
             </div>
             <div class="card p-4 flex items-center gap-4">
                 <div class="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center"><span class="material-symbols-outlined">hourglass_top</span></div>
-                <div><div class="text-xs text-gray-400 font-bold uppercase tracking-wider">Pending Release</div><div class="text-xl font-bold">08</div></div>
+                <div><div class="text-xs text-gray-400 font-bold uppercase tracking-wider">Waiting in Queue</div><div class="text-xl font-bold">{{ stats.pending }}</div></div>
             </div>
         </div>
 
@@ -207,7 +235,6 @@
         <div class="card animate-in" style="animation-delay: 0.2s;">
             <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/20">
                 <h3 class="font-bold text-xs uppercase tracking-wider text-gray-400">Reservation Tracking</h3>
-                <button class="bg-primary text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-primary-dark transition-all">Export Report</button>
             </div>
             <div class="overflow-x-auto">
                 <table>
@@ -216,58 +243,103 @@
                             <th>Book Title</th>
                             <th>Author</th>
                             <th class="text-center">Users Reserved</th>
+                            <th class="text-center">Waiting</th>
+                            <th class="text-center">Allocated</th>
+                            <th class="text-center">Claimed</th>
+                            <th class="text-center">Expired</th>
                             <th class="text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
+                        {% for group in groups %}
                         <tr>
-                            <td class="font-bold text-gray-900 font-outfit">Introduction to Algorithms</td>
-                            <td class="text-gray-500">Thomas H. Cormen, et al.</td>
+                            <td class="font-bold text-gray-900 font-outfit">{{ group[1] }}</td>
+                            <td class="text-gray-500">{{ group[2] }}</td>
                             <td class="text-center">
-                                <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 font-bold text-sm">5</span>
+                                <span class="inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-full bg-indigo-50 text-indigo-700 font-bold text-sm">{{ group[3] }}</span>
+                            </td>
+                            <td class="text-center">
+                                <span class="inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-full bg-amber-50 text-amber-700 font-bold text-sm">{{ group[4] }}</span>
+                            </td>
+                            <td class="text-center">
+                                <span class="inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-full bg-blue-50 text-blue-700 font-bold text-sm">{{ group[5] }}</span>
+                            </td>
+                            <td class="text-center">
+                                <span class="inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-full bg-emerald-50 text-emerald-700 font-bold text-sm">{{ group[6] }}</span>
+                            </td>
+                            <td class="text-center">
+                                <span class="inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-full bg-gray-100 text-gray-600 font-bold text-sm">{{ group[7] }}</span>
                             </td>
                             <td class="text-right">
-                                <button class="text-primary font-bold text-xs hover:underline flex items-center gap-1 ml-auto">
+                                <button class="text-primary font-bold text-xs hover:underline flex items-center gap-1 ml-auto"
+                                        onclick="document.getElementById('res-group-{{ group[0] }}').classList.toggle('hidden')">
                                     Details <span class="material-symbols-outlined text-sm">arrow_forward</span>
                                 </button>
                             </td>
                         </tr>
-                        <tr>
-                            <td class="font-bold text-gray-900 font-outfit">Design Systems</td>
-                            <td class="text-gray-500">Alla Kholmatova</td>
-                            <td class="text-center">
-                                <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 font-bold text-sm">3</span>
-                            </td>
-                            <td class="text-right">
-                                <button class="text-primary font-bold text-xs hover:underline flex items-center gap-1 ml-auto">
-                                    Details <span class="material-symbols-outlined text-sm">arrow_forward</span>
-                                </button>
+                        <tr id="res-group-{{ group[0] }}" class="hidden bg-gray-50/50">
+                            <td colspan="8" class="p-0">
+                                <table class="w-full">
+                                    <thead>
+                                        <tr>
+                                            <th class="text-xs">#</th>
+                                            <th>Borrower</th>
+                                            <th>ID Number</th>
+                                            <th>Reserved On</th>
+                                            <th>Status</th>
+                                            <th class="text-right">Manage</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for res in reservations_by_book.get(group[0], []) %}
+                                        <tr>
+                                            <td class="text-gray-400 font-bold">{{ res[1] }}</td>
+                                            <td class="font-semibold">{{ res[6] }}</td>
+                                            <td class="font-mono text-gray-500">{{ res[8] }}</td>
+                                            <td class="text-gray-500">{{ res[3].strftime('%b %d, %Y') if res[3] else '—' }}</td>
+                                            <td>
+                                                {% if res[2] == 'waiting' %}
+                                                <span class="badge badge-waiting">Waiting</span>
+                                                {% elif res[2] == 'allocated' %}
+                                                <span class="badge badge-allocated">Allocated</span>
+                                                {% elif res[2] == 'claimed' %}
+                                                <span class="badge badge-claimed">Claimed</span>
+                                                {% else %}
+                                                <span class="badge badge-expired">Expired</span>
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-right">
+                                                <div class="flex flex-wrap justify-end gap-2">
+                                                    {% if res[2] == 'waiting' %}
+                                                    <form method="POST" action="{{ url_for('circulation.reservation_action', reservation_id=res[0], action='allocate') }}">
+                                                        <button type="submit" class="btn-action btn-allocate">Allocate</button>
+                                                    </form>
+                                                    {% endif %}
+                                                    {% if res[2] == 'allocated' %}
+                                                    <form method="POST" action="{{ url_for('circulation.reservation_action', reservation_id=res[0], action='claim') }}">
+                                                        <button type="submit" class="btn-action btn-claim">Claim</button>
+                                                    </form>
+                                                    {% endif %}
+                                                    {% if res[2] in ('waiting', 'allocated') %}
+                                                    <form method="POST" action="{{ url_for('circulation.reservation_action', reservation_id=res[0], action='expire') }}">
+                                                        <button type="submit" class="btn-action btn-expire">Expire</button>
+                                                    </form>
+                                                    {% endif %}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% else %}
+                                        <tr><td colspan="6" class="text-center text-gray-400 py-6">No reservations for this book.</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
                             </td>
                         </tr>
+                        {% else %}
                         <tr>
-                            <td class="font-bold text-gray-900 font-outfit">Clean Code</td>
-                            <td class="text-gray-500">Robert C. Martin</td>
-                            <td class="text-center">
-                                <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 font-bold text-sm">2</span>
-                            </td>
-                            <td class="text-right">
-                                <button class="text-primary font-bold text-xs hover:underline flex items-center gap-1 ml-auto">
-                                    Details <span class="material-symbols-outlined text-sm">arrow_forward</span>
-                                </button>
-                            </td>
+                            <td colspan="8" class="text-center text-gray-400 py-8">No reservations have been placed yet.</td>
                         </tr>
-                        <tr>
-                            <td class="font-bold text-gray-900 font-outfit">The Pragmatic Programmer</td>
-                            <td class="text-gray-500">Andrew Hunt & David Thomas</td>
-                            <td class="text-center">
-                                <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 font-bold text-sm">1</span>
-                            </td>
-                            <td class="text-right">
-                                <button class="text-primary font-bold text-xs hover:underline flex items-center gap-1 ml-auto">
-                                    Details <span class="material-symbols-outlined text-sm">arrow_forward</span>
-                                </button>
-                            </td>
-                        </tr>
+                        {% endfor %}
                     </tbody>
                 </table>
             </div>
