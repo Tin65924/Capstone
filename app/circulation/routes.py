@@ -11,6 +11,7 @@ from .models import (
     get_borrower_by_user, get_borrower_by_id_number, get_borrower_details,
     get_circulation_stats, get_active_loans, get_recent_transactions,
     get_overdue_loans_detail, get_due_soon_detail, get_loans_by_borrower,
+    get_active_loan_by_id_and_user,
     create_reservation, get_next_queue_position,
     get_active_reservation_by_book_and_borrower, get_reservation_by_id,
     get_reservations_grouped, get_reservations_by_book,
@@ -301,3 +302,36 @@ def user_reserve():
     log_activity(current_user.id, f'circulation:user_reserve:{book_id}')
     flash('Reservation placed. You will be notified when a copy is ready.', 'success')
     return redirect(url_for('cataloging.book_info', book_id=book_id))
+
+
+@circulation_bp.route('/user/return', methods=['POST'])
+@login_required
+def user_return():
+    circulation_id = request.form.get('circulation_id', type=int)
+    if not circulation_id:
+        flash('Invalid borrowing record.', 'error')
+        return redirect(url_for('main.user_profile'))
+
+    loan = get_active_loan_by_id_and_user(circulation_id, current_user.id)
+    if not loan:
+        flash('Borrowing record not found or already returned.', 'error')
+        return redirect(url_for('main.user_profile'))
+
+    fine = calculate_fine(loan[0], current_app.config['OVERDUE_FINE_PER_DAY'])
+    return_book(loan[0], fine)
+    log_activity(current_user.id, f'circulation:user_return:{loan[0]}')
+
+    waiting = next_in_queue(loan[1])
+    if waiting:
+        create_notification(
+            waiting[2],
+            f'A reserved copy of "{get_book_by_id(loan[1])[1]}" is ready for pickup.',
+            'hold_ready',
+            str(waiting[0]),
+        )
+
+    if fine > 0:
+        flash(f'Book returned. Overdue fine: ₱{fine:.2f}.', 'success')
+    else:
+        flash('Book returned.', 'success')
+    return redirect(url_for('main.user_profile'))

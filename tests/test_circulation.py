@@ -252,6 +252,85 @@ class TestUserReserve:
         assert mock_db['execute'].call_count == 0
 
 
+class TestUserReturn:
+    def test_return_requires_login(self, client, mock_db):
+        resp = client.post('/user/return', data={'circulation_id': 55})
+        assert resp.status_code == 302
+        assert '/login' in resp.location
+
+    def test_returns_own_active_loan(self, student_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (55, 10, 1, '2026-08-02', 'active'),             # get_active_loan_by_id_and_user
+            (date(2026, 8, 1), date(2026, 8, 2)),            # calculate_fine due/returned
+            None,                                             # no waiting reservation
+        ]
+        resp = student_client.post('/user/return', data={'circulation_id': 55})
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
+        call_args = mock_db['execute'].call_args_list[0]
+        assert 'UPDATE circulation_records' in call_args[0][0]
+        assert 'returned' in call_args[0][1]
+
+    def test_return_other_users_loan_rejected(self, student_client, mock_db):
+        mock_db['fetch_one'].return_value = None
+        resp = student_client.post('/user/return', data={'circulation_id': 99})
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_return_invalid_record_id(self, student_client, mock_db):
+        resp = student_client.post('/user/return', data={'circulation_id': 'not-an-int'})
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_return_computes_fine(self, student_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (55, 10, 1, '2026-07-01', 'overdue'),            # overdue loan
+            (date(2026, 7, 1), date(2026, 7, 6)),            # 5 days late
+            None,                                             # no waiting reservation
+        ]
+        resp = student_client.post('/user/return', data={'circulation_id': 55})
+        assert resp.status_code == 302
+        call_args = mock_db['execute'].call_args_list[0]
+        assert 'UPDATE circulation_records' in call_args[0][0]
+        assert call_args[0][1][2] == 50.0
+
+
+class TestUserOverview:
+    def test_profile_shows_notification_button_and_no_hardcoded_alert(self, student_client, mock_db):
+        mock_db['fetch_one'].return_value = (1, 1, '2024-0001', 'CS', 'active')  # get_borrower_by_user
+        mock_db['fetch_all'].return_value = [
+            (1, 'Your reserved book is ready', 'hold_ready', None, '2026-08-10 09:00:00'),
+        ]
+        resp = student_client.get('/user/profile')
+        assert resp.status_code == 200
+        assert b'Notifications' in resp.data
+        assert b'The Pragmatic Programmer' not in resp.data
+        assert b'was due yesterday' not in resp.data
+
+    def test_profile_borrowing_card_has_return_button(self, student_client, mock_db):
+        mock_db['fetch_one'].return_value = (1, 1, '2024-0001', 'CS', 'active')
+        mock_db['fetch_all'].return_value = [
+            (55, date(2026, 8, 1), date(2026, 8, 2), 'overnight', 'active',
+             'Intro to Algorithms', '2024-00123'),
+        ]
+        resp = student_client.get('/user/profile')
+        assert resp.status_code == 200
+        assert b'Intro to Algorithms' in resp.data
+        assert b'View Details' in resp.data
+        assert b'/user/return' in resp.data
+
+    def test_history_lists_transactions_and_requests(self, student_client, mock_db):
+        mock_db['fetch_one'].return_value = (1, 1, '2024-0001', 'CS', 'active')
+        mock_db['fetch_all'].return_value = [
+            (55, date(2026, 8, 1), date(2026, 8, 2), None, 'overnight',
+             'active', 0, 'Intro to Algorithms', 'Cormen', '2024-00123'),
+        ]
+        resp = student_client.get('/user/history')
+        assert resp.status_code == 200
+        assert b'Intro to Algorithms' in resp.data
+        assert b'Borrowings &amp; Returns' in resp.data
+
+
 class TestBookInfoLabels:
     def test_book_info_shows_borrow_when_available(self, client, mock_db):
         mock_db['fetch_one'].return_value = (1, 'Intro to Algorithms', 'Cormen', '3rd', 'MIT Press', 2022,

@@ -34,7 +34,7 @@ def user_profile():
     from app.auth.models import get_user_by_id
     from app.circulation.models import (
         get_borrower_by_user, get_loans_by_borrower, count_active_loans,
-        get_reservations_by_borrower
+        get_reservations_by_borrower, get_notifications_by_borrower
     )
     from app.requests.models import get_requests_by_borrower
 
@@ -47,6 +47,7 @@ def user_profile():
     borrow_limit = 0
     pickups = []
     my_requests = []
+    notifications = []
 
     if borrower:
         borrower_id = borrower[0]
@@ -64,17 +65,29 @@ def user_profile():
         pickups = [r for r in reservations if r[2] == 'allocated']
 
         my_requests = get_requests_by_borrower(borrower_id)
+        notifications = get_notifications_by_borrower(borrower_id)
 
     return render_template('users/user_profile.html', user_data=user_data,
                            loans=loans, overdue_count=overdue_count,
                            active_count=active_count, borrow_limit=borrow_limit,
-                           pickups=pickups, my_requests=my_requests)
+                           pickups=pickups, my_requests=my_requests,
+                           notifications=notifications)
 
 
 @main_bp.route('/user/history')
 @login_required
 def user_history():
-    return render_template('users/user_history.html')
+    from app.circulation.models import get_borrower_by_user, get_user_loan_history
+    from app.requests.models import get_requests_by_borrower
+
+    transactions = []
+    my_requests = []
+    borrower = get_borrower_by_user(current_user.id)
+    if borrower:
+        transactions = get_user_loan_history(current_user.id)
+        my_requests = get_requests_by_borrower(borrower[0])
+    return render_template('users/user_history.html',
+                           transactions=transactions, my_requests=my_requests)
 
 
 @main_bp.route('/api/bloom')

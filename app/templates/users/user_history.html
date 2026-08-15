@@ -68,112 +68,67 @@
                 <div class="mb-10">
                     <h1 class="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight uppercase" style="">
                         User History</h1>
-                    <p class="text-gray-500 dark:text-gray-400 mt-3 text-lg" style="">A complete log of your previous
-                        borrowings, requests, and reservations.</p>
+                    <p class="text-gray-500 dark:text-gray-400 mt-3 text-lg" style="">A complete log of your borrowings,
+                        returns, and book requests.</p>
                 </div>
-                <!-- History List -->
+
+                <!-- Borrowings & Returns -->
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-3" style="">Borrowings &amp; Returns</h2>
+                <div class="space-y-4 mb-10">
+                    {% for txn in transactions %}
+                    {% set returned = txn[5] == 'returned' %}
+                    <div
+                        class="bg-white dark:bg-[#1a2235] p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white" style="">{{ txn[7] }}</h3>
+                            <p class="text-gray-500 dark:text-gray-400 text-sm" style="">{{ txn[8] }} · {{ txn[9] }}</p>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span class="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500"
+                                style="">
+                                {% if returned %}Returned {{ txn[3] }}{% else %}Due {{ txn[2] }}{% endif %}
+                            </span>
+                            <span
+                                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold {% if returned %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400{% elif txn[5] == 'overdue' %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400{% else %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400{% endif %}"
+                                style="">
+                                {% if returned %}Returned{% elif txn[5] == 'overdue' %}Overdue{% else %}Borrowed{% endif %}
+                            </span>
+                            {% if returned and txn[6] %}
+                            <span class="text-xs font-bold text-gray-500" style="">Fine ₱{{ txn[6] }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% else %}
+                    <p class="text-gray-500 dark:text-gray-400">No borrowings yet.</p>
+                    {% endfor %}
+                </div>
+
+                <!-- Book Requests -->
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-3" style="">Book Requests</h2>
                 <div class="space-y-4">
-                    <!-- History Card 1 -->
+                    {% for req in my_requests %}
                     <div
                         class="bg-white dark:bg-[#1a2235] p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div>
-                            <h3 class="text-lg font-bold text-gray-900 dark:text-white" style="">Design Systems for the
-                                Web</h3>
-                            <p class="text-gray-500 dark:text-gray-400 text-sm" style="">Alla Kholmatova</p>
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white" style="">{{ req[1] }}</h3>
+                            <p class="text-gray-500 dark:text-gray-400 text-sm" style="">{% if req[2] %}{{ req[2] }}{% endif %}</p>
+                            {% if req[5] %}
+                            <p class="text-gray-400 text-xs mt-1" style="">Remarks: {{ req[5] }}</p>
+                            {% endif %}
                         </div>
                         <div class="flex items-center gap-4">
                             <span class="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500"
-                                style="">22 Oct 2023</span>
+                                style="">{{ req[4] }}</span>
                             <span
-                                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold {% if req[3] == 'approved' %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400{% elif req[3] == 'rejected' %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400{% else %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400{% endif %}"
                                 style="">
-                                Returned
+                                {{ req[3]|replace('_', ' ')|title }}
                             </span>
                         </div>
                     </div>
-                    <!-- History Card 2 -->
-                    <div
-                        class="bg-white dark:bg-[#1a2235] p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div>
-                            <h3 class="text-lg font-bold text-gray-900 dark:text-white" style="">Quantum Computing: A
-                                Gentle Introduction</h3>
-                            <p class="text-gray-500 dark:text-gray-400 text-sm" style="">Eleanor Rieffel and Wolfgang
-                                Polak</p>
-                        </div>
-                        <div class="flex items-center gap-4">
-                            <span class="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500"
-                                style="">15 Oct 2023</span>
-                            <span
-                                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                                style="">
-                                Procured
-                            </span>
-                        </div>
-                    </div>
-                    <!-- History Card 3 -->
-                    <div
-                        class="bg-white dark:bg-[#1a2235] p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div>
-                            <h3 class="text-lg font-bold text-gray-900 dark:text-white" style="">Thinking, Fast and Slow
-                            </h3>
-                            <p class="text-gray-500 dark:text-gray-400 text-sm" style="">Daniel Kahneman</p>
-                        </div>
-                        <div class="flex items-center gap-4">
-                            <span class="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500"
-                                style="">08 Oct 2023</span>
-                            <span
-                                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                                style="">
-                                Expired
-                            </span>
-                        </div>
-                    </div>
-                    <!-- History Card 4 -->
-                    <div
-                        class="bg-white dark:bg-[#1a2235] p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div>
-                            <h3 class="text-lg font-bold text-gray-900 dark:text-white" style="">The Pragmatic
-                                Programmer</h3>
-                            <p class="text-gray-500 dark:text-gray-400 text-sm" style="">Andrew Hunt and David Thomas
-                            </p>
-                        </div>
-                        <div class="flex items-center gap-4">
-                            <span class="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500"
-                                style="">01 Oct 2023</span>
-                            <span
-                                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                style="">
-                                Returned
-                            </span>
-                        </div>
-                    </div>
-                    <!-- History Card 5 -->
-                    <div
-                        class="bg-white dark:bg-[#1a2235] p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div>
-                            <h3 class="text-lg font-bold text-gray-900 dark:text-white" style="">Artificial
-                                Intelligence: A Modern Approach</h3>
-                            <p class="text-gray-500 dark:text-gray-400 text-sm" style="">Stuart Russell and Peter Norvig
-                            </p>
-                        </div>
-                        <div class="flex items-center gap-4">
-                            <span class="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500"
-                                style="">24 Sep 2023</span>
-                            <span
-                                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                style="">
-                                Returned
-                            </span>
-                        </div>
-                    </div>
-                </div>
-                <div class="mt-8 flex justify-center">
-                    <button
-                        class="text-sm font-bold text-primary dark:text-white hover:underline flex items-center gap-2"
-                        style="">
-                        Load More Activity
-                        <span class="material-symbols-outlined text-[18px]" style="">expand_more</span>
-                    </button>
+                    {% else %}
+                    <p class="text-gray-500 dark:text-gray-400">No book requests yet.</p>
+                    {% endfor %}
                 </div>
             </div>
         </main>

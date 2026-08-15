@@ -200,6 +200,41 @@ def get_loans_by_borrower(borrower_id):
     )
 
 
+def get_active_loan_by_id_and_user(circulation_id, user_id):
+    return db.fetch_one(
+        '''SELECT c.circulation_id, c.book_id, c.borrower_id, c.due_date, c.transaction_status
+           FROM circulation_records c
+           JOIN borrowers br ON c.borrower_id = br.borrower_id
+           WHERE c.circulation_id = %s AND br.user_id = %s
+             AND c.transaction_status IN ('active', 'overdue')''',
+        (circulation_id, user_id)
+    )
+
+
+def get_user_loan_history(user_id):
+    return db.fetch_all(
+        '''SELECT c.circulation_id, c.borrow_date, c.due_date, c.return_date, c.borrow_type,
+                  c.transaction_status, c.fine_amount, b.title, b.author, a.accession_number
+           FROM circulation_records c
+           JOIN borrowers br ON c.borrower_id = br.borrower_id
+           JOIN book_catalog b ON c.book_id = b.book_id
+           JOIN accession_log a ON c.accession_id = a.accession_id
+           WHERE br.user_id = %s
+           ORDER BY COALESCE(c.return_date, c.borrow_date) DESC, c.circulation_id DESC''',
+        (user_id,)
+    )
+
+
+def get_notifications_by_borrower(borrower_id):
+    return db.fetch_all(
+        '''SELECT notification_id, message, notif_type, related_reference, date_sent
+           FROM notification_log
+           WHERE recipient_id = %s
+           ORDER BY date_sent DESC''',
+        (borrower_id,)
+    )
+
+
 def get_borrower_by_user(user_id):
     return db.fetch_one('SELECT * FROM borrowers WHERE user_id = %s', (user_id,))
 
