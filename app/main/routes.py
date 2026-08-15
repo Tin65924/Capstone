@@ -1,4 +1,5 @@
 from flask import render_template, redirect, url_for, jsonify, request
+from datetime import date
 from flask_login import login_required, current_user
 from . import main_bp
 from .models import get_dashboard_stats, get_recent_activity, get_daily_borrows
@@ -31,8 +32,11 @@ def dashboard():
 @login_required
 def user_profile():
     from app.auth.models import get_user_by_id
+    from app.circulation.models import get_user_active_loans
     user_data = get_user_by_id(current_user.id)
-    return render_template('users/user_profile.html', user_data=user_data)
+    borrowings = get_user_active_loans(current_user.id)
+    return render_template('users/user_profile.html', user_data=user_data,
+                           borrowings=borrowings, today=date.today())
 
 
 @main_bp.route('/user/history')

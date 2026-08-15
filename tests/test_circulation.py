@@ -140,12 +140,30 @@ class TestDeskReturn:
 
 class TestReservationLifecycle:
     def test_allocate_writes_notification(self, librarian_client, mock_db):
-        mock_db['fetch_one'].return_value = (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None)
+        mock_db['fetch_one'].side_effect = [
+            (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),  # reservation
+            (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),    # available copy
+        ]
         resp = librarian_client.post('/librarian/reservations/9/allocate')
         assert resp.status_code == 302
         assert mock_db['execute'].call_count >= 2
         notification_call = mock_db['execute'].call_args_list[1]
         assert 'INSERT INTO notification_log' in notification_call[0][0]
+
+    def test_allocate_rejected_when_no_available_copy(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),  # reservation
+            None,                                                   # no available copy
+        ]
+        resp = librarian_client.post('/librarian/reservations/9/allocate')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_allocate_rejected_when_not_waiting(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (9, 5, 2, 1, '2026-08-01 10:00:00', 'claimed', None)
+        resp = librarian_client.post('/librarian/reservations/9/allocate')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
 
     def test_claim_requires_allocated(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None)
@@ -250,6 +268,62 @@ class TestUserReserve:
         resp = student_client.post('/user/reserve', data={'book_id': 5})
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
+
+
+class TestUserProfileBorrowings:
+    def test_profile_shows_return_button_for_active_loan(self, student_client, mock_db):
+        mock_db['fetch_one'].return_value = (1, 'student@mcst.edu.ph', 'Student', 'Test Student')
+        mock_db['fetch_all'].return_value = [
+            (55, date(2026, 8, 1), date(2026, 8, 2), 'overnight', 'active', 'Intro to Algorithms', 'Cormen', '2024-00123'),
+        ]
+        resp = student_client.get('/user/profile')
+        assert resp.status_code == 200
+        assert b'Return Book' in resp.data
+        assert b'Intro to Algorithms' in resp.data
+        assert b'/user/return' in resp.data
+
+
+class TestUserReturn:
+    def test_return_requires_login(self, client, mock_db):
+        resp = client.post('/user/return', data={'circulation_id': 55})
+        assert resp.status_code == 302
+        assert '/login' in resp.location
+
+    def test_returns_own_active_loan(self, student_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (55, 10, 1, '2026-08-02', 'active'),             # get_active_loan_by_id_and_user
+            (date(2026, 8, 1), date(2026, 8, 2)),            # calculate_fine due/returned
+            None,                                             # no waiting reservation
+        ]
+        resp = student_client.post('/user/return', data={'circulation_id': 55})
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
+        call_args = mock_db['execute'].call_args_list[0]
+        assert 'UPDATE circulation_records' in call_args[0][0]
+        assert 'returned' in call_args[0][1]
+
+    def test_return_other_users_loan_rejected(self, student_client, mock_db):
+        mock_db['fetch_one'].return_value = None
+        resp = student_client.post('/user/return', data={'circulation_id': 99})
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_return_invalid_branching_record_id(self, student_client, mock_db):
+        resp = student_client.post('/user/return', data={'circulation_id': 'not-an-int'})
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_return_fine_computed(self, student_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (55, 10, 1, '2026-07-01', 'overdue'),            # overdue loan
+            (date(2026, 7, 1), date(2026, 7, 6)),            # 5 days late
+            None,                                             # no waiting reservation
+        ]
+        resp = student_client.post('/user/return', data={'circulation_id': 55})
+        assert resp.status_code == 302
+        call_args = mock_db['execute'].call_args_list[0]
+        assert 'UPDATE circulation_records' in call_args[0][0]
+        assert call_args[0][1][2] == 50.0
 
 
 class TestBookInfoLabels:
