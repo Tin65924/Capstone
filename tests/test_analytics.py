@@ -96,6 +96,38 @@ class TestAnalyticsPage:
         assert resp.status_code == 200
 
 
+class TestKpiJson:
+    def test_kpi_json_requires_login(self, client, mock_db):
+        resp = client.get('/librarian/analytics/kpi?kpi_type=most_borrowed_titles')
+        assert resp.status_code == 302
+
+    def test_kpi_json_rejects_invalid_type(self, librarian_client, mock_db):
+        resp = librarian_client.get('/librarian/analytics/kpi?kpi_type=bogus')
+        assert resp.status_code == 400
+
+    def test_kpi_json_returns_data(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [('Clean Code', 50)]
+        resp = librarian_client.get('/librarian/analytics/kpi?kpi_type=most_borrowed_titles&preset=year')
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body['kpi_type'] == 'most_borrowed_titles'
+        assert body['data'] == [['Clean Code', 50]]
+
+    def test_kpi_json_passes_dates(self, librarian_client, mock_db):
+        from datetime import date
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics/kpi?kpi_type=underutilized_titles&from=2026-01-01&to=2026-12-31')
+        assert resp.status_code == 200
+        params = mock_db['fetch_all'].call_args[0][1]
+        assert params == (date(2026, 1, 1), date(2026, 12, 31))
+
+    def test_kpi_json_utilization_rate(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [(10,), (2,)]
+        resp = librarian_client.get('/librarian/analytics/kpi?kpi_type=utilization_rate')
+        assert resp.status_code == 200
+        assert resp.get_json()['data'] == 20.0
+
+
 class TestExportCsv:
     def test_export_requires_login(self, client, mock_db):
         resp = client.post('/librarian/analytics/export', data={'kpi_type': 'most_borrowed_titles'})

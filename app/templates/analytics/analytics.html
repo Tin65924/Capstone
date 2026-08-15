@@ -345,6 +345,83 @@
         </div>
     </div>
 
+    <!-- Export Modal -->
+    <div id="exportModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-900/60" onclick="closeExportModal()"></div>
+        <div class="relative bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 max-w-sm w-full">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white">Export <span id="exportKpiTitle" class="text-primary"></span></h3>
+                <button onclick="closeExportModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="p-6 space-y-3">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Choose a file format for this report.</p>
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="doExport('csv')"
+                        class="flex flex-col items-center gap-1 p-4 border border-slate-200 dark:border-slate-700 rounded hover:border-primary hover:ring-1 hover:ring-primary transition-all">
+                        <span class="material-symbols-outlined text-2xl text-emerald-500">table_rows</span>
+                        <span class="text-sm font-bold">CSV</span>
+                        <span class="text-[10px] text-slate-400">Spreadsheet data</span>
+                    </button>
+                    <button onclick="doExport('xlsx')"
+                        class="flex flex-col items-center gap-1 p-4 border border-slate-200 dark:border-slate-700 rounded hover:border-primary hover:ring-1 hover:ring-primary transition-all">
+                        <span class="material-symbols-outlined text-2xl text-primary">grid_on</span>
+                        <span class="text-sm font-bold">XLSX</span>
+                        <span class="text-[10px] text-slate-400">Excel workbook</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Modal -->
+    <div id="filterModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-900/60" onclick="closeFilterModal()"></div>
+        <div class="relative bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 max-w-md w-full">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white">Filter <span id="filterKpiTitle" class="text-primary"></span></h3>
+                <button onclick="closeFilterModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="p-6 space-y-5">
+                <div>
+                    <label class="text-xs font-bold text-slate-500 uppercase tracking-widest">Time Range</label>
+                    <select id="filterPreset"
+                        class="mt-2 w-full bg-gray-100 border-none text-sm font-bold rounded-lg px-3 py-2 outline-none focus:ring-0">
+                        <option value="all">All time</option>
+                        <option value="semester">This semester</option>
+                        <option value="year">This year</option>
+                        <option value="custom">Custom dates</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-3" id="filterCustomDates">
+                    <div>
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-widest">From</label>
+                        <input type="date" id="filterFrom"
+                            class="mt-2 w-full bg-gray-100 border-none text-sm rounded-lg px-3 py-2 outline-none focus:ring-0">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-widest">To</label>
+                        <input type="date" id="filterTo"
+                            class="mt-2 w-full bg-gray-100 border-none text-sm rounded-lg px-3 py-2 outline-none focus:ring-0">
+                    </div>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="applyFilter()"
+                        class="flex-1 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 rounded font-bold text-sm transition-all">
+                        Apply Filter
+                    </button>
+                    <button onclick="resetFilter()"
+                        class="px-4 py-2.5 rounded font-bold text-sm border border-gray-200 hover:bg-gray-50 transition-all">
+                        Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Server-side KPI payload -->
     <script type="application/json" id="kpi-data">{{ kpi_data | tojson }}</script>
     <script type="application/json" id="kpi-labels">{{ kpi_labels | tojson }}</script>
@@ -353,16 +430,19 @@
         const KPI_DATA = JSON.parse(document.getElementById('kpi-data').textContent);
         const KPI_LABELS = JSON.parse(document.getElementById('kpi-labels').textContent);
         const BOARD_KEY = 'mcst_kpi_board';
+        const KPI_JSON_URL = '{{ url_for("analytics.kpi_json") }}';
+        const EXPORT_URL = '{{ url_for("analytics.export_report") }}';
+        const GLOBAL = { preset: '{{ preset }}', from: '{{ from_date }}', to: '{{ to_date }}' };
 
         function getBoard() {
             const raw = localStorage.getItem(BOARD_KEY);
             if (raw) {
                 try {
                     const parsed = JSON.parse(raw);
-                    if (Array.isArray(parsed)) return parsed;
+                    if (parsed && Array.isArray(parsed.kpis)) return parsed;
                 } catch (e) { /* fall through */ }
             }
-            return { kpis: ['books_borrowed_per_program', 'utilization_rate'], visible: {} };
+            return { kpis: ['books_borrowed_per_program', 'utilization_rate'], filters: {} };
         }
 
         function setBoard(board) {
@@ -376,26 +456,40 @@
 
             board.kpis.forEach(function (type) {
                 if (type in KPI_LABELS) {
-                    container.appendChild(cardEl(type, board.visible[type] !== false));
+                    container.appendChild(cardEl(type));
                 }
             });
 
             container.appendChild(addCardEl());
+
+            board.kpis.forEach(function (type) {
+                const f = cardFilter(type);
+                if (f) loadKpiBody(type);
+            });
         }
 
-        function cardEl(type, visible) {
+        function cardFilter(type) {
+            const board = getBoard();
+            return (board.filters && board.filters[type]) || null;
+        }
+
+        function cardEl(type) {
             const card = document.createElement('div');
             card.className = 'kpi-card';
             card.dataset.kpi = type;
+            card.draggable = true;
             card.innerHTML = `
                 <div class="kpi-card-header">
                     <div class="flex items-center gap-2">
-                        <span class="material-symbols-outlined text-indigo-500 text-lg cursor-grab">analytics</span>
+                        <span class="material-symbols-outlined text-indigo-500 text-lg cursor-grab">drag_indicator</span>
                         <span class="text-sm font-bold">${KPI_LABELS[type]}</span>
                     </div>
                     <div class="flex items-center gap-2">
-                        <button class="hide-kpi text-gray-400 hover:text-amber-500 transition-colors" title="Hide KPI">
-                            <span class="material-symbols-outlined text-lg">${visible ? 'visibility' : 'visibility_off'}</span>
+                        <button class="export-kpi text-gray-400 hover:text-primary transition-colors" title="Export">
+                            <span class="material-symbols-outlined text-lg">download</span>
+                        </button>
+                        <button class="filter-kpi text-gray-400 hover:text-primary transition-colors" title="Filter">
+                            <span class="material-symbols-outlined text-lg">tune</span>
                         </button>
                         <button class="remove-kpi text-gray-400 hover:text-red-500 transition-colors" title="Remove KPI">
                             <span class="material-symbols-outlined text-lg">close</span>
@@ -405,20 +499,42 @@
             `;
             const body = document.createElement('div');
             body.className = 'kpi-card-body';
-            body.appendChild(bodyEl(type));
+            body.dataset.bodyFor = type;
+            body.appendChild(bodyEl(type, KPI_DATA[type]));
             card.appendChild(body);
+            attachCardDrag(card);
             return card;
         }
 
-        function bodyEl(type) {
-            if (type === 'books_borrowed_per_program') return programBars(KPI_DATA[type] || []);
-            if (type === 'utilization_rate') return utilizationRing(KPI_DATA[type]);
-            if (type === 'most_borrowed_titles') return titleList(KPI_DATA[type] || [], true);
-            if (type === 'underutilized_titles') return titleList(KPI_DATA[type] || [], false);
+        function bodyEl(type, data) {
+            if (type === 'books_borrowed_per_program') return programBars(data || []);
+            if (type === 'utilization_rate') return utilizationRing(data);
+            if (type === 'most_borrowed_titles') return titleList(data || [], true);
+            if (type === 'underutilized_titles') return titleList(data || [], false);
             const empty = document.createElement('div');
             empty.className = 'text-center text-gray-400 py-8 text-sm';
             empty.textContent = 'No data for this KPI.';
             return empty;
+        }
+
+        function loadKpiBody(type) {
+            const f = cardFilter(type);
+            if (!f) return;
+            const params = new URLSearchParams();
+            params.set('kpi_type', type);
+            params.set('preset', f.preset || 'all');
+            params.set('from', f.from || '');
+            params.set('to', f.to || '');
+            fetch(KPI_JSON_URL + '?' + params.toString())
+                .then(function (r) { return r.json(); })
+                .then(function (json) {
+                    const body = document.querySelector('[data-body-for="' + type + '"]');
+                    if (body && body.isConnected) {
+                        body.innerHTML = '';
+                        body.appendChild(bodyEl(type, json.data));
+                    }
+                })
+                .catch(function () { /* keep server-side data on error */ });
         }
 
         function programBars(rows) {
@@ -444,7 +560,6 @@
                 `;
                 wrap.appendChild(row);
             });
-            wrap.appendChild(exportFooter('books_borrowed_per_program'));
             return wrap;
         }
 
@@ -462,7 +577,6 @@
                     </div>
                 </div>
             `;
-            wrap.appendChild(exportFooter('utilization_rate'));
             return wrap;
         }
 
@@ -488,31 +602,7 @@
                 `;
                 wrap.appendChild(row);
             });
-            wrap.appendChild(exportFooter(numbered ? 'most_borrowed_titles' : 'underutilized_titles'));
             return wrap;
-        }
-
-        function exportFooter(type) {
-            const foot = document.createElement('form');
-            foot.className = 'flex gap-2 justify-end mt-4 pt-3 border-t border-gray-100';
-            foot.method = 'POST';
-            foot.action = '{{ url_for("analytics.export_report") }}';
-            foot.target = '_blank';
-            foot.innerHTML = `
-                <input type="hidden" name="kpi_type" value="${type}">
-                <input type="hidden" name="preset" value="{{ preset }}">
-                <input type="hidden" name="from" value="{{ from_date }}">
-                <input type="hidden" name="to" value="{{ to_date }}">
-                <button type="submit" name="format" value="csv"
-                    class="text-[10px] font-bold px-3 py-1.5 rounded border border-gray-200 hover:bg-gray-50 transition-all flex items-center gap-1">
-                    <span class="material-symbols-outlined text-sm">download</span> CSV
-                </button>
-                <button type="submit" name="format" value="xlsx"
-                    class="text-[10px] font-bold px-3 py-1.5 rounded border border-gray-200 hover:bg-gray-50 transition-all flex items-center gap-1">
-                    <span class="material-symbols-outlined text-sm">table_chart</span> XLSX
-                </button>
-            `;
-            return foot;
         }
 
         function addCardEl() {
@@ -540,8 +630,6 @@
             const board = getBoard();
             if (board.kpis.indexOf(type) === -1) {
                 board.kpis.push(type);
-                board.visible = board.visible || {};
-                board.visible[type] = true;
                 setBoard(board);
             }
             closeAddKpiModal();
@@ -554,23 +642,141 @@
             return div.innerHTML;
         }
 
+        let dragType = null;
+
+        function attachCardDrag(card) {
+            card.addEventListener('dragstart', function (e) {
+                dragType = card.dataset.kpi;
+                card.classList.add('opacity-40');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            card.addEventListener('dragend', function () {
+                dragType = null;
+                card.classList.remove('opacity-40');
+            });
+            card.addEventListener('dragover', function (e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+            });
+            card.addEventListener('drop', function (e) {
+                e.preventDefault();
+                if (!dragType || dragType === card.dataset.kpi) return;
+                const board = getBoard();
+                const from = board.kpis.indexOf(dragType);
+                const to = board.kpis.indexOf(card.dataset.kpi);
+                if (from < 0 || to < 0) return;
+                board.kpis.splice(from, 1);
+                board.kpis.splice(to, 0, dragType);
+                setBoard(board);
+                renderBoard();
+            });
+        }
+
         document.getElementById('board').addEventListener('click', function (e) {
+            const btn = e.target.closest('.export-kpi, .filter-kpi, .remove-kpi');
+            if (!btn) return;
             const card = e.target.closest('.kpi-card');
             if (!card) return;
             const type = card.dataset.kpi;
-            const board = getBoard();
-            board.visible = board.visible || {};
 
-            if (e.target.closest('.remove-kpi')) {
+            if (btn.classList.contains('remove-kpi')) {
+                const board = getBoard();
                 board.kpis = board.kpis.filter(function (k) { return k !== type; });
+                if (board.filters) delete board.filters[type];
                 setBoard(board);
                 renderBoard();
-            } else if (e.target.closest('.hide-kpi')) {
-                board.visible[type] = board.visible[type] === false ? true : false;
-                setBoard(board);
-                renderBoard();
+            } else if (btn.classList.contains('export-kpi')) {
+                openExportModal(type);
+            } else if (btn.classList.contains('filter-kpi')) {
+                openFilterModal(type);
             }
         });
+
+        let exportType = null;
+
+        function openExportModal(type) {
+            exportType = type;
+            document.getElementById('exportKpiTitle').textContent = KPI_LABELS[type];
+            document.getElementById('exportModal').classList.remove('hidden');
+        }
+
+        function closeExportModal() {
+            document.getElementById('exportModal').classList.add('hidden');
+        }
+
+        function doExport(format) {
+            const f = cardFilter(exportType);
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = EXPORT_URL;
+            form.target = '_blank';
+            const fields = {
+                kpi_type: exportType,
+                format: format,
+                preset: f ? f.preset : GLOBAL.preset,
+                from: f ? (f.from || '') : GLOBAL.from,
+                to: f ? (f.to || '') : GLOBAL.to,
+            };
+            Object.keys(fields).forEach(function (k) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = k;
+                input.value = fields[k];
+                form.appendChild(input);
+            });
+            document.body.appendChild(form);
+            form.submit();
+            form.remove();
+            closeExportModal();
+        }
+
+        let filterType = null;
+
+        function syncFilterCustomDates() {
+            const preset = document.getElementById('filterPreset').value;
+            document.getElementById('filterCustomDates').classList.toggle('hidden', preset !== 'custom');
+        }
+
+        function openFilterModal(type) {
+            filterType = type;
+            const f = cardFilter(type);
+            document.getElementById('filterKpiTitle').textContent = KPI_LABELS[type];
+            document.getElementById('filterPreset').value = f ? (f.preset || 'all') : 'all';
+            document.getElementById('filterFrom').value = f ? (f.from || '') : '';
+            document.getElementById('filterTo').value = f ? (f.to || '') : '';
+            document.getElementById('filterModal').classList.remove('hidden');
+            syncFilterCustomDates();
+        }
+
+        function closeFilterModal() {
+            document.getElementById('filterModal').classList.add('hidden');
+        }
+
+        function applyFilter() {
+            const preset = document.getElementById('filterPreset').value;
+            const from = document.getElementById('filterFrom').value;
+            const to = document.getElementById('filterTo').value;
+            const board = getBoard();
+            board.filters = board.filters || {};
+            if (preset === 'all' || (preset === 'custom' && !from && !to)) {
+                delete board.filters[filterType];
+            } else {
+                board.filters[filterType] = { preset: preset, from: from, to: to };
+            }
+            setBoard(board);
+            closeFilterModal();
+            renderBoard();
+        }
+
+        function resetFilter() {
+            const board = getBoard();
+            if (board.filters) delete board.filters[filterType];
+            setBoard(board);
+            closeFilterModal();
+            renderBoard();
+        }
+
+        document.getElementById('filterPreset').addEventListener('change', syncFilterCustomDates);
 
         renderBoard();
     </script>

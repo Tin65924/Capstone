@@ -1,7 +1,8 @@
 import csv
 import io
 from datetime import date, datetime
-from flask import render_template, request, Response, redirect, url_for, flash
+
+from flask import render_template, request, Response, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from openpyxl import Workbook
 
@@ -31,18 +32,14 @@ KPI_DESCRIPTIONS = {
 }
 
 
-def parse_date_range():
-    """Resolve the requested date range into (start_date, end_date).
+def resolve_dates(preset, from_str, to_str):
+    """Resolve a date range into (start_date, end_date).
 
-    Priority: explicit from/to dates, else the chosen preset
+    Explicit ``from``/``to`` dates win; otherwise the preset applies
     (``all`` -> no bounds, ``semester`` -> current academic semester,
     ``year`` -> current calendar year).
     """
-    preset = request.args.get('preset', 'all')
-    from_str = request.args.get('from', '').strip()
-    to_str = request.args.get('to', '').strip()
     today = date.today()
-
     start_date = end_date = None
 
     if from_str or to_str:
@@ -79,17 +76,35 @@ def compute_all_kpis(start_date, end_date):
 @login_required
 @librarian_required
 def analytics_page():
-    start_date, end_date = parse_date_range()
+    preset = request.args.get('preset', 'all')
+    from_str = request.args.get('from', '').strip()
+    to_str = request.args.get('to', '').strip()
+    start_date, end_date = resolve_dates(preset, from_str, to_str)
     kpi_data = compute_all_kpis(start_date, end_date)
     return render_template(
         'analytics/analytics.html',
         kpi_data=kpi_data,
         kpi_labels=KPI_LABELS,
         kpi_descriptions=KPI_DESCRIPTIONS,
-        preset=request.args.get('preset', 'all'),
-        from_date=request.args.get('from', ''),
-        to_date=request.args.get('to', ''),
+        preset=preset,
+        from_date=from_str,
+        to_date=to_str,
     )
+
+
+@analytics_bp.route('/librarian/analytics/kpi')
+@login_required
+@librarian_required
+def kpi_json():
+    """Return a single KPI's data for the requested range as JSON."""
+    kpi_type = request.args.get('kpi_type', '')
+    if kpi_type not in VALID_KPIS:
+        return jsonify({'error': 'invalid kpi_type'}), 400
+    preset = request.args.get('preset', 'all')
+    from_str = request.args.get('from', '').strip()
+    to_str = request.args.get('to', '').strip()
+    start_date, end_date = resolve_dates(preset, from_str, to_str)
+    return jsonify({'kpi_type': kpi_type, 'data': _run_kpi(kpi_type, start_date, end_date)})
 
 
 def _as_2d_rows(kpi_type, kpi_data):
@@ -134,17 +149,7 @@ def export_report():
     if fmt not in ('csv', 'xlsx'):
         fmt = 'csv'
 
-    try:
-        if from_str:
-            start_date = datetime.strptime(from_str, '%Y-%m-%d').date()
-        else:
-            start_date = None
-        if to_str:
-            end_date = datetime.strptime(to_str, '%Y-%m-%d').date()
-        else:
-            end_date = None
-    except ValueError:
-        start_date = end_date = None
+    start_date, end_date = resolve_dates(preset, from_str, to_str)
 
     if export_all:
         kpi_types = list(KPI_LABELS.keys())
