@@ -16,6 +16,7 @@ from .models import (
     get_reservations_grouped, get_reservations_by_book,
     allocate_reservation, claim_reservation, expire_reservation, next_in_queue,
     get_available_accession_by_book, create_notification,
+    get_user_active_loans, get_active_loan_by_id_and_user,
 )
 
 VALID_BORROW_TYPES = ('overnight', 'daily_circulation')
@@ -193,6 +194,9 @@ def reservation_action(reservation_id, action):
         if reservation[5] != 'waiting':
             flash('Only waiting reservations can be allocated.', 'error')
             return redirect(url_for('circulation.reservations_page'))
+        if not get_available_accession_by_book(reservation[1]):
+            flash('Cannot allocate — all copies of this book are still on loan.', 'error')
+            return redirect(url_for('circulation.reservations_page'))
         deadline = datetime.now() + timedelta(days=2)
         allocate_reservation(reservation_id, deadline)
         create_notification(
@@ -301,3 +305,36 @@ def user_reserve():
     log_activity(current_user.id, f'circulation:user_reserve:{book_id}')
     flash('Reservation placed. You will be notified when a copy is ready.', 'success')
     return redirect(url_for('cataloging.book_info', book_id=book_id))
+
+
+@circulation_bp.route('/user/return', methods=['POST'])
+@login_required
+def user_return():
+    circulation_id = request.form.get('circulation_id', type=int)
+    if not circulation_id:
+        flash('Invalid borrowing record.', 'error')
+        return redirect(url_for('main.user_profile'))
+
+    loan = get_active_loan_by_id_and_user(circulation_id, current_user.id)
+    if not loan:
+        flash('Borrowing record not found or already returned.', 'error')
+        return redirect(url_for('main.user_profile'))
+
+    fine = calculate_fine(loan[0], current_app.config['OVERDUE_FINE_PER_DAY'])
+    return_book(loan[0], fine)
+    log_activity(current_user.id, f'circulation:user_return:{loan[0]}')
+
+    waiting = next_in_queue(loan[1])
+    if waiting:
+        create_notification(
+            waiting[2],
+            f'A reserved copy of "{get_book_by_id(loan[1])[1]}" is ready for pickup.',
+            'hold_ready',
+            str(waiting[0]),
+        )
+
+    if fine > 0:
+        flash(f'Book returned. Overdue fine: ₱{fine:.2f}.', 'success')
+    else:
+        flash('Book returned.', 'success')
+    return redirect(url_for('main.user_profile'))
