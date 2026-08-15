@@ -62,6 +62,7 @@
 </header>
 
 <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+    {% include 'components/flash_messages.html' %}
     <nav aria-label="Breadcrumb" class="flex mb-6 text-xs font-medium text-slate-500 uppercase tracking-wider">
         <ol class="flex items-center space-x-2">
             <li><a class="hover:text-primary" href="{{ url_for('cataloging.public_catalog') }}">Catalog</a></li>
@@ -88,7 +89,7 @@
                 <p class="text-lg text-slate-600 dark:text-slate-400 font-medium">{{ book[2] }}</p>
             </div>
             <div class="flex flex-col items-end gap-4 min-w-[240px]">
-                {% if accessions %}
+                {% if any_available %}
                 <span class="inline-flex bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-4 py-2 rounded font-bold uppercase tracking-wider text-xs items-center gap-2 border border-green-200 dark:border-green-800">
                     <span class="w-2 h-2 rounded-full bg-green-500"></span>
                     Available in Library
@@ -100,9 +101,24 @@
                 </span>
                 {% endif %}
                 <div class="flex gap-2 w-full">
-                    <button class="flex-1 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded font-bold text-sm transition-all flex items-center justify-center gap-2">
-                        Reserve
-                    </button>
+                    {% if current_user.is_authenticated %}
+                        {% if any_available %}
+                        <button id="openBorrowModalBtn" class="flex-1 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded font-bold text-sm transition-all flex items-center justify-center gap-2">
+                            Borrow <span class="material-symbols-outlined text-lg">import_export</span>
+                        </button>
+                        {% else %}
+                        <form method="post" action="{{ url_for('circulation.user_reserve') }}" class="flex-1">
+                            <input type="hidden" name="book_id" value="{{ book[0] }}">
+                            <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded font-bold text-sm transition-all flex items-center justify-center gap-2">
+                                Reserve <span class="material-symbols-outlined text-lg">bookmark_add</span>
+                            </button>
+                        </form>
+                        {% endif %}
+                    {% else %}
+                    <a href="{{ url_for('auth.login', next=request.path) }}" class="flex-1 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded font-bold text-sm transition-all flex items-center justify-center gap-2 text-center">
+                        {{ 'Borrow' if any_available else 'Reserve' }} <span class="material-symbols-outlined text-lg">login</span>
+                    </a>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -156,32 +172,53 @@
             <table class="w-full text-left border-collapse">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest" style="">Accession Number</th>
-                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest" style="">LOC Classification</th>
-                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest" style="">Status</th>
-                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right" style="">Action</th>
+                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Accession Number</th>
+                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">LOC Classification</th>
+                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status</th>
+                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Action</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                    {% for acc in accessions %}
+                    {% for acc, is_available in accessions %}
                     <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                        <td class="px-6 py-4 text-sm font-medium" style="">{{ acc[1] }}</td>
-                        <td class="px-6 py-4" style="">
-                            <div class="text-sm text-slate-900 dark:text-slate-100 font-semibold" style="">{{ book[7] or '—' }}</div>
+                        <td class="px-6 py-4 text-sm font-medium">{{ acc[1] }}</td>
+                        <td class="px-6 py-4">
+                            <div class="text-sm text-slate-900 dark:text-slate-100 font-semibold">{{ book[7] or '—' }}</div>
                         </td>
-                        <td class="px-6 py-4 text-sm" style="">
-                            <span class="inline-flex items-center gap-1 text-green-600 dark:text-green-400 text-xs font-bold uppercase tracking-tight" style="">
+                        <td class="px-6 py-4 text-sm">
+                            {% if is_available %}
+                            <span class="inline-flex items-center gap-1 text-green-600 dark:text-green-400 text-xs font-bold uppercase tracking-tight">
                                 <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                                 Available
                             </span>
+                            {% else %}
+                            <span class="inline-flex items-center gap-1 text-slate-400 text-xs font-bold uppercase tracking-tight">
+                                <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                Borrowed
+                            </span>
+                            {% endif %}
                         </td>
-                        <td class="px-6 py-4 text-right" style="">
-                            <button class="text-primary hover:underline text-xs font-bold" style="">Reserve</button>
+                        <td class="px-6 py-4 text-right">
+                            {% if current_user.is_authenticated %}
+                                {% if is_available %}
+                                <button class="text-primary hover:underline text-xs font-bold"
+                                        onclick="openBorrowModal('{{ acc[0] }}')">Borrow</button>
+                                {% else %}
+                                <button class="text-slate-300 text-xs font-bold cursor-not-allowed" disabled>Borrowed</button>
+                                {% endif %}
+                            {% else %}
+                                {% if is_available %}
+                                <a class="text-primary hover:underline text-xs font-bold"
+                                   href="{{ url_for('auth.login', next=request.path) }}">Borrow</a>
+                                {% else %}
+                                <button class="text-slate-300 text-xs font-bold cursor-not-allowed" disabled>Borrowed</button>
+                                {% endif %}
+                            {% endif %}
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="4" class="px-6 py-8 text-center text-sm text-slate-400" style="">
+                        <td colspan="4" class="px-6 py-8 text-center text-sm text-slate-400">
                             No copies available for this title.
                         </td>
                     </tr>
@@ -191,6 +228,41 @@
         </div>
     </div>
 </main>
+
+<!-- Borrow Modal -->
+<div id="borrowModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-slate-900/60" onclick="closeBorrowModal()"></div>
+    <div class="relative bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 max-w-md w-full">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white">Borrow {{ book[1] }}</h3>
+            <button onclick="closeBorrowModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        <form method="post" action="{{ url_for('circulation.user_borrow') }}" class="p-6 space-y-5">
+            <input type="hidden" name="book_id" value="{{ book[0] }}">
+            <input type="hidden" id="borrowAccessionId" name="accession_id" value="">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Choose a borrow type. The due date is computed automatically based on your role.</p>
+            <label class="flex items-start gap-3 p-4 border border-slate-200 dark:border-slate-700 rounded cursor-pointer has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary">
+                <input type="radio" name="borrow_type" value="overnight" checked class="mt-0.5 accent-primary">
+                <span>
+                    <span class="font-bold text-sm text-slate-900 dark:text-white">Overnight</span>
+                    <span class="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">Students: due in 2 days. Faculty/Staff: due in 1 month. Reminders are sent before the due date.</span>
+                </span>
+            </label>
+            <label class="flex items-start gap-3 p-4 border border-slate-200 dark:border-slate-700 rounded cursor-pointer has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary">
+                <input type="radio" name="borrow_type" value="daily_circulation" class="mt-0.5 accent-primary">
+                <span>
+                    <span class="font-bold text-sm text-slate-900 dark:text-white">In-Library (Daily Circulation)</span>
+                    <span class="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">Same-day loan, 8:00 AM&ndash;5:00 PM (~9 hours), for any role.</span>
+                </span>
+            </label>
+            <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded font-bold text-sm transition-all flex items-center justify-center gap-2">
+                Confirm Borrow <span class="material-symbols-outlined text-lg">check_circle</span>
+            </button>
+        </form>
+    </div>
+</div>
 
 <footer class="mt-auto py-8 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -209,6 +281,20 @@
         </div>
     </div>
 </footer>
+
+<script>
+    function openBorrowModal(accessionId) {
+        document.getElementById('borrowAccessionId').value = accessionId || '';
+        document.getElementById('borrowModal').classList.remove('hidden');
+    }
+    function closeBorrowModal() {
+        document.getElementById('borrowModal').classList.add('hidden');
+    }
+    var borrowBtn = document.getElementById('openBorrowModalBtn');
+    if (borrowBtn) {
+        borrowBtn.addEventListener('click', function () { openBorrowModal(''); });
+    }
+</script>
 
 </body>
 </html>

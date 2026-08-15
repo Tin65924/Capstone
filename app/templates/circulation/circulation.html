@@ -196,6 +196,47 @@
             margin-bottom: 0.5rem;
         }
 
+        .form-input, .form-select {
+            width: 100%;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.625rem 0.875rem;
+            font-size: 0.875rem;
+            color: var(--text-main);
+            background: white;
+            outline: none;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+
+        .form-input:focus, .form-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgb(30 58 138 / 0.1);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            border-radius: 8px;
+            padding: 0.625rem 1.25rem;
+            font-size: 0.875rem;
+            font-weight: 700;
+            transition: background 0.15s;
+        }
+
+        .btn-primary:hover { background: var(--primary-dark); }
+
+        .btn-ghost {
+            background: #f1f5f9;
+            color: var(--text-main);
+            border-radius: 8px;
+            padding: 0.625rem 1.25rem;
+            font-size: 0.875rem;
+            font-weight: 700;
+            transition: background 0.15s;
+        }
+
+        .btn-ghost:hover { background: #e2e8f0; }
+
         /* Micro-animations */
         @keyframes slideUp {
             from { opacity: 0; transform: translateY(20px); }
@@ -212,7 +253,7 @@
     <!-- Sidebar -->
     <div class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0 h-screen sticky top-0">
       <div class="p-6 flex-1 flex flex-col overflow-hidden">
-        
+
         <!-- Logo / Title -->
         <div class="flex items-center gap-3 mb-8 shrink-0">
           <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
@@ -251,67 +292,230 @@
                 <div class="icon-box bg-blue-100 text-blue-600">
                     <span class="material-symbols-outlined">import_export</span>
                 </div>
-                <div class="stat-value">42</div>
+                <div class="stat-value">{{ stats.active_loans }}</div>
                 <div class="stat-label">Total Active Loans</div>
             </div>
             <div class="stat-card">
                 <div class="icon-box bg-red-100 text-red-600">
                     <span class="material-symbols-outlined">alarm_on</span>
                 </div>
-                <div class="stat-value">05</div>
+                <div class="stat-value">{{ stats.overdue_items }}</div>
                 <div class="stat-label">Overdue Items</div>
             </div>
             <div class="stat-card">
                 <div class="icon-box bg-amber-100 text-amber-600">
                     <span class="material-symbols-outlined">event_note</span>
                 </div>
-                <div class="stat-value">08</div>
+                <div class="stat-value">{{ stats.due_in_days }}</div>
                 <div class="stat-label">Due in 48 Hours</div>
             </div>
         </div>
 
-        <!-- Recent Transactions -->
+        <!-- Borrow & Return Desk -->
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-10 animate-slide-up" style="animation-delay: 0.15s;">
+            <!-- Borrower Lookup -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <span class="material-symbols-outlined text-primary">person_search</span>
+                        Borrower Lookup
+                    </h3>
+                </div>
+                <div class="p-6 space-y-6">
+                    <form method="GET" action="{{ url_for('circulation.circulation_page') }}" class="flex gap-3">
+                        <input type="text" name="search" value="{{ search }}" placeholder="Enter ID number (e.g. 2024-1234)" class="form-input">
+                        <button type="submit" class="btn-primary shrink-0">Search</button>
+                    </form>
+
+                    {% if borrower %}
+                    <div class="border border-gray-200 rounded-lg p-5 space-y-3 bg-gray-50/50">
+                        <div class="flex items-center justify-between">
+                            <h4 class="font-bold text-gray-900">{{ borrower[4] }}</h4>
+                            <span class="badge {% if borrower[6] == 'Student' %}bg-blue-100 text-blue-700{% else %}bg-violet-100 text-violet-700{% endif %}">{{ borrower[6] }}</span>
+                        </div>
+                        <div class="text-sm text-gray-500 grid grid-cols-1 sm:grid-cols-2 gap-1">
+                            <span><strong class="text-gray-700">ID:</strong> {{ borrower[1] }}</span>
+                            <span><strong class="text-gray-700">Department:</strong> {{ borrower[2] or '—' }}</span>
+                        </div>
+                        <div class="text-sm">
+                            <strong class="text-gray-700">Status:</strong>
+                            {% if borrower[3] == 'active' %}
+                            <span class="text-emerald-600 font-semibold">Active</span>
+                            {% else %}
+                            <span class="text-red-600 font-semibold">Blocked</span>
+                            {% endif %}
+                            <span class="ml-4 text-gray-500">Limit: {{ borrow_limit_student if borrower[6] == 'Student' else borrow_limit_faculty }} books</span>
+                        </div>
+
+                        <h5 class="font-bold text-sm text-gray-900 pt-2 border-t border-gray-200">Active Loans ({{ borrower_loans|length }})</h5>
+                        {% if borrower_loans %}
+                        <ul class="space-y-2 mt-1">
+                            {% for loan in borrower_loans %}
+                            <li class="text-sm flex items-center justify-between gap-2">
+                                <span class="text-gray-700">{{ loan[5] }} <span class="text-gray-400">({{ loan[6] }})</span></span>
+                                <span class="text-xs {% if loan[4] == 'overdue' or (loan[4] == 'active' and loan[2] < today) %}text-red-600 font-bold{% else %}text-gray-500{% endif %}">due {{ loan[2] }}</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <p class="text-sm text-gray-400">No active loans.</p>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <p class="text-sm text-gray-400">Search for a borrower by ID number to see their loans and process a borrow.</p>
+                    {% endif %}
+
+                    <!-- Borrow Form -->
+                    <form method="POST" action="{{ url_for('circulation.desk_borrow') }}" class="border-t border-gray-200 pt-5 space-y-4">
+                        <h4 class="font-bold text-gray-900 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary">login</span> Process Borrow
+                        </h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {% if borrower %}
+                            <input type="hidden" name="borrower_id" value="{{ borrower[0] }}">
+                            <div class="sm:col-span-2">
+                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Borrower</label>
+                                <div class="mt-1 px-3 py-2.5 rounded-lg bg-gray-50 text-sm font-medium text-gray-700">{{ borrower[4] }} ({{ borrower[1] }})</div>
+                            </div>
+                            {% else %}
+                            <div class="sm:col-span-2">
+                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Borrower ID Number</label>
+                                <input type="text" name="id_number" placeholder="2024-1234" class="form-input mt-1">
+                            </div>
+                            {% endif %}
+                            <div class="sm:col-span-2">
+                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Accession Number</label>
+                                <input type="text" name="accession_number" placeholder="2024-00123" required class="form-input mt-1">
+                            </div>
+                            <div class="sm:col-span-2">
+                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Borrow Type</label>
+                                <select name="borrow_type" class="form-select mt-1">
+                                    <option value="overnight">Overnight</option>
+                                    <option value="daily_circulation">In-Library (Daily Circulation)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-primary w-full">Borrow Book</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Return Form -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <span class="material-symbols-outlined text-emerald-600">logout</span>
+                        Process Return
+                    </h3>
+                </div>
+                <div class="p-6">
+                    <form method="POST" action="{{ url_for('circulation.desk_return') }}" class="space-y-4">
+                        <div>
+                            <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Accession Number</label>
+                            <input type="text" name="accession_number" placeholder="2024-00123" required class="form-input mt-1">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Damage Notes (optional)</label>
+                            <textarea name="damage_notes" rows="2" placeholder="e.g. torn cover, pages missing" class="form-input mt-1 resize-none"></textarea>
+                        </div>
+                        <label class="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                            <input type="checkbox" name="lost" value="1" class="accent-red-600 w-4 h-4">
+                            Mark as lost
+                        </label>
+                        <button type="submit" class="btn-ghost w-full !bg-emerald-600 !text-white hover:!bg-emerald-700">Return Book</button>
+                    </form>
+                    <p class="text-xs text-gray-400 mt-4">Overdue fines are computed automatically on return.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Loans -->
         <div class="card animate-slide-up" style="animation-delay: 0.2s;">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <span class="material-symbols-outlined text-primary">library_books</span>
+                    All Borrowings ({{ active_loans|length }})
+                </h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Borrower</th>
+                            <th>Book Title</th>
+                            <th>Accession</th>
+                            <th>Type</th>
+                            <th>Borrowed</th>
+                            <th>Due Date</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for loan in active_loans %}
+                        <tr>
+                            <td class="font-semibold">{{ loan[5] }}</td>
+                            <td class="text-gray-600">{{ loan[7] }}</td>
+                            <td class="font-mono text-gray-500">{{ loan[8] }}</td>
+                            <td>{{ 'Overnight' if loan[3] == 'overnight' else 'In-Library' }}</td>
+                            <td class="text-gray-500">{{ loan[1] }}</td>
+                            <td class="{% if loan[4] == 'overdue' or loan[2] < today %}text-red-600 font-bold{% endif %}">{{ loan[2] }}</td>
+                            <td>
+                                {% if loan[4] == 'overdue' or (loan[4] == 'active' and loan[2] < today) %}
+                                <span class="badge badge-danger">Overdue</span>
+                                {% else %}
+                                <span class="badge badge-borrowed">Borrowed</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="7" class="text-center text-gray-400 py-6">No active loans.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Recent Transactions -->
+        <div class="card animate-slide-up" style="animation-delay: 0.25s;">
             <div class="card-header">
                 <h3 class="card-title">
                     <span class="material-symbols-outlined text-primary">history</span>
                     Recent Transactions
                 </h3>
-                <button class="text-primary font-semibold text-sm hover:underline">View All History</button>
             </div>
             <div class="overflow-x-auto">
                 <table>
                     <thead>
                         <tr>
                             <th>Borrower Name</th>
-                            <th>Type</th>
                             <th>Book Title</th>
+                            <th>Accession</th>
                             <th>Action</th>
-                            <th>Date & Time</th>
+                            <th>Borrowed</th>
+                            <th>Due / Returned</th>
+                            <th>Fine</th>
                         </tr>
                     </thead>
                     <tbody>
+                        {% for tx in recent %}
                         <tr>
-                            <td class="font-semibold">Juan Dela Cruz</td>
-                            <td>Student</td>
-                            <td class="text-gray-600 italic">Intro to Algorithms</td>
-                            <td><span class="badge badge-borrowed">Borrowed</span></td>
-                            <td class="text-gray-500">Apr 21, 10:32 AM</td>
+                            <td class="font-semibold">{{ tx[6] }}</td>
+                            <td class="text-gray-600 italic">{{ tx[7] }}</td>
+                            <td class="font-mono text-gray-500">{{ tx[8] }}</td>
+                            <td>
+                                {% if tx[0] == 'borrow' %}
+                                <span class="badge badge-borrowed">Borrowed</span>
+                                {% else %}
+                                <span class="badge badge-returned">Returned</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-gray-500">{{ tx[1] }}</td>
+                            <td class="text-gray-500">{{ tx[4] if tx[0] == 'return' else tx[3] }}</td>
+                            <td class="{% if tx[5] > 0 %}text-red-600 font-bold{% else %}text-gray-400{% endif %}">{{ '₱%.2f'|format(tx[5]) if tx[5] > 0 else '—' }}</td>
                         </tr>
-                        <tr>
-                            <td class="font-semibold">Maria Santos</td>
-                            <td>Faculty</td>
-                            <td class="text-gray-600 italic">Principles of Economics</td>
-                            <td><span class="badge badge-returned">Returned</span></td>
-                            <td class="text-gray-500">Apr 21, 09:50 AM</td>
-                        </tr>
-                        <tr>
-                            <td class="font-semibold">Ana Reyes</td>
-                            <td>Student</td>
-                            <td class="text-gray-600 italic">Filipino Literature</td>
-                            <td><span class="badge badge-borrowed">Borrowed</span></td>
-                            <td class="text-gray-500">Apr 20, 04:15 PM</td>
-                        </tr>
+                        {% else %}
+                        <tr><td colspan="7" class="text-center text-gray-400 py-6">No transactions yet.</td></tr>
+                        {% endfor %}
                     </tbody>
                 </table>
             </div>
@@ -333,23 +537,21 @@
                             <tr>
                                 <th>Borrower Name</th>
                                 <th>Book Title</th>
+                                <th>Accession</th>
                                 <th>Due Date</th>
-                                <th>Days Late</th>
                             </tr>
                         </thead>
                         <tbody>
+                            {% for row in overdue %}
                             <tr>
-                                <td class="font-semibold">Pedro Cruz</td>
-                                <td class="text-gray-600 italic">Data Structures</td>
-                                <td>Apr 18</td>
-                                <td><span class="text-red-600 font-bold">3 days</span></td>
+                                <td class="font-semibold">{{ row[2] }}</td>
+                                <td class="text-gray-600 italic">{{ row[3] }}</td>
+                                <td class="font-mono text-gray-500">{{ row[4] }}</td>
+                                <td><span class="text-red-600 font-bold">{{ row[1] }}</span></td>
                             </tr>
-                            <tr>
-                                <td class="font-semibold">Lisa Ramos</td>
-                                <td class="text-gray-600 italic">Rizal Works</td>
-                                <td>Apr 19</td>
-                                <td><span class="text-red-600 font-bold">2 days</span></td>
-                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-center text-gray-400 py-6">Nothing overdue. Great job!</td></tr>
+                            {% endfor %}
                         </tbody>
                     </table>
                 </div>
@@ -368,26 +570,23 @@
                         <thead>
                             <tr>
                                 <th>Borrower Name</th>
-                                <th>Book Title</th>
                                 <th>Due Date</th>
                             </tr>
                         </thead>
                         <tbody>
+                            {% for row in due_soon %}
                             <tr>
-                                <td class="font-semibold">Carla Gomez</td>
-                                <td class="text-gray-600 italic">Database Systems</td>
-                                <td class="font-medium">Apr 22</td>
+                                <td class="font-semibold">{{ row[2] }}</td>
+                                <td class="font-medium">{{ row[1] }}</td>
                             </tr>
-                            <tr>
-                                <td class="font-semibold">Mark Reyes</td>
-                                <td class="text-gray-600 italic">Physics Fundamentals</td>
-                                <td class="font-medium">Apr 22</td>
-                            </tr>
+                            {% else %}
+                            <tr><td colspan="2" class="text-center text-gray-400 py-6">No loans due in the next 2 days.</td></tr>
+                            {% endfor %}
                         </tbody>
                     </table>
                 </div>
                 <div class="p-4 bg-amber-50/30 border-t border-amber-100 italic text-xs text-amber-800">
-                    💡 Tip: Send automated reminders to these borrowers tonight.
+                    💡 Tip: Send rent reminders to these borrowers before their due dates.
                 </div>
             </div>
         </div>
