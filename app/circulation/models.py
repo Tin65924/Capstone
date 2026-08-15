@@ -276,6 +276,17 @@ def get_reservations_by_book(book_id):
         (book_id,)
     )
 
+def get_reservations_by_borrower(borrower_id):
+    return db.fetch_all(
+        '''SELECT r.reservation_id, r.queue_position, r.reservation_status, r.request_date, r.claim_deadline,
+                  b.title, b.author
+           FROM reservation_queue r
+           JOIN book_catalog b ON r.book_id = b.book_id
+           WHERE r.borrower_id = %s
+           ORDER BY r.queue_position''',
+        (borrower_id,)
+    )
+
 
 def allocate_reservation(reservation_id, claim_deadline):
     return db.execute(
