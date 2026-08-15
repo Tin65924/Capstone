@@ -195,3 +195,20 @@ class TestExportXlsx:
         wb = load_workbook(io.BytesIO(resp.data))
         assert 'Books Borrowed per Program' in wb.sheetnames
         assert 'Most Borrowed Titles' in wb.sheetnames
+
+    def test_export_pdf_single_kpi(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [('Clean Code', 50)]
+        resp = librarian_client.post('/librarian/analytics/export',
+                                     data={'kpi_type': 'most_borrowed_titles', 'format': 'pdf'})
+        assert resp.status_code == 200
+        assert resp.content_type == 'application/pdf'
+        assert resp.data[:4] == b'%PDF'
+
+    def test_export_pdf_all_sections(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (10,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.post('/librarian/analytics/export',
+                                     data={'kpi_type': 'all', 'format': 'pdf'})
+        assert resp.status_code == 200
+        assert resp.content_type == 'application/pdf'
+        assert resp.data[:4] == b'%PDF'

@@ -352,7 +352,7 @@
             </div>
             <div class="p-6 space-y-3">
                 <p class="text-sm text-slate-500 dark:text-slate-400">Choose a file format for this report.</p>
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-3 gap-3">
                     <button onclick="doExport('csv')"
                         class="flex flex-col items-center gap-1 p-4 border border-slate-200 dark:border-slate-700 rounded hover:border-primary hover:ring-1 hover:ring-primary transition-all">
                         <span class="material-symbols-outlined text-2xl text-emerald-500">table_rows</span>
@@ -364,6 +364,12 @@
                         <span class="material-symbols-outlined text-2xl text-primary">grid_on</span>
                         <span class="text-sm font-bold">XLSX</span>
                         <span class="text-[10px] text-slate-400">Excel workbook</span>
+                    </button>
+                    <button onclick="doExport('pdf')"
+                        class="flex flex-col items-center gap-1 p-4 border border-slate-200 dark:border-slate-700 rounded hover:border-primary hover:ring-1 hover:ring-primary transition-all">
+                        <span class="material-symbols-outlined text-2xl text-rose-500">picture_as_pdf</span>
+                        <span class="text-sm font-bold">PDF</span>
+                        <span class="text-[10px] text-slate-400">Document</span>
                     </button>
                 </div>
             </div>
@@ -382,7 +388,7 @@
             </div>
             <div class="p-6 space-y-3">
                 <p class="text-sm text-slate-500 dark:text-slate-400">Export every KPI report in one file. Choose a format.</p>
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-3 gap-3">
                     <button onclick="doExportAll('csv')"
                         class="flex flex-col items-center gap-1 p-4 border border-slate-200 dark:border-slate-700 rounded hover:border-primary hover:ring-1 hover:ring-primary transition-all">
                         <span class="material-symbols-outlined text-2xl text-emerald-500">table_rows</span>
@@ -394,6 +400,12 @@
                         <span class="material-symbols-outlined text-2xl text-primary">grid_on</span>
                         <span class="text-sm font-bold">XLSX</span>
                         <span class="text-[10px] text-slate-400">One sheet per KPI</span>
+                    </button>
+                    <button onclick="doExportAll('pdf')"
+                        class="flex flex-col items-center gap-1 p-4 border border-slate-200 dark:border-slate-700 rounded hover:border-primary hover:ring-1 hover:ring-primary transition-all">
+                        <span class="material-symbols-outlined text-2xl text-rose-500">picture_as_pdf</span>
+                        <span class="text-sm font-bold">PDF</span>
+                        <span class="text-[10px] text-slate-400">One document, per-KPI pages</span>
                     </button>
                 </div>
             </div>

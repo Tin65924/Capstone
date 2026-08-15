@@ -5,6 +5,10 @@ from datetime import date, datetime
 from flask import render_template, request, Response, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from openpyxl import Workbook
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 
 from . import analytics_bp
 from app.auth.decorators import librarian_required
@@ -132,6 +136,61 @@ def _run_kpi(kpi_type, start_date, end_date):
     raise ValueError('Unknown KPI type: %s' % kpi_type)
 
 
+def _pdf_bytes(sections):
+    """Build a PDF report from (kpi_type, kpi_data) sections."""
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter,
+                            rightMargin=54, leftMargin=54,
+                            topMargin=54, bottomMargin=54)
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'ReportTitle', parent=styles['Title'], fontSize=18, spaceAfter=6)
+    subtitle_style = ParagraphStyle(
+        'ReportSubtitle', parent=styles['Normal'], fontSize=10,
+        textColor=colors.grey, spaceAfter=18)
+    section_style = ParagraphStyle(
+        'ReportSection', parent=styles['Heading2'], fontSize=14,
+        spaceBefore=14, spaceAfter=8)
+    cell_style = ParagraphStyle(
+        'ReportCell', parent=styles['Normal'], fontSize=9, leading=12)
+
+    now = datetime.now().strftime('%B %d, %Y')
+    story = [
+        Paragraph('MCST Library - Analytics Report', title_style),
+        Paragraph('Generated on {}'.format(now), subtitle_style),
+    ]
+
+    for i, (kt, kpi_data) in enumerate(sections):
+        if i > 0:
+            story.append(Spacer(1, 18))
+        story.append(Paragraph(KPI_LABELS[kt], section_style))
+
+        rows = _as_2d_rows(kt, kpi_data)
+        if len(rows) == 1:
+            story.append(Paragraph('No data for this KPI.', cell_style))
+            continue
+
+        header = [Paragraph(str(c), cell_style) for c in rows[0]]
+        data = [[Paragraph(str(c), cell_style) for c in row] for row in rows[1:]]
+        table = Table([header] + data, hAlign='LEFT')
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a8a')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f1f5f9')]),
+            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#cbd5e1')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        story.append(table)
+
+    doc.build(story)
+    return buf.getvalue()
+
+
 @analytics_bp.route('/librarian/analytics/export', methods=['POST'])
 @login_required
 @librarian_required
@@ -146,7 +205,7 @@ def export_report():
     if not export_all and kpi_type not in VALID_KPIS:
         flash('Invalid report type.', 'error')
         return redirect(url_for('analytics.analytics_page'))
-    if fmt not in ('csv', 'xlsx'):
+    if fmt not in ('csv', 'xlsx', 'pdf'):
         fmt = 'csv'
 
     start_date, end_date = resolve_dates(preset, from_str, to_str)
@@ -171,7 +230,10 @@ def export_report():
     label = 'all' if export_all else kpi_type
     filename = '{}_{}.{}'.format(label, stamp, fmt)
 
-    if fmt == 'xlsx':
+    if fmt == 'pdf':
+        body = _pdf_bytes(sections)
+        mimetype = 'application/pdf'
+    elif fmt == 'xlsx':
         wb = Workbook()
         wb.remove(wb.active)
         for kt, kpi_data in sections:
