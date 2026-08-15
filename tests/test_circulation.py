@@ -270,19 +270,6 @@ class TestUserReserve:
         assert mock_db['execute'].call_count == 0
 
 
-class TestUserProfileBorrowings:
-    def test_profile_shows_return_button_for_active_loan(self, student_client, mock_db):
-        mock_db['fetch_one'].return_value = (1, 'student@mcst.edu.ph', 'Student', 'Test Student')
-        mock_db['fetch_all'].return_value = [
-            (55, date(2026, 8, 1), date(2026, 8, 2), 'overnight', 'active', 'Intro to Algorithms', 'Cormen', '2024-00123'),
-        ]
-        resp = student_client.get('/user/profile')
-        assert resp.status_code == 200
-        assert b'Return Book' in resp.data
-        assert b'Intro to Algorithms' in resp.data
-        assert b'/user/return' in resp.data
-
-
 class TestUserReturn:
     def test_return_requires_login(self, client, mock_db):
         resp = client.post('/user/return', data={'circulation_id': 55})
@@ -308,12 +295,12 @@ class TestUserReturn:
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
 
-    def test_return_invalid_branching_record_id(self, student_client, mock_db):
+    def test_return_invalid_record_id(self, student_client, mock_db):
         resp = student_client.post('/user/return', data={'circulation_id': 'not-an-int'})
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
 
-    def test_return_fine_computed(self, student_client, mock_db):
+    def test_return_computes_fine(self, student_client, mock_db):
         mock_db['fetch_one'].side_effect = [
             (55, 10, 1, '2026-07-01', 'overdue'),            # overdue loan
             (date(2026, 7, 1), date(2026, 7, 6)),            # 5 days late
@@ -326,6 +313,42 @@ class TestUserReturn:
         assert call_args[0][1][2] == 50.0
 
 
+class TestUserOverview:
+    def test_profile_shows_notification_button_and_no_hardcoded_alert(self, student_client, mock_db):
+        mock_db['fetch_one'].return_value = (1, 1, '2024-0001', 'CS', 'active')  # get_borrower_by_user
+        mock_db['fetch_all'].return_value = [
+            (1, 'Your reserved book is ready', 'hold_ready', None, '2026-08-10 09:00:00'),
+        ]
+        resp = student_client.get('/user/profile')
+        assert resp.status_code == 200
+        assert b'Notifications' in resp.data
+        assert b'The Pragmatic Programmer' not in resp.data
+        assert b'was due yesterday' not in resp.data
+
+    def test_profile_borrowing_card_has_return_button(self, student_client, mock_db):
+        mock_db['fetch_one'].return_value = (1, 1, '2024-0001', 'CS', 'active')
+        mock_db['fetch_all'].return_value = [
+            (55, date(2026, 8, 1), date(2026, 8, 2), 'overnight', 'active',
+             'Intro to Algorithms', '2024-00123'),
+        ]
+        resp = student_client.get('/user/profile')
+        assert resp.status_code == 200
+        assert b'Intro to Algorithms' in resp.data
+        assert b'View Details' in resp.data
+        assert b'/user/return' in resp.data
+
+    def test_history_lists_transactions_and_requests(self, student_client, mock_db):
+        mock_db['fetch_one'].return_value = (1, 1, '2024-0001', 'CS', 'active')
+        mock_db['fetch_all'].return_value = [
+            (55, date(2026, 8, 1), date(2026, 8, 2), None, 'overnight',
+             'active', 0, 'Intro to Algorithms', 'Cormen', '2024-00123'),
+        ]
+        resp = student_client.get('/user/history')
+        assert resp.status_code == 200
+        assert b'Intro to Algorithms' in resp.data
+        assert b'Borrowings &amp; Returns' in resp.data
+
+
 class TestBookInfoLabels:
     def test_book_info_shows_borrow_when_available(self, client, mock_db):
         mock_db['fetch_one'].return_value = (1, 'Intro to Algorithms', 'Cormen', '3rd', 'MIT Press', 2022,
@@ -333,20 +356,47 @@ class TestBookInfoLabels:
         mock_db['fetch_all'].side_effect = [
             [(10, '2024-00123', 1, 1, '2026-01-10', 'purchase')],  # accessions
             [],                                                     # no borrowed ids
+            [],                                                     # no borrowers
         ]
         resp = client.get('/book/1')
         assert resp.status_code == 200
         assert b'Borrow' in resp.data
         assert b'Available in Library' in resp.data
 
-    def test_book_info_shows_reserve_when_borrowed(self, client, mock_db):
+    def test_book_info_shows_reserve_when_borrowed_by_someone_else(self, student_client, mock_db):
         mock_db['fetch_one'].return_value = (1, 'Intro to Algorithms', 'Cormen', '3rd', 'MIT Press', 2022,
                                              'CS', 'QA76', '978-x', 'Book', 'desc', 'active', '2026-01-01')
         mock_db['fetch_all'].side_effect = [
             [(10, '2024-00123', 1, 1, '2026-01-10', 'purchase')],  # accessions
-            [(10,)],                                                 # accession 10 is on loan
+            [(10,)],                                                # accession 10 is on loan
+            [(10, 99)],                                             # borrowed by another user
         ]
-        resp = client.get('/book/1')
+        resp = student_client.get('/book/1')
         assert resp.status_code == 200
         assert b'Reserve' in resp.data
         assert b'Not Available' in resp.data
+
+    def test_book_info_shows_borrowed_for_current_borrower(self, student_client, mock_db):
+        mock_db['fetch_one'].return_value = (1, 'Intro to Algorithms', 'Cormen', '3rd', 'MIT Press', 2022,
+                                             'CS', 'QA76', '978-x', 'Book', 'desc', 'active', '2026-01-01')
+        mock_db['fetch_all'].side_effect = [
+            [(10, '2024-00123', 1, 1, '2026-01-10', 'purchase')],  # accessions
+            [(10,)],                                                # accession 10 is on loan
+            [(10, 1)],                                              # borrowed by the current user
+        ]
+        resp = student_client.get('/book/1')
+        assert resp.status_code == 200
+        assert b'>Reserve</button>' not in resp.data
+        assert b'Borrowed</button>' in resp.data
+
+    def test_book_info_has_no_header_borrow_button(self, student_client, mock_db):
+        mock_db['fetch_one'].return_value = (1, 'Intro to Algorithms', 'Cormen', '3rd', 'MIT Press', 2022,
+                                             'CS', 'QA76', '978-x', 'Book', 'desc', 'active', '2026-01-01')
+        mock_db['fetch_all'].side_effect = [
+            [(10, '2024-00123', 1, 1, '2026-01-10', 'purchase')],  # accessions
+            [],                                                     # no borrowed ids
+            [],                                                     # no borrowers
+        ]
+        resp = student_client.get('/book/1')
+        assert resp.status_code == 200
+        assert b'openBorrowModalBtn' not in resp.data

@@ -45,6 +45,18 @@ def get_active_loan_accession_ids_by_book(book_id):
     return {row[0] for row in rows}
 
 
+def get_active_loan_borrower_user_ids_by_book(book_id):
+    rows = db.fetch_all(
+        '''SELECT c.accession_id, u.user_id
+           FROM circulation_records c
+           JOIN borrowers br ON c.borrower_id = br.borrower_id
+           JOIN user_accounts u ON br.user_id = u.user_id
+           WHERE c.book_id = %s AND c.transaction_status IN ('active', 'overdue')''',
+        (book_id,)
+    )
+    return {row[0]: row[1] for row in rows}
+
+
 def get_available_accession_by_book(book_id):
     return db.fetch_one(
         '''SELECT a.* FROM accession_log a
@@ -225,6 +237,30 @@ def get_active_loan_by_id_and_user(circulation_id, user_id):
     )
 
 
+def get_user_loan_history(user_id):
+    return db.fetch_all(
+        '''SELECT c.circulation_id, c.borrow_date, c.due_date, c.return_date, c.borrow_type,
+                  c.transaction_status, c.fine_amount, b.title, b.author, a.accession_number
+           FROM circulation_records c
+           JOIN borrowers br ON c.borrower_id = br.borrower_id
+           JOIN book_catalog b ON c.book_id = b.book_id
+           JOIN accession_log a ON c.accession_id = a.accession_id
+           WHERE br.user_id = %s
+           ORDER BY COALESCE(c.return_date, c.borrow_date) DESC, c.circulation_id DESC''',
+        (user_id,)
+    )
+
+
+def get_notifications_by_borrower(borrower_id):
+    return db.fetch_all(
+        '''SELECT notification_id, message, notif_type, related_reference, date_sent
+           FROM notification_log
+           WHERE recipient_id = %s
+           ORDER BY date_sent DESC''',
+         (borrower_id,)
+    )
+
+
 def get_borrower_by_user(user_id):
     return db.fetch_one('SELECT * FROM borrowers WHERE user_id = %s', (user_id,))
 
@@ -299,6 +335,17 @@ def get_reservations_by_book(book_id):
            WHERE r.book_id = %s
            ORDER BY r.queue_position''',
         (book_id,)
+    )
+
+def get_reservations_by_borrower(borrower_id):
+    return db.fetch_all(
+        '''SELECT r.reservation_id, r.queue_position, r.reservation_status, r.request_date, r.claim_deadline,
+                  b.title, b.author
+           FROM reservation_queue r
+           JOIN book_catalog b ON r.book_id = b.book_id
+           WHERE r.borrower_id = %s
+           ORDER BY r.queue_position''',
+        (borrower_id,)
     )
 
 

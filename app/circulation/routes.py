@@ -11,6 +11,7 @@ from .models import (
     get_borrower_by_user, get_borrower_by_id_number, get_borrower_details,
     get_circulation_stats, get_active_loans, get_recent_transactions,
     get_overdue_loans_detail, get_due_soon_detail, get_loans_by_borrower,
+    get_active_loan_by_id_and_user,
     create_reservation, get_next_queue_position,
     get_active_reservation_by_book_and_borrower, get_reservation_by_id,
     get_reservations_grouped, get_reservations_by_book,
