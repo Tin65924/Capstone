@@ -558,8 +558,12 @@ def book_info(book_id):
         return redirect(url_for('cataloging.public_catalog'))
     accessions = get_accessions_by_book(book_id)
     from app.auth.models import get_user_by_id
-    from app.circulation.models import get_active_loan_accession_ids_by_book
+    from app.circulation.models import (
+        get_active_loan_accession_ids_by_book,
+        get_active_loan_borrower_user_ids_by_book,
+    )
     borrowed_ids = get_active_loan_accession_ids_by_book(book_id)
+    borrower_map = get_active_loan_borrower_user_ids_by_book(book_id)
     accessions_with_status = [
         (acc, acc[0] not in borrowed_ids) for acc in accessions
     ]
@@ -567,4 +571,4 @@ def book_info(book_id):
     user_data = get_user_by_id(current_user.id) if current_user.is_authenticated else None
     return render_template('public/bookinfo.html', book=book,
                            accessions=accessions_with_status, any_available=any_available,
-                           user_data=user_data)
+                           borrower_map=borrower_map, user_data=user_data)

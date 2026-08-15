@@ -45,6 +45,18 @@ def get_active_loan_accession_ids_by_book(book_id):
     return {row[0] for row in rows}
 
 
+def get_active_loan_borrower_user_ids_by_book(book_id):
+    rows = db.fetch_all(
+        '''SELECT c.accession_id, u.user_id
+           FROM circulation_records c
+           JOIN borrowers br ON c.borrower_id = br.borrower_id
+           JOIN user_accounts u ON br.user_id = u.user_id
+           WHERE c.book_id = %s AND c.transaction_status IN ('active', 'overdue')''',
+        (book_id,)
+    )
+    return {row[0]: row[1] for row in rows}
+
+
 def get_available_accession_by_book(book_id):
     return db.fetch_one(
         '''SELECT a.* FROM accession_log a

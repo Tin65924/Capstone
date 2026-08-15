@@ -100,26 +100,6 @@
                     Not Available
                 </span>
                 {% endif %}
-                <div class="flex gap-2 w-full">
-                    {% if current_user.is_authenticated %}
-                        {% if any_available %}
-                        <button id="openBorrowModalBtn" class="flex-1 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded font-bold text-sm transition-all flex items-center justify-center gap-2">
-                            Borrow <span class="material-symbols-outlined text-lg">import_export</span>
-                        </button>
-                        {% else %}
-                        <form method="post" action="{{ url_for('circulation.user_reserve') }}" class="flex-1">
-                            <input type="hidden" name="book_id" value="{{ book[0] }}">
-                            <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded font-bold text-sm transition-all flex items-center justify-center gap-2">
-                                Reserve <span class="material-symbols-outlined text-lg">bookmark_add</span>
-                            </button>
-                        </form>
-                        {% endif %}
-                    {% else %}
-                    <a href="{{ url_for('auth.login', next=request.path) }}" class="flex-1 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded font-bold text-sm transition-all flex items-center justify-center gap-2 text-center">
-                        {{ 'Borrow' if any_available else 'Reserve' }} <span class="material-symbols-outlined text-lg">login</span>
-                    </a>
-                    {% endif %}
-                </div>
             </div>
         </div>
 
@@ -203,8 +183,13 @@
                                 {% if is_available %}
                                 <button class="text-primary hover:underline text-xs font-bold"
                                         onclick="openBorrowModal('{{ acc[0] }}')">Borrow</button>
-                                {% else %}
+                                {% elif borrower_map.get(acc[0]) == current_user.id|int %}
                                 <button class="text-slate-300 text-xs font-bold cursor-not-allowed" disabled>Borrowed</button>
+                                {% else %}
+                                <form method="post" action="{{ url_for('circulation.user_reserve') }}" class="inline">
+                                    <input type="hidden" name="book_id" value="{{ book[0] }}">
+                                    <button type="submit" class="text-primary hover:underline text-xs font-bold">Reserve</button>
+                                </form>
                                 {% endif %}
                             {% else %}
                                 {% if is_available %}
@@ -289,10 +274,6 @@
     }
     function closeBorrowModal() {
         document.getElementById('borrowModal').classList.add('hidden');
-    }
-    var borrowBtn = document.getElementById('openBorrowModalBtn');
-    if (borrowBtn) {
-        borrowBtn.addEventListener('click', function () { openBorrowModal(''); });
     }
 </script>
 
