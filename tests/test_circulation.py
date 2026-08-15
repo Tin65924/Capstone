@@ -39,6 +39,8 @@ class TestCirculationPage:
         resp = librarian_client.get('/librarian/circulation?search=2024-0001')
         assert resp.status_code == 200
         assert b'Test Student' in resp.data
+        assert b'bg-blue-100 text-blue-700">Student</span>' in resp.data
+        assert b'Limit: 3 books' in resp.data
 
     def test_borrower_lookup_not_found(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = None
@@ -164,6 +166,18 @@ class TestReservationLifecycle:
         assert resp.status_code == 302
         call_args = mock_db['execute'].call_args_list[0]
         assert "reservation_status = 'expired'" in call_args[0][0]
+
+    def test_stats_sum_correct_status_columns(self, librarian_client, mock_db):
+        groups = [
+            (1, 'Book A', 'Author A', 6, 1, 2, 0, 0),   # total, waiting, allocated, claimed, expired
+            (3, 'Book B', 'Author B', 5, 2, 3, 0, 0),
+        ]
+        mock_db['fetch_all'].side_effect = [groups, [], []]
+        resp = librarian_client.get('/librarian/reservations')
+        assert resp.status_code == 200
+        assert b'Active Reservations</div><div class="text-xl font-bold">8</div>' in resp.data
+        assert b'Ready for Pickup</div><div class="text-xl font-bold">5</div>' in resp.data
+        assert b'Waiting in Queue</div><div class="text-xl font-bold">3</div>' in resp.data
 
 
 class TestUserBorrow:

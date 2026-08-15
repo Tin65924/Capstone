@@ -169,9 +169,9 @@ def reservations_page():
     reservations_by_book = {
         row[0]: get_reservations_by_book(row[0]) for row in groups
     }
-    active = sum(row[3] + row[4] for row in groups)
-    ready = sum(row[4] for row in groups)
-    pending = sum(row[3] for row in groups)
+    active = sum(row[4] + row[5] for row in groups)
+    ready = sum(row[5] for row in groups)
+    pending = sum(row[4] for row in groups)
     return render_template(
         'reservations/reservations.html',
         groups=groups,
