@@ -18,10 +18,12 @@ def books_borrowed_per_program(start_date=None, end_date=None):
     parts, params = _date_filter({'start': start_date, 'end': end_date}, 'c.borrow_date')
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
-        '''SELECT b.department, COUNT(c.circulation_id) as total
+        '''SELECT COALESCE(NULLIF(b.department, ''), 'No program') as department,
+                  COUNT(c.circulation_id) as total
            FROM circulation_records c
            JOIN borrowers b ON c.borrower_id = b.borrower_id
-           {} GROUP BY b.department ORDER BY total DESC'''.format(where),
+           {} GROUP BY COALESCE(NULLIF(b.department, ''), 'No program')
+           ORDER BY total DESC'''.format(where),
         tuple(params) if params else None
     )
 
