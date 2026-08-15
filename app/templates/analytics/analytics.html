@@ -304,16 +304,11 @@
                     </button>
                 </form>
                 <div class="w-[1px] h-6 bg-gray-200 mx-1"></div>
-                <form method="post" action="{{ url_for('analytics.export_report') }}" target="_blank">
-                    <input type="hidden" name="preset" value="{{ preset }}">
-                    <input type="hidden" name="from" value="{{ from_date }}">
-                    <input type="hidden" name="to" value="{{ to_date }}">
-                    <button type="submit" name="kpi_type" value="all"
-                        class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all">
-                        <span class="material-symbols-outlined text-lg">download</span>
-                        Export All
-                    </button>
-                </form>
+                <button id="exportAllBtn" onclick="openExportAllModal()"
+                    class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all">
+                    <span class="material-symbols-outlined text-lg">download</span>
+                    Export All
+                </button>
             </div>
         </div>
 
@@ -369,6 +364,36 @@
                         <span class="material-symbols-outlined text-2xl text-primary">grid_on</span>
                         <span class="text-sm font-bold">XLSX</span>
                         <span class="text-[10px] text-slate-400">Excel workbook</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export All Modal -->
+    <div id="exportAllModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-900/60" onclick="closeExportAllModal()"></div>
+        <div class="relative bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 max-w-sm w-full">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white">Export All Reports</h3>
+                <button onclick="closeExportAllModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="p-6 space-y-3">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Export every KPI report in one file. Choose a format.</p>
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="doExportAll('csv')"
+                        class="flex flex-col items-center gap-1 p-4 border border-slate-200 dark:border-slate-700 rounded hover:border-primary hover:ring-1 hover:ring-primary transition-all">
+                        <span class="material-symbols-outlined text-2xl text-emerald-500">table_rows</span>
+                        <span class="text-sm font-bold">CSV</span>
+                        <span class="text-[10px] text-slate-400">One file, per-KPI sections</span>
+                    </button>
+                    <button onclick="doExportAll('xlsx')"
+                        class="flex flex-col items-center gap-1 p-4 border border-slate-200 dark:border-slate-700 rounded hover:border-primary hover:ring-1 hover:ring-primary transition-all">
+                        <span class="material-symbols-outlined text-2xl text-primary">grid_on</span>
+                        <span class="text-sm font-bold">XLSX</span>
+                        <span class="text-[10px] text-slate-400">One sheet per KPI</span>
                     </button>
                 </div>
             </div>
@@ -707,30 +732,47 @@
             document.getElementById('exportModal').classList.add('hidden');
         }
 
-        function doExport(format) {
-            const f = cardFilter(exportType);
+        function submitExport(kpi_type, format, preset, from, to) {
             const form = document.createElement('form');
             form.method = 'POST';
             form.action = EXPORT_URL;
             form.target = '_blank';
-            const fields = {
-                kpi_type: exportType,
-                format: format,
-                preset: f ? f.preset : GLOBAL.preset,
-                from: f ? (f.from || '') : GLOBAL.from,
-                to: f ? (f.to || '') : GLOBAL.to,
-            };
+            const fields = { kpi_type: kpi_type, format: format, preset: preset, from: from, to: to };
             Object.keys(fields).forEach(function (k) {
                 const input = document.createElement('input');
                 input.type = 'hidden';
                 input.name = k;
-                input.value = fields[k];
+                input.value = fields[k] || '';
                 form.appendChild(input);
             });
             document.body.appendChild(form);
             form.submit();
             form.remove();
+        }
+
+        function doExport(format) {
+            const f = cardFilter(exportType);
+            submitExport(
+                exportType,
+                format,
+                f ? f.preset : GLOBAL.preset,
+                f ? (f.from || '') : GLOBAL.from,
+                f ? (f.to || '') : GLOBAL.to,
+            );
             closeExportModal();
+        }
+
+        function openExportAllModal() {
+            document.getElementById('exportAllModal').classList.remove('hidden');
+        }
+
+        function closeExportAllModal() {
+            document.getElementById('exportAllModal').classList.add('hidden');
+        }
+
+        function doExportAll(format) {
+            submitExport('all', format, GLOBAL.preset, GLOBAL.from, GLOBAL.to);
+            closeExportAllModal();
         }
 
         let filterType = null;
