@@ -1,11 +1,195 @@
-from flask import render_template
-from flask_login import login_required
+import csv
+import io
+from datetime import date, datetime
+from flask import render_template, request, Response, redirect, url_for, flash
+from flask_login import login_required, current_user
+from openpyxl import Workbook
+
 from . import analytics_bp
 from app.auth.decorators import librarian_required
+from app.analytics import models
+
+VALID_KPIS = {
+    'books_borrowed_per_program',
+    'utilization_rate',
+    'most_borrowed_titles',
+    'underutilized_titles',
+}
+
+KPI_LABELS = {
+    'books_borrowed_per_program': 'Books Borrowed per Program',
+    'utilization_rate': 'Utilization Rate',
+    'most_borrowed_titles': 'Most Borrowed Titles',
+    'underutilized_titles': 'Underutilized Titles',
+}
+
+KPI_DESCRIPTIONS = {
+    'books_borrowed_per_program': 'Total borrows broken down by borrower program/department.',
+    'utilization_rate': 'Share of the active collection currently on loan.',
+    'most_borrowed_titles': 'Top titles by quantity of borrows in the selected period.',
+    'underutilized_titles': 'Titles with zero borrows in the selected period.',
+}
+
+
+def parse_date_range():
+    """Resolve the requested date range into (start_date, end_date).
+
+    Priority: explicit from/to dates, else the chosen preset
+    (``all`` -> no bounds, ``semester`` -> current academic semester,
+    ``year`` -> current calendar year).
+    """
+    preset = request.args.get('preset', 'all')
+    from_str = request.args.get('from', '').strip()
+    to_str = request.args.get('to', '').strip()
+    today = date.today()
+
+    start_date = end_date = None
+
+    if from_str or to_str:
+        try:
+            start_date = datetime.strptime(from_str, '%Y-%m-%d').date() if from_str else None
+            end_date = datetime.strptime(to_str, '%Y-%m-%d').date() if to_str else None
+        except ValueError:
+            start_date = end_date = None
+        return start_date, end_date
+
+    if preset == 'year':
+        start_date = date(today.year, 1, 1)
+        end_date = date(today.year, 12, 31)
+    elif preset == 'semester':
+        if today.month >= 8:
+            start_date = date(today.year, 8, 1)
+            end_date = date(today.year, 12, 31)
+        else:
+            start_date = date(today.year, 1, 1)
+            end_date = date(today.year, 5, 31)
+    return start_date, end_date
+
+
+def compute_all_kpis(start_date, end_date):
+    return {
+        'books_borrowed_per_program': models.books_borrowed_per_program(start_date, end_date),
+        'utilization_rate': models.utilization_rate(start_date, end_date),
+        'most_borrowed_titles': models.most_borrowed_titles(start_date, end_date),
+        'underutilized_titles': models.underutilized_titles(start_date, end_date),
+    }
 
 
 @analytics_bp.route('/librarian/analytics')
 @login_required
 @librarian_required
 def analytics_page():
-    return render_template('analytics/analytics.html')
+    start_date, end_date = parse_date_range()
+    kpi_data = compute_all_kpis(start_date, end_date)
+    return render_template(
+        'analytics/analytics.html',
+        kpi_data=kpi_data,
+        kpi_labels=KPI_LABELS,
+        kpi_descriptions=KPI_DESCRIPTIONS,
+        preset=request.args.get('preset', 'all'),
+        from_date=request.args.get('from', ''),
+        to_date=request.args.get('to', ''),
+    )
+
+
+def _as_2d_rows(kpi_type, kpi_data):
+    """Flatten a KPI query result into labeled, exportable 2-D rows."""
+    if kpi_type == 'books_borrowed_per_program':
+        return [('Program', 'Total Borrows')] + [(r[0], r[1]) for r in kpi_data]
+    if kpi_type == 'utilization_rate':
+        return [('Metric', 'Value'), ('Utilization Rate (%)', kpi_data)]
+    if kpi_type == 'most_borrowed_titles':
+        return [('Title', 'Borrow Count')] + [(r[0], r[1]) for r in kpi_data]
+    if kpi_type == 'underutilized_titles':
+        return [('Title',)] + [(r[0],) for r in kpi_data]
+    raise ValueError('Unknown KPI type: %s' % kpi_type)
+
+
+def _run_kpi(kpi_type, start_date, end_date):
+    if kpi_type == 'utilization_rate':
+        return models.utilization_rate(start_date, end_date)
+    if kpi_type == 'books_borrowed_per_program':
+        return models.books_borrowed_per_program(start_date, end_date)
+    if kpi_type == 'most_borrowed_titles':
+        return models.most_borrowed_titles(start_date, end_date)
+    if kpi_type == 'underutilized_titles':
+        return models.underutilized_titles(start_date, end_date)
+    raise ValueError('Unknown KPI type: %s' % kpi_type)
+
+
+@analytics_bp.route('/librarian/analytics/export', methods=['POST'])
+@login_required
+@librarian_required
+def export_report():
+    kpi_type = request.form.get('kpi_type', '')
+    fmt = request.form.get('format', 'csv')
+    preset = request.form.get('preset', 'all')
+    from_str = request.form.get('from', '').strip()
+    to_str = request.form.get('to', '').strip()
+
+    export_all = kpi_type == 'all'
+    if not export_all and kpi_type not in VALID_KPIS:
+        flash('Invalid report type.', 'error')
+        return redirect(url_for('analytics.analytics_page'))
+    if fmt not in ('csv', 'xlsx'):
+        fmt = 'csv'
+
+    try:
+        if from_str:
+            start_date = datetime.strptime(from_str, '%Y-%m-%d').date()
+        else:
+            start_date = None
+        if to_str:
+            end_date = datetime.strptime(to_str, '%Y-%m-%d').date()
+        else:
+            end_date = None
+    except ValueError:
+        start_date = end_date = None
+
+    if export_all:
+        kpi_types = list(KPI_LABELS.keys())
+    else:
+        kpi_types = [kpi_type]
+
+    sections = []
+    for kt in kpi_types:
+        kpi_data = _run_kpi(kt, start_date, end_date)
+        models.save_report_snapshot(
+            kt,
+            {'preset': preset, 'from': from_str, 'to': to_str},
+            [list(r) for r in kpi_data] if isinstance(kpi_data, list) else kpi_data,
+            current_user.id,
+        )
+        sections.append((kt, kpi_data))
+
+    stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    label = 'all' if export_all else kpi_type
+    filename = '{}_{}.{}'.format(label, stamp, fmt)
+
+    if fmt == 'xlsx':
+        wb = Workbook()
+        wb.remove(wb.active)
+        for kt, kpi_data in sections:
+            ws = wb.create_sheet(title=(KPI_LABELS[kt][:31] or kt))
+            for row in _as_2d_rows(kt, kpi_data):
+                ws.append(row)
+        buf = io.BytesIO()
+        wb.save(buf)
+        body = buf.getvalue()
+        mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    else:
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        for i, (kt, kpi_data) in enumerate(sections):
+            if i > 0:
+                buf.write('\n')
+            writer.writerow([KPI_LABELS[kt]])
+            writer.writerows(_as_2d_rows(kt, kpi_data))
+        body = buf.getvalue().encode('utf-8-sig')
+        mimetype = 'text/csv'
+
+    return Response(
+        body,
+        mimetype=mimetype,
+        headers={'Content-Disposition': 'attachment; filename="{}"'.format(filename)},
+    )
