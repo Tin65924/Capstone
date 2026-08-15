@@ -602,6 +602,9 @@
                 `;
                 wrap.appendChild(row);
             });
+            if (!numbered) {
+                wrap.classList.add('max-h-56', 'overflow-y-auto', 'pr-1', 'custom-scrollbar');
+            }
             return wrap;
         }
 
