@@ -212,9 +212,17 @@ def reservation_action(reservation_id, action):
         if reservation[5] != 'allocated':
             flash('Only allocated reservations can be claimed.', 'error')
             return redirect(url_for('circulation.reservations_page'))
+        accession = get_available_accession_by_book(reservation[1])
+        if not accession:
+            flash('Cannot claim — no copy of this book is available to check out.', 'error')
+            return redirect(url_for('circulation.reservations_page'))
+        borrower_detail = get_borrower_details(reservation[2])
+        role_name = borrower_detail[6] if borrower_detail else 'Student'
+        due_date = _compute_due_date('overnight', role_name)
+        borrow_book(reservation[1], accession[0], reservation[2], current_user.id, 'overnight', due_date)
         claim_reservation(reservation_id)
         log_activity(current_user.id, f'circulation:claim_reservation:{reservation_id}')
-        flash('Reservation claimed.', 'success')
+        flash(f'Reservation claimed — booked as an overnight borrow due {due_date}.', 'success')
     elif action == 'expire':
         if reservation[5] not in ('waiting', 'allocated'):
             flash('This reservation is already finished.', 'error')
@@ -249,6 +257,17 @@ def user_borrow():
         return redirect(url_for('cataloging.book_info', book_id=book_id))
     if borrower_row[4] != 'active':
         flash('Your borrower account is not active.', 'error')
+        return redirect(url_for('cataloging.book_info', book_id=book_id))
+
+    if borrow_type == 'overnight':
+        existing = get_active_reservation_by_book_and_borrower(book_id, borrower_row[0])
+        if existing:
+            flash('You already have a pending reservation for this book.', 'error')
+            return redirect(url_for('cataloging.book_info', book_id=book_id))
+        position = get_next_queue_position(book_id)
+        create_reservation(book_id, borrower_row[0], position)
+        log_activity(current_user.id, f'circulation:user_borrow_request:{book_id}')
+        flash('Overnight borrow request submitted. A librarian must approve it before the book leaves the library.', 'success')
         return redirect(url_for('cataloging.book_info', book_id=book_id))
 
     accession_id = request.form.get('accession_id', type=int)

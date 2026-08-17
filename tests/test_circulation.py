@@ -172,11 +172,27 @@ class TestReservationLifecycle:
         assert mock_db['execute'].call_count == 0
 
     def test_claim_success(self, librarian_client, mock_db):
-        mock_db['fetch_one'].return_value = (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', '2026-08-03 10:00:00')
+        mock_db['fetch_one'].side_effect = [
+            (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', '2026-08-03 10:00:00'),  # reservation
+            (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),                        # available copy
+            (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),            # borrower details
+        ]
         resp = librarian_client.post('/librarian/reservations/9/claim')
         assert resp.status_code == 302
-        call_args = mock_db['execute'].call_args_list[0]
-        assert "reservation_status = 'claimed'" in call_args[0][0]
+        first_call = mock_db['execute'].call_args_list[0]
+        assert 'INSERT INTO circulation_records' in first_call[0][0]
+        assert 'overnight' in first_call[0][1]
+        second_call = mock_db['execute'].call_args_list[1]
+        assert "reservation_status = 'claimed'" in second_call[0][0]
+
+    def test_claim_rejected_when_no_available_copy(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', '2026-08-03 10:00:00'),  # reservation
+            None,                                                                      # no available copy
+        ]
+        resp = librarian_client.post('/librarian/reservations/9/claim')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
 
     def test_expire_success(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', '2026-08-03 10:00:00')
@@ -199,7 +215,36 @@ class TestReservationLifecycle:
 
 
 class TestUserBorrow:
-    def test_student_borrows_available_book(self, student_client, mock_db):
+    def test_overnight_borrow_creates_reservation_not_loan(self, student_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (5, 'Intro to Algorithms', 'Cormen'),     # get_book_by_id
+            (1, 1, '2024-0001', 'CS', 'active'),       # get_borrower_by_user
+            None,                                      # no existing reservation
+            (1,),                                      # next queue position
+        ]
+        resp = student_client.post('/user/borrow', data={
+            'book_id': 5,
+            'borrow_type': 'overnight',
+        })
+        assert resp.status_code == 302
+        call_args = mock_db['execute'].call_args_list[0]
+        assert 'INSERT INTO reservation_queue' in call_args[0][0]
+        assert call_args[0][1] == (5, 1, 1)
+
+    def test_overnight_borrow_rejects_duplicate_reservation(self, student_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (5, 'Intro to Algorithms', 'Cormen'),
+            (1, 1, '2024-0001', 'CS', 'active'),
+            (9, 5, 1, 1, '2026-08-01 10:00:00', 'waiting', None),  # existing reservation
+        ]
+        resp = student_client.post('/user/borrow', data={
+            'book_id': 5,
+            'borrow_type': 'overnight',
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_daily_circulation_borrow_is_immediate_loan(self, student_client, mock_db):
         mock_db['fetch_one'].side_effect = [
             (5, 'Intro to Algorithms', 'Cormen'),     # get_book_by_id
             (1, 1, '2024-0001', 'CS', 'active'),       # get_borrower_by_user
@@ -208,25 +253,12 @@ class TestUserBorrow:
         ]
         resp = student_client.post('/user/borrow', data={
             'book_id': 5,
-            'borrow_type': 'overnight',
+            'borrow_type': 'daily_circulation',
         })
         assert resp.status_code == 302
         call_args = mock_db['execute'].call_args_list[0]
         assert 'INSERT INTO circulation_records' in call_args[0][0]
-        assert 'overnight' in call_args[0][1]
-
-    def test_student_borrow_all_copies_out(self, student_client, mock_db):
-        mock_db['fetch_one'].side_effect = [
-            (5, 'Intro to Algorithms', 'Cormen'),
-            (1, 1, '2024-0001', 'CS', 'active'),
-            None,  # no available accession
-        ]
-        resp = student_client.post('/user/borrow', data={
-            'book_id': 5,
-            'borrow_type': 'overnight',
-        })
-        assert resp.status_code == 302
-        assert mock_db['execute'].call_count == 0
+        assert 'daily_circulation' in call_args[0][1]
 
     def test_borrow_requires_login(self, client, mock_db):
         resp = client.post('/user/borrow', data={'book_id': 5})
