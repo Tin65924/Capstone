@@ -223,16 +223,17 @@
                             <div class="mb-3">
                                 {% if book[9] == 'E-Book' %}
                                 <span class="inline-flex bg-primary/10 text-primary px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight">E-Book</span>
-                                {% elif book[12] == 'borrowed' %}
+                                {% elif book[13] == 'borrowed' %}
                                 <span class="inline-flex bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight items-center gap-1">
                                     <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                                    Borrowed
+                                    Not Available
                                 </span>
                                 {% else %}
                                 <span class="inline-flex bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight items-center gap-1">
                                     <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                                     Available
                                 </span>
+                                <p class="text-[10px] text-gray-400 mt-1">{{ book[14] }} cop{{ 'y' if book[14] == 1 else 'ies' }} available</p>
                                 {% endif %}
                             </div>
                             <h3 class="text-primary font-bold text-base leading-tight mb-2 line-clamp-2">{{ book[1] }}</h3>
