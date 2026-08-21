@@ -231,12 +231,11 @@
                     </div>
                     <!-- Right Column: Current Book Requests -->
                     <div class="flex flex-col gap-6">
-                        <!-- Current Book Requests Section -->
+                        <!-- Current Book Procurement Requests Section -->
                         <div
                             class="bg-white dark:bg-[#1a2235] rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
                             <div class="p-4 border-b border-gray-100 dark:border-gray-700">
-                                <h2 class="font-bold text-gray-900 dark:text-white text-lg" style="">Current Book
-                                    Requests</h2>
+                                <h2 class="font-bold text-gray-900 dark:text-white text-lg" style="">Current Book Procurement Requests</h2>
                             </div>
                             <div class="p-4 flex flex-col gap-4 {% if my_requests|length > 3 %}max-h-72 overflow-y-auto{% endif %}">
                                 {% for req in my_requests[:3] %}
@@ -259,6 +258,37 @@
                                     <a href="{{ url_for('main.user_history') }}"
                                         class="text-xs font-bold text-primary hover:underline">View all
                                         ({{ my_requests|length }})</a>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <!-- Current Book Borrowing Requests Section -->
+                        <div
+                            class="bg-white dark:bg-[#1a2235] rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                            <div class="p-4 border-b border-gray-100 dark:border-gray-700">
+                                <h2 class="font-bold text-gray-900 dark:text-white text-lg" style="">Current Book Borrowing Requests</h2>
+                            </div>
+                            <div class="p-4 flex flex-col gap-4 {% if borrowing_requests|length > 3 %}max-h-72 overflow-y-auto{% endif %}">
+                                {% for br in borrowing_requests[:3] %}
+                                <div
+                                    class="p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
+                                    <div class="flex justify-between items-start mb-1">
+                                        <h4 class="font-bold text-sm text-gray-900 dark:text-white leading-tight"
+                                            style="">{{ br[5] }}</h4>
+                                        <span
+                                            class="{% if br[2] == 'allocated' %}bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300{% else %}bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300{% endif %} text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider"
+                                            style="">{{ br[2]|replace('_', ' ')|title }}</span>
+                                    </div>
+                                    <p class="text-xs text-gray-500" style="">{{ br[6] if br[6] else 'No author' }} · Queue #{{ br[1] }}</p>
+                                </div>
+                                {% else %}
+                                <p class="text-xs text-gray-400">No borrowing requests yet.</p>
+                                {% endfor %}
+                                {% if borrowing_requests|length > 3 %}
+                                <div class="pt-1">
+                                    <a href="{{ url_for('main.user_history') }}"
+                                        class="text-xs font-bold text-primary hover:underline">View all
+                                        ({{ borrowing_requests|length }})</a>
                                 </div>
                                 {% endif %}
                             </div>

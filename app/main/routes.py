@@ -64,14 +64,18 @@ def user_profile():
 
         reservations = get_reservations_by_borrower(borrower_id)
         pickups = [r for r in reservations if r[2] == 'allocated']
+        borrowing_requests = [r for r in reservations if r[2] in ('waiting', 'allocated')]
 
         my_requests = get_requests_by_borrower(borrower_id)
         notifications = get_notifications_by_borrower(borrower_id)
+    else:
+        borrowing_requests = []
 
     return render_template('users/user_profile.html', user_data=user_data,
                            loans=loans, overdue_count=overdue_count,
                            active_count=active_count, borrow_limit=borrow_limit,
                            pickups=pickups, my_requests=my_requests,
+                           borrowing_requests=borrowing_requests,
                            notifications=notifications)
 
 
