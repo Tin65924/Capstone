@@ -198,6 +198,13 @@ def reservation_action(reservation_id, action):
         if not get_available_accession_by_book(reservation[1]):
             flash('Cannot allocate — all copies of this book are still on loan.', 'error')
             return redirect(url_for('circulation.reservations_page'))
+        borrower_detail = get_borrower_details(reservation[2])
+        role_name = borrower_detail[6] if borrower_detail else 'Student'
+        limit = _borrow_limit(role_name)
+        if count_active_loans(reservation[2]) >= limit:
+            borrower_name = borrower_detail[4] if borrower_detail else 'Borrower'
+            flash(f'Cannot allocate — {borrower_name} has reached the borrow limit ({limit} books).', 'error')
+            return redirect(url_for('circulation.reservations_page'))
         deadline = datetime.now() + timedelta(days=2)
         allocate_reservation(reservation_id, deadline)
         create_notification(
@@ -218,6 +225,11 @@ def reservation_action(reservation_id, action):
             return redirect(url_for('circulation.reservations_page'))
         borrower_detail = get_borrower_details(reservation[2])
         role_name = borrower_detail[6] if borrower_detail else 'Student'
+        limit = _borrow_limit(role_name)
+        if count_active_loans(reservation[2]) >= limit:
+            borrower_name = borrower_detail[4] if borrower_detail else 'Borrower'
+            flash(f'Cannot claim — {borrower_name} has reached the borrow limit ({limit} books).', 'error')
+            return redirect(url_for('circulation.reservations_page'))
         due_date = _compute_due_date('overnight', role_name)
         borrow_book(reservation[1], accession[0], reservation[2], current_user.id, 'overnight', due_date)
         claim_reservation(reservation_id)
@@ -263,6 +275,10 @@ def user_borrow():
         existing = get_active_reservation_by_book_and_borrower(book_id, borrower_row[0])
         if existing:
             flash('You already have a pending reservation for this book.', 'error')
+            return redirect(url_for('cataloging.book_info', book_id=book_id))
+        limit = _borrow_limit(current_user.role)
+        if count_active_loans(borrower_row[0]) >= limit:
+            flash(f'You have reached the borrow limit ({limit} books).', 'error')
             return redirect(url_for('cataloging.book_info', book_id=book_id))
         position = get_next_queue_position(book_id)
         create_reservation(book_id, borrower_row[0], position)

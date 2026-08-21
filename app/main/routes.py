@@ -58,7 +58,7 @@ def user_profile():
 
         role_name = user_data[2] if user_data else ''
         if role_name == 'Faculty':
-            borrow_limit = current_app.config.get('MAX_BORROW_LIMIT_FACULTY', 10)
+            borrow_limit = current_app.config.get('MAX_BORROW_LIMIT_FACULTY', 5)
         else:
             borrow_limit = current_app.config.get('MAX_BORROW_LIMIT_STUDENT', 3)
 

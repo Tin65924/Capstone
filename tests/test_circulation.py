@@ -143,6 +143,8 @@ class TestReservationLifecycle:
         mock_db['fetch_one'].side_effect = [
             (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),  # reservation
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),    # available copy
+            (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),  # borrower details
+            (0,),                                                  # count active loans
         ]
         resp = librarian_client.post('/librarian/reservations/9/allocate')
         assert resp.status_code == 302
@@ -176,6 +178,7 @@ class TestReservationLifecycle:
             (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', '2026-08-03 10:00:00'),  # reservation
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),                        # available copy
             (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),            # borrower details
+            (0,),                                                                      # count active loans
         ]
         resp = librarian_client.post('/librarian/reservations/9/claim')
         assert resp.status_code == 302
@@ -191,6 +194,28 @@ class TestReservationLifecycle:
             None,                                                                      # no available copy
         ]
         resp = librarian_client.post('/librarian/reservations/9/claim')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_claim_rejected_when_borrower_at_limit(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', '2026-08-03 10:00:00'),  # reservation
+            (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),                        # available copy
+            (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),            # borrower details
+            (3,),                                                                      # count == student limit
+        ]
+        resp = librarian_client.post('/librarian/reservations/9/claim')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_allocate_rejected_when_borrower_at_limit(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),  # reservation
+            (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),    # available copy
+            (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),  # borrower details
+            (3,),                                                  # count == limit
+        ]
+        resp = librarian_client.post('/librarian/reservations/9/allocate')
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
 
@@ -220,6 +245,7 @@ class TestUserBorrow:
             (5, 'Intro to Algorithms', 'Cormen'),     # get_book_by_id
             (1, 1, '2024-0001', 'CS', 'active'),       # get_borrower_by_user
             None,                                      # no existing reservation
+            (0,),                                      # count active loans
             (1,),                                      # next queue position
         ]
         resp = student_client.post('/user/borrow', data={
@@ -236,6 +262,20 @@ class TestUserBorrow:
             (5, 'Intro to Algorithms', 'Cormen'),
             (1, 1, '2024-0001', 'CS', 'active'),
             (9, 5, 1, 1, '2026-08-01 10:00:00', 'waiting', None),  # existing reservation
+        ]
+        resp = student_client.post('/user/borrow', data={
+            'book_id': 5,
+            'borrow_type': 'overnight',
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_overnight_borrow_over_limit_rejected(self, student_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (5, 'Intro to Algorithms', 'Cormen'),
+            (1, 1, '2024-0001', 'CS', 'active'),
+            None,                                      # no existing reservation
+            (3,),                                      # count active loans == student limit (3)
         ]
         resp = student_client.post('/user/borrow', data={
             'book_id': 5,
@@ -264,6 +304,36 @@ class TestUserBorrow:
         resp = client.post('/user/borrow', data={'book_id': 5})
         assert resp.status_code == 302
         assert '/login' in resp.location
+
+    def test_faculty_over_limit_is_5(self, faculty_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (5, 'Intro to Algorithms', 'Cormen'),
+            (2, 2, '2024-0002', 'CS', 'active'),       # faculty borrower
+            None,                                      # no existing reservation
+            (5,),                                      # count == faculty limit (5)
+        ]
+        resp = faculty_client.post('/user/borrow', data={
+            'book_id': 5,
+            'borrow_type': 'overnight',
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_faculty_under_limit_can_borrow(self, faculty_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (5, 'Intro to Algorithms', 'Cormen'),
+            (2, 2, '2024-0002', 'CS', 'active'),
+            None,
+            (4,),                                      # under limit
+            (1,),
+        ]
+        resp = faculty_client.post('/user/borrow', data={
+            'book_id': 5,
+            'borrow_type': 'overnight',
+        })
+        assert resp.status_code == 302
+        call_args = mock_db['execute'].call_args_list[0]
+        assert 'INSERT INTO reservation_queue' in call_args[0][0]
 
 
 class TestUserReserve:
