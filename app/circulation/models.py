@@ -228,7 +228,7 @@ def get_user_active_loans(user_id):
 
 def get_active_loan_by_id_and_user(circulation_id, user_id):
     return db.fetch_one(
-        '''SELECT c.circulation_id, c.book_id, c.borrower_id, c.due_date, c.transaction_status
+        '''SELECT c.circulation_id, c.book_id, c.borrower_id, c.due_date, c.transaction_status, c.borrow_type
            FROM circulation_records c
            JOIN borrowers br ON c.borrower_id = br.borrower_id
            WHERE c.circulation_id = %s AND br.user_id = %s

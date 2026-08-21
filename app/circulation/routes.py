@@ -356,6 +356,10 @@ def user_return():
         flash('Borrowing record not found or already returned.', 'error')
         return redirect(url_for('main.user_profile'))
 
+    if len(loan) > 5 and loan[5] == 'overnight':
+        flash('Overnight books must be returned at the circulation desk for inspection.', 'error')
+        return redirect(url_for('main.user_profile'))
+
     fine = calculate_fine(loan[0], current_app.config['OVERDUE_FINE_PER_DAY'])
     return_book(loan[0], fine)
     log_activity(current_user.id, f'circulation:user_return:{loan[0]}')

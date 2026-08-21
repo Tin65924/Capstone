@@ -380,9 +380,9 @@ class TestUserReturn:
 
     def test_returns_own_active_loan(self, student_client, mock_db):
         mock_db['fetch_one'].side_effect = [
-            (55, 10, 1, '2026-08-02', 'active'),             # get_active_loan_by_id_and_user
-            (date(2026, 8, 1), date(2026, 8, 2)),            # calculate_fine due/returned
-            None,                                             # no waiting reservation
+            (55, 10, 1, '2026-08-02', 'active', 'daily_circulation'),  # get_active_loan_by_id_and_user
+            (date(2026, 8, 1), date(2026, 8, 2)),                       # calculate_fine due/returned
+            None,                                                        # no waiting reservation
         ]
         resp = student_client.post('/user/return', data={'circulation_id': 55})
         assert resp.status_code == 302
@@ -390,6 +390,12 @@ class TestUserReturn:
         call_args = mock_db['execute'].call_args_list[0]
         assert 'UPDATE circulation_records' in call_args[0][0]
         assert 'returned' in call_args[0][1]
+
+    def test_overnight_self_return_blocked(self, student_client, mock_db):
+        mock_db['fetch_one'].return_value = (55, 10, 1, '2026-08-02', 'active', 'overnight')
+        resp = student_client.post('/user/return', data={'circulation_id': 55})
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
 
     def test_return_other_users_loan_rejected(self, student_client, mock_db):
         mock_db['fetch_one'].return_value = None
@@ -404,9 +410,9 @@ class TestUserReturn:
 
     def test_return_computes_fine(self, student_client, mock_db):
         mock_db['fetch_one'].side_effect = [
-            (55, 10, 1, '2026-07-01', 'overdue'),            # overdue loan
-            (date(2026, 7, 1), date(2026, 7, 6)),            # 5 days late
-            None,                                             # no waiting reservation
+            (55, 10, 1, '2026-07-01', 'overdue', 'daily_circulation'),  # overdue loan
+            (date(2026, 7, 1), date(2026, 7, 6)),                       # 5 days late
+            None,                                                        # no waiting reservation
         ]
         resp = student_client.post('/user/return', data={'circulation_id': 55})
         assert resp.status_code == 302
@@ -430,7 +436,7 @@ class TestUserOverview:
     def test_profile_borrowing_card_has_return_button(self, student_client, mock_db):
         mock_db['fetch_one'].return_value = (1, 1, '2024-0001', 'CS', 'active')
         mock_db['fetch_all'].return_value = [
-            (55, date(2026, 8, 1), date(2026, 8, 2), 'overnight', 'active',
+            (55, date(2026, 8, 1), date(2026, 8, 2), 'daily_circulation', 'active',
              'Intro to Algorithms', '2024-00123'),
         ]
         resp = student_client.get('/user/profile')
@@ -438,6 +444,18 @@ class TestUserOverview:
         assert b'Intro to Algorithms' in resp.data
         assert b'View Details' in resp.data
         assert b'/user/return' in resp.data
+
+    def test_profile_overnight_shows_no_return_button(self, student_client, mock_db):
+        mock_db['fetch_one'].return_value = (1, 1, '2024-0001', 'CS', 'active')
+        mock_db['fetch_all'].return_value = [
+            (55, date(2026, 8, 1), date(2026, 8, 2), 'overnight', 'active',
+             'Intro to Algorithms', '2024-00123'),
+        ]
+        resp = student_client.get('/user/profile')
+        assert resp.status_code == 200
+        assert b'Intro to Algorithms' in resp.data
+        assert b'Return at desk' in resp.data
+        assert b'View Details' not in resp.data
 
     def test_history_lists_transactions_and_requests(self, student_client, mock_db):
         mock_db['fetch_one'].return_value = (1, 1, '2024-0001', 'CS', 'active')
