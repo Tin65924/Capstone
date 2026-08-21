@@ -165,22 +165,25 @@ def search_books_filtered(query, field=None, year_from=None, year_to=None, sort_
         elif material_type == 'physical':
             conditions.append('material_type IS NULL OR material_type != %s')
             args.append('E-Book')
+    AVAILABLE_COPY_EXISTS = (
+        "EXISTS (SELECT 1 FROM accession_log al WHERE al.book_id = book_catalog.book_id "
+        "AND NOT EXISTS (SELECT 1 FROM circulation_records c WHERE c.accession_id = al.accession_id "
+        "AND c.transaction_status IN ('active', 'overdue')))"
+    )
+
     if availability == 'available':
-        conditions.append(
-            "NOT EXISTS (SELECT 1 FROM circulation_records c WHERE c.book_id = book_catalog.book_id "
-            "AND c.transaction_status IN ('active', 'overdue'))"
-        )
+        conditions.append(AVAILABLE_COPY_EXISTS)
     elif availability == 'borrowed':
-        conditions.append(
-            "EXISTS (SELECT 1 FROM circulation_records c WHERE c.book_id = book_catalog.book_id "
-            "AND c.transaction_status IN ('active', 'overdue'))"
-        )
+        conditions.append(f'NOT {AVAILABLE_COPY_EXISTS}')
 
     where = 'WHERE ' + ' AND '.join(conditions)
 
-    availability_col = (
-        "CASE WHEN EXISTS (SELECT 1 FROM circulation_records c WHERE c.book_id = book_catalog.book_id "
-        "AND c.transaction_status IN ('active', 'overdue')) THEN 'borrowed' ELSE 'available' END AS availability"
+    availability_col = f"CASE WHEN {AVAILABLE_COPY_EXISTS} THEN 'available' ELSE 'borrowed' END AS availability"
+
+    available_count_col = (
+        "(SELECT COUNT(*) FROM accession_log al WHERE al.book_id = book_catalog.book_id "
+        "AND NOT EXISTS (SELECT 1 FROM circulation_records c WHERE c.accession_id = al.accession_id "
+        "AND c.transaction_status IN ('active', 'overdue'))) AS available_count"
     )
 
     if sort_by == 'title':
@@ -190,7 +193,7 @@ def search_books_filtered(query, field=None, year_from=None, year_to=None, sort_
     else:
         order = f'ORDER BY {DISTINCT_ORDER}'
 
-    base = f'SELECT DISTINCT ON ({DISTINCT_ORDER}) book_catalog.*, {availability_col} FROM book_catalog {where} ORDER BY {DISTINCT_ORDER}'
+    base = f'SELECT DISTINCT ON ({DISTINCT_ORDER}) book_catalog.*, {availability_col}, {available_count_col} FROM book_catalog {where} ORDER BY {DISTINCT_ORDER}'
     if sort_by in ('title', 'year_desc'):
         return db.fetch_all(
             f'SELECT * FROM ({base}) AS deduped {order}',
