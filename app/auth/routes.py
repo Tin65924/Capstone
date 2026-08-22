@@ -1,10 +1,17 @@
+import csv
+import io
 import os
 import secrets
-from flask import render_template, redirect, url_for, request, flash, session, abort, current_app
+from datetime import datetime
+
+from flask import Response, render_template, redirect, url_for, request, flash, session, abort, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from google_auth_oauthlib.flow import Flow
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+
 from . import auth_bp
 from app.database import db
 from app.bloom_registry import bloom_registry
@@ -250,6 +257,107 @@ def admin_users():
                            active=active, students=students,
                            inactive=inactive, archived=archived,
                            status_filter=status_filter)
+
+
+_USER_EXPORT_HEADERS = [
+    'User ID', 'Email', 'Full Name', 'Role', 'Account Status',
+    'Created At', 'ID Number', 'Department',
+]
+
+
+def _user_row_to_export(row):
+    def _str(v):
+        return '' if v is None else str(v)
+    created = row[5]
+    created_s = created.isoformat(sep=' ') if hasattr(created, 'isoformat') else _str(created)
+    return [
+        _str(row[0]), _str(row[1]), _str(row[2]), _str(row[3]), _str(row[4]),
+        created_s, _str(row[6]), _str(row[7]),
+    ]
+
+
+def _style_user_xlsx(ws, headers):
+    navy = PatternFill(start_color='1e3a8a', end_color='1e3a8a', fill_type='solid')
+    white_font = Font(color='FFFFFF', bold=True, size=9, name='Calibri')
+    thin = Side(style='thin', color='cbd5e1')
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.fill = navy
+        c.font = white_font
+        c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        c.border = border
+    ws.row_dimensions[1].height = 18
+    ws.freeze_panes = 'A2'
+    ws.auto_filter.ref = ws.dimensions
+    widths = [10, 28, 24, 12, 14, 18, 14, 22]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+
+
+@auth_bp.route('/librarian/users/export')
+@login_required
+@librarian_required
+def export_users():
+    status = request.args.get('status', '').strip().lower()
+    fmt = request.args.get('format', 'csv').strip().lower()
+    if fmt not in ('csv', 'xlsx'):
+        fmt = 'csv'
+    # map Inactive alias to disabled; allow 'all' or '' for no filter
+    if status == 'inactive':
+        status = 'disabled'
+    if status not in ('active', 'disabled', 'pending', 'archived'):
+        status = ''
+
+    users = get_all_users()
+    if status:
+        users = [u for u in users if (u[4] or '').lower() == status]
+
+    rows = [_user_row_to_export(u) for u in users]
+    stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    suffix = status or 'all'
+    # normalize suffix for filename: disabled -> inactive is more readable
+    file_suffix = 'inactive' if suffix == 'disabled' else suffix
+    filename = f'users_{file_suffix}_{stamp}.{fmt}'
+
+    if fmt == 'xlsx':
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Users'
+        _style_user_xlsx(ws, _USER_EXPORT_HEADERS)
+        for r in rows:
+            ws.append(r)
+        thin = Side(style='thin', color='cbd5e1')
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        for row in ws.iter_rows(min_row=2, max_row=ws.max_row, max_col=len(_USER_EXPORT_HEADERS)):
+            for cell in row:
+                cell.font = Font(size=9, name='Calibri')
+                cell.alignment = Alignment(vertical='center', wrap_text=True)
+                cell.border = border
+            ws.row_dimensions[row[0].row].height = 15
+        light = PatternFill(start_color='f8fafc', end_color='f8fafc', fill_type='solid')
+        for idx, row in enumerate(ws.iter_rows(min_row=2, max_row=ws.max_row, max_col=len(_USER_EXPORT_HEADERS)), 2):
+            if idx % 2 == 0:
+                for cell in row:
+                    cell.fill = light
+        buf = io.BytesIO()
+        wb.save(buf)
+        body = buf.getvalue()
+        mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    else:
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(_USER_EXPORT_HEADERS)
+        writer.writerows(rows)
+        body = buf.getvalue().encode('utf-8-sig')
+        mimetype = 'text/csv'
+
+    log_activity(current_user.id, f'users:export:{file_suffix}:{len(rows)}')
+    return Response(
+        body,
+        mimetype=mimetype,
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
 
 
 @auth_bp.route('/librarian/users/<int:user_id>/approve', methods=['POST'])

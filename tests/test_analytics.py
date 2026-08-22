@@ -140,15 +140,14 @@ class TestExportCsv:
         assert '/librarian/analytics' in resp.location
 
     def test_export_csv_single_kpi(self, librarian_client, mock_db):
+        """CSV format was removed — legacy csv requests now return the polished PDF."""
         mock_db['fetch_all'].return_value = [('Clean Code', 50), ('Refactoring', 30)]
         resp = librarian_client.post('/librarian/analytics/export',
                                      data={'kpi_type': 'most_borrowed_titles', 'format': 'csv'})
         assert resp.status_code == 200
-        assert 'text/csv' in resp.content_type
+        assert resp.content_type == 'application/pdf'
+        assert resp.data[:4] == b'%PDF'
         assert 'attachment' in resp.headers['Content-Disposition']
-        body = resp.data.decode('utf-8-sig')
-        assert 'Title' in body and 'Borrow Count' in body
-        assert 'Clean Code' in body and '50' in body
         # snapshot row recorded
         query = mock_db['execute'].call_args[0][0]
         assert 'INSERT INTO analytics_cache' in query
@@ -158,8 +157,8 @@ class TestExportCsv:
         resp = librarian_client.post('/librarian/analytics/export',
                                      data={'kpi_type': 'utilization_rate', 'format': 'csv'})
         assert resp.status_code == 200
-        body = resp.data.decode('utf-8-sig')
-        assert 'Utilization Rate' in body and '20' in body
+        assert resp.content_type == 'application/pdf'
+        assert resp.data[:4] == b'%PDF'
 
     def test_export_csv_all_sections(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = (10,)
@@ -167,24 +166,19 @@ class TestExportCsv:
         resp = librarian_client.post('/librarian/analytics/export',
                                      data={'kpi_type': 'all', 'format': 'csv'})
         assert resp.status_code == 200
-        body = resp.data.decode('utf-8-sig')
-        assert 'Books Borrowed per Program' in body
-        assert 'Most Borrowed Titles' in body
-        assert 'Underutilized Titles' in body
+        assert resp.content_type == 'application/pdf'
+        assert resp.data[:4] == b'%PDF'
 
 
 class TestExportXlsx:
     def test_export_xlsx_single_kpi(self, librarian_client, mock_db):
+        """XLSX format was removed — legacy xlsx requests now return the polished PDF."""
         mock_db['fetch_all'].return_value = [('Clean Code', 50)]
         resp = librarian_client.post('/librarian/analytics/export',
                                      data={'kpi_type': 'most_borrowed_titles', 'format': 'xlsx'})
         assert resp.status_code == 200
-        assert 'spreadsheetml' in resp.content_type
-        wb = load_workbook(io.BytesIO(resp.data))
-        ws = wb.active
-        assert ws['A1'].value == 'Title'
-        assert ws['A2'].value == 'Clean Code'
-        assert ws['B2'].value == 50
+        assert resp.content_type == 'application/pdf'
+        assert resp.data[:4] == b'%PDF'
 
     def test_export_xlsx_all_has_sheet_per_kpi(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = (10,)
@@ -192,9 +186,8 @@ class TestExportXlsx:
         resp = librarian_client.post('/librarian/analytics/export',
                                      data={'kpi_type': 'all', 'format': 'xlsx'})
         assert resp.status_code == 200
-        wb = load_workbook(io.BytesIO(resp.data))
-        assert 'Books Borrowed per Program' in wb.sheetnames
-        assert 'Most Borrowed Titles' in wb.sheetnames
+        assert resp.content_type == 'application/pdf'
+        assert resp.data[:4] == b'%PDF'
 
     def test_export_pdf_single_kpi(self, librarian_client, mock_db):
         mock_db['fetch_all'].return_value = [('Clean Code', 50)]

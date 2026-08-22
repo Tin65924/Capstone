@@ -180,6 +180,9 @@
                 <p class="text-gray-500 mt-1">Manage and organize your library's information database.</p>
             </div>
             <div class="flex gap-3">
+                <button class="btn btn-outline" onclick="openModal('catalogExportModal')">
+                    <span class="material-symbols-outlined">download</span> Export
+                </button>
                 <button class="btn btn-primary" onclick="openModal('addBookModal')">
                     <span class="material-symbols-outlined">add</span> Add New Book
                 </button>
@@ -628,6 +631,33 @@
             <div id="importMsg" class="hidden text-sm text-blue-600 bg-blue-50 border-t border-blue-100 px-6 py-3 flex items-center gap-2">
                 <span class="material-symbols-outlined animate-spin text-[18px]">sync</span>
                 <span>Processing bulk import of books...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Modal -->
+    <div id="catalogExportModal" class="modal-overlay" onclick="closeModal(event, 'catalogExportModal')">
+        <div class="modal" style="max-width: 420px;">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+                <h2 class="text-lg font-bold">Export Books</h2>
+                <button onclick="closeModal(null, 'catalogExportModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-sm text-gray-500">Choose a file format. Current filter: <span class="font-bold text-gray-700">{{ 'All' if not status_filter else status_filter|capitalize }}</span> — export respects the active tab.</p>
+                <div class="grid grid-cols-2 gap-3">
+                    <a href="{{ url_for('cataloging.export_books', status=status_filter, format='csv') }}"
+                       class="flex flex-col items-center gap-1.5 p-4 border border-gray-200 rounded-xl hover:border-primary hover:bg-primary/5 transition-all text-center">
+                        <span class="material-symbols-outlined text-3xl text-emerald-600">table_rows</span>
+                        <span class="text-sm font-bold">CSV</span>
+                        <span class="text-[11px] text-gray-400">Spreadsheet</span>
+                    </a>
+                    <a href="{{ url_for('cataloging.export_books', status=status_filter, format='xlsx') }}"
+                       class="flex flex-col items-center gap-1.5 p-4 border border-gray-200 rounded-xl hover:border-primary hover:bg-primary/5 transition-all text-center">
+                        <span class="material-symbols-outlined text-3xl text-primary">grid_on</span>
+                        <span class="text-sm font-bold">XLSX</span>
+                        <span class="text-[11px] text-gray-400">Excel workbook</span>
+                    </a>
+                </div>
             </div>
         </div>
     </div>

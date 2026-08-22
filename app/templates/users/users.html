@@ -197,6 +197,12 @@
                 <h1 class="text-3xl font-bold font-outfit">User Management</h1>
                 <p class="text-gray-500 mt-1">Control access roles and monitor library members.</p>
             </div>
+            <div class="flex gap-3">
+                <button onclick="openUsersExportModal()"
+                   class="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold rounded-lg border border-gray-200 bg-white text-gray-700 hover:border-primary hover:text-primary transition-colors">
+                    <span class="material-symbols-outlined text-[18px]">download</span> Export
+                </button>
+            </div>
         </div>
 
 
@@ -452,7 +458,37 @@
     </div>
 </div>
 
+<div id="usersExportModal" class="fixed inset-0 z-50 hidden bg-black/40 flex items-center justify-center">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 p-6 animate-in">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-bold">Export Users</h3>
+            <button onclick="closeUsersExportModal()" class="text-gray-400 hover:text-gray-600">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        <p class="text-sm text-gray-500 mb-4">Choose a file format. Current filter: <span class="font-bold text-gray-700">{{ 'All' if not status_filter else ('Inactive' if status_filter == 'disabled' else status_filter|capitalize) }}</span> — export respects the active tab.</p>
+        <div class="grid grid-cols-2 gap-3">
+            <a href="{{ url_for('auth.export_users', status=status_filter, format='csv') }}"
+               class="flex flex-col items-center gap-1.5 p-4 border border-gray-200 rounded-xl hover:border-primary hover:bg-primary/5 transition-all text-center">
+                <span class="material-symbols-outlined text-3xl text-emerald-600">table_rows</span>
+                <span class="text-sm font-bold">CSV</span>
+                <span class="text-[11px] text-gray-400">Spreadsheet</span>
+            </a>
+            <a href="{{ url_for('auth.export_users', status=status_filter, format='xlsx') }}"
+               class="flex flex-col items-center gap-1.5 p-4 border border-gray-200 rounded-xl hover:border-primary hover:bg-primary/5 transition-all text-center">
+                <span class="material-symbols-outlined text-3xl text-primary">grid_on</span>
+                <span class="text-sm font-bold">XLSX</span>
+                <span class="text-[11px] text-gray-400">Excel workbook</span>
+            </a>
+        </div>
+    </div>
+</div>
+
 <script>
+function openUsersExportModal() { document.getElementById('usersExportModal').classList.remove('hidden'); }
+function closeUsersExportModal() { document.getElementById('usersExportModal').classList.add('hidden'); }
+document.getElementById('usersExportModal').addEventListener('click', function(e) { if (e.target === this) closeUsersExportModal(); });
+
 function openEditModal(btn) {
     document.getElementById('editForm').action = '/admin/users/' + btn.getAttribute('data-user-id') + '/edit';
     document.getElementById('editName').value = btn.getAttribute('data-user-name');
