@@ -1,14 +1,21 @@
-import csv
 import io
 from datetime import date, datetime
 
 from flask import render_template, request, Response, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
-from openpyxl import Workbook
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.platypus import (
+    HRFlowable,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
 from . import analytics_bp
 from app.auth.decorators import librarian_required
@@ -136,58 +143,396 @@ def _run_kpi(kpi_type, start_date, end_date):
     raise ValueError('Unknown KPI type: %s' % kpi_type)
 
 
-def _pdf_bytes(sections):
-    """Build a PDF report from (kpi_type, kpi_data) sections."""
+def _format_period(start_date, end_date, preset, from_str, to_str):
+    if from_str or to_str:
+        if start_date and end_date:
+            return f"{start_date:%b %d, %Y} – {end_date:%b %d, %Y}"
+        if start_date:
+            return f"From {start_date:%b %d, %Y}"
+        if end_date:
+            return f"Until {end_date:%b %d, %Y}"
+    if preset == 'year':
+        return f"Calendar Year {date.today().year}"
+    if preset == 'semester':
+        return 'Current Semester' + (
+            ' (Aug–Dec)' if date.today().month >= 8 else ' (Jan–May)'
+        )
+    return 'All Time'
+
+
+def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
+               from_str='', to_str=''):
+    """Build a polished PDF report from (kpi_type, kpi_data) sections."""
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=letter,
-                            rightMargin=54, leftMargin=54,
-                            topMargin=54, bottomMargin=54)
+
+    # -- palette
+    NAVY = colors.HexColor('#1e3a8a')
+    NAVY_DARK = colors.HexColor('#172554')
+    NAVY_LIGHT = colors.HexColor('#1d4ed8')
+    SLATE_900 = colors.HexColor('#0f172a')
+    SLATE_700 = colors.HexColor('#334155')
+    SLATE_500 = colors.HexColor('#64748b')
+    SLATE_300 = colors.HexColor('#cbd5e1')
+    SLATE_100 = colors.HexColor('#f1f5f9')
+    SLATE_50 = colors.HexColor('#f8fafc')
+    WHITE = colors.white
+
+    def _header_footer(canvas, doc):
+        canvas.saveState()
+        # top hairline + brand
+        canvas.setStrokeColor(SLATE_300)
+        canvas.setLineWidth(0.6)
+        canvas.line(doc.leftMargin, doc.height + doc.topMargin + 6,
+                    doc.width + doc.leftMargin, doc.height + doc.topMargin + 6)
+        canvas.setFont('Helvetica-Bold', 7)
+        canvas.setFillColor(NAVY)
+        canvas.drawString(doc.leftMargin, doc.height + doc.topMargin + 14,
+                          'MCST  •  LIBRARY MANAGEMENT SYSTEM')
+        canvas.setFont('Helvetica', 7)
+        canvas.setFillColor(SLATE_500)
+        canvas.drawRightString(doc.width + doc.leftMargin,
+                               doc.height + doc.topMargin + 14,
+                               'CONFIDENTIAL  •  INTERNAL USE ONLY')
+        # footer
+        canvas.setFont('Helvetica', 7)
+        canvas.setFillColor(SLATE_500)
+        canvas.drawString(doc.leftMargin, 30,
+                          'MCST Library  •  Analytics & Reporting')
+        canvas.drawRightString(doc.width + doc.leftMargin, 30,
+                               f"Page {doc.page}")
+        # thin bottom line
+        canvas.setStrokeColor(SLATE_300)
+        canvas.setLineWidth(0.4)
+        canvas.line(doc.leftMargin, 36,
+                    doc.width + doc.leftMargin, 36)
+        canvas.restoreState()
+
+    doc = SimpleDocTemplate(
+        buf, pagesize=letter,
+        rightMargin=48, leftMargin=48,
+        topMargin=64, bottomMargin=48,
+        title='MCST Library Analytics Report',
+        author='MCST Library',
+    )
+
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        'ReportTitle', parent=styles['Title'], fontSize=18, spaceAfter=6)
-    subtitle_style = ParagraphStyle(
-        'ReportSubtitle', parent=styles['Normal'], fontSize=10,
-        textColor=colors.grey, spaceAfter=18)
-    section_style = ParagraphStyle(
-        'ReportSection', parent=styles['Heading2'], fontSize=14,
-        spaceBefore=14, spaceAfter=8)
-    cell_style = ParagraphStyle(
-        'ReportCell', parent=styles['Normal'], fontSize=9, leading=12)
+    s_title = ParagraphStyle('RTitle', parent=styles['Title'],
+                             fontName='Helvetica-Bold', fontSize=22,
+                             leading=26, textColor=NAVY_DARK,
+                             spaceAfter=4, alignment=TA_LEFT)
+    s_sub = ParagraphStyle('RSub', parent=styles['Normal'],
+                           fontName='Helvetica', fontSize=9.5,
+                           leading=13, textColor=SLATE_500, spaceAfter=0)
+    s_meta_label = ParagraphStyle('RMetaLabel', parent=styles['Normal'],
+                                  fontName='Helvetica-Bold', fontSize=7,
+                                  leading=9, textColor=SLATE_500,
+                                  spaceAfter=1)
+    s_meta_value = ParagraphStyle('RMetaValue', parent=styles['Normal'],
+                                  fontName='Helvetica', fontSize=9,
+                                  leading=11, textColor=SLATE_700)
+    s_section_title = ParagraphStyle('RSectionTitle', parent=styles['Heading2'],
+                                     fontName='Helvetica-Bold', fontSize=13,
+                                     leading=15, textColor=NAVY_DARK,
+                                     spaceBefore=0, spaceAfter=2)
+    s_section_desc = ParagraphStyle('RSectionDesc', parent=styles['Normal'],
+                                    fontName='Helvetica', fontSize=8.5,
+                                    leading=11, textColor=SLATE_500,
+                                    spaceAfter=8)
+    s_cell = ParagraphStyle('RCell', parent=styles['Normal'],
+                            fontName='Helvetica', fontSize=8.5, leading=11,
+                            textColor=SLATE_700, alignment=TA_LEFT)
+    s_cell_header = ParagraphStyle('RCellH', parent=s_cell,
+                                   fontName='Helvetica-Bold', textColor=WHITE,
+                                   fontSize=7.5, leading=10)
+    s_cell_right = ParagraphStyle('RCellR', parent=s_cell, alignment=TA_RIGHT)
+    s_cell_center = ParagraphStyle('RCellC', parent=s_cell, alignment=TA_CENTER)
+    s_empty = ParagraphStyle('REmpty', parent=styles['Normal'],
+                             fontName='Helvetica-Oblique', fontSize=8.5,
+                             leading=11, textColor=SLATE_500,
+                             alignment=TA_CENTER)
+    s_kpi_big = ParagraphStyle('RKpiBig', parent=styles['Normal'],
+                               fontName='Helvetica-Bold', fontSize=28,
+                               leading=30, textColor=NAVY_DARK, alignment=TA_CENTER)
+    s_kpi_unit = ParagraphStyle('RKpiUnit', parent=styles['Normal'],
+                                fontName='Helvetica-Bold', fontSize=9,
+                                leading=11, textColor=NAVY_LIGHT, alignment=TA_CENTER)
+    s_kpi_caption = ParagraphStyle('RKpiCap', parent=styles['Normal'],
+                                   fontName='Helvetica', fontSize=7.5,
+                                   leading=9, textColor=SLATE_500, alignment=TA_CENTER)
 
-    now = datetime.now().strftime('%B %d, %Y')
-    story = [
-        Paragraph('MCST Library - Analytics Report', title_style),
-        Paragraph('Generated on {}'.format(now), subtitle_style),
+    now = datetime.now()
+    period_label = _format_period(start_date, end_date, preset, from_str, to_str)
+
+    gen_name = getattr(current_user, 'full_name', None) or getattr(current_user, 'email', '') or 'System'
+    gen_role = getattr(current_user, 'role', '') or ''
+
+    story = []
+
+    # -- Cover block -----------------------------------------------------
+    # Eyebrow
+    story.append(Paragraph('ANALYTICS  &  REPORTING', ParagraphStyle(
+        'REyebrow', parent=styles['Normal'], fontName='Helvetica-Bold',
+        fontSize=7, leading=9, textColor=NAVY_LIGHT, spaceAfter=6)))
+    story.append(Paragraph('Library Analytics Report', s_title))
+    story.append(Paragraph(
+        'Operational KPIs for collection utilization, circulation demand '
+        'and engagement — prepared for planning and budget review.', s_sub))
+    story.append(Spacer(1, 10))
+    story.append(HRFlowable(width='100%', thickness=0.6, color=NAVY, spaceAfter=12, spaceBefore=6))
+
+    # Key-value meta grid (period, generated on, generated by)
+    meta_data = [
+        [Paragraph('<font color="#64748b"><b>REPORT PERIOD</b></font>', s_meta_label),
+         Paragraph('<font color="#64748b"><b>GENERATED ON</b></font>', s_meta_label),
+         Paragraph('<font color="#64748b"><b>GENERATED BY</b></font>', s_meta_label)],
+        [Paragraph(period_label, s_meta_value),
+         Paragraph(now.strftime('%B %d, %Y  •  %I:%M %p'), s_meta_value),
+         Paragraph(f"{gen_name}<br/><font color=\"#64748b\" size=\"7\">{gen_role}</font>" if gen_role else gen_name, s_meta_value)],
     ]
+    t_meta = Table(meta_data, colWidths=[doc.width * 0.34, doc.width * 0.33, doc.width * 0.33],
+                   hAlign='LEFT')
+    t_meta.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 2),
+        ('BOTTOMPADDING', (0, 1), (-1, 1), 0),
+        ('LINEBELOW', (0, 0), (-1, 0), 0.4, SLATE_300),
+        ('TOPPADDING', (0, 1), (-1, 1), 4),
+    ]))
+    story.append(t_meta)
+    story.append(Spacer(1, 14))
 
-    for i, (kt, kpi_data) in enumerate(sections):
-        if i > 0:
-            story.append(Spacer(1, 18))
-        story.append(Paragraph(KPI_LABELS[kt], section_style))
-
-        rows = _as_2d_rows(kt, kpi_data)
-        if len(rows) == 1:
-            story.append(Paragraph('No data for this KPI.', cell_style))
-            continue
-
-        header = [Paragraph(str(c), cell_style) for c in rows[0]]
-        data = [[Paragraph(str(c), cell_style) for c in row] for row in rows[1:]]
-        table = Table([header] + data, hAlign='LEFT')
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a8a')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-            ('TOPPADDING', (0, 0), (-1, -1), 5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f1f5f9')]),
-            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#cbd5e1')),
+    # Summary badges: sections in this report
+    badge_cells = []
+    for kt, _ in sections:
+        badge_cells.append(Paragraph(
+            f'<font color="#1e3a8a"><b>{KPI_LABELS.get(kt, kt)}</b></font>',
+            ParagraphStyle('RBadgeTx', parent=s_cell, fontSize=7, leading=9,
+                           textColor=NAVY, alignment=TA_CENTER)))
+    if badge_cells:
+        # flow into a single row table with wrapped cells
+        n = len(badge_cells)
+        col_w = doc.width / max(n, 1)
+        t_badges = Table([badge_cells], colWidths=[col_w] * n, hAlign='LEFT')
+        style_badges = TableStyle([
+            ('BOX', (0, 0), (-1, -1), 0.5, SLATE_300),
+            ('INNERGRID', (0, 0), (-1, -1), 0.4, SLATE_300),
+            ('BACKGROUND', (0, 0), (-1, -1), SLATE_50),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ]))
-        story.append(table)
+            ('ROUNDEDCORNERS', [3, 3, 3, 3]),
+        ])
+        t_badges.setStyle(style_badges)
+        story.append(Paragraph('INCLUDED IN THIS REPORT', ParagraphStyle(
+            'RBadgeLbl', parent=s_meta_label, alignment=TA_LEFT, spaceAfter=4)))
+        story.append(t_badges)
+        story.append(Spacer(1, 6))
 
-    doc.build(story)
+    story.append(HRFlowable(width='100%', thickness=0.4, color=SLATE_300, spaceAfter=10, spaceBefore=6))
+    story.append(Paragraph(
+        'Each section below contains the KPI definition, the filtered time window, '
+        'and a styled data table.  Empty sections indicate no matching records for the selected period.',
+        ParagraphStyle('RNote', parent=s_sub, fontSize=7.5, leading=10, textColor=SLATE_500)))
+    story.append(Spacer(1, 14))
+
+    # -- KPI sections ----------------------------------------------------
+    for idx, (kt, kpi_data) in enumerate(sections):
+        if idx > 0:
+            story.append(Spacer(1, 6))
+
+        # Section card header: numbered pill + title
+        pill = Table(
+            [[Paragraph(f"{idx + 1:02d}", ParagraphStyle(
+                'RPill', parent=styles['Normal'], fontName='Helvetica-Bold',
+                fontSize=7, leading=7, textColor=WHITE, alignment=TA_CENTER))]],
+            colWidths=[22], rowHeights=[16], hAlign='LEFT')
+        pill.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), NAVY),
+            ('ROUNDEDCORNERS', [8, 8, 8, 8]),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ]))
+        title_row = Table(
+            [[pill, Paragraph(KPI_LABELS.get(kt, kt), s_section_title)]],
+            colWidths=[26, doc.width - 26], hAlign='LEFT')
+        title_row.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        story.append(title_row)
+        story.append(Paragraph(KPI_DESCRIPTIONS.get(kt, ''), s_section_desc))
+
+        # Period chip row for this card
+        story.append(Table(
+            [[Paragraph(
+                f'<font color="#334155"><b>PERIOD</b></font>  <font color="#64748b">{period_label}</font>'
+                f'&nbsp;&nbsp;&nbsp;<font color="#334155"><b>ROWS</b></font>  '
+                f'<font color="#64748b">{(len(kpi_data) if isinstance(kpi_data, list) else 1) if kpi_data is not None else 0}</font>',
+                ParagraphStyle('RPeriod', parent=s_cell, fontSize=7, leading=9))]],
+            colWidths=[doc.width], hAlign='LEFT'))
+        story.append(Spacer(1, 6))
+
+        # Render table / metric
+        rows = _as_2d_rows(kt, kpi_data)
+
+        if kt == 'utilization_rate':
+            # Metric hero card
+            val = kpi_data if isinstance(kpi_data, (int, float)) else 0
+            try:
+                val_f = float(val)
+            except Exception:
+                val_f = 0.0
+            # clamp display 0..100
+            val_f = max(0.0, min(100.0, val_f))
+            hero = Table([
+                [Paragraph(f"{val_f:.1f}<font size=\"14\" color=\"#1d4ed8\">%</font>", s_kpi_big)],
+                [Paragraph('collection currently on loan', s_kpi_caption)],
+                [Paragraph(
+                    f'<font color="#334155"><b>{int(round(val_f))} of 100</b></font>'
+                    f'  <font color="#64748b">active titles borrowed in the selected window</font>',
+                    ParagraphStyle('RKpiSub', parent=s_kpi_caption, alignment=TA_CENTER))],
+            ], colWidths=[doc.width], hAlign='CENTER')
+            hero.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), SLATE_50),
+                ('BOX', (0, 0), (-1, -1), 0.6, SLATE_300),
+                ('INNERGRID', (0, 0), (-1, -1), 0.4, SLATE_300),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('LEFTPADDING', (0, 0), (-1, -1), 12),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 12),
+                ('ROUNDEDCORNERS', [6, 6, 6, 6]),
+            ]))
+            story.append(hero)
+            story.append(Spacer(1, 4))
+            # also show tiny 2-col table for auditability
+            mini = Table(
+                [[Paragraph('Metric', s_cell_header), Paragraph('Value', s_cell_header)],
+                 [Paragraph('Utilization Rate (%)', s_cell), Paragraph(f"{val_f:.2f}%", s_cell_right)]],
+                colWidths=[doc.width * 0.70, doc.width * 0.30], hAlign='LEFT')
+            mini.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), NAVY),
+                ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 8),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [WHITE, SLATE_50]),
+                ('GRID', (0, 0), (-1, -1), 0.4, SLATE_300),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ]))
+            story.append(mini)
+        elif len(rows) == 1:
+            # empty state
+            empty_box = Table(
+                [[Paragraph('No records for this KPI in the selected period.', s_empty)]],
+                colWidths=[doc.width], hAlign='CENTER')
+            empty_box.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), SLATE_50),
+                ('BOX', (0, 0), (-1, -1), 0.5, SLATE_300),
+                ('TOPPADDING', (0, 0), (-1, -1), 14),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 14),
+                ('LEFTPADDING', (0, 0), (-1, -1), 10),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+                ('ROUNDEDCORNERS', [6, 6, 6, 6]),
+            ]))
+            story.append(empty_box)
+        else:
+            # Styled data table
+            # choose column widths by KPI
+            if kt == 'books_borrowed_per_program':
+                cw = [doc.width * 0.68, doc.width * 0.32]
+                aligns = [s_cell, s_cell_right]
+            elif kt == 'most_borrowed_titles':
+                cw = [doc.width * 0.68, doc.width * 0.32]
+                aligns = [s_cell, s_cell_right]
+            else:  # underutilized_titles
+                cw = [doc.width]
+                aligns = [s_cell]
+
+            header_cells = []
+            for j, c in enumerate(rows[0]):
+                style = s_cell_center if len(cw) == 1 else (s_cell_header if j == 0 else s_cell_header)
+                # numeric headers center/right
+                if len(cw) > 1 and j == 1:
+                    style = ParagraphStyle('RThR', parent=s_cell_header, alignment=TA_RIGHT)
+                elif len(cw) > 1 and j == 0:
+                    style = ParagraphStyle('RThL', parent=s_cell_header, alignment=TA_LEFT)
+                header_cells.append(Paragraph(str(c), style))
+
+            body = []
+            for r in rows[1:]:
+                cells = []
+                for j, val in enumerate(r):
+                    st = aligns[j] if j < len(aligns) else s_cell
+                    cells.append(Paragraph(str(val), st))
+                body.append(cells)
+
+            # optional: cap rows for readability, add "..." note
+            truncated = False
+            max_rows = 28
+            if len(body) > max_rows:
+                truncated = True
+                body = body[:max_rows]
+
+            t = Table([header_cells] + body, colWidths=cw, hAlign='LEFT', repeatRows=1)
+            style_cmds = [
+                ('BACKGROUND', (0, 0), (-1, 0), NAVY),
+                ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 8),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 7),
+                ('TOPPADDING', (0, 0), (-1, 0), 7),
+                ('TOPPADDING', (0, 1), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
+                ('LEFTPADDING', (0, 0), (-1, -1), 7),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 7),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [WHITE, SLATE_100]),
+                ('GRID', (0, 0), (-1, -1), 0.4, SLATE_300),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('LINEBELOW', (0, 0), (-1, 0), 1.2, NAVY_DARK),
+            ]
+            # zebra is via ROWBACKGROUNDS; add light inner rule
+            t.setStyle(TableStyle(style_cmds))
+            story.append(t)
+            if truncated:
+                story.append(Spacer(1, 4))
+                story.append(Paragraph(
+                    f'Showing first {max_rows} rows.  Export includes all rows; '
+                    f'{len(rows) - 1 - max_rows} more row(s) not displayed in the paginated table.',
+                    ParagraphStyle('RTrunc', parent=s_empty, alignment=TA_LEFT, fontSize=7)))
+
+        # card footer spacing
+        story.append(Spacer(1, 8))
+        story.append(HRFlowable(width='100%', thickness=0.4, color=SLATE_300, spaceAfter=2, spaceBefore=2))
+
+    # -- closing note
+    story.append(Spacer(1, 8))
+    story.append(Paragraph(
+        'Notes:  Figures are computed from circulation_records joined to borrowers and roles.  '
+        '“All Time” is unfiltered; presets and custom dates filter on borrow_date.  '
+        'A snapshot of this export was cached to analytics_cache for audit and budget defense.',
+        ParagraphStyle('RFootNote', parent=s_sub, fontSize=7, leading=9, textColor=SLATE_500)))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(
+        'MCST Library Management System  •  Maranding, Lala, Lanao del Norte  •  '
+        'This document is system-generated and does not require a signature.',
+        ParagraphStyle('RFootNote2', parent=s_sub, fontSize=6.5, leading=8, textColor=SLATE_500,
+                       alignment=TA_CENTER)))
+
+    doc.build(story, onFirstPage=_header_footer, onLaterPages=_header_footer)
     return buf.getvalue()
 
 
@@ -196,17 +541,24 @@ def _pdf_bytes(sections):
 @librarian_required
 def export_report():
     kpi_type = request.form.get('kpi_type', '')
-    fmt = request.form.get('format', 'csv')
     preset = request.form.get('preset', 'all')
     from_str = request.form.get('from', '').strip()
     to_str = request.form.get('to', '').strip()
+    # Analytics reports are PDF-only since 2026-08 (migration from CSV/XLSX).
+    # Keep spreadsheet generation for Catalog/Users exports only. For backwards
+    # compatibility, legacy format=csv|xlsx requests are explicitly coerced to PDF
+    # with an info flash (not silent) — see analytics.html PDF-only modal.
+    fmt = request.form.get('format', 'pdf').strip().lower()
+    if fmt in ('csv', 'xlsx'):
+        flash('Analytics CSV/XLSX exports have been retired — PDF generated instead. Use Catalog/Users exports for spreadsheets.', 'info')
+        fmt = 'pdf'
+    elif fmt != 'pdf':
+        fmt = 'pdf'
 
     export_all = kpi_type == 'all'
     if not export_all and kpi_type not in VALID_KPIS:
         flash('Invalid report type.', 'error')
         return redirect(url_for('analytics.analytics_page'))
-    if fmt not in ('csv', 'xlsx', 'pdf'):
-        fmt = 'csv'
 
     start_date, end_date = resolve_dates(preset, from_str, to_str)
 
@@ -228,35 +580,15 @@ def export_report():
 
     stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     label = 'all' if export_all else kpi_type
-    filename = '{}_{}.{}'.format(label, stamp, fmt)
+    filename = f'{label}_{stamp}.pdf'
 
-    if fmt == 'pdf':
-        body = _pdf_bytes(sections)
-        mimetype = 'application/pdf'
-    elif fmt == 'xlsx':
-        wb = Workbook()
-        wb.remove(wb.active)
-        for kt, kpi_data in sections:
-            ws = wb.create_sheet(title=(KPI_LABELS[kt][:31] or kt))
-            for row in _as_2d_rows(kt, kpi_data):
-                ws.append(row)
-        buf = io.BytesIO()
-        wb.save(buf)
-        body = buf.getvalue()
-        mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    else:
-        buf = io.StringIO()
-        writer = csv.writer(buf)
-        for i, (kt, kpi_data) in enumerate(sections):
-            if i > 0:
-                buf.write('\n')
-            writer.writerow([KPI_LABELS[kt]])
-            writer.writerows(_as_2d_rows(kt, kpi_data))
-        body = buf.getvalue().encode('utf-8-sig')
-        mimetype = 'text/csv'
-
+    body = _pdf_bytes(
+        sections,
+        preset=preset, start_date=start_date, end_date=end_date,
+        from_str=from_str, to_str=to_str,
+    )
     return Response(
         body,
-        mimetype=mimetype,
-        headers={'Content-Disposition': 'attachment; filename="{}"'.format(filename)},
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
     )

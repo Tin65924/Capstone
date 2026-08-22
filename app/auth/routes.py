@@ -1,10 +1,17 @@
+import csv
+import io
 import os
 import secrets
-from flask import render_template, redirect, url_for, request, flash, session, abort, current_app
+from datetime import datetime
+
+from flask import Response, render_template, redirect, url_for, request, flash, session, abort, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from google_auth_oauthlib.flow import Flow
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+
 from . import auth_bp
 from app.database import db
 from app.bloom_registry import bloom_registry
@@ -250,6 +257,146 @@ def admin_users():
                            active=active, students=students,
                            inactive=inactive, archived=archived,
                            status_filter=status_filter)
+
+
+_USER_EXPORT_HEADERS = [
+    'User ID', 'Email', 'Full Name', 'Role', 'Account Status',
+    'Created At', 'ID Number', 'Department',
+]
+
+
+# get_all_users() contract: 8 positional cols from auth/models.py:96
+# 0 user_id, 1 email, 2 full_name, 3 role_name, 4 account_status, 5 created_at, 6 id_number, 7 department
+# Keep in sync with schema.sql account_status CHECK ('active','disabled','pending','archived')
+_USER_COL = {'user_id': 0, 'email': 1, 'full_name': 2, 'role': 3, 'status': 4, 'created': 5, 'id_number': 6, 'dept': 7}
+
+
+def _user_row_to_export(row):
+    def _str(v):
+        return '' if v is None else str(v)
+    # created_at may be datetime, date, or string (mock); handle all
+    created = row[_USER_COL['created']] if len(row) > _USER_COL['created'] else None
+    if hasattr(created, 'isoformat'):
+        try:
+            created_s = created.isoformat(sep=' ', timespec='seconds')
+        except TypeError:
+            created_s = created.isoformat()
+    else:
+        created_s = _str(created)
+    return [
+        _str(row[_USER_COL['user_id']] if len(row) > _USER_COL['user_id'] else ''),
+        _str(row[_USER_COL['email']] if len(row) > _USER_COL['email'] else ''),
+        _str(row[_USER_COL['full_name']] if len(row) > _USER_COL['full_name'] else ''),
+        _str(row[_USER_COL['role']] if len(row) > _USER_COL['role'] else ''),
+        _str(row[_USER_COL['status']] if len(row) > _USER_COL['status'] else ''),
+        created_s,
+        _str(row[_USER_COL['id_number']] if len(row) > _USER_COL['id_number'] else ''),
+        _str(row[_USER_COL['dept']] if len(row) > _USER_COL['dept'] else ''),
+    ]
+
+
+def _style_user_xlsx(ws, headers):
+    navy = PatternFill(start_color='1e3a8a', end_color='1e3a8a', fill_type='solid')
+    white_font = Font(color='FFFFFF', bold=True, size=9, name='Calibri')
+    thin = Side(style='thin', color='cbd5e1')
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.fill = navy
+        c.font = white_font
+        c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        c.border = border
+    ws.row_dimensions[1].height = 18
+    ws.freeze_panes = 'A2'
+    ws.auto_filter.ref = ws.dimensions
+    widths = [10, 28, 24, 12, 14, 18, 14, 22]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+
+
+def _generate_user_csv(headers, rows):
+    """Yield CSV bytes incrementally — scalable for large exports."""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(headers)
+    yield buf.getvalue().encode('utf-8-sig')
+    buf.seek(0)
+    buf.truncate(0)
+    for r in rows:
+        writer.writerow(r)
+        data = buf.getvalue()
+        if data:
+            yield data.encode('utf-8') if isinstance(data, str) else data
+            buf.seek(0)
+            buf.truncate(0)
+
+
+@auth_bp.route('/librarian/users/export')
+@login_required
+@librarian_required
+def export_users():
+    status = request.args.get('status', '').strip().lower()
+    fmt = request.args.get('format', 'csv').strip().lower()
+    if fmt not in ('csv', 'xlsx'):
+        fmt = 'csv'
+    # UI uses Inactive but DB uses disabled — keep mapping symmetric
+    # schema.sql: CHECK (account_status IN ('active','disabled','pending','archived'))
+    if status == 'inactive':
+        status = 'disabled'
+    if status not in ('active', 'disabled', 'pending', 'archived'):
+        status = ''
+
+    users = get_all_users()
+    if status:
+        users = [u for u in users if (u[_USER_COL['status']] or '').lower() == status]
+
+    rows = [_user_row_to_export(u) for u in users]
+    stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    suffix = status or 'all'
+    # filename uses UI term inactive for readability
+    file_suffix = 'inactive' if suffix == 'disabled' else suffix
+    filename = f'users_{file_suffix}_{stamp}.{fmt}'
+
+    if fmt == 'xlsx':
+        # For large exports, write_only would be more scalable; current buffered
+        # approach is fine for capstone scale (<10k rows) and keeps styling.
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Users'
+        _style_user_xlsx(ws, _USER_EXPORT_HEADERS)
+        for r in rows:
+            ws.append(r)
+        thin = Side(style='thin', color='cbd5e1')
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        for row in ws.iter_rows(min_row=2, max_row=ws.max_row, max_col=len(_USER_EXPORT_HEADERS)):
+            for cell in row:
+                cell.font = Font(size=9, name='Calibri')
+                cell.alignment = Alignment(vertical='center', wrap_text=True)
+                cell.border = border
+            ws.row_dimensions[row[0].row].height = 15
+        light = PatternFill(start_color='f8fafc', end_color='f8fafc', fill_type='solid')
+        for idx, row in enumerate(ws.iter_rows(min_row=2, max_row=ws.max_row, max_col=len(_USER_EXPORT_HEADERS)), 2):
+            if idx % 2 == 0:
+                for cell in row:
+                    cell.fill = light
+        buf = io.BytesIO()
+        wb.save(buf)
+        body = buf.getvalue()
+        mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        log_activity(current_user.id, f'users:export:{file_suffix}:{len(rows)}')
+        return Response(
+            body,
+            mimetype=mimetype,
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+        )
+    else:
+        # Stream CSV to avoid holding large exports fully in memory
+        log_activity(current_user.id, f'users:export:{file_suffix}:{len(rows)}')
+        return Response(
+            _generate_user_csv(_USER_EXPORT_HEADERS, rows),
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+        )
 
 
 @auth_bp.route('/librarian/users/<int:user_id>/approve', methods=['POST'])

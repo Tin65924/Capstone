@@ -1,11 +1,15 @@
 import csv
+import io
 import json
 import threading
 import uuid
 import time
 from datetime import datetime, timedelta
-from flask import render_template, request, redirect, url_for, flash, jsonify
+from flask import Response, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+
 from . import cataloging_bp
 from app.auth.decorators import librarian_required
 from app.cataloging.models import (
@@ -98,6 +102,149 @@ def cataloging_page():
                            search_field=field, status_filter=status_filter,
                            page=page, per_page=per_page,
                            accessions_by_book=accessions_by_book)
+
+
+_BOOK_EXPORT_HEADERS = [
+    'Book ID', 'Title', 'Author', 'Edition', 'Publisher', 'Year Published',
+    'Subject Classification', 'Call Number', 'ISBN', 'Material Type',
+    'Description', 'Status', 'Date Added', 'Accession Numbers',
+]
+
+
+# book_catalog.* is 13 cols (0 book_id … 12 date_added) + accession_numbers at 13
+# Both get_all_books() and get_books_by_status() use ACCESSION_SUBQUERY ("...") AS accession_numbers
+# Keep _BOOK_EXPORT_HEADERS width in sync with these 14 positions.
+_BOOK_COL = {
+    'book_id': 0, 'title': 1, 'author': 2, 'edition': 3, 'publisher': 4,
+    'year': 5, 'subject': 6, 'call_number': 7, 'isbn': 8, 'material': 9,
+    'description': 10, 'status': 11, 'date_added': 12, 'accessions': 13,
+}
+
+
+def _book_row_to_export(row):
+    def _str(v):
+        return '' if v is None else str(v)
+    # accession_numbers is always at 13 when present; date_added at 12
+    date_added = row[_BOOK_COL['date_added']] if len(row) > _BOOK_COL['date_added'] else ''
+    acc = row[_BOOK_COL['accessions']] if len(row) > _BOOK_COL['accessions'] else ''
+    return [
+        _str(row[_BOOK_COL['book_id']] if len(row) > _BOOK_COL['book_id'] else ''),
+        _str(row[_BOOK_COL['title']] if len(row) > _BOOK_COL['title'] else ''),
+        _str(row[_BOOK_COL['author']] if len(row) > _BOOK_COL['author'] else ''),
+        _str(row[_BOOK_COL['edition']] if len(row) > _BOOK_COL['edition'] else ''),
+        _str(row[_BOOK_COL['publisher']] if len(row) > _BOOK_COL['publisher'] else ''),
+        _str(row[_BOOK_COL['year']] if len(row) > _BOOK_COL['year'] else ''),
+        _str(row[_BOOK_COL['subject']] if len(row) > _BOOK_COL['subject'] else ''),
+        _str(row[_BOOK_COL['call_number']] if len(row) > _BOOK_COL['call_number'] else ''),
+        _str(row[_BOOK_COL['isbn']] if len(row) > _BOOK_COL['isbn'] else ''),
+        _str(row[_BOOK_COL['material']] if len(row) > _BOOK_COL['material'] else ''),
+        _str(row[_BOOK_COL['description']] if len(row) > _BOOK_COL['description'] else ''),
+        _str(row[_BOOK_COL['status']] if len(row) > _BOOK_COL['status'] else ''),
+        date_added.isoformat() if hasattr(date_added, 'isoformat') else _str(date_added),
+        _str(acc),
+    ]
+
+
+def _generate_book_csv(headers, rows):
+    """Yield CSV bytes incrementally — keeps large exports scalable."""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(headers)
+    yield buf.getvalue().encode('utf-8-sig')
+    buf.seek(0)
+    buf.truncate(0)
+    for r in rows:
+        writer.writerow(r)
+        data = buf.getvalue()
+        if data:
+            yield data.encode('utf-8') if isinstance(data, str) else data
+            buf.seek(0)
+            buf.truncate(0)
+
+
+def _style_xlsx_sheet(ws, headers):
+    navy = PatternFill(start_color='1e3a8a', end_color='1e3a8a', fill_type='solid')
+    white_font = Font(color='FFFFFF', bold=True, size=9, name='Calibri')
+    thin = Side(style='thin', color='cbd5e1')
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.fill = navy
+        c.font = white_font
+        c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        c.border = border
+    ws.row_dimensions[1].height = 18
+    ws.freeze_panes = 'A2'
+    ws.auto_filter.ref = ws.dimensions
+    # widths tuned for content
+    widths = [8, 30, 22, 10, 18, 10, 22, 14, 14, 12, 32, 10, 12, 24]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+
+
+@cataloging_bp.route('/librarian/cataloging/export')
+@login_required
+@librarian_required
+def export_books():
+    status = request.args.get('status', '').strip().lower()
+    fmt = request.args.get('format', 'csv').strip().lower()
+    if fmt not in ('csv', 'xlsx'):
+        fmt = 'csv'
+    if status not in ('active', 'archived'):
+        status = ''
+
+    from app.cataloging.models import get_books_by_status
+    if status:
+        books = get_books_by_status(status)
+    else:
+        books = get_all_books()
+
+    rows = [_book_row_to_export(b) for b in books]
+    stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    suffix = status or 'all'
+    filename = f'books_{suffix}_{stamp}.{fmt}'
+
+    if fmt == 'xlsx':
+        # Buffered workbook is fine for capstone scale (<10k rows) and keeps styling;
+        # for larger scale, switch to write_only with manual style handling.
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Books'
+        _style_xlsx_sheet(ws, _BOOK_EXPORT_HEADERS)
+        for r in rows:
+            ws.append(r)
+        # style data rows
+        thin = Side(style='thin', color='cbd5e1')
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        for row in ws.iter_rows(min_row=2, max_row=ws.max_row, max_col=len(_BOOK_EXPORT_HEADERS)):
+            for cell in row:
+                cell.font = Font(size=9, name='Calibri')
+                cell.alignment = Alignment(vertical='center', wrap_text=True)
+                cell.border = border
+            ws.row_dimensions[row[0].row].height = 15
+        # alternating row fill
+        light = PatternFill(start_color='f8fafc', end_color='f8fafc', fill_type='solid')
+        for idx, row in enumerate(ws.iter_rows(min_row=2, max_row=ws.max_row, max_col=len(_BOOK_EXPORT_HEADERS)), 2):
+            if idx % 2 == 0:
+                for cell in row:
+                    cell.fill = light
+        buf = io.BytesIO()
+        wb.save(buf)
+        body = buf.getvalue()
+        mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        log_activity(current_user.id, f'cataloging:export_books:{suffix}:{len(rows)}')
+        return Response(
+            body,
+            mimetype=mimetype,
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+        )
+    else:
+        log_activity(current_user.id, f'cataloging:export_books:{suffix}:{len(rows)}')
+        return Response(
+            _generate_book_csv(_BOOK_EXPORT_HEADERS, rows),
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+        )
 
 
 @cataloging_bp.route('/librarian/cataloging/add', methods=['POST'])

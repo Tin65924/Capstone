@@ -280,29 +280,14 @@
                 <h2 class="text-xl font-bold font-outfit">Reporting Dashboard</h2>
             </div>
             <div class="flex items-center gap-3">
-                <a href="?preset=semester"
-                    class="preset-btn {% if preset == 'semester' %}active{% endif %} text-xs font-bold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all">
-                    This semester
-                </a>
-                <a href="?preset=year"
-                    class="preset-btn {% if preset == 'year' %}active{% endif %} text-xs font-bold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all">
-                    This year
-                </a>
-                <a href="?preset=all"
-                    class="preset-btn {% if preset == 'all' %}active{% endif %} text-xs font-bold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all">
-                    All time
-                </a>
-                <form method="get" action="{{ url_for('analytics.analytics_page') }}" class="flex items-center gap-2">
-                    <input type="date" name="from" value="{{ from_date }}"
-                        class="bg-gray-100 border-none text-xs rounded-lg px-2 py-1.5 outline-none focus:ring-0">
-                    <span class="text-xs text-gray-400 font-bold">to</span>
-                    <input type="date" name="to" value="{{ to_date }}"
-                        class="bg-gray-100 border-none text-xs rounded-lg px-2 py-1.5 outline-none focus:ring-0">
-                    <button type="submit"
-                        class="text-xs font-bold px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all">
-                        Apply
-                    </button>
-                </form>
+                <button onclick="openGlobalFilterModal()"
+                    class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all {% if preset != 'all' or from_date or to_date %}ring-1 ring-primary border-primary text-primary{% endif %}">
+                    <span class="material-symbols-outlined text-lg">tune</span>
+                    Filters
+                    {% if preset != 'all' or from_date or to_date %}
+                    <span class="w-2 h-2 rounded-full bg-primary"></span>
+                    {% endif %}
+                </button>
                 <div class="w-[1px] h-6 bg-gray-200 mx-1"></div>
                 <button id="exportAllBtn" onclick="openExportAllModal()"
                     class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all">
@@ -350,28 +335,20 @@
                     <span class="material-icons">close</span>
                 </button>
             </div>
-            <div class="p-6 space-y-3">
-                <p class="text-sm text-slate-500 dark:text-slate-400">Choose a file format for this report.</p>
-                <div class="grid grid-cols-3 gap-3">
-                    <button onclick="doExport('csv')"
-                        class="flex flex-col items-center gap-1 p-4 border border-slate-200 dark:border-slate-700 rounded hover:border-primary hover:ring-1 hover:ring-primary transition-all">
-                        <span class="material-symbols-outlined text-2xl text-emerald-500">table_rows</span>
-                        <span class="text-sm font-bold">CSV</span>
-                        <span class="text-[10px] text-slate-400">Spreadsheet data</span>
-                    </button>
-                    <button onclick="doExport('xlsx')"
-                        class="flex flex-col items-center gap-1 p-4 border border-slate-200 dark:border-slate-700 rounded hover:border-primary hover:ring-1 hover:ring-primary transition-all">
-                        <span class="material-symbols-outlined text-2xl text-primary">grid_on</span>
-                        <span class="text-sm font-bold">XLSX</span>
-                        <span class="text-[10px] text-slate-400">Excel workbook</span>
-                    </button>
-                    <button onclick="doExport('pdf')"
-                        class="flex flex-col items-center gap-1 p-4 border border-slate-200 dark:border-slate-700 rounded hover:border-primary hover:ring-1 hover:ring-primary transition-all">
-                        <span class="material-symbols-outlined text-2xl text-rose-500">picture_as_pdf</span>
-                        <span class="text-sm font-bold">PDF</span>
-                        <span class="text-[10px] text-slate-400">Document</span>
-                    </button>
+            <div class="p-6 space-y-4">
+                <p class="text-sm text-slate-500 dark:text-slate-400">This report is generated as a polished, print-ready PDF with styled tables, period context, and page numbers — ideal for accreditation and budget review.</p>
+                <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-4 flex items-center gap-3">
+                    <span class="material-symbols-outlined text-3xl text-rose-500">picture_as_pdf</span>
+                    <div class="flex-1">
+                        <div class="text-sm font-bold text-slate-900 dark:text-white">PDF Report</div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400">Styled tables • header / footer • period &amp; generated-by metadata</div>
+                    </div>
                 </div>
+                <button onclick="doExport('pdf')"
+                    class="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg font-bold text-sm transition-all">
+                    <span class="material-symbols-outlined text-lg">download</span>
+                    Download PDF
+                </button>
             </div>
         </div>
     </div>
@@ -386,28 +363,20 @@
                     <span class="material-icons">close</span>
                 </button>
             </div>
-            <div class="p-6 space-y-3">
-                <p class="text-sm text-slate-500 dark:text-slate-400">Export every KPI report in one file. Choose a format.</p>
-                <div class="grid grid-cols-3 gap-3">
-                    <button onclick="doExportAll('csv')"
-                        class="flex flex-col items-center gap-1 p-4 border border-slate-200 dark:border-slate-700 rounded hover:border-primary hover:ring-1 hover:ring-primary transition-all">
-                        <span class="material-symbols-outlined text-2xl text-emerald-500">table_rows</span>
-                        <span class="text-sm font-bold">CSV</span>
-                        <span class="text-[10px] text-slate-400">One file, per-KPI sections</span>
-                    </button>
-                    <button onclick="doExportAll('xlsx')"
-                        class="flex flex-col items-center gap-1 p-4 border border-slate-200 dark:border-slate-700 rounded hover:border-primary hover:ring-1 hover:ring-primary transition-all">
-                        <span class="material-symbols-outlined text-2xl text-primary">grid_on</span>
-                        <span class="text-sm font-bold">XLSX</span>
-                        <span class="text-[10px] text-slate-400">One sheet per KPI</span>
-                    </button>
-                    <button onclick="doExportAll('pdf')"
-                        class="flex flex-col items-center gap-1 p-4 border border-slate-200 dark:border-slate-700 rounded hover:border-primary hover:ring-1 hover:ring-primary transition-all">
-                        <span class="material-symbols-outlined text-2xl text-rose-500">picture_as_pdf</span>
-                        <span class="text-sm font-bold">PDF</span>
-                        <span class="text-[10px] text-slate-400">One document, per-KPI pages</span>
-                    </button>
+            <div class="p-6 space-y-4">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Combine every KPI into a single polished PDF document for printing or submission.</p>
+                <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-4 flex items-center gap-3">
+                    <span class="material-symbols-outlined text-3xl text-rose-500">picture_as_pdf</span>
+                    <div class="flex-1">
+                        <div class="text-sm font-bold text-slate-900 dark:text-white">All KPIs — One PDF</div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400">Per-KPI sections • styled tables • cover metadata &amp; pagination</div>
+                    </div>
                 </div>
+                <button onclick="doExportAll('pdf')"
+                    class="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg font-bold text-sm transition-all">
+                    <span class="material-symbols-outlined text-lg">download</span>
+                    Download PDF
+                </button>
             </div>
         </div>
     </div>
@@ -451,6 +420,53 @@
                         Apply Filter
                     </button>
                     <button onclick="resetFilter()"
+                        class="px-4 py-2.5 rounded font-bold text-sm border border-gray-200 hover:bg-gray-50 transition-all">
+                        Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Filter Modal -->
+    <div id="globalFilterModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-900/60" onclick="closeGlobalFilterModal()"></div>
+        <div class="relative bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 max-w-md w-full">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white">Filters</h3>
+                <button onclick="closeGlobalFilterModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="p-6 space-y-5">
+                <div>
+                    <label class="text-xs font-bold text-slate-500 uppercase tracking-widest">Time Range</label>
+                    <select id="globalFilterPreset"
+                        class="mt-2 w-full bg-gray-100 border-none text-sm font-bold rounded-lg px-3 py-2 outline-none focus:ring-0">
+                        <option value="all">All time</option>
+                        <option value="semester">This semester</option>
+                        <option value="year">This year</option>
+                        <option value="custom">Custom dates</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-3" id="globalFilterCustomDates">
+                    <div>
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-widest">From</label>
+                        <input type="date" id="globalFilterFrom"
+                            class="mt-2 w-full bg-gray-100 border-none text-sm rounded-lg px-3 py-2 outline-none focus:ring-0">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-widest">To</label>
+                        <input type="date" id="globalFilterTo"
+                            class="mt-2 w-full bg-gray-100 border-none text-sm rounded-lg px-3 py-2 outline-none focus:ring-0">
+                    </div>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="applyGlobalFilter()"
+                        class="flex-1 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 rounded font-bold text-sm transition-all">
+                        Apply Filters
+                    </button>
+                    <button onclick="resetGlobalFilter()"
                         class="px-4 py-2.5 rounded font-bold text-sm border border-gray-200 hover:bg-gray-50 transition-all">
                         Reset
                     </button>
@@ -832,6 +848,53 @@
             closeFilterModal();
             renderBoard();
         }
+
+function syncGlobalFilterCustomDates() {
+            const preset = document.getElementById('globalFilterPreset').value;
+            document.getElementById('globalFilterCustomDates').classList.toggle('hidden', preset !== 'custom');
+        }
+
+        function openGlobalFilterModal() {
+            const isCustom = GLOBAL.from || GLOBAL.to;
+            document.getElementById('globalFilterPreset').value = isCustom ? 'custom' : (GLOBAL.preset || 'all');
+            document.getElementById('globalFilterFrom').value = GLOBAL.from || '';
+            document.getElementById('globalFilterTo').value = GLOBAL.to || '';
+            document.getElementById('globalFilterModal').classList.remove('hidden');
+            syncGlobalFilterCustomDates();
+        }
+
+        function closeGlobalFilterModal() {
+            document.getElementById('globalFilterModal').classList.add('hidden');
+        }
+
+        function applyGlobalFilter() {
+            const preset = document.getElementById('globalFilterPreset').value;
+            const from = document.getElementById('globalFilterFrom').value;
+            const to = document.getElementById('globalFilterTo').value;
+            const params = new URLSearchParams();
+            if (preset && preset !== 'all') params.set('preset', preset);
+            else if (!from && !to) params.set('preset', 'all');
+            else params.set('preset', preset);
+            // custom dates: only send when preset is custom or dates filled
+            if (from) params.set('from', from);
+            if (to) params.set('to', to);
+            // when preset is not custom, ignore dates to match backend resolve_dates
+            if (preset !== 'custom') {
+                params.delete('from');
+                params.delete('to');
+                if (preset !== 'all') params.set('preset', preset);
+                else params.set('preset', 'all');
+            }
+            window.location.search = params.toString();
+        }
+
+        function resetGlobalFilter() {
+            window.location.search = 'preset=all';
+        }
+
+        document.getElementById('globalFilterPreset').addEventListener('change', syncGlobalFilterCustomDates);
+
+        document.getElementById('filterPreset').addEventListener('change', syncFilterCustomDates);
 
         document.getElementById('filterPreset').addEventListener('change', syncFilterCustomDates);
 
