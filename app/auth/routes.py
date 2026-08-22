@@ -265,14 +265,33 @@ _USER_EXPORT_HEADERS = [
 ]
 
 
+# get_all_users() contract: 8 positional cols from auth/models.py:96
+# 0 user_id, 1 email, 2 full_name, 3 role_name, 4 account_status, 5 created_at, 6 id_number, 7 department
+# Keep in sync with schema.sql account_status CHECK ('active','disabled','pending','archived')
+_USER_COL = {'user_id': 0, 'email': 1, 'full_name': 2, 'role': 3, 'status': 4, 'created': 5, 'id_number': 6, 'dept': 7}
+
+
 def _user_row_to_export(row):
     def _str(v):
         return '' if v is None else str(v)
-    created = row[5]
-    created_s = created.isoformat(sep=' ') if hasattr(created, 'isoformat') else _str(created)
+    # created_at may be datetime, date, or string (mock); handle all
+    created = row[_USER_COL['created']] if len(row) > _USER_COL['created'] else None
+    if hasattr(created, 'isoformat'):
+        try:
+            created_s = created.isoformat(sep=' ', timespec='seconds')
+        except TypeError:
+            created_s = created.isoformat()
+    else:
+        created_s = _str(created)
     return [
-        _str(row[0]), _str(row[1]), _str(row[2]), _str(row[3]), _str(row[4]),
-        created_s, _str(row[6]), _str(row[7]),
+        _str(row[_USER_COL['user_id']] if len(row) > _USER_COL['user_id'] else ''),
+        _str(row[_USER_COL['email']] if len(row) > _USER_COL['email'] else ''),
+        _str(row[_USER_COL['full_name']] if len(row) > _USER_COL['full_name'] else ''),
+        _str(row[_USER_COL['role']] if len(row) > _USER_COL['role'] else ''),
+        _str(row[_USER_COL['status']] if len(row) > _USER_COL['status'] else ''),
+        created_s,
+        _str(row[_USER_COL['id_number']] if len(row) > _USER_COL['id_number'] else ''),
+        _str(row[_USER_COL['dept']] if len(row) > _USER_COL['dept'] else ''),
     ]
 
 
@@ -295,6 +314,23 @@ def _style_user_xlsx(ws, headers):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
 
 
+def _generate_user_csv(headers, rows):
+    """Yield CSV bytes incrementally — scalable for large exports."""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(headers)
+    yield buf.getvalue().encode('utf-8-sig')
+    buf.seek(0)
+    buf.truncate(0)
+    for r in rows:
+        writer.writerow(r)
+        data = buf.getvalue()
+        if data:
+            yield data.encode('utf-8') if isinstance(data, str) else data
+            buf.seek(0)
+            buf.truncate(0)
+
+
 @auth_bp.route('/librarian/users/export')
 @login_required
 @librarian_required
@@ -303,7 +339,8 @@ def export_users():
     fmt = request.args.get('format', 'csv').strip().lower()
     if fmt not in ('csv', 'xlsx'):
         fmt = 'csv'
-    # map Inactive alias to disabled; allow 'all' or '' for no filter
+    # UI uses Inactive but DB uses disabled — keep mapping symmetric
+    # schema.sql: CHECK (account_status IN ('active','disabled','pending','archived'))
     if status == 'inactive':
         status = 'disabled'
     if status not in ('active', 'disabled', 'pending', 'archived'):
@@ -311,16 +348,18 @@ def export_users():
 
     users = get_all_users()
     if status:
-        users = [u for u in users if (u[4] or '').lower() == status]
+        users = [u for u in users if (u[_USER_COL['status']] or '').lower() == status]
 
     rows = [_user_row_to_export(u) for u in users]
     stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     suffix = status or 'all'
-    # normalize suffix for filename: disabled -> inactive is more readable
+    # filename uses UI term inactive for readability
     file_suffix = 'inactive' if suffix == 'disabled' else suffix
     filename = f'users_{file_suffix}_{stamp}.{fmt}'
 
     if fmt == 'xlsx':
+        # For large exports, write_only would be more scalable; current buffered
+        # approach is fine for capstone scale (<10k rows) and keeps styling.
         wb = Workbook()
         ws = wb.active
         ws.title = 'Users'
@@ -344,20 +383,20 @@ def export_users():
         wb.save(buf)
         body = buf.getvalue()
         mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        log_activity(current_user.id, f'users:export:{file_suffix}:{len(rows)}')
+        return Response(
+            body,
+            mimetype=mimetype,
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+        )
     else:
-        buf = io.StringIO()
-        writer = csv.writer(buf)
-        writer.writerow(_USER_EXPORT_HEADERS)
-        writer.writerows(rows)
-        body = buf.getvalue().encode('utf-8-sig')
-        mimetype = 'text/csv'
-
-    log_activity(current_user.id, f'users:export:{file_suffix}:{len(rows)}')
-    return Response(
-        body,
-        mimetype=mimetype,
-        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
-    )
+        # Stream CSV to avoid holding large exports fully in memory
+        log_activity(current_user.id, f'users:export:{file_suffix}:{len(rows)}')
+        return Response(
+            _generate_user_csv(_USER_EXPORT_HEADERS, rows),
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+        )
 
 
 @auth_bp.route('/librarian/users/<int:user_id>/approve', methods=['POST'])

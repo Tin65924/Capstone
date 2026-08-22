@@ -111,34 +111,55 @@ _BOOK_EXPORT_HEADERS = [
 ]
 
 
+# book_catalog.* is 13 cols (0 book_id … 12 date_added) + accession_numbers at 13
+# Both get_all_books() and get_books_by_status() use ACCESSION_SUBQUERY ("...") AS accession_numbers
+# Keep _BOOK_EXPORT_HEADERS width in sync with these 14 positions.
+_BOOK_COL = {
+    'book_id': 0, 'title': 1, 'author': 2, 'edition': 3, 'publisher': 4,
+    'year': 5, 'subject': 6, 'call_number': 7, 'isbn': 8, 'material': 9,
+    'description': 10, 'status': 11, 'date_added': 12, 'accessions': 13,
+}
+
+
 def _book_row_to_export(row):
-    # row is book_catalog.* plus accession_numbers at -1; tolerate extra
-    # Use positional indices: 0 book_id, 1 title, 2 author, 3 edition, 4 publisher,
-    # 5 year, 6 subject, 7 call_number, 8 isbn, 9 material_type, 10 description,
-    # 11 catalog_status, 12 date_added, 13 accession_numbers (if present)
     def _str(v):
         return '' if v is None else str(v)
-    # handle both get_all_books (with accession_numbers) and get_books_by_status
-    acc = ''
-    if len(row) > 13:
-        acc = _str(row[13])
-    elif len(row) > 12 and isinstance(row[12], str) and ',' in str(row[12]):
-        # fallback, but prefer explicit
-        acc = _str(row[12])
-    date_added = row[12] if len(row) > 12 else ''
-    # if accession_numbers present, date_added shifts
-    if len(row) > 13:
-        date_added = row[12]
-    else:
-        # when no accession_numbers column, date_added is still row[12]
-        acc = ''
+    # accession_numbers is always at 13 when present; date_added at 12
+    date_added = row[_BOOK_COL['date_added']] if len(row) > _BOOK_COL['date_added'] else ''
+    acc = row[_BOOK_COL['accessions']] if len(row) > _BOOK_COL['accessions'] else ''
     return [
-        _str(row[0]), _str(row[1]), _str(row[2]), _str(row[3]), _str(row[4]),
-        _str(row[5]), _str(row[6]), _str(row[7]), _str(row[8]), _str(row[9]),
-        _str(row[10]), _str(row[11]),
+        _str(row[_BOOK_COL['book_id']] if len(row) > _BOOK_COL['book_id'] else ''),
+        _str(row[_BOOK_COL['title']] if len(row) > _BOOK_COL['title'] else ''),
+        _str(row[_BOOK_COL['author']] if len(row) > _BOOK_COL['author'] else ''),
+        _str(row[_BOOK_COL['edition']] if len(row) > _BOOK_COL['edition'] else ''),
+        _str(row[_BOOK_COL['publisher']] if len(row) > _BOOK_COL['publisher'] else ''),
+        _str(row[_BOOK_COL['year']] if len(row) > _BOOK_COL['year'] else ''),
+        _str(row[_BOOK_COL['subject']] if len(row) > _BOOK_COL['subject'] else ''),
+        _str(row[_BOOK_COL['call_number']] if len(row) > _BOOK_COL['call_number'] else ''),
+        _str(row[_BOOK_COL['isbn']] if len(row) > _BOOK_COL['isbn'] else ''),
+        _str(row[_BOOK_COL['material']] if len(row) > _BOOK_COL['material'] else ''),
+        _str(row[_BOOK_COL['description']] if len(row) > _BOOK_COL['description'] else ''),
+        _str(row[_BOOK_COL['status']] if len(row) > _BOOK_COL['status'] else ''),
         date_added.isoformat() if hasattr(date_added, 'isoformat') else _str(date_added),
         _str(acc),
     ]
+
+
+def _generate_book_csv(headers, rows):
+    """Yield CSV bytes incrementally — keeps large exports scalable."""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(headers)
+    yield buf.getvalue().encode('utf-8-sig')
+    buf.seek(0)
+    buf.truncate(0)
+    for r in rows:
+        writer.writerow(r)
+        data = buf.getvalue()
+        if data:
+            yield data.encode('utf-8') if isinstance(data, str) else data
+            buf.seek(0)
+            buf.truncate(0)
 
 
 def _style_xlsx_sheet(ws, headers):
@@ -184,6 +205,8 @@ def export_books():
     filename = f'books_{suffix}_{stamp}.{fmt}'
 
     if fmt == 'xlsx':
+        # Buffered workbook is fine for capstone scale (<10k rows) and keeps styling;
+        # for larger scale, switch to write_only with manual style handling.
         wb = Workbook()
         ws = wb.active
         ws.title = 'Books'
@@ -209,20 +232,19 @@ def export_books():
         wb.save(buf)
         body = buf.getvalue()
         mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        log_activity(current_user.id, f'cataloging:export_books:{suffix}:{len(rows)}')
+        return Response(
+            body,
+            mimetype=mimetype,
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+        )
     else:
-        buf = io.StringIO()
-        writer = csv.writer(buf)
-        writer.writerow(_BOOK_EXPORT_HEADERS)
-        writer.writerows(rows)
-        body = buf.getvalue().encode('utf-8-sig')
-        mimetype = 'text/csv'
-
-    log_activity(current_user.id, f'cataloging:export_books:{suffix}:{len(rows)}')
-    return Response(
-        body,
-        mimetype=mimetype,
-        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
-    )
+        log_activity(current_user.id, f'cataloging:export_books:{suffix}:{len(rows)}')
+        return Response(
+            _generate_book_csv(_BOOK_EXPORT_HEADERS, rows),
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+        )
 
 
 @cataloging_bp.route('/librarian/cataloging/add', methods=['POST'])

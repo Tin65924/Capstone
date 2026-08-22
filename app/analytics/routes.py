@@ -544,6 +544,16 @@ def export_report():
     preset = request.form.get('preset', 'all')
     from_str = request.form.get('from', '').strip()
     to_str = request.form.get('to', '').strip()
+    # Analytics reports are PDF-only since 2026-08 (migration from CSV/XLSX).
+    # Keep spreadsheet generation for Catalog/Users exports only. For backwards
+    # compatibility, legacy format=csv|xlsx requests are explicitly coerced to PDF
+    # with an info flash (not silent) — see analytics.html PDF-only modal.
+    fmt = request.form.get('format', 'pdf').strip().lower()
+    if fmt in ('csv', 'xlsx'):
+        flash('Analytics CSV/XLSX exports have been retired — PDF generated instead. Use Catalog/Users exports for spreadsheets.', 'info')
+        fmt = 'pdf'
+    elif fmt != 'pdf':
+        fmt = 'pdf'
 
     export_all = kpi_type == 'all'
     if not export_all and kpi_type not in VALID_KPIS:
