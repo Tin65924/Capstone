@@ -171,7 +171,10 @@
 
     <!-- Main Content -->
     <main>
+        {# Global feedback only when NOT targeting a modal — avoids duplicate top + modal flash #}
+        {% if not request.args.get('modal') %}
         {% include 'components/flash_messages.html' %}
+        {% endif %}
 
 
         <div class="flex justify-between items-center mb-8 animate-in">
@@ -403,6 +406,23 @@
                 <h2 class="text-xl font-bold">Add New Book</h2>
                 <button onclick="closeModal(null, 'addBookModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
             </div>
+            {% if request.args.get('modal') == 'addBookModal' %}
+            <div class="px-6 pt-4">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="space-y-2">
+                    {% for category, message in messages %}
+                    {% set color = {'error': 'bg-red-50 text-red-800 border-red-200', 'info': 'bg-blue-50 text-blue-800 border-blue-200', 'success': 'bg-green-50 text-green-800 border-green-200'} %}
+                    <div class="px-3 py-2 border rounded text-sm font-medium flex items-center gap-2 {{ color.get(category, color['info']) }}">
+                        <span class="material-symbols-outlined text-base">{{ 'error' if category == 'error' else 'info' if category == 'info' else 'check_circle' }}</span>
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+            </div>
+            {% endif %}
             <form method="POST" action="{{ url_for('cataloging.add_book') }}" class="p-6 space-y-4" data-exists-book>
                 <p data-exists-msg class="hidden mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm font-medium text-red-700 dark:text-red-300"></p>
                 <div class="grid grid-cols-2 gap-4">
@@ -481,6 +501,23 @@
                 <h2 class="text-xl font-bold">Edit Book</h2>
                 <button onclick="closeModal(null, 'editBookModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
             </div>
+            {% if request.args.get('modal') == 'editBookModal' %}
+            <div class="px-6 pt-4">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="space-y-2">
+                    {% for category, message in messages %}
+                    {% set color = {'error': 'bg-red-50 text-red-800 border-red-200', 'info': 'bg-blue-50 text-blue-800 border-blue-200', 'success': 'bg-green-50 text-green-800 border-green-200'} %}
+                    <div class="px-3 py-2 border rounded text-sm font-medium flex items-center gap-2 {{ color.get(category, color['info']) }}">
+                        <span class="material-symbols-outlined text-base">{{ 'error' if category == 'error' else 'info' if category == 'info' else 'check_circle' }}</span>
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+            </div>
+            {% endif %}
             <form method="POST" id="editBookForm" class="p-6 space-y-4">
                 <div class="grid grid-cols-2 gap-4">
                     <div class="col-span-2">
@@ -546,6 +583,23 @@
                 <h2 class="text-xl font-bold">Add Accession Copy</h2>
                 <button onclick="closeModal(null, 'addAccessionModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
             </div>
+            {% if request.args.get('modal') == 'addAccessionModal' %}
+            <div class="px-6 pt-4">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="space-y-2">
+                    {% for category, message in messages %}
+                    {% set color = {'error': 'bg-red-50 text-red-800 border-red-200', 'info': 'bg-blue-50 text-blue-800 border-blue-200', 'success': 'bg-green-50 text-green-800 border-green-200'} %}
+                    <div class="px-3 py-2 border rounded text-sm font-medium flex items-center gap-2 {{ color.get(category, color['info']) }}">
+                        <span class="material-symbols-outlined text-base">{{ 'error' if category == 'error' else 'info' if category == 'info' else 'check_circle' }}</span>
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+            </div>
+            {% endif %}
             <form method="POST" id="addAccessionForm" class="p-6 space-y-4">
                 <div class="grid grid-cols-2 gap-4">
                     <div class="col-span-2">
@@ -576,6 +630,23 @@
                 <h2 class="text-xl font-bold">Edit Accession Copy</h2>
                 <button onclick="closeModal(null, 'editAccessionModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
             </div>
+            {% if request.args.get('modal') == 'editAccessionModal' %}
+            <div class="px-6 pt-4">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="space-y-2">
+                    {% for category, message in messages %}
+                    {% set color = {'error': 'bg-red-50 text-red-800 border-red-200', 'info': 'bg-blue-50 text-blue-800 border-blue-200', 'success': 'bg-green-50 text-green-800 border-green-200'} %}
+                    <div class="px-3 py-2 border rounded text-sm font-medium flex items-center gap-2 {{ color.get(category, color['info']) }}">
+                        <span class="material-symbols-outlined text-base">{{ 'error' if category == 'error' else 'info' if category == 'info' else 'check_circle' }}</span>
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+            </div>
+            {% endif %}
             <form method="POST" id="editAccessionForm" class="p-6 space-y-4">
                 <div class="grid grid-cols-2 gap-4">
                     <div class="col-span-2">

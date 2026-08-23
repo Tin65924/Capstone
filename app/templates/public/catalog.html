@@ -1,9 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Library Resource Catalog Search{% endblock %}
 {% block content %}
-<main class="flex-grow mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-    <div class="flex gap-8 items-start">
-        <!-- Filter Sidebar -->
+<main class="flex-grow mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 w-full max-w-[1400px]">
+    <div class="flex flex-col lg:flex-row gap-6 lg:gap-8 items-start">
+        <!-- Mobile filter toggle -->
+        <button type="button" id="mobile-filter-toggle" class="lg:hidden w-full flex items-center justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 shadow-sm hover:border-primary/30 transition-colors">
+            <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[20px]">tune</span> Filters</span>
+            <span class="material-symbols-outlined text-[20px]">expand_more</span>
+        </button>
+        <!-- Filter Sidebar - Desktop -->
         <aside class="hidden lg:block w-52 shrink-0">
             <form method="GET" action="{{ url_for('cataloging.public_catalog') }}" id="filter-form" class="sticky top-8">
                     <input type="hidden" name="q" value="{{ search_query or '' }}">
@@ -147,19 +152,161 @@
                 </form>
         </aside>
 
+        <!-- Mobile Filter Drawer -->
+        <div id="mobile-filter-drawer" class="fixed inset-0 z-50 hidden lg:hidden">
+            <div id="mobile-filter-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+            <div class="absolute top-0 left-0 h-full w-[85%] max-w-[340px] bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto">
+                <div class="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
+                    <h3 class="font-bold text-slate-800 dark:text-white flex items-center gap-2"><span class="material-symbols-outlined text-[20px]">tune</span> Filters</h3>
+                    <button type="button" id="mobile-filter-close" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"><span class="material-symbols-outlined">close</span></button>
+                </div>
+                <form method="GET" action="{{ url_for('cataloging.public_catalog') }}" class="p-4 space-y-6">
+                    <input type="hidden" name="q" value="{{ search_query or '' }}">
+                    <input type="hidden" name="field" value="{{ search_field or '' }}">
+                    <div>
+                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Sort</h3>
+                        <div class="space-y-1.5 text-[13px]">
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="sort_by" value="" {% if not sort_by %}checked{% endif %} class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Sort by relevance</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="sort_by" value="title" {% if sort_by == 'title' %}checked{% endif %} class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Sort by title (A-Z)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="sort_by" value="year_desc" {% if sort_by == 'year_desc' %}checked{% endif %} class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Sort by year (newest)</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
+                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Category</h3>
+                        <div class="space-y-1.5 text-[13px]">
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="category" value="" {% if not category %}checked{% endif %} class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">All categories</span>
+                            </label>
+                            {% for cat in categories %}
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="category" value="{{ cat }}" {% if category == cat %}checked{% endif %} class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">{{ cat }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
+                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Type</h3>
+                        <div class="space-y-1.5 text-[13px]">
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="material_type" value="" {% if not material_type %}checked{% endif %} class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Any type</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="material_type" value="ebook" {% if material_type == 'ebook' %}checked{% endif %} class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">E-Books</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="material_type" value="physical" {% if material_type == 'physical' %}checked{% endif %} class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Physical books</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
+                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Availability</h3>
+                        <div class="space-y-1.5 text-[13px]">
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="availability" value="" {% if not availability %}checked{% endif %} class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">All</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="availability" value="available" {% if availability == 'available' %}checked{% endif %} class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Available</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="availability" value="borrowed" {% if availability == 'borrowed' %}checked{% endif %} class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Borrowed</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
+                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Year</h3>
+                        <div class="space-y-1.5 text-[13px]">
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="year_preset" value="any" {% if year_preset == 'any' or (not year_preset and not year_from and not year_to) %}checked{% endif %} class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Any time</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="year_preset" value="since_this_year" {% if year_preset == 'since_this_year' %}checked{% endif %} class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Since {{ current_year }}</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="year_preset" value="since_last_year" {% if year_preset == 'since_last_year' %}checked{% endif %} class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Since {{ current_year - 1 }}</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="year_preset" value="since_2023" {% if year_preset == 'since_2023' %}checked{% endif %} class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Since 2023</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="year_preset" value="custom" {% if year_preset == 'custom' %}checked{% endif %} class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Custom range...</span>
+                            </label>
+                        </div>
+                        <div class="mt-3 space-y-2.5">
+                            <div class="flex items-center gap-1.5">
+                                <input type="number" name="year_from" value="{{ year_from or '' }}" min="1000" max="2100" placeholder="From"
+                                    class="w-full px-2 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-[13px] placeholder-slate-400 focus:ring-2 focus:ring-primary/20 outline-none">
+                                <span class="text-slate-400 text-[13px]">to</span>
+                                <input type="number" name="year_to" value="{{ year_to or '' }}" min="1000" max="2100" placeholder="To"
+                                    class="w-full px-2 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-[13px] placeholder-slate-400 focus:ring-2 focus:ring-primary/20 outline-none">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="pt-4 flex gap-2 sticky bottom-0 bg-white dark:bg-slate-900 pb-2">
+                        <button type="submit" class="flex-1 bg-primary text-white py-2.5 rounded-lg font-bold text-sm hover:bg-primary/90 transition-colors">Apply Filters</button>
+                        <a href="{{ url_for('cataloging.public_catalog') }}" class="px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-semibold text-slate-600 dark:text-slate-300 text-center hover:bg-slate-50 dark:hover:bg-slate-800">Clear</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Results -->
-        <div class="flex-1 min-w-0">
-            <form method="GET" action="{{ url_for('cataloging.public_catalog') }}" class="flex flex-col gap-4">
-                        <div class="flex flex-col md:flex-row gap-3">
-                            <div class="relative min-w-[180px]">
-                                <select name="field"
-                                    class="w-full flex items-center justify-between bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-4 py-3 rounded text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer">
+        <div class="flex-1 min-w-0 w-full">
+            <form method="GET" action="{{ url_for('cataloging.public_catalog') }}" class="flex flex-col gap-3 sm:gap-4">
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <div class="relative w-full sm:w-auto sm:min-w-[180px]" id="field-select-wrapper">
+                                <!-- Hidden native select for form submission / no-JS fallback -->
+                                <select name="field" id="field-select-native" class="sr-only" tabindex="-1" aria-hidden="true">
                                     <option value="" {% if not search_field %}selected{% endif %}>All Fields</option>
                                     <option value="title" {% if search_field == 'title' %}selected{% endif %}>Title</option>
                                     <option value="author" {% if search_field == 'author' %}selected{% endif %}>Author</option>
                                     <option value="isbn" {% if search_field == 'isbn' %}selected{% endif %}>ISBN</option>
                                     <option value="category" {% if search_field == 'category' %}selected{% endif %}>Category</option>
                                 </select>
+                                <button type="button" id="field-select-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="field-select-dropdown"
+                                    class="w-full flex items-center justify-between gap-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:border-slate-400 dark:hover:border-slate-600 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
+                                    <span id="field-select-label" class="truncate">{% if search_field == 'title' %}Title{% elif search_field == 'author' %}Author{% elif search_field == 'isbn' %}ISBN{% elif search_field == 'category' %}Category{% else %}All Fields{% endif %}</span>
+                                    <span class="material-symbols-outlined text-slate-400 text-[20px] shrink-0 transition-transform duration-200" id="field-select-arrow">expand_more</span>
+                                </button>
+                                <ul id="field-select-dropdown" role="listbox" tabindex="-1"
+                                    class="hidden absolute z-20 mt-2 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden py-1.5 text-sm">
+                                    <li role="option" data-value="" tabindex="0" aria-selected="{% if not search_field %}true{% else %}false{% endif %}" class="field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors {% if not search_field %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700 dark:text-slate-200{% endif %}">
+                                        <span>All Fields</span>{% if not search_field %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}
+                                    </li>
+                                    <li role="option" data-value="title" tabindex="0" aria-selected="{% if search_field == 'title' %}true{% else %}false{% endif %}" class="field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors {% if search_field == 'title' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700 dark:text-slate-200{% endif %}">
+                                        <span>Title</span>{% if search_field == 'title' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}
+                                    </li>
+                                    <li role="option" data-value="author" tabindex="0" aria-selected="{% if search_field == 'author' %}true{% else %}false{% endif %}" class="field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors {% if search_field == 'author' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700 dark:text-slate-200{% endif %}">
+                                        <span>Author</span>{% if search_field == 'author' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}
+                                    </li>
+                                    <li role="option" data-value="isbn" tabindex="0" aria-selected="{% if search_field == 'isbn' %}true{% else %}false{% endif %}" class="field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors {% if search_field == 'isbn' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700 dark:text-slate-200{% endif %}">
+                                        <span>ISBN</span>{% if search_field == 'isbn' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}
+                                    </li>
+                                    <li role="option" data-value="category" tabindex="0" aria-selected="{% if search_field == 'category' %}true{% else %}false{% endif %}" class="field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors {% if search_field == 'category' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700 dark:text-slate-200{% endif %}">
+                                        <span>Category</span>{% if search_field == 'category' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}
+                                    </li>
+                                </ul>
                             </div>
                             <div class="relative flex-grow">
                                 <span class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -170,7 +317,7 @@
                                     placeholder="Search by title, author, keyword, or ISBN..." type="text" data-suggest="book_search" />
                             </div>
                             <button type="submit"
-                                class="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded font-semibold text-sm transition-all flex items-center justify-center gap-2">
+                                class="bg-primary hover:bg-primary/90 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg font-semibold text-sm transition-all flex items-center justify-center gap-2 w-full sm:w-auto shrink-0">
                                 Search Resources
                             </button>
                         </div>
@@ -203,10 +350,10 @@
                         {% endif %}
                     </form>
 
-            <div class="flex items-center justify-between mb-6">
-                <div>
-                    <h2 class="text-lg font-bold text-slate-800 dark:text-white py-3">Catalog Results</h2>
-                    <p class="text-sm text-slate-500">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 sm:mb-6">
+                <div class="min-w-0">
+                    <h2 class="text-base sm:text-lg font-bold text-slate-800 dark:text-white py-1 sm:py-3">Catalog Results</h2>
+                    <p class="text-xs sm:text-sm text-slate-500 truncate">
                         {% if search_query %}
                             Showing {{ books|length }} result{{ 's' if books|length != 1 }} for <span class="italic">&quot;{{ search_query }}&quot;</span>
                         {% else %}
@@ -215,11 +362,11 @@
                     </p>
                 </div>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
                 {% if books %}
                     {% for book in books %}
                     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden flex flex-col hover:shadow-lg hover:border-primary/30 transition-all group">
-                        <div class="p-5 flex-grow flex flex-col">
+                        <div class="p-4 sm:p-5 flex-grow flex flex-col">
                             <div class="mb-3">
                                 {% if book[9] == 'E-Book' %}
                                 <span class="inline-flex bg-primary/10 text-primary px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight">E-Book</span>
@@ -236,8 +383,8 @@
                                 <p class="text-[10px] text-gray-400 mt-1">{{ book[14] }} cop{{ 'y' if book[14] == 1 else 'ies' }} available</p>
                                 {% endif %}
                             </div>
-                            <h3 class="text-primary font-bold text-base leading-tight mb-2 line-clamp-2">{{ book[1] }}</h3>
-                            <p class="text-slate-600 dark:text-slate-400 text-xs mb-4">{{ book[2] }}</p>
+                            <h3 class="text-primary font-bold text-sm sm:text-base leading-tight mb-1 sm:mb-2 line-clamp-2 break-words">{{ book[1] }}</h3>
+                            <p class="text-slate-600 dark:text-slate-400 text-xs mb-3 sm:mb-4 truncate">{{ book[2] }}</p>
                             <div class="mt-auto space-y-3">
                                 <div class="flex flex-col gap-1 text-[10px] text-slate-400 font-medium">
                                     {% if book[5] %}<span>Copyright: {{ book[5] }}</span>{% endif %}
@@ -259,26 +406,26 @@
                 {% endif %}
             </div>
             {% if total_pages > 1 %}
-            <nav class="mt-10 flex items-center justify-center gap-2" aria-label="Pagination">
+            <nav class="mt-8 sm:mt-10 flex items-center justify-center gap-1.5 sm:gap-2 flex-wrap" aria-label="Pagination">
                 {% set query_args = {'q': search_query, 'field': search_field, 'year_preset': year_preset, 'year_from': year_from, 'year_to': year_to, 'sort_by': sort_by, 'category': category, 'material_type': material_type, 'availability': availability} %}
                 {% if page > 1 %}
                 <a href="{{ url_for('cataloging.public_catalog', page=page-1, **query_args) }}"
-                    class="inline-flex items-center gap-1 px-3 py-2 rounded border border-slate-300 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                    <span class="material-symbols-outlined text-base">chevron_left</span> Prev
+                    class="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded border border-slate-300 dark:border-slate-700 text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    <span class="material-symbols-outlined text-sm sm:text-base">chevron_left</span> Prev
                 </a>
                 {% endif %}
                 {% for p in range(1, total_pages + 1) %}
                     {% if p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
                     <a href="{{ url_for('cataloging.public_catalog', page=p, **query_args) }}"
-                        class="px-3.5 py-2 rounded text-sm font-semibold transition-colors {% if p == page %}bg-primary text-white{% else %}border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800{% endif %}">{{ p }}</a>
+                        class="px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-semibold transition-colors {% if p == page %}bg-primary text-white{% else %}border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800{% endif %}">{{ p }}</a>
                     {% elif p == page - 3 or p == page + 3 %}
-                    <span class="px-1 text-slate-400">…</span>
+                    <span class="px-1 text-slate-400 text-sm">…</span>
                     {% endif %}
                 {% endfor %}
                 {% if page < total_pages %}
                 <a href="{{ url_for('cataloging.public_catalog', page=page+1, **query_args) }}"
-                    class="inline-flex items-center gap-1 px-3 py-2 rounded border border-slate-300 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                    Next <span class="material-symbols-outlined text-base">chevron_right</span>
+                    class="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded border border-slate-300 dark:border-slate-700 text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    Next <span class="material-symbols-outlined text-sm sm:text-base">chevron_right</span>
                 </a>
                 {% endif %}
             </nav>
@@ -311,10 +458,126 @@
         document.getElementById('filter-form').submit();
     }
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') closeCategoryModal();
+        if (e.key === 'Escape') {
+            closeCategoryModal();
+            closeMobileFilters();
+        }
     });
     document.getElementById('categoryModal').addEventListener('click', function (e) {
         if (e.target === this) closeCategoryModal();
     });
+
+    // Mobile filter drawer
+    function openMobileFilters() {
+        var drawer = document.getElementById('mobile-filter-drawer');
+        if (drawer) {
+            drawer.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+    }
+    function closeMobileFilters() {
+        var drawer = document.getElementById('mobile-filter-drawer');
+        if (drawer) {
+            drawer.classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+    }
+    var toggleBtn = document.getElementById('mobile-filter-toggle');
+    if (toggleBtn) toggleBtn.addEventListener('click', openMobileFilters);
+    var closeBtn = document.getElementById('mobile-filter-close');
+    if (closeBtn) closeBtn.addEventListener('click', closeMobileFilters);
+    var backdrop = document.getElementById('mobile-filter-backdrop');
+    if (backdrop) backdrop.addEventListener('click', closeMobileFilters);
+
+    // Custom field select — replaces native <select> that looked broken on some browsers
+    (function() {
+        var btn = document.getElementById('field-select-btn');
+        var dropdown = document.getElementById('field-select-dropdown');
+        var label = document.getElementById('field-select-label');
+        var arrow = document.getElementById('field-select-arrow');
+        var native = document.getElementById('field-select-native');
+        var wrapper = document.getElementById('field-select-wrapper');
+        if (!btn || !dropdown || !native) return;
+
+        function setExpanded(expanded) {
+            btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            dropdown.classList.toggle('hidden', !expanded);
+            if (arrow) arrow.style.transform = expanded ? 'rotate(180deg)' : '';
+        }
+        function isOpen() { return !dropdown.classList.contains('hidden'); }
+
+        function selectValue(value, text) {
+            native.value = value;
+            if (label) label.textContent = text;
+            // update option styles
+            dropdown.querySelectorAll('[role=\"option\"]').forEach(function(opt) {
+                var isSel = opt.getAttribute('data-value') === value;
+                opt.setAttribute('aria-selected', isSel ? 'true' : 'false');
+                opt.classList.toggle('bg-primary/10', isSel);
+                opt.classList.toggle('text-primary', isSel);
+                opt.classList.toggle('font-semibold', isSel);
+                opt.classList.toggle('text-slate-700', !isSel);
+                // toggle check icon
+                var check = opt.querySelector('.material-symbols-outlined');
+                if (isSel) {
+                    if (!check) {
+                        var c = document.createElement('span');
+                        c.className = 'material-symbols-outlined text-[18px] text-primary';
+                        c.textContent = 'check';
+                        opt.appendChild(c);
+                    }
+                } else {
+                    if (check) check.remove();
+                }
+            });
+        }
+
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            setExpanded(!isOpen());
+        });
+
+        dropdown.querySelectorAll('[role=\"option\"]').forEach(function(opt) {
+            opt.addEventListener('click', function() {
+                selectValue(opt.getAttribute('data-value'), opt.querySelector('span').textContent.trim());
+                setExpanded(false);
+                btn.focus();
+            });
+            opt.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    opt.click();
+                } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    var next = opt.nextElementSibling;
+                    if (next) next.focus();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    var prev = opt.previousElementSibling;
+                    if (prev) prev.focus(); else btn.focus();
+                } else if (e.key === 'Escape') {
+                    setExpanded(false);
+                    btn.focus();
+                }
+            });
+        });
+
+        btn.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                if (!isOpen()) setExpanded(true);
+                var first = dropdown.querySelector('[role=\"option\"]');
+                if (first) first.focus();
+            } else if (e.key === 'Escape' && isOpen()) {
+                setExpanded(false);
+            }
+        });
+
+        document.addEventListener('click', function(e) {
+            if (isOpen() && wrapper && !wrapper.contains(e.target)) {
+                setExpanded(false);
+            }
+        });
+    })();
 </script>
 {% endblock %}

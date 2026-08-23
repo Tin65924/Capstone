@@ -573,11 +573,13 @@
         function loadKpiBody(type) {
             const f = cardFilter(type);
             if (!f) return;
+            const preset = f.preset || 'all';
+            const isCustom = preset === 'custom';
             const params = new URLSearchParams();
             params.set('kpi_type', type);
-            params.set('preset', f.preset || 'all');
-            params.set('from', f.from || '');
-            params.set('to', f.to || '');
+            params.set('preset', preset);
+            params.set('from', isCustom ? (f.from || '') : '');
+            params.set('to', isCustom ? (f.to || '') : '');
             fetch(KPI_JSON_URL + '?' + params.toString())
                 .then(function (r) { return r.json(); })
                 .then(function (json) {
@@ -760,12 +762,16 @@
             document.getElementById('exportModal').classList.add('hidden');
         }
 
-        function submitExport(kpi_type, format, preset, from, to) {
+        function submitExport(kpi_type, format, preset, from, to, extraFields) {
             const form = document.createElement('form');
             form.method = 'POST';
             form.action = EXPORT_URL;
             form.target = '_blank';
-            const fields = { kpi_type: kpi_type, format: format, preset: preset, from: from, to: to };
+            // Clear stale custom dates when preset is not 'custom' — mirrors backend resolve_dates.
+            const isCustom = preset === 'custom';
+            const cleanFrom = isCustom ? (from || '') : '';
+            const cleanTo = isCustom ? (to || '') : '';
+            const fields = { kpi_type: kpi_type, format: format, preset: preset, from: cleanFrom, to: cleanTo };
             Object.keys(fields).forEach(function (k) {
                 const input = document.createElement('input');
                 input.type = 'hidden';
@@ -773,6 +779,15 @@
                 input.value = fields[k] || '';
                 form.appendChild(input);
             });
+            if (extraFields) {
+                Object.keys(extraFields).forEach(function (k) {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = k;
+                    input.value = extraFields[k] || '';
+                    form.appendChild(input);
+                });
+            }
             document.body.appendChild(form);
             form.submit();
             form.remove();
@@ -780,13 +795,10 @@
 
         function doExport(format) {
             const f = cardFilter(exportType);
-            submitExport(
-                exportType,
-                format,
-                f ? f.preset : GLOBAL.preset,
-                f ? (f.from || '') : GLOBAL.from,
-                f ? (f.to || '') : GLOBAL.to,
-            );
+            const preset = f ? (f.preset || GLOBAL.preset) : GLOBAL.preset;
+            const from = f ? (f.from || '') : GLOBAL.from;
+            const to = f ? (f.to || '') : GLOBAL.to;
+            submitExport(exportType, format, preset, from, to);
             closeExportModal();
         }
 
@@ -799,7 +811,17 @@
         }
 
         function doExportAll(format) {
-            submitExport('all', format, GLOBAL.preset, GLOBAL.from, GLOBAL.to);
+            const board = getBoard();
+            const added = (board.kpis || []).filter(function (k) { return k in KPI_LABELS; });
+            // GLOBAL dates: only keep them when preset is 'custom'.
+            const preset = GLOBAL.preset || 'all';
+            const from = GLOBAL.from || '';
+            const to = GLOBAL.to || '';
+            const extra = {};
+            // Tell backend which KPIs are actually on the board — 'all' now means "all added".
+            // Always send the key so backend can distinguish "no board param" (legacy) from "empty board".
+            extra['kpi_types'] = added.join(',');
+            submitExport('all', format, preset, from, to, extra);
             closeExportAllModal();
         }
 
@@ -827,8 +849,13 @@
 
         function applyFilter() {
             const preset = document.getElementById('filterPreset').value;
-            const from = document.getElementById('filterFrom').value;
-            const to = document.getElementById('filterTo').value;
+            let from = document.getElementById('filterFrom').value;
+            let to = document.getElementById('filterTo').value;
+            // Prevent stale custom dates from overriding semester/year presets.
+            if (preset !== 'custom') {
+                from = '';
+                to = '';
+            }
             const board = getBoard();
             board.filters = board.filters || {};
             if (preset === 'all' || (preset === 'custom' && !from && !to)) {
