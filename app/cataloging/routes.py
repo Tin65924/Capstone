@@ -671,20 +671,32 @@ def public_catalog():
         year_to = ''
 
     from app.cataloging.models import search_books_filtered, get_distinct_categories
-    books = search_books_filtered(
-        query, field=field if field else None,
-        year_from=year_from or None, year_to=year_to or None,
-        sort_by=sort_by or None, category=category or None,
-        material_type=material_type or None, availability=availability or None
-    )
-    categories = [row[0] for row in get_distinct_categories()]
 
-    per_page = 50
-    total = len(books)
-    total_pages = max(1, (total + per_page - 1) // per_page)
-    page = max(1, min(request.args.get('page', 1, type=int), total_pages))
-    start = (page - 1) * per_page
-    books = books[start:start + per_page]
+    # Empty by default: only query DB when user has provided a search term or filter.
+    # This keeps /catalog empty on first visit and clears when the search bar is emptied.
+    has_search = bool(query or category or material_type or availability or year_from or year_to)
+
+    if not has_search:
+        categories = [row[0] for row in get_distinct_categories()]
+        books = []
+        per_page = 50
+        total = 0
+        total_pages = 1
+        page = 1
+    else:
+        books_all = search_books_filtered(
+            query, field=field if field else None,
+            year_from=year_from or None, year_to=year_to or None,
+            sort_by=sort_by or None, category=category or None,
+            material_type=material_type or None, availability=availability or None
+        )
+        categories = [row[0] for row in get_distinct_categories()]
+        per_page = 50
+        total = len(books_all)
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        page = max(1, min(request.args.get('page', 1, type=int), total_pages))
+        start = (page - 1) * per_page
+        books = books_all[start:start + per_page]
 
     return render_template('public/catalog.html', books=books,
                            search_query=query, search_field=field,
@@ -694,6 +706,7 @@ def public_catalog():
                            material_type=material_type, availability=availability,
                            current_year=current_year,
                            categories=categories,
+                           has_search=has_search,
                            page=page, total_pages=total_pages, total=total, per_page=per_page)
 
 

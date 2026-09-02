@@ -417,17 +417,28 @@ class TestPublicCatalog:
             many_books,                  # search_books_filtered books (120)
             [],                          # get_distinct_categories
         ]
-        resp = client.get('/catalog')
+        # Empty catalog by default — must provide a search/filter to paginate
+        resp = client.get('/catalog?q=Book')
         assert resp.status_code == 200
         body = resp.get_data(as_text=True)
         assert '>1 - 50</span> of <span class="font-medium text-slate-900 dark:text-slate-100">120</span>' in body
         assert 'Next' in body
 
         mock_db['fetch_all'].side_effect = [many_books, []]
-        resp2 = client.get('/catalog?page=3')
+        resp2 = client.get('/catalog?q=Book&page=3')
         assert resp2.status_code == 200
         body2 = resp2.get_data(as_text=True)
         assert '>101 - 120</span> of <span class="font-medium text-slate-900 dark:text-slate-100">120</span>' in body2
+
+    def test_public_catalog_empty_by_default(self, client, mock_db):
+        # Visiting /catalog with no search term or filter should show empty prompt, no DB search
+        mock_db['fetch_all'].return_value = []  # get_distinct_categories -> []
+        resp = client.get('/catalog')
+        assert resp.status_code == 200
+        body = resp.get_data(as_text=True)
+        assert 'Search to explore the catalog' in body or 'Start searching' in body
+        # Should not show pagination or footer counts when empty
+        assert 'Next' not in body
 
     def test_book_info_found(self, client, mock_db):
         mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
