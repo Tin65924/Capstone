@@ -70,6 +70,15 @@ def run_schema(app):
                 ADD CONSTRAINT user_accounts_account_status_check
                 CHECK (account_status IN ('active', 'disabled', 'pending', 'archived'));
             """)
+            cur.execute("""
+                ALTER TABLE accession_log
+                DROP CONSTRAINT IF EXISTS accession_log_source_check;
+            """)
+            cur.execute("""
+                ALTER TABLE accession_log
+                ADD CONSTRAINT accession_log_source_check
+                CHECK (source IN ('purchase', 'donation', 'others'));
+            """)
         conn.commit()
         app.logger.info('Database schema initialized successfully.')
     except Exception as e:

@@ -597,7 +597,7 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                 source = book_data.get('source', '') or None
                 if source:
                     source = source.lower()
-                    if source not in ('purchase', 'donation'):
+                    if source not in ('purchase', 'donation', 'others'):
                         source = None
                 create_accession(
                     accession_number=accession_number,
