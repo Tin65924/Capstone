@@ -58,7 +58,6 @@
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cfd7e7; border-radius: 10px; }
-<<<<<<< HEAD
         main {
             flex: 1;
             padding: 1rem;
@@ -77,12 +76,6 @@
             .modal { margin: 1rem; max-width: calc(100% - 2rem); border-radius: 16px; }
             .pagination { flex-direction: column; gap: 0.75rem; align-items: stretch; }
         }
-=======
-        main { flex: 1; padding: 1.25rem; max-width: 100vw; width: 100%; min-width: 0; }
-@media (min-width: 1024px) {
-    main { padding: 2rem 3rem; max-width: calc(100vw - 256px); }
-}
->>>>>>> main
         .card {
             background: white;
             border-radius: var(--radius);
@@ -183,17 +176,8 @@
 </head>
 <body>
 
-<<<<<<< HEAD
     <!-- Sidebar - Desktop -->
     <div class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0 h-screen sticky top-0">
-=======
-    <!-- Mobile overlay backdrop -->
-<div id="sidebar-overlay" onclick="toggleSidebar()"
-     class="hidden fixed inset-0 bg-black/50 z-30 lg:hidden"></div>
-
-<!-- Sidebar -->
-<div id="sidebar" class="flex flex-col w-64 border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0 h-screen fixed inset-y-0 left-0 z-40 -translate-x-full transition-transform duration-200 lg:translate-x-0 lg:sticky lg:top-0">
->>>>>>> main
       <div class="p-6 flex-1 flex flex-col overflow-hidden">
         <div class="flex items-center gap-3 mb-8 shrink-0">
           <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
@@ -238,7 +222,6 @@
 
     <!-- Main Content -->
     <main>
-<<<<<<< HEAD
         <!-- Mobile top bar -->
         <div class="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-[#1a2235] border-b border-[#cfd7e7] dark:border-gray-700 px-4 py-3 mb-4 -mx-4 sm:-mx-6 lg:mx-0 -mt-4 sm:-mt-6 lg:mt-0">
             <button id="mobile-sidebar-open" type="button" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">menu</span></button>
@@ -262,27 +245,6 @@
             <div class="flex flex-wrap gap-2 sm:gap-3">
                 <button class="btn btn-outline flex-1 sm:flex-none justify-center text-xs sm:text-sm px-3 sm:px-4" onclick="openModal('catalogExportModal')">
                     <span class="material-symbols-outlined text-[18px] sm:text-[20px]">download</span> Export
-=======
-    <!-- Mobile Top Bar -->
-    <div class="lg:hidden flex items-center gap-3 px-4 py-3 border-b border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235]">
-        <button onclick="toggleSidebar()" class="p-2 -ml-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
-            <span class="material-symbols-outlined">menu</span>
-        </button>
-        <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-6 w-6 rounded object-cover">
-        <span class="font-bold text-sm">MCST Library</span>
-    </div>
-    {% include 'components/flash_messages.html' %}
-
-
-        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8 animate-in">
-            <div>
-                <h1 class="text-3xl font-bold">Cataloging Module</h1>
-                <p class="text-gray-500 mt-1">Manage and organize your library's information database.</p>
-            </div>
-            <div class="flex flex-wrap gap-3">
-                <button class="btn btn-outline" onclick="openModal('catalogExportModal')">
-                    <span class="material-symbols-outlined">download</span> Export
->>>>>>> main
                 </button>
                 <button class="btn btn-primary flex-1 sm:flex-none justify-center text-xs sm:text-sm px-3 sm:px-4" onclick="openModal('addBookModal')">
                     <span class="material-symbols-outlined text-[18px] sm:text-[20px]">add</span> Add New Book
@@ -608,11 +570,7 @@
             {% endif %}
             <form method="POST" action="{{ url_for('cataloging.add_book') }}" class="p-4 sm:p-6 space-y-4" data-exists-book>
                 <p data-exists-msg class="hidden mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm font-medium text-red-700 dark:text-red-300"></p>
-<<<<<<< HEAD
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-=======
-                <div class="form-grid">
->>>>>>> main
                     <div class="col-span-2">
                         <label class="form-label">Accession Number *</label>
                         <input type="text" name="accession_number" required class="form-input" placeholder="e.g. 2025-0001">
@@ -688,7 +646,6 @@
                 <h2 class="text-lg sm:text-xl font-bold">Edit Book</h2>
                 <button onclick="closeModal(null, 'editBookModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
             </div>
-<<<<<<< HEAD
             {% if request.args.get('modal') == 'editBookModal' %}
             <div class="px-6 pt-4">
                 {% with messages = get_flashed_messages(with_categories=true) %}
@@ -709,11 +666,6 @@
             <form method="POST" id="editBookForm" class="p-4 sm:p-6 space-y-4">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div class="col-span-1 sm:col-span-2">
-=======
-            <form method="POST" id="editBookForm" class="p-6 space-y-4">
-                <div class="form-grid">
-                    <div class="col-span-2">
->>>>>>> main
                         <label class="form-label">Title *</label>
                         <input type="text" name="title" id="edit_title" required class="form-input">
                     </div>
@@ -776,7 +728,6 @@
                 <h2 class="text-lg sm:text-xl font-bold">Add Accession Copy</h2>
                 <button onclick="closeModal(null, 'addAccessionModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
             </div>
-<<<<<<< HEAD
             {% if request.args.get('modal') == 'addAccessionModal' %}
             <div class="px-6 pt-4">
                 {% with messages = get_flashed_messages(with_categories=true) %}
@@ -797,11 +748,6 @@
             <form method="POST" id="addAccessionForm" class="p-4 sm:p-6 space-y-4">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div class="col-span-1 sm:col-span-2">
-=======
-            <form method="POST" id="addAccessionForm" class="p-6 space-y-4">
-                <div class="form-grid">
-                    <div class="col-span-2">
->>>>>>> main
                         <label class="form-label">Accession Number *</label>
                         <input type="text" name="accession_number" required class="form-input" placeholder="e.g. 2025-0001">
                     </div>
@@ -829,7 +775,6 @@
                 <h2 class="text-lg sm:text-xl font-bold">Edit Accession Copy</h2>
                 <button onclick="closeModal(null, 'editAccessionModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
             </div>
-<<<<<<< HEAD
             {% if request.args.get('modal') == 'editAccessionModal' %}
             <div class="px-6 pt-4">
                 {% with messages = get_flashed_messages(with_categories=true) %}
@@ -850,11 +795,6 @@
             <form method="POST" id="editAccessionForm" class="p-4 sm:p-6 space-y-4">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div class="col-span-1 sm:col-span-2">
-=======
-            <form method="POST" id="editAccessionForm" class="p-6 space-y-4">
-                <div class="form-grid">
-                    <div class="col-span-2">
->>>>>>> main
                         <label class="form-label">Accession Number *</label>
                         <input type="text" name="accession_number" id="edit_acc_number" required class="form-input" placeholder="e.g. 2025-0001">
                     </div>
