@@ -443,12 +443,29 @@ class TestPublicCatalog:
 
     def test_book_info_with_accessions(self, client, mock_db):
         mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
-        mock_db['fetch_all'].return_value = [
-            (1, '2025-0001', 1, 4, '2025-01-10', 'purchase'),
+        mock_db['fetch_all'].side_effect = [
+            [(1, '2025-0001', 1, 4, '2025-01-10', 'purchase')],  # accessions
+            [],  # no active loans -> copy available
+            [],  # borrower map
         ]
         resp = client.get('/book/1')
         assert resp.status_code == 200
-        assert b'2025-0001' in resp.data
+        assert b'1 of 1' in resp.data
+        assert b'Borrow' in resp.data
+        assert b'Reserve' in resp.data
+
+    def test_book_info_all_borrowed(self, client, mock_db):
+        mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
+        mock_db['fetch_all'].side_effect = [
+            [(1, '2025-0001', 1, 4, '2025-01-10', 'purchase')],  # accessions
+            [(1,)],  # active loan on accession 1 -> none available
+            [(1, 1)],  # borrower map
+        ]
+        resp = client.get('/book/1')
+        assert resp.status_code == 200
+        assert b'No copies available' in resp.data
+        assert b'Borrow' in resp.data
+        assert b'Reserve' in resp.data
 
 
 def _csv_file(content, filename='books.csv'):

@@ -7,6 +7,7 @@ from app.auth.models import log_activity
 from app.cataloging.models import get_book_by_id, get_accession_by_number, get_accession_by_id
 from .models import (
     borrow_book, return_book, get_active_loan_by_accession,
+    get_active_loan_by_book_and_borrower,
     count_active_loans, calculate_fine,
     get_borrower_by_user, get_borrower_by_id_number, get_borrower_details,
     get_circulation_stats, get_active_loans, get_recent_transactions,
@@ -109,6 +110,10 @@ def desk_borrow():
 
     if get_active_loan_by_accession(accession[0]):
         flash(f'Accession {accession_number} is already on loan.', 'error')
+        return redirect(url_for('circulation.circulation_page', search=borrower_row[1]))
+
+    if get_active_loan_by_book_and_borrower(accession[2], borrower_row[0]):
+        flash(f'{borrower_row[4]} already has a copy of this book borrowed.', 'error')
         return redirect(url_for('circulation.circulation_page', search=borrower_row[1]))
 
     limit = _borrow_limit(borrower_row[6])
@@ -225,6 +230,10 @@ def reservation_action(reservation_id, action):
             return redirect(url_for('circulation.reservations_page'))
         borrower_detail = get_borrower_details(reservation[2])
         role_name = borrower_detail[6] if borrower_detail else 'Student'
+        if get_active_loan_by_book_and_borrower(reservation[1], reservation[2]):
+            borrower_name = borrower_detail[4] if borrower_detail else 'Borrower'
+            flash(f'Cannot claim — {borrower_name} already has a copy of this book borrowed.', 'error')
+            return redirect(url_for('circulation.reservations_page'))
         limit = _borrow_limit(role_name)
         if count_active_loans(reservation[2]) >= limit:
             borrower_name = borrower_detail[4] if borrower_detail else 'Borrower'
@@ -269,6 +278,10 @@ def user_borrow():
         return redirect(url_for('cataloging.book_info', book_id=book_id))
     if borrower_row[4] != 'active':
         flash('Your borrower account is not active.', 'error')
+        return redirect(url_for('cataloging.book_info', book_id=book_id))
+
+    if get_active_loan_by_book_and_borrower(book_id, borrower_row[0]):
+        flash('You already have a copy of this book borrowed.', 'error')
         return redirect(url_for('cataloging.book_info', book_id=book_id))
 
     if borrow_type == 'overnight':
@@ -330,6 +343,10 @@ def user_reserve():
     existing = get_active_reservation_by_book_and_borrower(book_id, borrower_row[0])
     if existing:
         flash('You already have an active reservation for this book.', 'error')
+        return redirect(url_for('cataloging.book_info', book_id=book_id))
+
+    if get_active_loan_by_book_and_borrower(book_id, borrower_row[0]):
+        flash('You already have a copy of this book borrowed.', 'error')
         return redirect(url_for('cataloging.book_info', book_id=book_id))
 
     if get_available_accession_by_book(book_id):

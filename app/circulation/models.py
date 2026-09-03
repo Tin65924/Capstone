@@ -37,6 +37,13 @@ def get_active_loan_by_accession(accession_id):
     )
 
 
+def get_active_loan_by_book_and_borrower(book_id, borrower_id):
+    return db.fetch_one(
+        "SELECT * FROM circulation_records WHERE book_id = %s AND borrower_id = %s AND transaction_status IN ('active', 'overdue')",
+        (book_id, borrower_id)
+    )
+
+
 def get_active_loan_accession_ids_by_book(book_id):
     rows = db.fetch_all(
         "SELECT accession_id FROM circulation_records WHERE book_id = %s AND transaction_status IN ('active', 'overdue')",

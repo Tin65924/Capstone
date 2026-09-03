@@ -347,12 +347,22 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
                 {% if books %}
                     {% for book in books %}
+                    {% set is_ebook = book[9] == 'E-Book' %}
+                    {% set avail_status = book[13] if book|length > 14 else 'available' %}
+                    {% set avail_count = book[14] if book|length > 14 else 1 %}
+                    {% if is_ebook %}
+                        {% set has_available = true %}
+                    {% elif book|length > 14 %}
+                        {% set has_available = avail_status != 'borrowed' and (avail_count|string|int(0) > 0) %}
+                    {% else %}
+                        {% set has_available = avail_status != 'borrowed' %}
+                    {% endif %}
                     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden flex flex-col hover:shadow-lg hover:border-primary/30 transition-all group">
                         <div class="p-4 sm:p-5 flex-grow flex flex-col">
                             <div class="mb-3">
-                                {% if book[9] == 'E-Book' %}
+                                {% if is_ebook %}
                                 <span class="inline-flex bg-primary/10 text-primary px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight">E-Book</span>
-                                {% elif book[13] == 'borrowed' %}
+                                {% elif not has_available %}
                                 <span class="inline-flex bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight items-center gap-1">
                                     <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                                     Not Available
@@ -362,7 +372,6 @@
                                     <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                                     Available
                                 </span>
-                                <p class="text-[10px] text-gray-400 mt-1">{{ book[14] }} cop{{ 'y' if book[14] == 1 else 'ies' }} available</p>
                                 {% endif %}
                             </div>
                             <h3 class="text-primary font-bold text-sm sm:text-base leading-tight mb-1 sm:mb-2 line-clamp-2 break-words">{{ book[1] }}</h3>
@@ -372,7 +381,31 @@
                                     {% if book[5] %}<span>Copyright: {{ book[5] }}</span>{% endif %}
                                     {% if book[8] %}<span>ISBN: {{ book[8] }}</span>{% endif %}
                                 </div>
-                                <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-center">
+                                <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                                    <span class="text-[11px] font-semibold {% if has_available %}text-green-600 dark:text-green-400{% else %}text-slate-400{% endif %}">
+                                        {% if is_ebook %}Available online{% elif has_available %}{% if book|length > 14 %}{{ avail_count }} cop{{ 'y' if (avail_count|string|int(0)) == 1 else 'ies' }} available{% else %}Available{% endif %}{% else %}No copies available{% endif %}
+                                    </span>
+                                    <div class="flex items-center gap-2 shrink-0">
+                                        {% if has_available %}
+                                        <a href="{{ url_for('cataloging.book_info', book_id=book[0]) }}"
+                                            class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-primary text-white hover:bg-primary/90 transition-colors">Borrow</a>
+                                        {% else %}
+                                        <button type="button" disabled
+                                            class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed opacity-60">Borrow</button>
+                                        {% endif %}
+                                        {% if has_available %}
+                                        <button type="button" disabled title="A copy is available — reserve is only enabled when all copies are borrowed."
+                                            class="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-60">Reserve</button>
+                                        {% else %}
+                                        <form method="post" action="{{ url_for('circulation.user_reserve') }}" class="inline">
+                                            <input type="hidden" name="book_id" value="{{ book[0] }}">
+                                            <button type="submit"
+                                                class="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-primary text-primary hover:bg-primary/5 transition-colors">Reserve</button>
+                                        </form>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-center">
                                     <a href="{{ url_for('cataloging.book_info', book_id=book[0]) }}" class="text-primary text-xs font-bold hover:underline text-center">View Details</a>
                                 </div>
                             </div>
