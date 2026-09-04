@@ -37,7 +37,7 @@
 | 2 | `book_id` | int | FK → `book_catalog` |
 | 3 | `librarian_id` | int | FK → `user_accounts` |
 | 4 | `date_accessioned` | date (str) | |
-| 5 | `source` | str\|None | `'purchase'` or `'donation'` |
+| 5 | `source` | str\|None | `'purchase'`, `'donation'`, or `'others'` |
 
 ## Endpoints
 
