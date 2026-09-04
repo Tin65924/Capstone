@@ -205,6 +205,10 @@ def reservation_action(reservation_id, action):
             return redirect(url_for('circulation.reservations_page'))
         borrower_detail = get_borrower_details(reservation[2])
         role_name = borrower_detail[6] if borrower_detail else 'Student'
+        if get_active_loan_by_book_and_borrower(reservation[1], reservation[2]):
+            borrower_name = borrower_detail[4] if borrower_detail else 'Borrower'
+            flash(f'Cannot allocate — {borrower_name} already has a copy of this book borrowed.', 'error')
+            return redirect(url_for('circulation.reservations_page'))
         limit = _borrow_limit(role_name)
         if count_active_loans(reservation[2]) >= limit:
             borrower_name = borrower_detail[4] if borrower_detail else 'Borrower'

@@ -38,6 +38,10 @@ def get_active_loan_by_accession(accession_id):
 
 
 def get_active_loan_by_book_and_borrower(book_id, borrower_id):
+    # NOTE: application-level guard only. Concurrent POSTs can both pass this
+    # check and INSERT different accessions of the same book (no partial unique
+    # index on (book_id, borrower_id) WHERE active/overdue). Accepted for
+    # capstone scope; a DB-level constraint would close the race.
     return db.fetch_one(
         "SELECT * FROM circulation_records WHERE book_id = %s AND borrower_id = %s AND transaction_status IN ('active', 'overdue')",
         (book_id, borrower_id)

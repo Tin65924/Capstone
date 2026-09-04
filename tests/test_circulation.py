@@ -161,6 +161,7 @@ class TestReservationLifecycle:
             (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),  # reservation
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),    # available copy
             (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),  # borrower details
+            None,                                                  # no active loan for this book
             (0,),                                                  # count active loans
         ]
         resp = librarian_client.post('/librarian/reservations/9/allocate')
@@ -243,7 +244,19 @@ class TestReservationLifecycle:
             (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),  # reservation
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),    # available copy
             (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),  # borrower details
+            None,                                                  # no active loan for this book
             (3,),                                                  # count == limit
+        ]
+        resp = librarian_client.post('/librarian/reservations/9/allocate')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_allocate_rejected_when_already_holding_book(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),  # reservation
+            (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),    # available copy
+            (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),  # borrower details
+            (55, 5, 2, 1, 1, 'daily_circulation', 'borrow', '2026-08-01', '2026-08-02', None, 0, None, False, 'active'),  # already holds book 5
         ]
         resp = librarian_client.post('/librarian/reservations/9/allocate')
         assert resp.status_code == 302
