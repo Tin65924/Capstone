@@ -46,32 +46,32 @@ KPI_DESCRIPTIONS = {
 def resolve_dates(preset, from_str, to_str):
     """Resolve a date range into (start_date, end_date).
 
-    Preset ``semester``/``year`` always wins over explicit dates (prevents
-    stale ``from``/``to`` from hidden custom inputs from overriding the
-    preset).  For ``custom`` (or ``all`` with explicit dates) the dates are
-    parsed; invalid dates fall back to no bounds.
+    Explicit ``from``/``to`` dates win; otherwise the preset applies
+    (``all`` -> no bounds, ``semester`` -> current academic semester,
+    ``year`` -> current calendar year).
     """
     today = date.today()
+    start_date = end_date = None
 
-    # Preset ranges take precedence — ignore any stale from/to.
-    if preset == 'year':
-        return date(today.year, 1, 1), date(today.year, 12, 31)
-    if preset == 'semester':
-        if today.month >= 8:
-            return date(today.year, 8, 1), date(today.year, 12, 31)
-        else:
-            return date(today.year, 1, 1), date(today.year, 5, 31)
-
-    # ``custom`` or ``all`` with explicit dates: try to parse the dates.
-    if from_str or to_str or preset == 'custom':
+    if from_str or to_str:
         try:
             start_date = datetime.strptime(from_str, '%Y-%m-%d').date() if from_str else None
             end_date = datetime.strptime(to_str, '%Y-%m-%d').date() if to_str else None
         except ValueError:
-            return None, None
+            start_date = end_date = None
         return start_date, end_date
 
-    return None, None
+    if preset == 'year':
+        start_date = date(today.year, 1, 1)
+        end_date = date(today.year, 12, 31)
+    elif preset == 'semester':
+        if today.month >= 8:
+            start_date = date(today.year, 8, 1)
+            end_date = date(today.year, 12, 31)
+        else:
+            start_date = date(today.year, 1, 1)
+            end_date = date(today.year, 5, 31)
+    return start_date, end_date
 
 
 def compute_all_kpis(start_date, end_date):
@@ -90,9 +90,6 @@ def analytics_page():
     preset = request.args.get('preset', 'all')
     from_str = request.args.get('from', '').strip()
     to_str = request.args.get('to', '').strip()
-    # Normalize: semester/year presets ignore stale custom dates in the URL.
-    if preset in ('semester', 'year'):
-        from_str = to_str = ''
     start_date, end_date = resolve_dates(preset, from_str, to_str)
     kpi_data = compute_all_kpis(start_date, end_date)
     return render_template(
@@ -117,10 +114,6 @@ def kpi_json():
     preset = request.args.get('preset', 'all')
     from_str = request.args.get('from', '').strip()
     to_str = request.args.get('to', '').strip()
-    if preset in ('semester', 'year'):
-        from_str = to_str = ''
-    elif preset not in ('custom', 'all'):
-        from_str = to_str = ''
     start_date, end_date = resolve_dates(preset, from_str, to_str)
     return jsonify({'kpi_type': kpi_type, 'data': _run_kpi(kpi_type, start_date, end_date)})
 
@@ -551,11 +544,6 @@ def export_report():
     preset = request.form.get('preset', 'all')
     from_str = request.form.get('from', '').strip()
     to_str = request.form.get('to', '').strip()
-    # Semester/year presets must not carry stale custom dates.
-    if preset in ('semester', 'year'):
-        from_str = to_str = ''
-    elif preset not in ('custom', 'all'):
-        from_str = to_str = ''
     # Analytics reports are PDF-only since 2026-08 (migration from CSV/XLSX).
     # Keep spreadsheet generation for Catalog/Users exports only. For backwards
     # compatibility, legacy format=csv|xlsx requests are explicitly coerced to PDF
@@ -575,30 +563,7 @@ def export_report():
     start_date, end_date = resolve_dates(preset, from_str, to_str)
 
     if export_all:
-        # If the board sent an explicit list of added KPIs, export only those.
-        # Legacy calls without kpi_types still export all KPIs (keeps tests green).
-        has_key = ('kpi_types' in request.form or 'kpi_types[]' in request.form
-                   or 'selected_kpis' in request.form)
-        raw = (request.form.get('kpi_types') or request.form.get('kpi_types[]') or
-               request.form.get('selected_kpis') or '').strip()
-        multi = request.form.getlist('kpi_types')
-        # handle repeated field: kpi_types=a&kpi_types=b
-        if multi and len(multi) > 1:
-            candidates = [c.strip() for c in multi if c.strip()]
-        elif raw:
-            candidates = [p.strip() for p in raw.split(',') if p.strip()]
-        else:
-            candidates = []
-        if has_key:
-            # Respect the board's explicit selection — even if empty (board has no KPIs, export nothing).
-            # Filter to valid KPIs only; if board sent only invalid names, result is empty.
-            kpi_types = [k for k in candidates if k in VALID_KPIS and k in KPI_LABELS]
-        elif candidates:
-            kpi_types = [k for k in candidates if k in VALID_KPIS and k in KPI_LABELS]
-            if not kpi_types:
-                kpi_types = list(KPI_LABELS.keys())
-        else:
-            kpi_types = list(KPI_LABELS.keys())
+        kpi_types = list(KPI_LABELS.keys())
     else:
         kpi_types = [kpi_type]
 

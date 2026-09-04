@@ -419,17 +419,17 @@ def edit_accession(accession_id):
 
     if not accession_number:
         flash('Accession number is required.', 'error')
-        return redirect(url_for('cataloging.cataloging_page', modal='editAccessionModal', mstatus='error'))
+        return redirect(url_for('cataloging.cataloging_page'))
 
     existing = get_accession_by_number(accession_number)
     if existing and existing[0] != accession_id:
         flash(f'Accession number {accession_number} already exists.', 'error')
-        return redirect(url_for('cataloging.cataloging_page', modal='editAccessionModal', mstatus='error'))
+        return redirect(url_for('cataloging.cataloging_page'))
 
     update_accession(accession_id, accession_number, source)
     log_activity(current_user.id, f'cataloging:edit_accession:{accession_id}')
     flash(f'Accession {accession_number} updated.', 'success')
-    return redirect(url_for('cataloging.cataloging_page', modal='editAccessionModal', mstatus='success'))
+    return redirect(url_for('cataloging.cataloging_page'))
 
 
 @cataloging_bp.route('/librarian/cataloging/accession/<int:accession_id>/delete', methods=['POST'])
@@ -597,7 +597,7 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                 source = book_data.get('source', '') or None
                 if source:
                     source = source.lower()
-                    if source not in ('purchase', 'donation', 'others'):
+                    if source not in ('purchase', 'donation'):
                         source = None
                 create_accession(
                     accession_number=accession_number,

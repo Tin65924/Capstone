@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS accession_log (
     book_id          INT NOT NULL REFERENCES book_catalog(book_id),
     librarian_id     INT NOT NULL REFERENCES user_accounts(user_id),
     date_accessioned DATE NOT NULL DEFAULT CURRENT_DATE,
-    source           VARCHAR(20) CHECK (source IN ('purchase', 'donation', 'others'))
+    source           VARCHAR(20) CHECK (source IN ('purchase', 'donation'))
 );
 
 CREATE TABLE IF NOT EXISTS request_records (
