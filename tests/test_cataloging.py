@@ -271,6 +271,8 @@ class TestCatalogingCopies:
             'source': 'donation',
         })
         assert resp.status_code == 302
+        assert 'modal=editAccessionModal' in resp.location
+        assert 'mstatus=success' in resp.location
         call_args = mock_db['execute'].call_args_list[0]
         assert 'UPDATE accession_log' in call_args[0][0]
         assert call_args[0][1] == ('ACC-0099', 'donation', 21)
@@ -281,6 +283,8 @@ class TestCatalogingCopies:
             'accession_number': 'ACC-0099',
         })
         assert resp.status_code == 302
+        assert 'modal=editAccessionModal' in resp.location
+        assert 'mstatus=error' in resp.location
         assert all('UPDATE accession_log' not in c[0][0] for c in mock_db['execute'].call_args_list)
 
     def test_edit_accession_missing_number(self, librarian_client, mock_db):
@@ -289,6 +293,8 @@ class TestCatalogingCopies:
             'accession_number': '',
         })
         assert resp.status_code == 302
+        assert 'modal=editAccessionModal' in resp.location
+        assert 'mstatus=error' in resp.location
         assert all('UPDATE accession_log' not in c[0][0] for c in mock_db['execute'].call_args_list)
 
     def test_edit_accession_not_found(self, librarian_client, mock_db):
