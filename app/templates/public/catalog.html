@@ -167,18 +167,18 @@
                                 </span>
                                 <input id="catalog-search-input" name="q" value="{{ search_query or '' }}"
                                     class="block w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-sm placeholder-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                                    placeholder="Search by title, author, keyword, or ISBN..." type="text" data-suggest="book_search" />
+                                    placeholder="Search by title, author, keyword, or ISBN..." type="search" data-suggest="book_search" />
                             </div>
                             <button type="submit"
                                 class="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded font-semibold text-sm transition-all flex items-center justify-center gap-2">
                                 Search Resources
                             </button>
                         </div>
-                        {% if year_from or year_to or category or material_type or catalog_status or sort_by %}
+                        {% if year_from or year_to or category or material_type or availability or sort_by %}
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="text-xs text-slate-400 font-medium">Active filters:</span>
                             {% if sort_by %}
-                            <a href="{{ url_for('cataloging.public_catalog', q=search_query, field=search_field, year_from=year_from, year_to=year_to, category=category, material_type=material_type, catalog_status=catalog_status) }}"
+                            <a href="{{ url_for('cataloging.public_catalog', q=search_query, field=search_field, year_from=year_from, year_to=year_to, category=category, material_type=material_type, availability=availability) }}"
                                 class="inline-flex items-center gap-1 text-xs font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full hover:bg-primary/20 transition-colors">Sort: {{ 'Title A-Z' if sort_by == 'title' else 'Newest First' if sort_by == 'year_desc' else sort_by }} <span class="material-symbols-outlined text-sm">close</span></a>
                             {% endif %}
                             {% if category %}
@@ -334,7 +334,6 @@
         if (!input || !grid) return;
         var hasActiveFilter = {{ 'true' if (category or material_type or availability or year_from or year_to) else 'false' }};
         var isSearching = {{ 'true' if has_search else 'false' }};
-        var originalGridHTML = grid.innerHTML;
         var emptyPromptHTML = '<div id="catalog-empty-prompt" class="col-span-full flex flex-col items-center justify-center py-16 text-center">'
             + '<span class="material-symbols-outlined text-5xl text-slate-300 dark:text-slate-600 mb-4">search</span>'
             + '<h3 class="text-lg font-bold text-slate-700 dark:text-slate-300 mb-1">Search to explore the catalog</h3>'
@@ -358,7 +357,7 @@
                             grid.innerHTML = emptyPromptHTML;
                             var headerP = document.querySelector('.flex.items-center.justify-between.mb-6 p');
                             if (headerP) headerP.textContent = 'Start searching — enter a title, author, keyword or select a filter to discover books.';
-                            var footer = document.querySelector('footer');
+                            var footer = document.querySelector('main footer');
                             if (footer) footer.style.display = 'none';
                             var nav = document.querySelector('nav[aria-label="Pagination"]');
                             if (nav) nav.style.display = 'none';

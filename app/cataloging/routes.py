@@ -674,7 +674,7 @@ def public_catalog():
 
     # Empty by default: only query DB when user has provided a search term or filter.
     # This keeps /catalog empty on first visit and clears when the search bar is emptied.
-    has_search = bool(query or category or material_type or availability or year_from or year_to)
+    has_search = bool(query or category or material_type or availability or year_from or year_to or sort_by)
 
     if not has_search:
         categories = [row[0] for row in get_distinct_categories()]

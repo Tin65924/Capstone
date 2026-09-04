@@ -357,10 +357,13 @@ class TestCatalogingSearch:
 
 class TestPublicCatalog:
     def test_public_catalog_all(self, client, mock_db):
-        mock_db['fetch_all'].return_value = SAMPLE_BOOKS
+        # Bare /catalog is empty by default: only categories queried, no book search.
+        mock_db['fetch_all'].return_value = []
         resp = client.get('/catalog')
         assert resp.status_code == 200
-        assert b'Catalog' in resp.data or b'Search' in resp.data
+        assert mock_db['fetch_all'].call_count == 1
+        body = resp.get_data(as_text=True)
+        assert 'Search to explore the catalog' in body
 
     def test_public_catalog_search(self, client, mock_db):
         mock_db['fetch_all'].return_value = [SAMPLE_BOOKS[0]]
@@ -400,8 +403,9 @@ class TestPublicCatalog:
             SAMPLE_BOOKS,                  # search_books_filtered books
             [],                            # get_distinct_categories
         ]
-        resp = client.get('/catalog')
+        resp = client.get('/catalog?q=test')
         assert resp.status_code == 200
+        assert mock_db['fetch_all'].call_count == 2
         body = resp.get_data(as_text=True)
         for label in ['Sort', 'Category', 'Type', 'Availability', 'Year']:
             assert label in body, f'missing sidebar section: {label}'
@@ -435,10 +439,33 @@ class TestPublicCatalog:
         mock_db['fetch_all'].return_value = []  # get_distinct_categories -> []
         resp = client.get('/catalog')
         assert resp.status_code == 200
+        assert mock_db['fetch_all'].call_count == 1
         body = resp.get_data(as_text=True)
         assert 'Search to explore the catalog' in body or 'Start searching' in body
         # Should not show pagination or footer counts when empty
         assert 'Next' not in body
+
+    def test_public_catalog_sort_only_shows_results(self, client, mock_db):
+        # Bookmarked sorted view: sort_by alone counts as a search (no empty state).
+        mock_db['fetch_all'].side_effect = [
+            SAMPLE_BOOKS,  # search_books_filtered books
+            [],            # get_distinct_categories
+        ]
+        resp = client.get('/catalog?sort_by=title')
+        assert resp.status_code == 200
+        assert mock_db['fetch_all'].call_count == 2
+        body = resp.get_data(as_text=True)
+        assert SAMPLE_BOOKS[0][1] in body
+        assert 'Sort: Title A-Z' in body
+
+    def test_public_catalog_availability_pill(self, client, mock_db):
+        mock_db['fetch_all'].side_effect = [
+            SAMPLE_BOOKS,  # search_books_filtered books
+            [],            # get_distinct_categories
+        ]
+        resp = client.get('/catalog?availability=available')
+        assert resp.status_code == 200
+        assert b'Availability: Available' in resp.data
 
     def test_book_info_found(self, client, mock_db):
         mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
