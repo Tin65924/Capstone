@@ -673,3 +673,27 @@ class TestBulkImport:
             'file': _csv_file(csv_content),
         })
         self._assert_job(resp)
+
+    def test_bulk_import_accepts_others_source(self, app, mock_db):
+        from app.cataloging.routes import _bulk_import_worker, _import_jobs
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
+        _import_jobs['test-others-job'] = {
+            'status': 'processing', 'total': 1, 'done': 0,
+            'errors': [], 'message': None,
+        }
+        try:
+            _bulk_import_worker(
+                app, 'test-others-job',
+                [{'title': 'Other Book', 'author': 'Other Author',
+                  'accession_number': 'ACC-099', 'source': 'Others'}],
+                {'title': 'title', 'author': 'author',
+                 'accession_number': 'accession_number', 'source': 'source'},
+                3,
+            )
+        finally:
+            _import_jobs.pop('test-others-job', None)
+        acc_calls = [c for c in mock_db['execute'].call_args_list
+                     if 'INSERT INTO accession_log' in c[0][0]]
+        assert acc_calls, 'expected an accession INSERT'
+        assert 'others' in acc_calls[0][0][1]
