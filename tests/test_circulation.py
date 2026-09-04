@@ -1,6 +1,6 @@
 """Tests for the Circulation module: desk borrow/return, reservations, user borrow/reserve, RBAC, availability labels."""
 
-from datetime import date
+from datetime import date, datetime
 
 
 class TestCirculationAccess:
@@ -226,6 +226,18 @@ class TestReservationLifecycle:
         call_args = mock_db['execute'].call_args_list[0]
         assert "reservation_status = 'expired'" in call_args[0][0]
 
+    def test_action_preserves_status_filter(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', '2026-08-03 10:00:00')
+        resp = librarian_client.post('/librarian/reservations/9/expire', data={'status': 'waiting'})
+        assert resp.status_code == 302
+        assert 'status=waiting' in resp.location
+
+    def test_action_drops_invalid_status(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', '2026-08-03 10:00:00')
+        resp = librarian_client.post('/librarian/reservations/9/expire', data={'status': 'bogus'})
+        assert resp.status_code == 302
+        assert 'status=' not in resp.location
+
     def test_stats_sum_correct_status_columns(self, librarian_client, mock_db):
         groups = [
             (1, 'Book A', 'Author A', 6, 1, 2, 0, 0),   # total, waiting, allocated, claimed, expired
@@ -237,6 +249,84 @@ class TestReservationLifecycle:
         assert b'Active Reservations</div><div class="text-xl font-bold">8</div>' in resp.data
         assert b'Ready for Pickup</div><div class="text-xl font-bold">5</div>' in resp.data
         assert b'Waiting in Queue</div><div class="text-xl font-bold">3</div>' in resp.data
+
+
+class TestReservationFilters:
+    GROUPS = [
+        (1, 'Book A', 'Author A', 3, 1, 1, 1, 0),  # waiting 1, allocated 1, claimed 1
+        (2, 'Book B', 'Author B', 1, 0, 0, 0, 1),  # expired only
+    ]
+    BOOK_A_ROWS = [
+        (11, 1, 'waiting', datetime(2026, 8, 1, 10, 0), None, 'Book A', 'Alice', 5, 'ID-1'),
+        (12, 2, 'allocated', datetime(2026, 8, 2, 10, 0), None, 'Book A', 'Bob', 6, 'ID-2'),
+        (13, 3, 'claimed', datetime(2026, 8, 3, 10, 0), None, 'Book A', 'Cara', 7, 'ID-3'),
+    ]
+    BOOK_B_ROWS = [
+        (21, 1, 'expired', datetime(2026, 8, 4, 10, 0), None, 'Book B', 'Dan', 8, 'ID-4'),
+    ]
+
+    def _mock_page(self, mock_db):
+        mock_db['fetch_all'].side_effect = [self.GROUPS, self.BOOK_A_ROWS, self.BOOK_B_ROWS]
+
+    def test_no_filter_shows_everything(self, librarian_client, mock_db):
+        self._mock_page(mock_db)
+        resp = librarian_client.get('/librarian/reservations')
+        assert resp.status_code == 200
+        for name in (b'Alice', b'Bob', b'Cara', b'Dan', b'Book A', b'Book B'):
+            assert name in resp.data
+        assert b'Clear filter' not in resp.data
+
+    def test_filter_waiting(self, librarian_client, mock_db):
+        self._mock_page(mock_db)
+        resp = librarian_client.get('/librarian/reservations?status=waiting')
+        assert resp.status_code == 200
+        assert b'Alice' in resp.data
+        for name in (b'Bob', b'Cara', b'Dan'):
+            assert name not in resp.data
+        assert b'Book B' not in resp.data
+        assert b'>waiting</strong> reservations' in resp.data
+
+    def test_filter_allocated(self, librarian_client, mock_db):
+        self._mock_page(mock_db)
+        resp = librarian_client.get('/librarian/reservations?status=allocated')
+        assert resp.status_code == 200
+        assert b'Bob' in resp.data
+        for name in (b'Alice', b'Cara', b'Dan'):
+            assert name not in resp.data
+        assert b'ready for pickup' in resp.data
+
+    def test_filter_active_shows_waiting_and_allocated(self, librarian_client, mock_db):
+        self._mock_page(mock_db)
+        resp = librarian_client.get('/librarian/reservations?status=active')
+        assert resp.status_code == 200
+        assert b'Alice' in resp.data
+        assert b'Bob' in resp.data
+        for name in (b'Cara', b'Dan'):
+            assert name not in resp.data
+        assert b'>active</strong> reservations' in resp.data
+
+    def test_invalid_filter_ignored(self, librarian_client, mock_db):
+        self._mock_page(mock_db)
+        resp = librarian_client.get('/librarian/reservations?status=bogus')
+        assert resp.status_code == 200
+        for name in (b'Alice', b'Bob', b'Cara', b'Dan'):
+            assert name in resp.data
+        assert b'Clear filter' not in resp.data
+
+    def test_kpi_cards_link_to_filters(self, librarian_client, mock_db):
+        self._mock_page(mock_db)
+        resp = librarian_client.get('/librarian/reservations')
+        assert resp.status_code == 200
+        assert b'status=active' in resp.data
+        assert b'status=allocated' in resp.data
+        assert b'status=waiting' in resp.data
+
+    def test_cancel_button_replaces_expire(self, librarian_client, mock_db):
+        self._mock_page(mock_db)
+        resp = librarian_client.get('/librarian/reservations')
+        assert resp.status_code == 200
+        assert b'>Cancel</button>' in resp.data
+        assert b'>Expire</button>' not in resp.data
 
 
 class TestUserBorrow:
