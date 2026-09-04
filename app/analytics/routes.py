@@ -90,8 +90,11 @@ def analytics_page():
     preset = request.args.get('preset', 'all')
     from_str = request.args.get('from', '').strip()
     to_str = request.args.get('to', '').strip()
-    # Normalize: semester/year presets ignore stale custom dates in the URL.
+    # Normalize: semester/year presets ignore stale custom dates in the URL;
+    # invalid presets fall back to no bounds (same as kpi_json/export_report).
     if preset in ('semester', 'year'):
+        from_str = to_str = ''
+    elif preset not in ('custom', 'all'):
         from_str = to_str = ''
     start_date, end_date = resolve_dates(preset, from_str, to_str)
     kpi_data = compute_all_kpis(start_date, end_date)
@@ -581,8 +584,8 @@ def export_report():
                    or 'selected_kpis' in request.form)
         raw = (request.form.get('kpi_types') or request.form.get('kpi_types[]') or
                request.form.get('selected_kpis') or '').strip()
-        multi = request.form.getlist('kpi_types')
-        # handle repeated field: kpi_types=a&kpi_types=b
+        multi = request.form.getlist('kpi_types') + request.form.getlist('kpi_types[]')
+        # handle repeated fields: kpi_types=a&kpi_types=b (or kpi_types[]=a&kpi_types[]=b)
         if multi and len(multi) > 1:
             candidates = [c.strip() for c in multi if c.strip()]
         elif raw:
@@ -593,12 +596,9 @@ def export_report():
             # Respect the board's explicit selection — even if empty (board has no KPIs, export nothing).
             # Filter to valid KPIs only; if board sent only invalid names, result is empty.
             kpi_types = [k for k in candidates if k in VALID_KPIS and k in KPI_LABELS]
-        elif candidates:
-            kpi_types = [k for k in candidates if k in VALID_KPIS and k in KPI_LABELS]
-            if not kpi_types:
-                kpi_types = list(KPI_LABELS.keys())
         else:
-            kpi_types = list(KPI_LABELS.keys())
+            # Legacy calls without kpi_types export all KPIs (keeps tests green).
+            kpi_types = [k for k in candidates if k in VALID_KPIS and k in KPI_LABELS] or list(KPI_LABELS.keys())
     else:
         kpi_types = [kpi_type]
 
