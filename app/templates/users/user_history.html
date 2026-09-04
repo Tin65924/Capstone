@@ -37,7 +37,7 @@
 
 <body class="bg-background-light dark:bg-background-dark text-[#0f172a] dark:text-white font-display overflow-hidden">
     <div class="flex h-screen w-full flex-row">
-        <!-- Sidebar -->
+        <!-- Sidebar - Desktop -->
         <div
             class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0">
             <div class="p-6">
@@ -60,30 +60,64 @@
                 </a>
             </div>
         </div>
+        <!-- Mobile sidebar drawer -->
+        <div id="mobile-sidebar" class="fixed inset-0 z-50 hidden lg:hidden">
+            <div id="mobile-sidebar-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+            <div class="absolute top-0 left-0 h-full w-[80%] max-w-[280px] bg-white dark:bg-[#1a2235] shadow-2xl flex flex-col overflow-hidden">
+                <div class="p-4 flex items-center justify-between border-b border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                    <div class="flex items-center gap-3">
+                        <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
+                        <h1 class="text-lg font-bold">Profile</h1>
+                    </div>
+                    <button id="mobile-sidebar-close" type="button" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">close</span></button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-6">
+                    {% include 'components/user_sidebar_nav.html' %}
+                </div>
+                <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                    <div class="flex flex-col items-center mb-4">
+                        <h2 class="text-base font-bold text-center">{{ current_user.full_name }} | {{ current_user.role }}</h2>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 text-center break-all">{{ current_user.email }}</p>
+                    </div>
+                    <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-700 transition-colors">
+                        <span class="material-symbols-outlined text-[18px]">logout</span> Log Out
+                    </a>
+                </div>
+            </div>
+        </div>
         <!-- Main Content -->
         <main class="flex-1 h-full overflow-y-auto bg-background-light dark:bg-background-dark">
+            <!-- Mobile top bar -->
+            <div class="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-[#1a2235] border-b border-[#cfd7e7] dark:border-gray-700 px-4 py-3">
+                <button id="mobile-sidebar-open" type="button" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">menu</span></button>
+                <div class="flex items-center gap-2">
+                    <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover">
+                    <span class="font-bold text-sm">MCST Library</span>
+                </div>
+                <div class="w-10"></div>
+            </div>
             {% include 'components/flash_messages.html' %}
-            <div class="max-w-4xl mx-auto px-6 py-12">
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:py-12">
                 <!-- User History Header -->
-                <div class="mb-10">
-                    <h1 class="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight uppercase" style="">
+                <div class="mb-6 sm:mb-8 lg:mb-10">
+                    <h1 class="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight uppercase leading-tight" style="">
                         User History</h1>
-                    <p class="text-gray-500 dark:text-gray-400 mt-3 text-lg" style="">A complete log of your borrowings,
+                    <p class="text-gray-500 dark:text-gray-400 mt-2 sm:mt-3 text-sm sm:text-base lg:text-lg leading-relaxed" style="">A complete log of your borrowings,
                         returns, and book requests.</p>
                 </div>
 
                 <!-- Borrowings & Returns -->
-                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-3" style="">Borrowings &amp; Returns</h2>
-                <div class="space-y-4 mb-10">
+                <h2 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-2 sm:mb-3" style="">Borrowings &amp; Returns</h2>
+                <div class="space-y-3 sm:space-y-4 mb-8 sm:mb-10">
                     {% for txn in transactions %}
                     {% set returned = txn[5] == 'returned' %}
                     <div
-                        class="bg-white dark:bg-[#1a2235] p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div>
-                            <h3 class="text-lg font-bold text-gray-900 dark:text-white" style="">{{ txn[7] }}</h3>
-                            <p class="text-gray-500 dark:text-gray-400 text-sm" style="">{{ txn[8] }} · {{ txn[9] }}</p>
+                        class="bg-white dark:bg-[#1a2235] p-4 sm:p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                        <div class="min-w-0 flex-1">
+                            <h3 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white truncate" style="">{{ txn[7] }}</h3>
+                            <p class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm truncate" style="">{{ txn[8] }} · {{ txn[9] }}</p>
                         </div>
-                        <div class="flex items-center gap-4">
+                        <div class="flex flex-wrap items-center gap-2 sm:gap-4 shrink-0">
                             <span class="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500"
                                 style="">
                                 {% if returned %}Returned {{ txn[3] }}{% else %}Due {{ txn[2] }}{% endif %}
@@ -104,19 +138,19 @@
                 </div>
 
                 <!-- Book Requests -->
-                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-3" style="">Book Requests</h2>
-                <div class="space-y-4">
+                <h2 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-2 sm:mb-3" style="">Book Requests</h2>
+                <div class="space-y-3 sm:space-y-4">
                     {% for req in my_requests %}
                     <div
-                        class="bg-white dark:bg-[#1a2235] p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div>
-                            <h3 class="text-lg font-bold text-gray-900 dark:text-white" style="">{{ req[1] }}</h3>
-                            <p class="text-gray-500 dark:text-gray-400 text-sm" style="">{% if req[2] %}{{ req[2] }}{% endif %}</p>
+                        class="bg-white dark:bg-[#1a2235] p-4 sm:p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                        <div class="min-w-0 flex-1">
+                            <h3 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white truncate" style="">{{ req[1] }}</h3>
+                            <p class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm truncate" style="">{% if req[2] %}{{ req[2] }}{% endif %}</p>
                             {% if req[5] %}
-                            <p class="text-gray-400 text-xs mt-1" style="">Remarks: {{ req[5] }}</p>
+                            <p class="text-gray-400 text-[11px] sm:text-xs mt-1 line-clamp-2 break-words" style="">Remarks: {{ req[5] }}</p>
                             {% endif %}
                         </div>
-                        <div class="flex items-center gap-4">
+                        <div class="flex flex-wrap items-center gap-2 sm:gap-4 shrink-0">
                             <span class="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500"
                                 style="">{{ req[4] }}</span>
                             <span
@@ -133,6 +167,20 @@
             </div>
         </main>
     </div>
+    <script>
+    (function() {
+        var openBtn = document.getElementById('mobile-sidebar-open');
+        var closeBtn = document.getElementById('mobile-sidebar-close');
+        var drawer = document.getElementById('mobile-sidebar');
+        var backdrop = document.getElementById('mobile-sidebar-backdrop');
+        function open() { if (drawer) { drawer.classList.remove('hidden'); document.body.style.overflow = 'hidden'; } }
+        function close() { if (drawer) { drawer.classList.add('hidden'); document.body.style.overflow = ''; } }
+        if (openBtn) openBtn.addEventListener('click', open);
+        if (closeBtn) closeBtn.addEventListener('click', close);
+        if (backdrop) backdrop.addEventListener('click', close);
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && drawer && !drawer.classList.contains('hidden')) close(); });
+    })();
+    </script>
 </body>
 
 </html>

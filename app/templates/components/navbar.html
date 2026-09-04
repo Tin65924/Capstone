@@ -1,17 +1,63 @@
-<header class="sticky top-0 z-50 flex items-center justify-between border-b border-solid border-b-[#e7ebf3] dark:border-gray-800 bg-white dark:bg-[#151c2b] px-10 py-3 shadow-sm">
-    <div class="flex items-center gap-4 text-[#0f172a] dark:text-white">
-        <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
-        <h2 class="text-[#0f172a] dark:text-white text-xl font-bold leading-tight tracking-[-0.015em]">MCST Library</h2>
+<header class="sticky top-0 z-50 border-b border-solid border-b-[#e7ebf3] dark:border-gray-800 bg-white dark:bg-[#151c2b] shadow-sm">
+    <div class="flex items-center justify-between px-4 sm:px-6 lg:px-10 py-3">
+        <a href="{{ url_for('main.index') }}" class="flex items-center gap-3 text-[#0f172a] dark:text-white min-w-0">
+            <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover shrink-0">
+            <h2 class="text-[#0f172a] dark:text-white text-lg sm:text-xl font-bold leading-tight tracking-[-0.015em] truncate">MCST Library</h2>
+        </a>
+        <div class="flex items-center gap-2 sm:gap-8">
+            <nav class="hidden md:flex items-center gap-6 lg:gap-9">
+                <a class="text-[#0f172a] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none {% if request.endpoint == 'main.index' %}text-primary font-bold border-b-2 border-primary pb-1{% endif %}" href="{{ url_for('main.index') }}">Home</a>
+                <a class="text-[#0f172a] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none {% if request.endpoint == 'cataloging.public_catalog' %}text-primary font-bold border-b-2 border-primary pb-1{% endif %}" href="{{ url_for('cataloging.public_catalog') }}">Catalog</a>
+                {% if current_user.is_authenticated %}
+                <a class="text-[#0f172a] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none" href="{{ url_for('main.user_profile') }}">Profile</a>
+                {% else %}
+                <a class="text-[#0f172a] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none {% if request.endpoint == 'auth.login' %}text-primary font-bold border-b-2 border-primary pb-1{% endif %}" href="{{ url_for('auth.login') }}">Login</a>
+                {% endif %}
+            </nav>
+            <button id="mobile-menu-btn" type="button" aria-label="Toggle menu" aria-expanded="false" class="md:hidden inline-flex items-center justify-center p-2 rounded-lg text-[#0f172a] dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                <span class="material-symbols-outlined" id="mobile-menu-icon">menu</span>
+            </button>
+        </div>
     </div>
-    <div class="flex items-center gap-8">
-        <nav class="hidden md:flex items-center gap-9">
-            <a class="text-[#0f172a] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none {% if request.endpoint == 'main.index' %}text-primary font-bold border-b-2 border-primary pb-1{% endif %}" href="{{ url_for('main.index') }}">Home</a>
-            <a class="text-[#0f172a] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none {% if request.endpoint == 'cataloging.public_catalog' %}text-primary font-bold border-b-2 border-primary pb-1{% endif %}" href="{{ url_for('cataloging.public_catalog') }}">Catalog</a>
+    <!-- Mobile menu -->
+    <div id="mobile-menu" class="hidden md:hidden border-t border-[#e7ebf3] dark:border-gray-800 bg-white dark:bg-[#151c2b] px-4 sm:px-6 py-3">
+        <nav class="flex flex-col gap-1">
+            <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {% if request.endpoint == 'main.index' %}bg-primary text-white{% else %}text-[#0f172a] dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" href="{{ url_for('main.index') }}">
+                <span class="material-symbols-outlined text-[20px]">home</span> Home
+            </a>
+            <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {% if request.endpoint == 'cataloging.public_catalog' %}bg-primary text-white{% else %}text-[#0f172a] dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" href="{{ url_for('cataloging.public_catalog') }}">
+                <span class="material-symbols-outlined text-[20px]">menu_book</span> Catalog
+            </a>
             {% if current_user.is_authenticated %}
-            <a class="text-[#0f172a] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none" href="{{ url_for('main.user_profile') }}">Profile</a>
+            <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[#0f172a] dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" href="{{ url_for('main.user_profile') }}">
+                <span class="material-symbols-outlined text-[20px]">person</span> Profile
+            </a>
             {% else %}
-            <a class="text-[#0f172a] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none {% if request.endpoint == 'auth.login' %}text-primary font-bold border-b-2 border-primary pb-1{% endif %}" href="{{ url_for('auth.login') }}">Login</a>
+            <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {% if request.endpoint == 'auth.login' %}bg-primary text-white{% else %}text-[#0f172a] dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" href="{{ url_for('auth.login') }}">
+                <span class="material-symbols-outlined text-[20px]">login</span> Login
+            </a>
             {% endif %}
         </nav>
     </div>
 </header>
+<script>
+(function() {
+    var btn = document.getElementById('mobile-menu-btn');
+    var menu = document.getElementById('mobile-menu');
+    var icon = document.getElementById('mobile-menu-icon');
+    if (!btn || !menu) return;
+    btn.addEventListener('click', function() {
+        var isHidden = menu.classList.contains('hidden');
+        menu.classList.toggle('hidden');
+        btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+        if (icon) icon.textContent = isHidden ? 'close' : 'menu';
+    });
+    document.addEventListener('click', function(e) {
+        if (!menu.classList.contains('hidden') && !menu.contains(e.target) && !btn.contains(e.target)) {
+            menu.classList.add('hidden');
+            btn.setAttribute('aria-expanded', 'false');
+            if (icon) icon.textContent = 'menu';
+        }
+    });
+})();
+</script>

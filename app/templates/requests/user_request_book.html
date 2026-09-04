@@ -37,7 +37,7 @@
 
 <body class="bg-background-light dark:bg-background-dark text-[#0f172a] dark:text-white font-display overflow-hidden">
     <div class="flex h-screen w-full flex-row">
-        <!-- Sidebar -->
+        <!-- Sidebar - Desktop -->
         <div
             class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0">
             <div class="p-6">
@@ -60,68 +60,103 @@
                 </a>
             </div>
         </div>
+        <!-- Mobile sidebar drawer -->
+        <div id="mobile-sidebar" class="fixed inset-0 z-50 hidden lg:hidden">
+            <div id="mobile-sidebar-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+            <div class="absolute top-0 left-0 h-full w-[80%] max-w-[280px] bg-white dark:bg-[#1a2235] shadow-2xl flex flex-col overflow-hidden">
+                <div class="p-4 flex items-center justify-between border-b border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                    <div class="flex items-center gap-3">
+                        <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
+                        <h1 class="text-lg font-bold">Profile</h1>
+                    </div>
+                    <button id="mobile-sidebar-close" type="button" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">close</span></button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-6">
+                    {% include 'components/user_sidebar_nav.html' %}
+                </div>
+                <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                    <div class="flex flex-col items-center mb-4">
+                        <h2 class="text-base font-bold text-center">{{ current_user.full_name }} | {{ current_user.role }}</h2>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 text-center break-all">{{ current_user.email }}</p>
+                    </div>
+                    <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-700 transition-colors">
+                        <span class="material-symbols-outlined text-[18px]">logout</span> Log Out
+                    </a>
+                </div>
+            </div>
+        </div>
         <!-- Main Content -->
         <main class="flex-1 h-full overflow-y-auto bg-background-light dark:bg-background-dark">
+            <!-- Mobile top bar -->
+            <div class="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-[#1a2235] border-b border-[#cfd7e7] dark:border-gray-700 px-4 py-3">
+                <button id="mobile-sidebar-open" type="button" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">menu</span></button>
+                <div class="flex items-center gap-2">
+                    <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover">
+                    <span class="font-bold text-sm">MCST Library</span>
+                </div>
+                <div class="w-10"></div>
+            </div>
             {% include 'components/flash_messages.html' %}
-            <div class="max-w-4xl mx-auto px-6 py-12">
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:py-12">
                 <!-- Book Procurement Header -->
-                <div class="mb-10">
-                    <h1 class="text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight" style="">Book
+                <div class="mb-6 sm:mb-8 lg:mb-10">
+                    <h1 class="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight leading-tight" style="">Book
                         Procurement</h1>
-                    <p class="text-gray-500 dark:text-gray-400 mt-3 text-lg" style="">Submit a request for books not
+                    <p class="text-gray-500 dark:text-gray-400 mt-2 sm:mt-3 text-sm sm:text-base lg:text-lg leading-relaxed" style="">Submit a request for books not
                         currently available in our digital or physical library collection.</p>
                 </div>
                 <!-- Form Card -->
                 <div
-                    class="bg-white dark:bg-[#1a2235] rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-8 md:p-12">
-                    <form class="space-y-8" method="POST">
+                    class="bg-white dark:bg-[#1a2235] rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 sm:p-6 md:p-8 lg:p-12">
+                    <form class="space-y-6 sm:space-y-8" method="POST">
                         <!-- Book Title Field -->
                         <div>
-                            <label class="block text-sm font-bold text-gray-900 dark:text-white mb-2" for="book-title"
+                            <label class="block text-xs sm:text-sm font-bold text-gray-900 dark:text-white mb-1.5 sm:mb-2" for="book-title"
                                 style="">
                                 Book Title <span class="text-red-500" style="">*</span>
                             </label>
                             <input
-                                class="w-full px-4 py-3.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder:text-gray-400"
+                                class="w-full px-3 sm:px-4 py-3 sm:py-3.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm sm:text-base focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder:text-gray-400"
                                 id="book-title" name="book-title" placeholder="Enter the full title of the book"
                                 required="" type="text">
                         </div>
                         <!-- Author Field -->
                         <div>
-                            <label class="block text-sm font-bold text-gray-900 dark:text-white mb-2" for="author"
+                            <label class="block text-xs sm:text-sm font-bold text-gray-900 dark:text-white mb-1.5 sm:mb-2" for="author"
                                 style="">
                                 Author (Optional)
                             </label>
                             <input
-                                class="w-full px-4 py-3.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder:text-gray-400"
+                                class="w-full px-3 sm:px-4 py-3 sm:py-3.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm sm:text-base focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder:text-gray-400"
                                 id="author" name="author" placeholder="Enter the author's name" type="text">
-                            <p class="mt-2 text-xs text-gray-400" style="">Recommended for faster processing</p>
+                            <p class="mt-1.5 sm:mt-2 text-[11px] sm:text-xs text-gray-400" style="">Recommended for faster processing</p>
                         </div>
                         <!-- Submit Button -->
-                        <div class="pt-4">
+                        <div class="pt-2 sm:pt-4">
                             <button
-                                class="w-full sm:w-auto px-8 py-3.5 bg-primary text-white font-bold rounded-lg hover:bg-blue-800 transition-colors shadow-lg active:transform active:scale-[0.98]"
+                                class="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-3.5 bg-primary text-white font-bold rounded-lg hover:bg-blue-800 transition-colors shadow-md sm:shadow-lg active:transform active:scale-[0.98] text-sm sm:text-base flex items-center justify-center gap-2"
                                 type="submit" style="">
+                                <span class="material-symbols-outlined text-[18px] sm:text-[20px]">send</span>
                                 Submit Request
                             </button>
                         </div>
                     </form>
                 </div>
                     <!-- My Requests Section -->
-                    <div class="mt-12">
-                        <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">My Requests</h2>
+                    <div class="mt-8 sm:mt-12">
+                        <h2 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-3 sm:mb-4">My Requests</h2>
                         {% if my_requests %}
-                        <div class="space-y-3">
+                        <div class="space-y-2 sm:space-y-3">
                             {% for req in my_requests %}
-                            <div class="bg-white dark:bg-[#1a2235] rounded-lg border border-gray-100 dark:border-gray-700 p-4 flex items-center justify-between">
-                                <div>
-                                    <p class="font-bold text-gray-900 dark:text-white">{{ req[1] }}</p>
-                                    <p class="text-sm text-gray-500 dark:text-gray-400">{{ req[2] or 'Author unknown' }} &middot; {{ req[4].strftime('%b %d, %Y') }}</p>
+                            <div class="bg-white dark:bg-[#1a2235] rounded-lg border border-gray-100 dark:border-gray-700 p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
+                                <div class="min-w-0 flex-1">
+                                    <p class="font-bold text-gray-900 dark:text-white text-sm sm:text-base truncate">{{ req[1] }}</p>
+                                    <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">{{ req[2] or 'Author unknown' }} &middot; {{ req[4].strftime('%b %d, %Y') }}</p>
                                     {% if req[5] %}
-                                    <p class="text-xs text-gray-400 mt-1">Note: {{ req[5] }}</p>
+                                    <p class="text-[11px] sm:text-xs text-gray-400 mt-1 line-clamp-2 break-words">Note: {{ req[5] }}</p>
                                     {% endif %}
                                 </div>
-                                <span class="text-xs font-bold px-3 py-1 rounded-full
+                                <span class="text-[11px] sm:text-xs font-bold px-2.5 sm:px-3 py-1 rounded-full shrink-0 self-start sm:self-auto whitespace-nowrap
                                     {% if req[3] == 'pending_review' %}bg-yellow-100 text-yellow-700
                                     {% elif req[3] == 'approved' %}bg-green-100 text-green-700
                                     {% elif req[3] == 'rejected' %}bg-red-100 text-red-700
@@ -140,6 +175,20 @@
             </div>
         </main>
     </div>
+    <script>
+    (function() {
+        var openBtn = document.getElementById('mobile-sidebar-open');
+        var closeBtn = document.getElementById('mobile-sidebar-close');
+        var drawer = document.getElementById('mobile-sidebar');
+        var backdrop = document.getElementById('mobile-sidebar-backdrop');
+        function open() { if (drawer) { drawer.classList.remove('hidden'); document.body.style.overflow = 'hidden'; } }
+        function close() { if (drawer) { drawer.classList.add('hidden'); document.body.style.overflow = ''; } }
+        if (openBtn) openBtn.addEventListener('click', open);
+        if (closeBtn) closeBtn.addEventListener('click', close);
+        if (backdrop) backdrop.addEventListener('click', close);
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && drawer && !drawer.classList.contains('hidden')) close(); });
+    })();
+    </script>
 </body>
 
 </html>

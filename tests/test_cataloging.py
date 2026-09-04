@@ -271,6 +271,8 @@ class TestCatalogingCopies:
             'source': 'donation',
         })
         assert resp.status_code == 302
+        assert 'modal=editAccessionModal' in resp.location
+        assert 'mstatus=success' in resp.location
         call_args = mock_db['execute'].call_args_list[0]
         assert 'UPDATE accession_log' in call_args[0][0]
         assert call_args[0][1] == ('ACC-0099', 'donation', 21)
@@ -281,6 +283,8 @@ class TestCatalogingCopies:
             'accession_number': 'ACC-0099',
         })
         assert resp.status_code == 302
+        assert 'modal=editAccessionModal' in resp.location
+        assert 'mstatus=error' in resp.location
         assert all('UPDATE accession_log' not in c[0][0] for c in mock_db['execute'].call_args_list)
 
     def test_edit_accession_missing_number(self, librarian_client, mock_db):
@@ -289,6 +293,8 @@ class TestCatalogingCopies:
             'accession_number': '',
         })
         assert resp.status_code == 302
+        assert 'modal=editAccessionModal' in resp.location
+        assert 'mstatus=error' in resp.location
         assert all('UPDATE accession_log' not in c[0][0] for c in mock_db['execute'].call_args_list)
 
     def test_edit_accession_not_found(self, librarian_client, mock_db):
@@ -357,10 +363,13 @@ class TestCatalogingSearch:
 
 class TestPublicCatalog:
     def test_public_catalog_all(self, client, mock_db):
-        mock_db['fetch_all'].return_value = SAMPLE_BOOKS
+        # Bare /catalog is empty by default: only categories queried, no book search.
+        mock_db['fetch_all'].return_value = []
         resp = client.get('/catalog')
         assert resp.status_code == 200
-        assert b'Catalog' in resp.data or b'Search' in resp.data
+        assert mock_db['fetch_all'].call_count == 1
+        body = resp.get_data(as_text=True)
+        assert 'Search to explore the catalog' in body
 
     def test_public_catalog_search(self, client, mock_db):
         mock_db['fetch_all'].return_value = [SAMPLE_BOOKS[0]]
@@ -400,8 +409,9 @@ class TestPublicCatalog:
             SAMPLE_BOOKS,                  # search_books_filtered books
             [],                            # get_distinct_categories
         ]
-        resp = client.get('/catalog')
+        resp = client.get('/catalog?q=test')
         assert resp.status_code == 200
+        assert mock_db['fetch_all'].call_count == 2
         body = resp.get_data(as_text=True)
         for label in ['Sort', 'Category', 'Type', 'Availability', 'Year']:
             assert label in body, f'missing sidebar section: {label}'
@@ -417,17 +427,51 @@ class TestPublicCatalog:
             many_books,                  # search_books_filtered books (120)
             [],                          # get_distinct_categories
         ]
-        resp = client.get('/catalog')
+        # Empty catalog by default — must provide a search/filter to paginate
+        resp = client.get('/catalog?q=Book')
         assert resp.status_code == 200
         body = resp.get_data(as_text=True)
         assert '>1 - 50</span> of <span class="font-medium text-slate-900 dark:text-slate-100">120</span>' in body
         assert 'Next' in body
 
         mock_db['fetch_all'].side_effect = [many_books, []]
-        resp2 = client.get('/catalog?page=3')
+        resp2 = client.get('/catalog?q=Book&page=3')
         assert resp2.status_code == 200
         body2 = resp2.get_data(as_text=True)
         assert '>101 - 120</span> of <span class="font-medium text-slate-900 dark:text-slate-100">120</span>' in body2
+
+    def test_public_catalog_empty_by_default(self, client, mock_db):
+        # Visiting /catalog with no search term or filter should show empty prompt, no DB search
+        mock_db['fetch_all'].return_value = []  # get_distinct_categories -> []
+        resp = client.get('/catalog')
+        assert resp.status_code == 200
+        assert mock_db['fetch_all'].call_count == 1
+        body = resp.get_data(as_text=True)
+        assert 'Search to explore the catalog' in body or 'Start searching' in body
+        # Should not show pagination or footer counts when empty
+        assert 'Next' not in body
+
+    def test_public_catalog_sort_only_shows_results(self, client, mock_db):
+        # Bookmarked sorted view: sort_by alone counts as a search (no empty state).
+        mock_db['fetch_all'].side_effect = [
+            SAMPLE_BOOKS,  # search_books_filtered books
+            [],            # get_distinct_categories
+        ]
+        resp = client.get('/catalog?sort_by=title')
+        assert resp.status_code == 200
+        assert mock_db['fetch_all'].call_count == 2
+        body = resp.get_data(as_text=True)
+        assert SAMPLE_BOOKS[0][1] in body
+        assert 'Sort: Title A-Z' in body
+
+    def test_public_catalog_availability_pill(self, client, mock_db):
+        mock_db['fetch_all'].side_effect = [
+            SAMPLE_BOOKS,  # search_books_filtered books
+            [],            # get_distinct_categories
+        ]
+        resp = client.get('/catalog?availability=available')
+        assert resp.status_code == 200
+        assert b'Availability: Available' in resp.data
 
     def test_book_info_found(self, client, mock_db):
         mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
@@ -443,12 +487,29 @@ class TestPublicCatalog:
 
     def test_book_info_with_accessions(self, client, mock_db):
         mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
-        mock_db['fetch_all'].return_value = [
-            (1, '2025-0001', 1, 4, '2025-01-10', 'purchase'),
+        mock_db['fetch_all'].side_effect = [
+            [(1, '2025-0001', 1, 4, '2025-01-10', 'purchase')],  # accessions
+            [],  # no active loans -> copy available
+            [],  # borrower map
         ]
         resp = client.get('/book/1')
         assert resp.status_code == 200
-        assert b'2025-0001' in resp.data
+        assert b'1 of 1' in resp.data
+        assert b'Borrow' in resp.data
+        assert b'Reserve' in resp.data
+
+    def test_book_info_all_borrowed(self, client, mock_db):
+        mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
+        mock_db['fetch_all'].side_effect = [
+            [(1, '2025-0001', 1, 4, '2025-01-10', 'purchase')],  # accessions
+            [(1,)],  # active loan on accession 1 -> none available
+            [(1, 1)],  # borrower map
+        ]
+        resp = client.get('/book/1')
+        assert resp.status_code == 200
+        assert b'No copies available' in resp.data
+        assert b'Borrow' in resp.data
+        assert b'Reserve' in resp.data
 
 
 def _csv_file(content, filename='books.csv'):
@@ -673,3 +734,27 @@ class TestBulkImport:
             'file': _csv_file(csv_content),
         })
         self._assert_job(resp)
+
+    def test_bulk_import_accepts_others_source(self, app, mock_db):
+        from app.cataloging.routes import _bulk_import_worker, _import_jobs
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
+        _import_jobs['test-others-job'] = {
+            'status': 'processing', 'total': 1, 'done': 0,
+            'errors': [], 'message': None,
+        }
+        try:
+            _bulk_import_worker(
+                app, 'test-others-job',
+                [{'title': 'Other Book', 'author': 'Other Author',
+                  'accession_number': 'ACC-099', 'source': 'Others'}],
+                {'title': 'title', 'author': 'author',
+                 'accession_number': 'accession_number', 'source': 'source'},
+                3,
+            )
+        finally:
+            _import_jobs.pop('test-others-job', None)
+        acc_calls = [c for c in mock_db['execute'].call_args_list
+                     if 'INSERT INTO accession_log' in c[0][0]]
+        assert acc_calls, 'expected an accession INSERT'
+        assert 'others' in acc_calls[0][0][1]

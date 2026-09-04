@@ -78,11 +78,25 @@
             border-radius: 10px;
         }
 
-        /* Main Content Adjustments */
+        /* Main Content - responsive */
         main {
             flex: 1;
-            padding: 2rem 3rem;
-            max-width: calc(100vw - 256px);
+            padding: 1rem;
+            max-width: 100%;
+            overflow-y: auto;
+        }
+        @media (min-width: 640px) {
+            main { padding: 1.5rem; }
+        }
+        @media (min-width: 1024px) {
+            main { padding: 2rem 3rem; max-width: calc(100vw - 256px); }
+        }
+        @media (max-width: 640px) {
+            .card { margin-bottom: 1rem; }
+            th, td { padding: 0.75rem 1rem; font-size: 0.8125rem; }
+            .status-grid { gap: 0.5rem; }
+            .status-box { padding: 0.75rem; }
+            .status-value { font-size: 1.25rem; }
         }
 
         .card {
@@ -249,7 +263,7 @@
 </head>
 <body>
 
-    <!-- Sidebar -->
+    <!-- Sidebar - Desktop -->
     <div class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0 h-screen sticky top-0">
       <div class="p-6 flex-1 flex flex-col overflow-hidden">
         
@@ -275,45 +289,79 @@
         </a>
       </div>
     </div>
+    <!-- Mobile sidebar drawer -->
+    <div id="mobile-sidebar" class="fixed inset-0 z-50 hidden lg:hidden">
+        <div id="mobile-sidebar-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+        <div class="absolute top-0 left-0 h-full w-[80%] max-w-[280px] bg-white dark:bg-[#1a2235] shadow-2xl flex flex-col overflow-hidden">
+            <div class="p-4 flex items-center justify-between border-b border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                <div class="flex items-center gap-3">
+                    <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
+                    <h1 class="text-lg font-bold">MCST Library</h1>
+                </div>
+                <button id="mobile-sidebar-close" type="button" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6">
+                {% include 'components/librarian_sidebar_nav.html' %}
+            </div>
+            <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                <div class="flex flex-col items-center mb-4">
+                    <h2 class="text-base font-bold text-center">{{ current_user.full_name }}</h2>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 text-center">{{ current_user.role }}</p>
+                </div>
+                <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors">
+                    <span class="material-symbols-outlined text-[18px]">logout</span> Log Out
+                </a>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Content -->
     <main>
+        <!-- Mobile top bar -->
+        <div class="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-[#1a2235] border-b border-[#cfd7e7] dark:border-gray-700 px-4 py-3 mb-4 -mx-4 sm:-mx-6 lg:mx-0 -mt-4 sm:-mt-6 lg:mt-0">
+            <button id="mobile-sidebar-open" type="button" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">menu</span></button>
+            <div class="flex items-center gap-2">
+                <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover">
+                <span class="font-bold text-sm">Inventory</span>
+            </div>
+            <div class="w-10"></div>
+        </div>
         {% include 'components/flash_messages.html' %}
         <!-- Top Action Section -->
-        <div class="card p-6 border-none shadow-none bg-transparent mb-6">
-            <div class="flex flex-wrap justify-between items-center gap-6">
-                <div>
-                    <h1 class="text-3xl font-bold text-gray-900 mb-1">Inventory Monitoring</h1>
-                    <div class="flex gap-4 items-center mt-3 flex-wrap">
+        <div class="card p-4 sm:p-6 border-none shadow-none bg-transparent mb-4 sm:mb-6">
+            <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 sm:gap-6">
+                <div class="min-w-0">
+                    <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 leading-tight">Inventory Monitoring</h1>
+                    <div class="flex flex-wrap gap-2 sm:gap-4 items-center mt-2 sm:mt-3">
                         {% if not session %}
                         <form method="POST" action="{{ url_for('inventory.start_session') }}">
-                            <button type="submit" class="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2">
-                               <span class="material-symbols-outlined text-lg">play_arrow</span> Start New Session
+                            <button type="submit" class="bg-primary hover:bg-primary-dark text-white px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 sm:gap-2">
+                               <span class="material-symbols-outlined text-base sm:text-lg">play_arrow</span> Start New Session
                             </button>
                         </form>
                         {% elif session[4] == 'active' %}
                         <form method="POST" action="{{ url_for('inventory.complete_session', session_id=session[0]) }}">
-                            <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-all">
+                            <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all">
                                 Complete Session
                             </button>
                         </form>
                         <form method="POST" action="{{ url_for('inventory.cancel_session', session_id=session[0]) }}">
-                            <button type="submit" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-5 py-2.5 rounded-lg text-sm font-bold transition-all">
+                            <button type="submit" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all">
                                 Cancel Session
                             </button>
                         </form>
-                        <div class="h-6 w-[1px] bg-gray-200"></div>
-                        <div class="text-sm text-gray-500">
+                        <div class="hidden sm:block h-6 w-[1px] bg-gray-200"></div>
+                        <div class="text-xs sm:text-sm text-gray-500 w-full sm:w-auto mt-1 sm:mt-0">
                             <strong>Session:</strong> Started {{ session[5].strftime('%b %d, %I:%M %p') }} • <strong>Librarian:</strong> {{ current_user.full_name }}
                         </div>
                         {% else %}
-                        <div class="text-sm text-gray-500">
+                        <div class="text-xs sm:text-sm text-gray-500 w-full sm:w-auto">
                             <strong>Session:</strong> {{ session[4].title() }} • Started {{ session[5].strftime('%b %d, %I:%M %p') }}
                         </div>
-                        <a href="{{ url_for('inventory.export_session', session_id=session[0]) }}" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-5 py-2.5 rounded-lg text-sm font-bold transition-all">
+                        <a href="{{ url_for('inventory.export_session', session_id=session[0]) }}" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all">
                             Export CSV
                         </a>
-                        <a href="{{ url_for('inventory.inventory_page') }}" class="text-primary text-sm font-bold hover:underline">
+                        <a href="{{ url_for('inventory.inventory_page') }}" class="text-primary text-xs sm:text-sm font-bold hover:underline">
                             Back to current view
                         </a>
                         {% endif %}
@@ -321,11 +369,11 @@
                 </div>
                 {% if not session or session[4] == 'active' %}
                 <!-- Scanning Hero -->
-                <form method="POST" action="{{ url_for('inventory.scan_accession') }}" class="flex gap-2 w-full lg:w-auto">
+                <form method="POST" action="{{ url_for('inventory.scan_accession') }}" class="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
                     {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
-                    <input type="text" name="accession_number" class="scan-input" placeholder="Enter Accession No. (e.g. 2024-00123)" required>
-                    <button type="submit" class="btn-scan flex items-center gap-2">
-                        <span class="material-symbols-outlined">barcode_scanner</span> Scan
+                    <input type="text" name="accession_number" class="scan-input !max-w-none sm:!max-w-[400px] flex-1 text-sm sm:text-base py-2.5 sm:py-3" placeholder="Enter Accession No. (e.g. 2024-00123)" required>
+                    <button type="submit" class="btn-scan flex items-center justify-center gap-2 w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base shrink-0">
+                        <span class="material-symbols-outlined text-[18px] sm:text-[20px]">barcode_scanner</span> Scan
                     </button>
                 </form>
                 {% endif %}
@@ -356,31 +404,32 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 sm:gap-8">
             <!-- Left Side -->
-            <div class="xl:col-span-2 space-y-8">
+            <div class="xl:col-span-2 space-y-6 sm:space-y-8">
                 <!-- Scan History -->
                 <div class="card animate-in" style="animation-delay: 0.1s;">
-                    <div class="card-header">
-                        <h3 class="card-title">
+                    <div class="card-header p-3 sm:p-4 lg:p-6">
+                        <h3 class="card-title text-sm sm:text-base">
                             <span class="material-symbols-outlined text-emerald-500">done_all</span>
                             Scan History
                         </h3>
                     </div>
-                    <div class="px-6 py-3 border-b border-gray-100 flex gap-2 flex-wrap">
+                    <div class="px-3 sm:px-6 py-2 sm:py-3 border-b border-gray-100 flex gap-1.5 sm:gap-2 flex-wrap overflow-x-auto">
                         {% for filter_value, filter_label in [
                             (None, 'All'), ('available', 'Present'), ('missing', 'Missing'),
                             ('borrowed', 'Borrowed'), ('damaged', 'Damaged'), ('lost', 'Lost')
                         ] %}
                         <a href="{{ url_for('inventory.inventory_page', session_id=session[0] if session else None, status=filter_value) }}"
-                           class="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors
+                           class="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-colors whitespace-nowrap
                            {% if current_status == filter_value %}bg-primary text-white{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">
                             {{ filter_label }}
                         </a>
                         {% endfor %}
                     </div>
-                    <div class="overflow-x-auto">
-                        <table>
+                    <!-- Desktop table -->
+                    <div class="hidden lg:block overflow-x-auto">
+                        <table class="min-w-[700px]">
                             <thead>
                                 <tr>
                                     <th>Accession No.</th>
@@ -423,6 +472,38 @@
                             </tbody>
                         </table>
                     </div>
+                    <!-- Mobile cards -->
+                    <div class="lg:hidden divide-y divide-gray-100">
+                        {% for row in scan_rows %}
+                        <div class="p-4">
+                            <div class="flex justify-between items-start gap-2 mb-2">
+                                <div class="font-bold text-sm truncate pr-2">{{ row[2] }}</div>
+                                <span class="badge shrink-0 text-[11px]
+                                    {% if row[4] == 'available' %}bg-emerald-100 text-emerald-700
+                                    {% elif row[4] == 'borrowed' %}bg-indigo-100 text-indigo-700
+                                    {% elif row[4] == 'damaged' %}bg-amber-100 text-amber-700
+                                    {% elif row[4] == 'lost' %}bg-gray-200 text-gray-600
+                                    {% else %}bg-rose-100 text-rose-700{% endif %}">
+                                    {{ row[4].title() }}
+                                </span>
+                            </div>
+                            <p class="text-xs text-gray-700 truncate mb-1">{{ row[3] }}</p>
+                            <p class="text-[11px] text-gray-500 mb-3">{{ row[5].strftime('%b %d, %I:%M %p') }}</p>
+                            <div class="flex gap-2">
+                                <form method="POST" action="{{ url_for('inventory.damage_accession', accession_id=row[1]) }}" class="flex-1">
+                                    {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
+                                    <button type="submit" class="w-full py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold hover:bg-amber-100">Damaged</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('inventory.lost_accession', accession_id=row[1]) }}" class="flex-1">
+                                    {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
+                                    <button type="submit" class="w-full py-2 rounded-lg border border-gray-200 bg-white text-gray-600 text-xs font-bold hover:bg-gray-50">Lost</button>
+                                </form>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="p-8 text-center text-gray-400 text-sm">No scans recorded yet.</div>
+                        {% endfor %}
+                    </div>
                     {% if total_pages > 1 %}
                     <div class="flex items-center justify-center gap-2 py-4 border-t border-gray-100">
                         <a href="{{ url_for('inventory.inventory_page', session_id=session[0] if session else None, status=current_status, page=current_page - 1) if current_page > 1 else '#' }}"
@@ -438,8 +519,8 @@
             <!-- Right Side -->
             <div class="space-y-8">
                 <!-- Inventory Progress -->
-                <div class="card p-6 animate-in" style="animation-delay: 0.3s;">
-                    <h3 class="card-title mb-6">
+                <div class="card p-4 sm:p-6 animate-in" style="animation-delay: 0.3s;">
+                    <h3 class="card-title mb-4 sm:mb-6 text-sm sm:text-base">
                         <span class="material-symbols-outlined text-primary">analytics</span>
                         Session Progress
                     </h3>
@@ -471,21 +552,34 @@
                 </div>
 
                 <!-- Quick Status Check -->
-                <div class="card p-6 animate-in bg-indigo-50/30 border-indigo-100" style="animation-delay: 0.4s;">
-                    <h3 class="card-title mb-4">
+                <div class="card p-4 sm:p-6 animate-in bg-indigo-50/30 border-indigo-100" style="animation-delay: 0.4s;">
+                    <h3 class="card-title mb-3 sm:mb-4 text-sm sm:text-base">
                         <span class="material-symbols-outlined text-indigo-600">search_check</span>
                         Quick Status Check
                     </h3>
-                    <p class="text-xs text-gray-500 mb-4">Check a book's status without opening a full session.</p>
-                    <form method="POST" action="{{ url_for('inventory.check_accession') }}" class="flex gap-2">
+                    <p class="text-[11px] sm:text-xs text-gray-500 mb-3 sm:mb-4">Check a book's status without opening a full session.</p>
+                    <form method="POST" action="{{ url_for('inventory.check_accession') }}" class="flex flex-col sm:flex-row gap-2">
                         {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
-                        <input type="text" name="accession_number" class="scan-input" style="flex: 1; padding: 0.5rem 1rem; font-size: 0.875rem;" placeholder="Accession No." required>
-                        <button type="submit" class="bg-indigo-600 text-white px-4 rounded-lg font-bold text-xs">Check</button>
+                        <input type="text" name="accession_number" class="scan-input !text-sm sm:!text-base" style="flex: 1; padding: 0.5rem 1rem;" placeholder="Accession No." required>
+                        <button type="submit" class="bg-indigo-600 text-white px-4 py-2 sm:py-2.5 rounded-lg font-bold text-xs sm:text-sm w-full sm:w-auto">Check</button>
                     </form>
                 </div>
             </div>
         </div>
     </main>
-
+    <script>
+    (function() {
+        var openBtn = document.getElementById('mobile-sidebar-open');
+        var closeBtn = document.getElementById('mobile-sidebar-close');
+        var drawer = document.getElementById('mobile-sidebar');
+        var backdrop = document.getElementById('mobile-sidebar-backdrop');
+        function open() { if (drawer) { drawer.classList.remove('hidden'); document.body.style.overflow = 'hidden'; } }
+        function close() { if (drawer) { drawer.classList.add('hidden'); document.body.style.overflow = ''; } }
+        if (openBtn) openBtn.addEventListener('click', open);
+        if (closeBtn) closeBtn.addEventListener('click', close);
+        if (backdrop) backdrop.addEventListener('click', close);
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && drawer && !drawer.classList.contains('hidden')) close(); });
+    })();
+    </script>
 </body>
 </html>
