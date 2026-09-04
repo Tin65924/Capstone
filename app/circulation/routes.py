@@ -172,6 +172,15 @@ def desk_return():
 @login_required
 @librarian_required
 def reservations_page():
+    status_filter = request.args.get('status', '').strip().lower()
+    if status_filter == 'active':
+        wanted = ('waiting', 'allocated')
+    elif status_filter in ('waiting', 'allocated'):
+        wanted = (status_filter,)
+    else:
+        status_filter = ''
+        wanted = None
+
     groups = get_reservations_grouped()
     reservations_by_book = {
         row[0]: get_reservations_by_book(row[0]) for row in groups
@@ -179,11 +188,21 @@ def reservations_page():
     active = sum(row[4] + row[5] for row in groups)
     ready = sum(row[5] for row in groups)
     pending = sum(row[4] for row in groups)
+    if wanted:
+        reservations_by_book = {
+            book_id: [res for res in rows if res[2] in wanted]
+            for book_id, rows in reservations_by_book.items()
+        }
+        reservations_by_book = {
+            book_id: rows for book_id, rows in reservations_by_book.items() if rows
+        }
+        groups = [group for group in groups if group[0] in reservations_by_book]
     return render_template(
         'reservations/reservations.html',
         groups=groups,
         reservations_by_book=reservations_by_book,
         stats={'active': active, 'ready': ready, 'pending': pending},
+        status_filter=status_filter,
     )
 
 
@@ -191,18 +210,20 @@ def reservations_page():
 @login_required
 @librarian_required
 def reservation_action(reservation_id, action):
+    keep_status = request.form.get('status', '').strip().lower()
+    status_args = {'status': keep_status} if keep_status in ('active', 'waiting', 'allocated') else {}
     reservation = get_reservation_by_id(reservation_id)
     if not reservation:
         flash('Reservation not found.', 'error')
-        return redirect(url_for('circulation.reservations_page'))
+        return redirect(url_for('circulation.reservations_page', **status_args))
 
     if action == 'allocate':
         if reservation[5] != 'waiting':
             flash('Only waiting reservations can be allocated.', 'error')
-            return redirect(url_for('circulation.reservations_page'))
+            return redirect(url_for('circulation.reservations_page', **status_args))
         if not get_available_accession_by_book(reservation[1]):
             flash('Cannot allocate — all copies of this book are still on loan.', 'error')
-            return redirect(url_for('circulation.reservations_page'))
+            return redirect(url_for('circulation.reservations_page', **status_args))
         borrower_detail = get_borrower_details(reservation[2])
         role_name = borrower_detail[6] if borrower_detail else 'Student'
         if get_active_loan_by_book_and_borrower(reservation[1], reservation[2]):
@@ -213,7 +234,7 @@ def reservation_action(reservation_id, action):
         if count_active_loans(reservation[2]) >= limit:
             borrower_name = borrower_detail[4] if borrower_detail else 'Borrower'
             flash(f'Cannot allocate — {borrower_name} has reached the borrow limit ({limit} books).', 'error')
-            return redirect(url_for('circulation.reservations_page'))
+            return redirect(url_for('circulation.reservations_page', **status_args))
         deadline = datetime.now() + timedelta(days=2)
         allocate_reservation(reservation_id, deadline)
         create_notification(
@@ -227,11 +248,11 @@ def reservation_action(reservation_id, action):
     elif action == 'claim':
         if reservation[5] != 'allocated':
             flash('Only allocated reservations can be claimed.', 'error')
-            return redirect(url_for('circulation.reservations_page'))
+            return redirect(url_for('circulation.reservations_page', **status_args))
         accession = get_available_accession_by_book(reservation[1])
         if not accession:
             flash('Cannot claim — no copy of this book is available to check out.', 'error')
-            return redirect(url_for('circulation.reservations_page'))
+            return redirect(url_for('circulation.reservations_page', **status_args))
         borrower_detail = get_borrower_details(reservation[2])
         role_name = borrower_detail[6] if borrower_detail else 'Student'
         if get_active_loan_by_book_and_borrower(reservation[1], reservation[2]):
@@ -242,7 +263,7 @@ def reservation_action(reservation_id, action):
         if count_active_loans(reservation[2]) >= limit:
             borrower_name = borrower_detail[4] if borrower_detail else 'Borrower'
             flash(f'Cannot claim — {borrower_name} has reached the borrow limit ({limit} books).', 'error')
-            return redirect(url_for('circulation.reservations_page'))
+            return redirect(url_for('circulation.reservations_page', **status_args))
         due_date = _compute_due_date('overnight', role_name)
         borrow_book(reservation[1], accession[0], reservation[2], current_user.id, 'overnight', due_date)
         claim_reservation(reservation_id)
@@ -251,14 +272,14 @@ def reservation_action(reservation_id, action):
     elif action == 'expire':
         if reservation[5] not in ('waiting', 'allocated'):
             flash('This reservation is already finished.', 'error')
-            return redirect(url_for('circulation.reservations_page'))
+            return redirect(url_for('circulation.reservations_page', **status_args))
         expire_reservation(reservation_id)
         log_activity(current_user.id, f'circulation:expire_reservation:{reservation_id}')
         flash('Reservation expired.', 'success')
     else:
         flash('Invalid action.', 'error')
 
-    return redirect(url_for('circulation.reservations_page'))
+    return redirect(url_for('circulation.reservations_page', **status_args))
 
 
 @circulation_bp.route('/user/borrow', methods=['POST'])
