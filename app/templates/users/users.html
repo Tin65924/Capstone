@@ -71,11 +71,22 @@
             border-radius: 10px;
         }
 
-        /* Main Content Adjustments */
+        /* Main Content - responsive */
         main {
             flex: 1;
-            padding: 2rem 3rem;
-            max-width: calc(100vw - 256px);
+            padding: 1rem;
+            max-width: 100%;
+            overflow-y: auto;
+        }
+        @media (min-width: 640px) {
+            main { padding: 1.5rem; }
+        }
+        @media (min-width: 1024px) {
+            main { padding: 2rem 3rem; max-width: calc(100vw - 256px); }
+        }
+        @media (max-width: 640px) {
+            .card { margin-bottom: 1rem; }
+            th, td { padding: 0.75rem 1rem; }
         }
 
         .card {
@@ -162,7 +173,7 @@
 </head>
 <body>
 
-    <!-- Sidebar -->
+    <!-- Sidebar - Desktop -->
     <div class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0 h-screen sticky top-0">
       <div class="p-6 flex-1 flex flex-col overflow-hidden">
         
@@ -188,61 +199,97 @@
         </a>
       </div>
     </div>
+    <!-- Mobile sidebar drawer -->
+    <div id="mobile-sidebar" class="fixed inset-0 z-50 hidden lg:hidden">
+        <div id="mobile-sidebar-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+        <div class="absolute top-0 left-0 h-full w-[80%] max-w-[280px] bg-white dark:bg-[#1a2235] shadow-2xl flex flex-col overflow-hidden">
+            <div class="p-4 flex items-center justify-between border-b border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                <div class="flex items-center gap-3">
+                    <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
+                    <h1 class="text-lg font-bold">MCST Library</h1>
+                </div>
+                <button id="mobile-sidebar-close" type="button" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6">
+                {% include 'components/librarian_sidebar_nav.html' %}
+            </div>
+            <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                <div class="flex flex-col items-center mb-4">
+                    <h2 class="text-base font-bold text-center">{{ current_user.full_name }}</h2>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 text-center">{{ current_user.role }}</p>
+                </div>
+                <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors">
+                    <span class="material-symbols-outlined text-[18px]">logout</span> Log Out
+                </a>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Content Area -->
     <main>
-        {% include 'components/flash_messages.html' %}
-        <div class="flex justify-between items-center mb-8 animate-in">
-            <div>
-                <h1 class="text-3xl font-bold font-outfit">User Management</h1>
-                <p class="text-gray-500 mt-1">Control access roles and monitor library members.</p>
+        <!-- Mobile top bar -->
+        <div class="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-[#1a2235] border-b border-[#cfd7e7] dark:border-gray-700 px-4 py-3 mb-4 -mx-4 sm:-mx-6 lg:mx-0 -mt-4 sm:-mt-6 lg:mt-0">
+            <button id="mobile-sidebar-open" type="button" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">menu</span></button>
+            <div class="flex items-center gap-2">
+                <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover">
+                <span class="font-bold text-sm">User Management</span>
             </div>
-            <div class="flex gap-3">
+            <div class="w-10"></div>
+        </div>
+        {% if not request.args.get('modal') %}
+        {% include 'components/flash_messages.html' %}
+        {% endif %}
+        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8 animate-in">
+            <div class="min-w-0">
+                <h1 class="text-2xl sm:text-3xl font-bold font-outfit leading-tight">User Management</h1>
+                <p class="text-sm sm:text-base text-gray-500 mt-1">Control access roles and monitor library members.</p>
+            </div>
+            <div class="flex gap-2 sm:gap-3 shrink-0">
                 <button onclick="openUsersExportModal()"
-                   class="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold rounded-lg border border-gray-200 bg-white text-gray-700 hover:border-primary hover:text-primary transition-colors">
-                    <span class="material-symbols-outlined text-[18px]">download</span> Export
+                   class="inline-flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-bold rounded-lg border border-gray-200 bg-white text-gray-700 hover:border-primary hover:text-primary transition-colors">
+                    <span class="material-symbols-outlined text-[16px] sm:text-[18px]">download</span> Export
                 </button>
             </div>
         </div>
 
 
-        <div class="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-8 animate-in" style="animation-delay: 0.1s;">
-            <div class="card p-4 flex items-center gap-4">
-                <div class="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center"><span class="material-symbols-outlined">group</span></div>
-                <div><div class="text-sm text-gray-400 font-bold uppercase tracking-wider">Total</div><div class="text-xl font-bold">{{ total }}</div></div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-6 sm:mb-8 animate-in" style="animation-delay: 0.1s;">
+            <div class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4">
+                <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">group</span></div>
+                <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Total</div><div class="text-base sm:text-xl font-bold">{{ total }}</div></div>
             </div>
-            <div class="card p-4 flex items-center gap-4">
-                <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><span class="material-symbols-outlined">verified_user</span></div>
-                <div><div class="text-sm text-gray-400 font-bold uppercase tracking-wider">Active</div><div class="text-xl font-bold">{{ active }}</div></div>
+            <div class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4">
+                <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">verified_user</span></div>
+                <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Active</div><div class="text-base sm:text-xl font-bold">{{ active }}</div></div>
             </div>
-            <div class="card p-4 flex items-center gap-4">
-                <div class="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center"><span class="material-symbols-outlined">school</span></div>
-                <div><div class="text-sm text-gray-400 font-bold uppercase tracking-wider">Students</div><div class="text-xl font-bold">{{ students }}</div></div>
+            <div class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4">
+                <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">school</span></div>
+                <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Students</div><div class="text-base sm:text-xl font-bold">{{ students }}</div></div>
             </div>
-            <div class="card p-4 flex items-center gap-4">
-                <div class="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center"><span class="material-symbols-outlined">person_off</span></div>
-                <div><div class="text-sm text-gray-400 font-bold uppercase tracking-wider">Inactive</div><div class="text-xl font-bold">{{ inactive }}</div></div>
+            <div class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4">
+                <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">person_off</span></div>
+                <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Inactive</div><div class="text-base sm:text-xl font-bold">{{ inactive }}</div></div>
             </div>
-            <div class="card p-4 flex items-center gap-4">
-                <div class="w-10 h-10 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center"><span class="material-symbols-outlined">archive</span></div>
-                <div><div class="text-sm text-gray-400 font-bold uppercase tracking-wider">Archived</div><div class="text-xl font-bold">{{ archived }}</div></div>
+            <div class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4">
+                <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">archive</span></div>
+                <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Archived</div><div class="text-base sm:text-xl font-bold">{{ archived }}</div></div>
             </div>
-            <div class="card p-4 flex items-center gap-4">
-                <div class="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center"><span class="material-symbols-outlined">pending_actions</span></div>
-                <div><div class="text-sm text-gray-400 font-bold uppercase tracking-wider">Pending</div><div class="text-xl font-bold">{{ pending|length }}</div></div>
+            <div class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4">
+                <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">pending_actions</span></div>
+                <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Pending</div><div class="text-base sm:text-xl font-bold">{{ pending|length }}</div></div>
             </div>
         </div>
 
         {% if pending %}
-        <div class="card animate-in mb-6" style="animation-delay: 0.15s;">
-            <div class="p-4 border-b border-gray-100">
-                <h3 class="text-sm font-bold uppercase tracking-wider text-amber-600 flex items-center gap-2">
-                    <span class="material-symbols-outlined text-lg">pending_actions</span>
+        <div class="card animate-in mb-6 overflow-hidden" style="animation-delay: 0.15s;">
+            <div class="p-3 sm:p-4 border-b border-gray-100">
+                <h3 class="text-xs sm:text-sm font-bold uppercase tracking-wider text-amber-600 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-base sm:text-lg">pending_actions</span>
                     Pending Approval ({{ pending|length }})
                 </h3>
             </div>
-            <div class="overflow-x-auto">
-                <table>
+            <div class="hidden lg:block overflow-x-auto">
+                <table class="min-w-[700px]">
                     <thead>
                         <tr>
                             <th>User</th>
@@ -280,34 +327,52 @@
                     </tbody>
                 </table>
             </div>
+            <div class="lg:hidden divide-y divide-gray-100">
+                {% for p in pending %}
+                <div class="p-4">
+                    <div class="font-bold text-sm truncate">{{ p[2] }}</div>
+                    <div class="text-[11px] text-gray-400 truncate mb-2">{{ p[1] }} · {{ p[5] or '—' }}</div>
+                    <div class="flex flex-wrap gap-1.5 mb-2">
+                        <span class="badge badge-role text-[11px]">{{ p[3] }}</span>
+                        <span class="text-[11px] text-gray-500">{{ p[6] or '—' }}</span>
+                        <span class="text-[11px] text-gray-400">{{ p[4].strftime('%b %d, %Y') }}</span>
+                    </div>
+                    <form method="POST" action="{{ url_for('auth.approve_user_route', user_id=p[0]) }}">
+                        <button class="w-full py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold hover:bg-emerald-100 flex items-center justify-center gap-1">
+                            <span class="material-symbols-outlined text-base">check_circle</span> Approve
+                        </button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
         </div>
         {% endif %}
 
         <!-- Users Table -->
-        <div class="card animate-in" style="animation-delay: 0.2s;">
-            <div class="p-4 border-b border-gray-100 flex items-center gap-2 bg-gray-50/20">
+        <div class="card animate-in overflow-hidden" style="animation-delay: 0.2s;">
+            <div class="p-3 sm:p-4 border-b border-gray-100 flex items-center gap-1.5 sm:gap-2 bg-gray-50/20 overflow-x-auto">
                 <a href="{{ url_for('auth.admin_users') }}"
-                   class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors {% if not status_filter %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
+                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if not status_filter %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     All
                 </a>
                 <a href="{{ url_for('auth.admin_users', status='active') }}"
-                   class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors {% if status_filter == 'active' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
+                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if status_filter == 'active' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Active
                 </a>
                 <a href="{{ url_for('auth.admin_users', status='disabled') }}"
-                   class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors {% if status_filter == 'disabled' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
+                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if status_filter == 'disabled' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Inactive
                 </a>
                 <a href="{{ url_for('auth.admin_users', status='pending') }}"
-                   class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors {% if status_filter == 'pending' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
+                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if status_filter == 'pending' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Pending
                 </a>
                 <a href="{{ url_for('auth.admin_users', status='archived') }}"
-                   class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors {% if status_filter == 'archived' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
+                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if status_filter == 'archived' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Archived
                 </a>
             </div>
-            <div class="overflow-x-auto">
+            <div class="hidden lg:block overflow-x-auto">
                 <table>
                     <thead>
                         <tr>
@@ -419,17 +484,83 @@
                     </tbody>
                 </table>
             </div>
+            <div class="lg:hidden divide-y divide-gray-100">
+                {% for u in users %}
+                <div class="p-4">
+                    <div class="flex justify-between items-start gap-2 mb-2">
+                        <div class="min-w-0 flex-1">
+                            <div class="font-bold text-sm truncate">{{ u[2] }}</div>
+                            <div class="text-[11px] text-gray-400 truncate">{{ u[1] }}</div>
+                            <div class="text-[11px] text-gray-500 font-mono">{{ u[6] or '—' }} · {{ u[7] or '—' }}</div>
+                        </div>
+                        <span class="badge shrink-0 text-[11px] {% if u[4] == 'active' %}badge-active{% elif u[4] == 'disabled' %}badge-suspended{% else %}bg-gray-100 text-gray-600{% endif %}">{{ u[4] }}</span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5 mb-3">
+                        <span class="badge badge-role text-[11px]">{{ u[3] }}</span>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5 mb-3">
+                        <button data-user-id="{{ u[0] }}" data-user-name="{{ u[2]|escape }}" data-user-idnum="{{ u[6] or '' }}" data-user-dept="{{ u[7] or '' }}" onclick="openEditModal(this)" class="flex-1 py-2 rounded-lg border border-gray-200 bg-white text-xs font-bold flex items-center justify-center gap-1" title="Edit"><span class="material-symbols-outlined text-[16px]">edit</span> Edit</button>
+                        {% if u[4] == 'active' %}
+                        <button class="flex-1 py-2 rounded-lg border border-rose-200 bg-rose-50 text-rose-600 text-xs font-bold flex items-center justify-center gap-1" data-confirm-title="Deactivate User" data-confirm-message="Are you sure you want to deactivate &#34;{{ u[2] }}&#34;?" data-confirm-action="{{ url_for('auth.toggle_user_status_route', user_id=u[0]) }}" data-confirm-button="Deactivate" data-confirm-class="bg-rose-600 hover:bg-rose-700" data-confirm-icon="person_off" onclick="confirmFromData(this)" title="Deactivate"><span class="material-symbols-outlined text-[16px]">person_off</span> Deactivate</button>
+                        {% elif u[4] == 'disabled' %}
+                        <button class="flex-1 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-600 text-xs font-bold flex items-center justify-center gap-1" data-confirm-title="Activate User" data-confirm-message="Are you sure you want to activate &#34;{{ u[2] }}&#34;?" data-confirm-action="{{ url_for('auth.toggle_user_status_route', user_id=u[0]) }}" data-confirm-button="Activate" data-confirm-class="bg-emerald-600 hover:bg-emerald-700" data-confirm-icon="person_check" onclick="confirmFromData(this)" title="Activate"><span class="material-symbols-outlined text-[16px]">person_check</span> Activate</button>
+                        {% endif %}
+                        {% if u[4] != 'archived' %}
+                        <button class="flex-1 py-2 rounded-lg border border-gray-200 bg-white text-gray-600 text-xs font-bold flex items-center justify-center gap-1" data-confirm-title="Archive User" data-confirm-message="Are you sure you want to archive &#34;{{ u[2] }}&#34;?" data-confirm-action="{{ url_for('auth.archive_user_route', user_id=u[0]) }}" data-confirm-button="Archive" data-confirm-class="bg-gray-600 hover:bg-gray-700" data-confirm-icon="archive" onclick="confirmFromData(this)" title="Archive"><span class="material-symbols-outlined text-[16px]">archive</span> Archive</button>
+                        {% else %}
+                        <button class="flex-1 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-600 text-xs font-bold flex items-center justify-center gap-1" data-confirm-title="Restore User" data-confirm-message="Are you sure you want to restore &#34;{{ u[2] }}&#34;?" data-confirm-action="{{ url_for('auth.unarchive_user_route', user_id=u[0]) }}" data-confirm-button="Restore" data-confirm-class="bg-blue-600 hover:bg-blue-700" data-confirm-icon="unarchive" onclick="confirmFromData(this)" title="Restore"><span class="material-symbols-outlined text-[16px]">unarchive</span> Restore</button>
+                        <button class="flex-1 py-2 rounded-lg border border-red-200 bg-white text-red-600 text-xs font-bold flex items-center justify-center gap-1" data-confirm-title="Delete User" data-confirm-message="Are you sure you want to permanently delete &#34;{{ u[2] }}&#34;? This cannot be undone." data-confirm-action="{{ url_for('auth.delete_user_route', user_id=u[0]) }}" data-confirm-button="Delete" data-confirm-class="bg-red-600 hover:bg-red-700" data-confirm-icon="delete_forever" onclick="confirmFromData(this)" title="Delete"><span class="material-symbols-outlined text-[16px]">delete_forever</span> Delete</button>
+                        {% endif %}
+                    </div>
+                    <form method="POST" action="{{ url_for('auth.change_user_role', user_id=u[0]) }}" class="mt-2">
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Change Role</label>
+                        <div class="relative" id="role-select-wrapper-{{ u[0] }}">
+                            <select name="role_id" id="role-select-native-{{ u[0] }}" class="sr-only" tabindex="-1" aria-hidden="true">
+                                {% for r in roles %}
+                                <option value="{{ r[0] }}" {% if r[1] == u[3] %}selected{% endif %}>{{ r[1] }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" id="role-select-btn-{{ u[0] }}" aria-haspopup="listbox" aria-expanded="false" class="w-full flex items-center justify-between gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-medium text-gray-700 hover:border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
+                                <span id="role-select-label-{{ u[0] }}">{{ u[3] }}</span>
+                                <span class="material-symbols-outlined text-gray-400 text-[18px] shrink-0" id="role-select-arrow-{{ u[0] }}">expand_more</span>
+                            </button>
+                            <ul id="role-select-dropdown-{{ u[0] }}" role="listbox" class="hidden absolute z-50 top-full left-0 mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden py-1.5 text-xs">
+                                {% for r in roles %}
+                                {% set is_sel = r[1] == u[3] %}
+                                <li role="option" data-value="{{ r[0] }}" tabindex="0" aria-selected="{{ 'true' if is_sel else 'false' }}" class="role-option px-3 py-2 cursor-pointer flex items-center justify-between hover:bg-gray-50 {% if is_sel %}bg-primary/10 text-primary font-semibold{% else %}text-gray-700{% endif %}"><span>{{ r[1] }}</span>{% if is_sel %}<span class="material-symbols-outlined text-[16px] text-primary">check</span>{% endif %}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
         </div>
     </main>
 
-<div id="editModal" class="fixed inset-0 z-50 hidden bg-black/40 flex items-center justify-center">
-    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 p-6 animate-in">
+<div id="editModal" class="fixed inset-0 z-50 hidden bg-black/40 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-md mx-4 p-4 sm:p-6 animate-in max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between mb-6">
             <h3 class="text-lg font-bold">Edit User</h3>
             <button onclick="closeEditModal()" class="text-gray-400 hover:text-gray-600">
                 <span class="material-symbols-outlined">close</span>
             </button>
         </div>
+        {% if request.args.get('modal') == 'editModal' %}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="mb-4 space-y-2">
+            {% for category, message in messages %}
+            {% set color = {'error': 'bg-red-50 text-red-800 border-red-200', 'info': 'bg-blue-50 text-blue-800 border-blue-200', 'success': 'bg-green-50 text-green-800 border-green-200'} %}
+            <div class="px-3 py-2 border rounded text-sm font-medium flex items-center gap-2 {{ color.get(category, color['info']) }}">
+                <span class="material-symbols-outlined text-base">{{ 'error' if category == 'error' else 'info' if category == 'info' else 'check_circle' }}</span>
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+        {% endif %}
         <form method="POST" action="" id="editForm">
             <div class="space-y-4">
                 <div>
@@ -448,18 +579,18 @@
                         class="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
                 </div>
             </div>
-            <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+            <div class="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 mt-6 pt-4 border-t border-gray-100">
                 <button type="button" onclick="closeEditModal()"
-                    class="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
+                    class="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-lg transition-colors w-full sm:w-auto">Cancel</button>
                 <button type="submit"
-                    class="px-4 py-2 text-sm font-bold text-white bg-primary rounded-lg hover:bg-blue-800 transition-colors">Save Changes</button>
+                    class="px-4 py-2 text-sm font-bold text-white bg-primary rounded-lg hover:bg-blue-800 transition-colors w-full sm:w-auto">Save Changes</button>
             </div>
         </form>
     </div>
 </div>
 
-<div id="usersExportModal" class="fixed inset-0 z-50 hidden bg-black/40 flex items-center justify-center">
-    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 p-6 animate-in">
+<div id="usersExportModal" class="fixed inset-0 z-50 hidden bg-black/40 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-md mx-4 p-4 sm:p-6 animate-in max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between mb-4">
             <h3 class="text-lg font-bold">Export Users</h3>
             <button onclick="closeUsersExportModal()" class="text-gray-400 hover:text-gray-600">
@@ -527,6 +658,80 @@ function closeEditModal() {
 document.getElementById('editModal').addEventListener('click', function(e) {
     if (e.target === this) closeEditModal();
 });
+</script>
+<script>
+// Mobile sidebar
+(function() {
+    var openBtn = document.getElementById('mobile-sidebar-open');
+    var closeBtn = document.getElementById('mobile-sidebar-close');
+    var drawer = document.getElementById('mobile-sidebar');
+    var backdrop = document.getElementById('mobile-sidebar-backdrop');
+    function open() { if (drawer) { drawer.classList.remove('hidden'); document.body.style.overflow = 'hidden'; } }
+    function close() { if (drawer) { drawer.classList.add('hidden'); document.body.style.overflow = ''; } }
+    if (openBtn) openBtn.addEventListener('click', open);
+    if (closeBtn) closeBtn.addEventListener('click', close);
+    if (backdrop) backdrop.addEventListener('click', close);
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && drawer && !drawer.classList.contains('hidden')) close(); });
+})();
+</script>
+<script>
+// Role select custom — fixes native dropdown overlapping table
+(function() {
+    document.querySelectorAll('[id^="role-select-wrapper-"]').forEach(function(wrapper) {
+        var id = wrapper.id.replace('role-select-wrapper-', '');
+        var btn = document.getElementById('role-select-btn-' + id);
+        var dropdown = document.getElementById('role-select-dropdown-' + id);
+        var label = document.getElementById('role-select-label-' + id);
+        var arrow = document.getElementById('role-select-arrow-' + id);
+        var native = document.getElementById('role-select-native-' + id);
+        if (!btn || !dropdown || !native) return;
+        function setExpanded(expanded) { btn.setAttribute('aria-expanded', expanded ? 'true' : 'false'); dropdown.classList.toggle('hidden', !expanded); if (arrow) arrow.style.transform = expanded ? 'rotate(180deg)' : ''; }
+        function isOpen() { return !dropdown.classList.contains('hidden'); }
+        function selectValue(value, text) {
+            native.value = value;
+            if (label) label.textContent = text;
+            dropdown.querySelectorAll('[role="option"]').forEach(function(opt) {
+                var isSel = opt.getAttribute('data-value') === value;
+                opt.setAttribute('aria-selected', isSel ? 'true' : 'false');
+                opt.classList.toggle('bg-primary/10', isSel);
+                opt.classList.toggle('text-primary', isSel);
+                opt.classList.toggle('font-semibold', isSel);
+                var check = opt.querySelector('.material-symbols-outlined');
+                if (isSel) { if (!check) { var c = document.createElement('span'); c.className = 'material-symbols-outlined text-[16px] text-primary'; c.textContent = 'check'; opt.appendChild(c); } } else { if (check) check.remove(); }
+            });
+            native.form.submit();
+        }
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            document.querySelectorAll('[id^="role-select-dropdown-"]').forEach(function(d){ if(d!==dropdown) d.classList.add('hidden'); });
+            document.querySelectorAll('[id^="role-select-arrow-"]').forEach(function(a){ if(a!==arrow) a.style.transform=''; });
+            document.querySelectorAll('[id^="role-select-btn-"]').forEach(function(b){ if(b!==btn) b.setAttribute('aria-expanded','false'); });
+            setExpanded(!isOpen());
+        });
+        dropdown.querySelectorAll('[role="option"]').forEach(function(opt) {
+            opt.addEventListener('click', function() { selectValue(opt.getAttribute('data-value'), opt.querySelector('span').textContent.trim()); });
+            opt.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); opt.click(); }
+                else if (e.key === 'ArrowDown') { e.preventDefault(); var n = opt.nextElementSibling; if (n) n.focus(); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); var p = opt.previousElementSibling; if (p) p.focus(); else btn.focus(); }
+                else if (e.key === 'Escape') { setExpanded(false); btn.focus(); }
+            });
+        });
+        btn.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!isOpen()) setExpanded(true); var f = dropdown.querySelector('[role="option"]'); if (f) f.focus(); }
+            else if (e.key === 'Escape' && isOpen()) setExpanded(false);
+        });
+    });
+    document.addEventListener('click', function(e) {
+        document.querySelectorAll('[id^="role-select-wrapper-"]').forEach(function(wrapper) {
+            var id = wrapper.id.replace('role-select-wrapper-', '');
+            var dropdown = document.getElementById('role-select-dropdown-' + id);
+            var btn = document.getElementById('role-select-btn-' + id);
+            var arrow = document.getElementById('role-select-arrow-' + id);
+            if (dropdown && !wrapper.contains(e.target)) { dropdown.classList.add('hidden'); if (btn) btn.setAttribute('aria-expanded','false'); if (arrow) arrow.style.transform=''; }
+        });
+    });
+})();
 </script>
 
 {% include 'components/confirm_modal.html' %}

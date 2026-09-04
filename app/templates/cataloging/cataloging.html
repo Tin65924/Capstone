@@ -58,10 +58,25 @@
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cfd7e7; border-radius: 10px; }
-        main { flex: 1; padding: 1.25rem; max-width: 100vw; width: 100%; min-width: 0; }
-@media (min-width: 1024px) {
-    main { padding: 2rem 3rem; max-width: calc(100vw - 256px); }
-}
+        main {
+            flex: 1;
+            min-width: 0;
+            padding: 1rem;
+            max-width: 100%;
+            overflow-y: auto;
+        }
+        @media (min-width: 640px) {
+            main { padding: 1.5rem; }
+        }
+        @media (min-width: 1024px) {
+            main { padding: 2rem 3rem; max-width: calc(100vw - 256px); }
+        }
+        @media (max-width: 640px) {
+            .card { margin-bottom: 1rem; }
+            th, td { padding: 0.75rem 1rem; font-size: 0.8125rem; }
+            .modal { margin: 1rem; max-width: calc(100% - 2rem); border-radius: 16px; }
+            .pagination { flex-direction: column; gap: 0.75rem; align-items: stretch; }
+        }
         .card {
             background: white;
             border-radius: var(--radius);
@@ -162,12 +177,8 @@
 </head>
 <body>
 
-    <!-- Mobile overlay backdrop -->
-<div id="sidebar-overlay" onclick="toggleSidebar()"
-     class="hidden fixed inset-0 bg-black/50 z-30 lg:hidden"></div>
-
-<!-- Sidebar -->
-<div id="sidebar" class="flex flex-col w-64 border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0 h-screen fixed inset-y-0 left-0 z-40 -translate-x-full transition-transform duration-200 lg:translate-x-0 lg:sticky lg:top-0">
+    <!-- Sidebar - Desktop -->
+    <div class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0 h-screen sticky top-0">
       <div class="p-6 flex-1 flex flex-col overflow-hidden">
         <div class="flex items-center gap-3 mb-8 shrink-0">
           <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
@@ -184,76 +195,123 @@
         </a>
       </div>
     </div>
+    <!-- Mobile sidebar drawer -->
+    <div id="mobile-sidebar" class="fixed inset-0 z-50 hidden lg:hidden">
+        <div id="mobile-sidebar-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+        <div class="absolute top-0 left-0 h-full w-[80%] max-w-[280px] bg-white dark:bg-[#1a2235] shadow-2xl flex flex-col overflow-hidden">
+            <div class="p-4 flex items-center justify-between border-b border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                <div class="flex items-center gap-3">
+                    <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
+                    <h1 class="text-lg font-bold">MCST Library</h1>
+                </div>
+                <button id="mobile-sidebar-close" type="button" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6">
+                {% include 'components/librarian_sidebar_nav.html' %}
+            </div>
+            <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                <div class="flex flex-col items-center mb-4">
+                    <h2 class="text-base font-bold text-center">{{ current_user.full_name }}</h2>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 text-center">{{ current_user.role }}</p>
+                </div>
+                <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors">
+                    <span class="material-symbols-outlined text-[18px]">logout</span> Log Out
+                </a>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Content -->
     <main>
-    <!-- Mobile Top Bar -->
-    <div class="lg:hidden flex items-center gap-3 px-4 py-3 border-b border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235]">
-        <button onclick="toggleSidebar()" class="p-2 -ml-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
-            <span class="material-symbols-outlined">menu</span>
-        </button>
-        <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-6 w-6 rounded object-cover">
-        <span class="font-bold text-sm">MCST Library</span>
-    </div>
-    {% include 'components/flash_messages.html' %}
-
-
-        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8 animate-in">
-            <div>
-                <h1 class="text-3xl font-bold">Cataloging Module</h1>
-                <p class="text-gray-500 mt-1">Manage and organize your library's information database.</p>
+        <!-- Mobile top bar -->
+        <div class="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-[#1a2235] border-b border-[#cfd7e7] dark:border-gray-700 px-4 py-3 mb-4 -mx-4 sm:-mx-6 lg:mx-0 -mt-4 sm:-mt-6 lg:mt-0">
+            <button id="mobile-sidebar-open" type="button" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">menu</span></button>
+            <div class="flex items-center gap-2">
+                <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover">
+                <span class="font-bold text-sm">Cataloging</span>
             </div>
-            <div class="flex flex-wrap gap-3">
-                <button class="btn btn-outline" onclick="openModal('catalogExportModal')">
-                    <span class="material-symbols-outlined">download</span> Export
+            <div class="w-10"></div>
+        </div>
+        {# Global feedback only when NOT targeting a modal — avoids duplicate top + modal flash #}
+        {% if not request.args.get('modal') %}
+        {% include 'components/flash_messages.html' %}
+        {% endif %}
+
+
+        <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6 sm:mb-8 animate-in">
+            <div class="min-w-0">
+                <h1 class="text-2xl sm:text-3xl font-bold leading-tight">Cataloging Module</h1>
+                <p class="text-sm sm:text-base text-gray-500 mt-1">Manage and organize your library's information database.</p>
+            </div>
+            <div class="flex flex-wrap gap-2 sm:gap-3">
+                <button class="btn btn-outline flex-1 sm:flex-none justify-center text-xs sm:text-sm px-3 sm:px-4" onclick="openModal('catalogExportModal')">
+                    <span class="material-symbols-outlined text-[18px] sm:text-[20px]">download</span> Export
                 </button>
-                <button class="btn btn-primary" onclick="openModal('addBookModal')">
-                    <span class="material-symbols-outlined">add</span> Add New Book
+                <button class="btn btn-primary flex-1 sm:flex-none justify-center text-xs sm:text-sm px-3 sm:px-4" onclick="openModal('addBookModal')">
+                    <span class="material-symbols-outlined text-[18px] sm:text-[20px]">add</span> Add New Book
                 </button>
-                <button class="btn btn-outline" onclick="openModal('bulkImportModal')">
-                    <span class="material-symbols-outlined">upload_file</span> Bulk Import
+                <button class="btn btn-outline flex-1 sm:flex-none justify-center text-xs sm:text-sm px-3 sm:px-4" onclick="openModal('bulkImportModal')">
+                    <span class="material-symbols-outlined text-[18px] sm:text-[20px]">upload_file</span> Bulk Import
                 </button>
             </div>
         </div>
 
         <!-- Search & Filter -->
-        <form method="GET" action="{{ url_for('cataloging.cataloging_page') }}" class="flex flex-wrap gap-4 mb-8 animate-in" style="animation-delay: 0.1s;">
-            <div class="flex-1 min-w-[200px] flex gap-2">
-                <select name="field" class="form-input w-auto" onchange="this.form.submit()">
-                    <option value="" {% if not search_field %}selected{% endif %}>All Fields</option>
-                    <option value="title" {% if search_field == 'title' %}selected{% endif %}>Title</option>
-                    <option value="author" {% if search_field == 'author' %}selected{% endif %}>Author</option>
-                    <option value="isbn" {% if search_field == 'isbn' %}selected{% endif %}>ISBN</option>
-                    <option value="accession" {% if search_field == 'accession' %}selected{% endif %}>Accession No.</option>
-                </select>
-                <div class="relative flex-1 min-w-[180px]">
-                    <input type="text" name="q" value="{{ search_query }}" class="search-input w-full" placeholder="Search catalog..." data-suggest="book_search">
+        <form method="GET" action="{{ url_for('cataloging.cataloging_page') }}" class="flex flex-col gap-3 mb-6 sm:mb-8 animate-in relative z-20" style="animation-delay: 0.1s;">
+            <div class="flex flex-col sm:flex-row gap-2 sm:gap-2 w-full relative z-20">
+                <div class="relative w-full sm:w-auto sm:min-w-[160px] z-30" id="field-select-wrapper">
+                    <select name="field" id="field-select-native" class="sr-only" tabindex="-1" aria-hidden="true">
+                        <option value="" {% if not search_field %}selected{% endif %}>All Fields</option>
+                        <option value="title" {% if search_field == 'title' %}selected{% endif %}>Title</option>
+                        <option value="author" {% if search_field == 'author' %}selected{% endif %}>Author</option>
+                        <option value="isbn" {% if search_field == 'isbn' %}selected{% endif %}>ISBN</option>
+                        <option value="accession" {% if search_field == 'accession' %}selected{% endif %}>Accession No.</option>
+                    </select>
+                    <button type="button" id="field-select-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="field-select-dropdown"
+                        class="w-full flex items-center justify-between gap-2 bg-white border border-[#e2e8f0] px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg text-sm font-medium text-slate-700 hover:border-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
+                        <span id="field-select-label" class="truncate">{% if search_field == 'title' %}Title{% elif search_field == 'author' %}Author{% elif search_field == 'isbn' %}ISBN{% elif search_field == 'accession' %}Accession No.{% else %}All Fields{% endif %}</span>
+                        <span class="material-symbols-outlined text-slate-400 text-[20px] shrink-0 transition-transform duration-200" id="field-select-arrow">expand_more</span>
+                    </button>
+                    <ul id="field-select-dropdown" role="listbox" tabindex="-1"
+                        class="hidden absolute z-50 top-full left-0 mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden py-1.5 text-sm">
+                        <li role="option" data-value="" tabindex="0" aria-selected="{% if not search_field %}true{% else %}false{% endif %}" class="field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if not search_field %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>All Fields</span>{% if not search_field %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
+                        <li role="option" data-value="title" tabindex="0" aria-selected="{% if search_field == 'title' %}true{% else %}false{% endif %}" class="field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if search_field == 'title' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>Title</span>{% if search_field == 'title' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
+                        <li role="option" data-value="author" tabindex="0" aria-selected="{% if search_field == 'author' %}true{% else %}false{% endif %}" class="field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if search_field == 'author' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>Author</span>{% if search_field == 'author' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
+                        <li role="option" data-value="isbn" tabindex="0" aria-selected="{% if search_field == 'isbn' %}true{% else %}false{% endif %}" class="field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if search_field == 'isbn' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>ISBN</span>{% if search_field == 'isbn' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
+                        <li role="option" data-value="accession" tabindex="0" aria-selected="{% if search_field == 'accession' %}true{% else %}false{% endif %}" class="field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if search_field == 'accession' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>Accession No.</span>{% if search_field == 'accession' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
+                    </ul>
                 </div>
-                <button type="submit" class="btn btn-primary btn-sm"><span class="material-symbols-outlined">search</span></button>
-                {% if search_query %}
-                <a href="{{ url_for('cataloging.cataloging_page') }}" class="btn btn-outline btn-sm">Clear</a>
-                {% endif %}
+                <div class="relative flex-1 w-full">
+                    <input type="text" name="q" value="{{ search_query }}" class="search-input w-full text-sm" placeholder="Search catalog..." data-suggest="book_search">
+                </div>
+                <div class="flex gap-2 shrink-0">
+                    <button type="submit" class="btn btn-primary btn-sm flex-1 sm:flex-none justify-center"><span class="material-symbols-outlined text-[18px]">search</span> Search</button>
+                    {% if search_query %}
+                    <a href="{{ url_for('cataloging.cataloging_page') }}" class="btn btn-outline btn-sm flex-1 sm:flex-none justify-center">Clear</a>
+                    {% endif %}
+                </div>
             </div>
         </form>
 
         <!-- Table Card -->
-        <div class="card animate-in" style="animation-delay: 0.2s;">
-            <div class="p-4 border-b border-gray-100 flex items-center gap-2 bg-gray-50/50">
+        <div class="card animate-in overflow-hidden" style="animation-delay: 0.2s;">
+            <div class="p-3 sm:p-4 border-b border-gray-100 flex items-center gap-1.5 sm:gap-2 bg-gray-50/50 overflow-x-auto scrollbar-thin">
                 <a href="{{ url_for('cataloging.cataloging_page', q=search_query, field=search_field) }}"
-                   class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors {% if not status_filter %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
+                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if not status_filter %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     All ({{ total }})
                 </a>
                 <a href="{{ url_for('cataloging.cataloging_page', status='active', q=search_query, field=search_field) }}"
-                   class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors {% if status_filter == 'active' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
+                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if status_filter == 'active' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Active
                 </a>
                 <a href="{{ url_for('cataloging.cataloging_page', status='archived', q=search_query, field=search_field) }}"
-                   class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors {% if status_filter == 'archived' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
+                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if status_filter == 'archived' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Archived
                 </a>
             </div>
 
-            <div class="table-container">
+            <!-- Desktop table -->
+            <div class="hidden lg:block table-container">
                 <table>
                     <thead>
                         <tr>
@@ -392,8 +450,75 @@
                     </tbody>
                 </table>
             </div>
+            <!-- Mobile cards -->
+            <div class="lg:hidden divide-y divide-gray-100">
+                {% if books %}
+                {% for book in books %}
+                {% set copies = accessions_by_book.get(book[0], []) %}
+                <div class="p-4">
+                    <div class="flex justify-between items-start gap-2 mb-2">
+                        <h3 class="font-bold text-sm leading-tight truncate pr-2" title="{{ book[1] }}">{{ book[1] }}</h3>
+                        <span class="status-badge shrink-0 {{ 'status-active' if book[11] == 'active' else 'status-archived' }} text-[11px]">{{ book[11] }}</span>
+                    </div>
+                    <p class="text-xs text-gray-500 truncate mb-2">{{ book[2] }} {% if book[5] %}· {{ book[5] }}{% endif %}</p>
+                    <div class="grid grid-cols-2 gap-2 text-[11px] mb-3">
+                        <div class="bg-gray-50 rounded-lg p-2">
+                            <div class="text-[10px] font-bold uppercase text-gray-400">Accession</div>
+                            <button type="button" onclick="toggleCopies('{{ book[0] }}-mobile', this)" class="flex items-center gap-1 w-full text-left mt-1">
+                                <span class="material-symbols-outlined text-[14px] text-gray-400">expand_more</span>
+                                <span class="font-mono text-xs truncate">{{ book[13] if book[13] else '—' }}</span>
+                                {% if copies %}<span class="text-[10px] font-bold text-primary bg-primary/10 rounded-full px-1.5 py-0.5 ml-auto">{{ copies|length }}</span>{% endif %}
+                            </button>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-2">
+                            <div class="text-[10px] font-bold uppercase text-gray-400">ISBN / LOC</div>
+                            <div class="font-mono text-xs truncate">{{ book[8] if book[8] else '—' }}</div>
+                            <div class="text-[11px] text-gray-500 italic truncate">{{ book[7] if book[7] else '—' }}</div>
+                        </div>
+                    </div>
+                    <div id="copies-{{ book[0] }}-mobile" class="hidden mb-3">
+                        <div class="bg-gray-50/70 rounded-lg border border-gray-200 overflow-hidden">
+                            <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider p-2 border-b border-gray-200">{{ copies|length }} copy/copies</div>
+                            {% if copies %}
+                            {% for copy in copies %}
+                            <div class="flex items-center justify-between p-2 border-b border-gray-100 last:border-0 bg-white gap-2">
+                                <div class="min-w-0 flex-1">
+                                    <div class="font-mono text-xs truncate">{{ copy[1] }}</div>
+                                    <div class="text-[11px] text-gray-500 truncate">{{ copy[3] or '—' }} · {{ copy[4] }}</div>
+                                </div>
+                                <div class="flex gap-1 shrink-0">
+                                    <button class="p-1.5 rounded-lg border border-gray-100 hover:border-primary hover:text-primary" data-acc-copy='{{ copy|tojson }}' onclick="editAccessionCopy(this)" title="Edit"><span class="material-symbols-outlined text-[16px]">edit</span></button>
+                                    <button class="p-1.5 rounded-lg border border-gray-100 hover:border-red-500 hover:text-red-500" data-confirm-title="Delete Accession Copy" data-confirm-message="Are you sure you want to delete accession &#34;{{ copy[1] }}&#34;?" data-confirm-action="{{ url_for('cataloging.delete_accession_route', accession_id=copy[0]) }}" data-confirm-button="Delete" data-confirm-class="bg-red-600 hover:bg-red-700" data-confirm-icon="delete_forever" onclick="confirmFromData(this)" title="Delete"><span class="material-symbols-outlined text-[16px]">delete</span></button>
+                                </div>
+                            </div>
+                            {% endfor %}
+                            {% else %}
+                            <div class="p-3 text-xs text-gray-400 text-center">No accession copies recorded.</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5">
+                        <button class="flex-1 py-2 rounded-lg border border-gray-200 bg-white text-xs font-bold hover:border-primary hover:text-primary flex items-center justify-center gap-1" data-book='{{ book|tojson }}' onclick="editBook(this)"><span class="material-symbols-outlined text-[16px]">edit</span> Edit</button>
+                        <button class="flex-1 py-2 rounded-lg border border-gray-200 bg-white text-xs font-bold hover:border-primary hover:text-primary flex items-center justify-center gap-1" data-acc-action="{{ url_for('cataloging.add_accession', book_id=book[0]) }}" onclick="openAccessionModal(this)"><span class="material-symbols-outlined text-[16px]">library_add</span> Add Copy</button>
+                        <button class="flex-1 py-2 rounded-lg border text-xs font-bold flex items-center justify-center gap-1 {% if book[11] == 'active' %}border-amber-200 text-amber-600 hover:bg-amber-50{% else %}border-emerald-200 text-emerald-600 hover:bg-emerald-50{% endif %}" data-confirm-title="{{ 'Archive' if book[11] == 'active' else 'Activate' }} Book" data-confirm-message="Are you sure you want to {{ 'archive' if book[11] == 'active' else 'activate' }} &#34;{{ book[1] }}&#34;?" data-confirm-action="{{ url_for('cataloging.toggle_book_status', book_id=book[0]) }}" data-confirm-button="{{ 'Archive' if book[11] == 'active' else 'Activate' }}" data-confirm-class="{{ 'bg-amber-600 hover:bg-amber-700' if book[11] == 'active' else 'bg-emerald-600 hover:bg-emerald-700' }}" data-confirm-icon="{{ 'archive' if book[11] == 'active' else 'unarchive' }}" onclick="confirmFromData(this)"><span class="material-symbols-outlined text-[16px]">{{ 'archive' if book[11] == 'active' else 'unarchive' }}</span> {{ 'Archive' if book[11] == 'active' else 'Activate' }}</button>
+                    </div>
+                    {% if book[11] == 'archived' %}
+                    <button class="w-full mt-1.5 py-2 rounded-lg border border-red-200 bg-white text-red-600 text-xs font-bold hover:bg-red-50 flex items-center justify-center gap-1" data-confirm-title="Delete Book" data-confirm-message="Are you sure you want to permanently delete &#34;{{ book[1] }}&#34;? This cannot be undone." data-confirm-action="{{ url_for('cataloging.delete_book_route', book_id=book[0]) }}" data-confirm-button="Delete" data-confirm-class="bg-red-600 hover:bg-red-700" data-confirm-icon="delete_forever" onclick="confirmFromData(this)"><span class="material-symbols-outlined text-[16px]">delete_forever</span> Delete Permanently</button>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="p-8 text-center text-gray-400">
+                    <div class="flex flex-col items-center gap-2">
+                        <span class="material-symbols-outlined text-3xl">search_off</span>
+                        <span class="font-medium text-sm">No books found</span>
+                        <span class="text-xs">Try adjusting your search or add a new book.</span>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
 
-            <div class="pagination">
+            <div class="pagination flex-col sm:flex-row gap-3 sm:gap-0">
                 <div class="text-sm text-gray-500 font-medium">
                     {% if books %}
                     {% set end = page * per_page if page * per_page <= total else total %}
@@ -423,13 +548,30 @@
     <!-- Add Book Modal -->
     <div id="addBookModal" class="modal-overlay" onclick="closeModal(event, 'addBookModal')">
         <div class="modal">
-            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
-                <h2 class="text-xl font-bold">Add New Book</h2>
+            <div class="p-4 sm:p-6 border-b border-gray-100 flex justify-between items-center">
+                <h2 class="text-lg sm:text-xl font-bold">Add New Book</h2>
                 <button onclick="closeModal(null, 'addBookModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
             </div>
-            <form method="POST" action="{{ url_for('cataloging.add_book') }}" class="p-6 space-y-4" data-exists-book>
+            {% if request.args.get('modal') == 'addBookModal' %}
+            <div class="px-6 pt-4">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="space-y-2">
+                    {% for category, message in messages %}
+                    {% set color = {'error': 'bg-red-50 text-red-800 border-red-200', 'info': 'bg-blue-50 text-blue-800 border-blue-200', 'success': 'bg-green-50 text-green-800 border-green-200'} %}
+                    <div class="px-3 py-2 border rounded text-sm font-medium flex items-center gap-2 {{ color.get(category, color['info']) }}">
+                        <span class="material-symbols-outlined text-base">{{ 'error' if category == 'error' else 'info' if category == 'info' else 'check_circle' }}</span>
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+            </div>
+            {% endif %}
+            <form method="POST" action="{{ url_for('cataloging.add_book') }}" class="p-4 sm:p-6 space-y-4" data-exists-book>
                 <p data-exists-msg class="hidden mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm font-medium text-red-700 dark:text-red-300"></p>
-                <div class="form-grid">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div class="col-span-2">
                         <label class="form-label">Accession Number *</label>
                         <input type="text" name="accession_number" required class="form-input" placeholder="e.g. 2025-0001">
@@ -483,7 +625,7 @@
                         </select>
                     </div>
                     <div class="col-span-2">
-                        <label class="form-label">Subject Classification</label>
+                        <label class="form-label">Category</label>
                         <input type="text" name="subject_classification" class="form-input" placeholder="e.g. Computer Science" data-suggest="book_subject">
                     </div>
                     <div class="col-span-2">
@@ -491,9 +633,9 @@
                         <textarea name="description" rows="3" class="form-input" placeholder="Brief description..."></textarea>
                     </div>
                 </div>
-                <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                    <button type="button" class="btn btn-outline" onclick="closeModal(null, 'addBookModal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Book</button>
+                <div class="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-4 border-t border-gray-100">
+                    <button type="button" class="btn btn-outline w-full sm:w-auto justify-center" onclick="closeModal(null, 'addBookModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary w-full sm:w-auto justify-center">Add Book</button>
                 </div>
             </form>
         </div>
@@ -502,13 +644,30 @@
     <!-- Edit Book Modal -->
     <div id="editBookModal" class="modal-overlay" onclick="closeModal(event, 'editBookModal')">
         <div class="modal">
-            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
-                <h2 class="text-xl font-bold">Edit Book</h2>
+            <div class="p-4 sm:p-6 border-b border-gray-100 flex justify-between items-center">
+                <h2 class="text-lg sm:text-xl font-bold">Edit Book</h2>
                 <button onclick="closeModal(null, 'editBookModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
             </div>
-            <form method="POST" id="editBookForm" class="p-6 space-y-4">
-                <div class="form-grid">
-                    <div class="col-span-2">
+            {% if request.args.get('modal') == 'editBookModal' %}
+            <div class="px-6 pt-4">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="space-y-2">
+                    {% for category, message in messages %}
+                    {% set color = {'error': 'bg-red-50 text-red-800 border-red-200', 'info': 'bg-blue-50 text-blue-800 border-blue-200', 'success': 'bg-green-50 text-green-800 border-green-200'} %}
+                    <div class="px-3 py-2 border rounded text-sm font-medium flex items-center gap-2 {{ color.get(category, color['info']) }}">
+                        <span class="material-symbols-outlined text-base">{{ 'error' if category == 'error' else 'info' if category == 'info' else 'check_circle' }}</span>
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+            </div>
+            {% endif %}
+            <form method="POST" id="editBookForm" class="p-4 sm:p-6 space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Title *</label>
                         <input type="text" name="title" id="edit_title" required class="form-input">
                     </div>
@@ -547,18 +706,18 @@
                         <label class="form-label">Call Number / LOC Class.</label>
                         <input type="text" name="call_number" id="edit_call_number" class="form-input">
                     </div>
-                    <div class="col-span-2">
-                        <label class="form-label">Subject Classification</label>
-                        <input type="text" name="subject_classification" id="edit_subject" class="form-input">
+                    <div class="col-span-1 sm:col-span-2">
+                        <label class="form-label">Category</label>
+                        <input type="text" name="subject_classification" id="edit_subject" class="form-input" placeholder="e.g. Computer Science">
                     </div>
-                    <div class="col-span-2">
+                    <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Description</label>
                         <textarea name="description" id="edit_description" rows="3" class="form-input"></textarea>
                     </div>
                 </div>
-                <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                    <button type="button" class="btn btn-outline" onclick="closeModal(null, 'editBookModal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                <div class="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-4 border-t border-gray-100">
+                    <button type="button" class="btn btn-outline w-full sm:w-auto justify-center" onclick="closeModal(null, 'editBookModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary w-full sm:w-auto justify-center">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -567,17 +726,34 @@
     <!-- Add Accession Modal -->
     <div id="addAccessionModal" class="modal-overlay" onclick="closeModal(event, 'addAccessionModal')">
         <div class="modal">
-            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
-                <h2 class="text-xl font-bold">Add Accession Copy</h2>
+            <div class="p-4 sm:p-6 border-b border-gray-100 flex justify-between items-center">
+                <h2 class="text-lg sm:text-xl font-bold">Add Accession Copy</h2>
                 <button onclick="closeModal(null, 'addAccessionModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
             </div>
-            <form method="POST" id="addAccessionForm" class="p-6 space-y-4">
-                <div class="form-grid">
-                    <div class="col-span-2">
+            {% if request.args.get('modal') == 'addAccessionModal' %}
+            <div class="px-6 pt-4">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="space-y-2">
+                    {% for category, message in messages %}
+                    {% set color = {'error': 'bg-red-50 text-red-800 border-red-200', 'info': 'bg-blue-50 text-blue-800 border-blue-200', 'success': 'bg-green-50 text-green-800 border-green-200'} %}
+                    <div class="px-3 py-2 border rounded text-sm font-medium flex items-center gap-2 {{ color.get(category, color['info']) }}">
+                        <span class="material-symbols-outlined text-base">{{ 'error' if category == 'error' else 'info' if category == 'info' else 'check_circle' }}</span>
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+            </div>
+            {% endif %}
+            <form method="POST" id="addAccessionForm" class="p-4 sm:p-6 space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Accession Number *</label>
                         <input type="text" name="accession_number" required class="form-input" placeholder="e.g. 2025-0001">
                     </div>
-                    <div class="col-span-2">
+                    <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Source</label>
                         <select name="source" class="form-input">
                             <option value="">— Select —</option>
@@ -587,9 +763,9 @@
                         </select>
                     </div>
                 </div>
-                <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                    <button type="button" class="btn btn-outline" onclick="closeModal(null, 'addAccessionModal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Accession</button>
+                <div class="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-4 border-t border-gray-100">
+                    <button type="button" class="btn btn-outline w-full sm:w-auto justify-center" onclick="closeModal(null, 'addAccessionModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary w-full sm:w-auto justify-center">Add Accession</button>
                 </div>
             </form>
         </div>
@@ -598,17 +774,34 @@
     <!-- Edit Accession Copy Modal -->
     <div id="editAccessionModal" class="modal-overlay" onclick="closeModal(event, 'editAccessionModal')">
         <div class="modal">
-            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
-                <h2 class="text-xl font-bold">Edit Accession Copy</h2>
+            <div class="p-4 sm:p-6 border-b border-gray-100 flex justify-between items-center">
+                <h2 class="text-lg sm:text-xl font-bold">Edit Accession Copy</h2>
                 <button onclick="closeModal(null, 'editAccessionModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
             </div>
-            <form method="POST" id="editAccessionForm" class="p-6 space-y-4">
-                <div class="form-grid">
-                    <div class="col-span-2">
+            {% if request.args.get('modal') == 'editAccessionModal' %}
+            <div class="px-6 pt-4">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="space-y-2">
+                    {% for category, message in messages %}
+                    {% set color = {'error': 'bg-red-50 text-red-800 border-red-200', 'info': 'bg-blue-50 text-blue-800 border-blue-200', 'success': 'bg-green-50 text-green-800 border-green-200'} %}
+                    <div class="px-3 py-2 border rounded text-sm font-medium flex items-center gap-2 {{ color.get(category, color['info']) }}">
+                        <span class="material-symbols-outlined text-base">{{ 'error' if category == 'error' else 'info' if category == 'info' else 'check_circle' }}</span>
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+            </div>
+            {% endif %}
+            <form method="POST" id="editAccessionForm" class="p-4 sm:p-6 space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Accession Number *</label>
                         <input type="text" name="accession_number" id="edit_acc_number" required class="form-input" placeholder="e.g. 2025-0001">
                     </div>
-                    <div class="col-span-2">
+                    <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Source</label>
                         <select name="source" id="edit_acc_source" class="form-input">
                             <option value="">— Select —</option>
@@ -618,9 +811,9 @@
                         </select>
                     </div>
                 </div>
-                <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                    <button type="button" class="btn btn-outline" onclick="closeModal(null, 'editAccessionModal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                <div class="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-4 border-t border-gray-100">
+                    <button type="button" class="btn btn-outline w-full sm:w-auto justify-center" onclick="closeModal(null, 'editAccessionModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary w-full sm:w-auto justify-center">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -629,11 +822,11 @@
     <!-- Bulk Import Modal -->
     <div id="bulkImportModal" class="modal-overlay" onclick="closeModal(event, 'bulkImportModal')">
         <div class="modal" style="max-width: 540px;">
-            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
-                <h2 class="text-xl font-bold">Bulk Import Books</h2>
+            <div class="p-4 sm:p-6 border-b border-gray-100 flex justify-between items-center">
+                <h2 class="text-lg sm:text-xl font-bold">Bulk Import Books</h2>
                 <button onclick="closeModal(null, 'bulkImportModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
             </div>
-            <form onsubmit="return bulkImport(event)" enctype="multipart/form-data" class="p-6 space-y-4">
+            <form onsubmit="return bulkImport(event)" enctype="multipart/form-data" class="p-4 sm:p-6 space-y-4">
                 <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
                     <strong>CSV Format:</strong> Upload a CSV file with headers like
                     <code class="bg-blue-100 px-1 rounded">title</code>,
@@ -650,12 +843,12 @@
                     <input type="file" id="bulkFileInput" name="file" accept=".csv" required
                            class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-gray-800 cursor-pointer">
                 </div>
-                <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                    <button type="button" class="btn btn-outline" onclick="closeModal(null, 'bulkImportModal')">Cancel</button>
-                    <button type="submit" id="bulkImportBtn" class="btn btn-primary"><span class="material-symbols-outlined">upload</span> Import</button>
+                <div class="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-4 border-t border-gray-100">
+                    <button type="button" class="btn btn-outline w-full sm:w-auto justify-center" onclick="closeModal(null, 'bulkImportModal')">Cancel</button>
+                    <button type="submit" id="bulkImportBtn" class="btn btn-primary w-full sm:w-auto justify-center"><span class="material-symbols-outlined">upload</span> Import</button>
                 </div>
             </form>
-            <div id="importMsg" class="hidden text-sm text-blue-600 bg-blue-50 border-t border-blue-100 px-6 py-3 flex items-center gap-2">
+            <div id="importMsg" class="hidden text-sm text-blue-600 bg-blue-50 border-t border-blue-100 px-4 sm:px-6 py-3 flex items-center gap-2">
                 <span class="material-symbols-outlined animate-spin text-[18px]">sync</span>
                 <span>Processing bulk import of books...</span>
             </div>
@@ -665,11 +858,11 @@
     <!-- Export Modal -->
     <div id="catalogExportModal" class="modal-overlay" onclick="closeModal(event, 'catalogExportModal')">
         <div class="modal" style="max-width: 420px;">
-            <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+            <div class="p-4 sm:p-6 border-b border-gray-100 flex justify-between items-center">
                 <h2 class="text-lg font-bold">Export Books</h2>
                 <button onclick="closeModal(null, 'catalogExportModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
             </div>
-            <div class="p-6 space-y-4">
+            <div class="p-4 sm:p-6 space-y-4">
                 <p class="text-sm text-gray-500">Choose a file format. Current filter: <span class="font-bold text-gray-700">{{ 'All' if not status_filter else status_filter|capitalize }}</span> — export respects the active tab.</p>
                 <div class="grid grid-cols-2 gap-3">
                     <a href="{{ url_for('cataloging.export_books', status=status_filter, format='csv') }}"
@@ -833,6 +1026,69 @@
             }
             poll();
         }
+
+        // Mobile sidebar
+        (function() {
+            var openBtn = document.getElementById('mobile-sidebar-open');
+            var closeBtn = document.getElementById('mobile-sidebar-close');
+            var drawer = document.getElementById('mobile-sidebar');
+            var backdrop = document.getElementById('mobile-sidebar-backdrop');
+            function open() { if (drawer) { drawer.classList.remove('hidden'); document.body.style.overflow = 'hidden'; } }
+            function close() { if (drawer) { drawer.classList.add('hidden'); document.body.style.overflow = ''; } }
+            if (openBtn) openBtn.addEventListener('click', open);
+            if (closeBtn) closeBtn.addEventListener('click', close);
+            if (backdrop) backdrop.addEventListener('click', close);
+            document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && drawer && !drawer.classList.contains('hidden')) close(); });
+        })();
+
+        // Custom field select — fixes native dropdown overflow / overlapping
+        (function() {
+            var btn = document.getElementById('field-select-btn');
+            var dropdown = document.getElementById('field-select-dropdown');
+            var label = document.getElementById('field-select-label');
+            var arrow = document.getElementById('field-select-arrow');
+            var native = document.getElementById('field-select-native');
+            var wrapper = document.getElementById('field-select-wrapper');
+            if (!btn || !dropdown || !native) return;
+            function setExpanded(expanded) { btn.setAttribute('aria-expanded', expanded ? 'true' : 'false'); dropdown.classList.toggle('hidden', !expanded); if (arrow) arrow.style.transform = expanded ? 'rotate(180deg)' : ''; }
+            function isOpen() { return !dropdown.classList.contains('hidden'); }
+            function selectValue(value, text) {
+                native.value = value;
+                if (label) label.textContent = text;
+                dropdown.querySelectorAll('[role="option"]').forEach(function(opt) {
+                    var isSel = opt.getAttribute('data-value') === value;
+                    opt.setAttribute('aria-selected', isSel ? 'true' : 'false');
+                    opt.classList.toggle('bg-primary/10', isSel);
+                    opt.classList.toggle('text-primary', isSel);
+                    opt.classList.toggle('font-semibold', isSel);
+                    var check = opt.querySelector('.material-symbols-outlined');
+                    if (isSel) {
+                        if (!check) {
+                            var c = document.createElement('span');
+                            c.className = 'material-symbols-outlined text-[18px] text-primary';
+                            c.textContent = 'check';
+                            opt.appendChild(c);
+                        }
+                    } else { if (check) check.remove(); }
+                });
+                native.form.submit();
+            }
+            btn.addEventListener('click', function(e) { e.stopPropagation(); setExpanded(!isOpen()); });
+            dropdown.querySelectorAll('[role="option"]').forEach(function(opt) {
+                opt.addEventListener('click', function() { selectValue(opt.getAttribute('data-value'), opt.querySelector('span').textContent.trim()); });
+                opt.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); opt.click(); }
+                    else if (e.key === 'ArrowDown') { e.preventDefault(); var next = opt.nextElementSibling; if (next) next.focus(); }
+                    else if (e.key === 'ArrowUp') { e.preventDefault(); var prev = opt.previousElementSibling; if (prev) prev.focus(); else btn.focus(); }
+                    else if (e.key === 'Escape') { setExpanded(false); btn.focus(); }
+                });
+            });
+            btn.addEventListener('keydown', function(e) {
+                if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!isOpen()) setExpanded(true); var first = dropdown.querySelector('[role="option"]'); if (first) first.focus(); }
+                else if (e.key === 'Escape' && isOpen()) { setExpanded(false); }
+            });
+            document.addEventListener('click', function(e) { if (isOpen() && wrapper && !wrapper.contains(e.target)) setExpanded(false); });
+        })();
     </script>
     <script src="{{ url_for('static', filename='js/autosuggest.js') }}"></script>
     <script>
