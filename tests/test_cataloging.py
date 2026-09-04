@@ -271,6 +271,8 @@ class TestCatalogingCopies:
             'source': 'donation',
         })
         assert resp.status_code == 302
+        assert 'modal=editAccessionModal' in resp.location
+        assert 'mstatus=success' in resp.location
         call_args = mock_db['execute'].call_args_list[0]
         assert 'UPDATE accession_log' in call_args[0][0]
         assert call_args[0][1] == ('ACC-0099', 'donation', 21)
@@ -281,6 +283,8 @@ class TestCatalogingCopies:
             'accession_number': 'ACC-0099',
         })
         assert resp.status_code == 302
+        assert 'modal=editAccessionModal' in resp.location
+        assert 'mstatus=error' in resp.location
         assert all('UPDATE accession_log' not in c[0][0] for c in mock_db['execute'].call_args_list)
 
     def test_edit_accession_missing_number(self, librarian_client, mock_db):
@@ -289,6 +293,8 @@ class TestCatalogingCopies:
             'accession_number': '',
         })
         assert resp.status_code == 302
+        assert 'modal=editAccessionModal' in resp.location
+        assert 'mstatus=error' in resp.location
         assert all('UPDATE accession_log' not in c[0][0] for c in mock_db['execute'].call_args_list)
 
     def test_edit_accession_not_found(self, librarian_client, mock_db):
@@ -481,12 +487,29 @@ class TestPublicCatalog:
 
     def test_book_info_with_accessions(self, client, mock_db):
         mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
-        mock_db['fetch_all'].return_value = [
-            (1, '2025-0001', 1, 4, '2025-01-10', 'purchase'),
+        mock_db['fetch_all'].side_effect = [
+            [(1, '2025-0001', 1, 4, '2025-01-10', 'purchase')],  # accessions
+            [],  # no active loans -> copy available
+            [],  # borrower map
         ]
         resp = client.get('/book/1')
         assert resp.status_code == 200
-        assert b'2025-0001' in resp.data
+        assert b'1 of 1' in resp.data
+        assert b'Borrow' in resp.data
+        assert b'Reserve' in resp.data
+
+    def test_book_info_all_borrowed(self, client, mock_db):
+        mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
+        mock_db['fetch_all'].side_effect = [
+            [(1, '2025-0001', 1, 4, '2025-01-10', 'purchase')],  # accessions
+            [(1,)],  # active loan on accession 1 -> none available
+            [(1, 1)],  # borrower map
+        ]
+        resp = client.get('/book/1')
+        assert resp.status_code == 200
+        assert b'No copies available' in resp.data
+        assert b'Borrow' in resp.data
+        assert b'Reserve' in resp.data
 
 
 def _csv_file(content, filename='books.csv'):
@@ -711,3 +734,27 @@ class TestBulkImport:
             'file': _csv_file(csv_content),
         })
         self._assert_job(resp)
+
+    def test_bulk_import_accepts_others_source(self, app, mock_db):
+        from app.cataloging.routes import _bulk_import_worker, _import_jobs
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
+        _import_jobs['test-others-job'] = {
+            'status': 'processing', 'total': 1, 'done': 0,
+            'errors': [], 'message': None,
+        }
+        try:
+            _bulk_import_worker(
+                app, 'test-others-job',
+                [{'title': 'Other Book', 'author': 'Other Author',
+                  'accession_number': 'ACC-099', 'source': 'Others'}],
+                {'title': 'title', 'author': 'author',
+                 'accession_number': 'accession_number', 'source': 'source'},
+                3,
+            )
+        finally:
+            _import_jobs.pop('test-others-job', None)
+        acc_calls = [c for c in mock_db['execute'].call_args_list
+                     if 'INSERT INTO accession_log' in c[0][0]]
+        assert acc_calls, 'expected an accession INSERT'
+        assert 'others' in acc_calls[0][0][1]

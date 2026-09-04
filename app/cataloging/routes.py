@@ -419,17 +419,17 @@ def edit_accession(accession_id):
 
     if not accession_number:
         flash('Accession number is required.', 'error')
-        return redirect(url_for('cataloging.cataloging_page'))
+        return redirect(url_for('cataloging.cataloging_page', modal='editAccessionModal', mstatus='error'))
 
     existing = get_accession_by_number(accession_number)
     if existing and existing[0] != accession_id:
         flash(f'Accession number {accession_number} already exists.', 'error')
-        return redirect(url_for('cataloging.cataloging_page'))
+        return redirect(url_for('cataloging.cataloging_page', modal='editAccessionModal', mstatus='error'))
 
     update_accession(accession_id, accession_number, source)
     log_activity(current_user.id, f'cataloging:edit_accession:{accession_id}')
     flash(f'Accession {accession_number} updated.', 'success')
-    return redirect(url_for('cataloging.cataloging_page'))
+    return redirect(url_for('cataloging.cataloging_page', modal='editAccessionModal', mstatus='success'))
 
 
 @cataloging_bp.route('/librarian/cataloging/accession/<int:accession_id>/delete', methods=['POST'])

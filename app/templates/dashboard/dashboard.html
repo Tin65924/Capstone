@@ -71,11 +71,18 @@
             border-radius: 10px;
         }
 
-        /* Main Content */
+        /* Main Content - responsive */
         main {
             flex: 1;
-            padding: 2rem 3rem;
-            max-width: calc(100vw - 256px);
+            padding: 1rem;
+            max-width: 100%;
+            overflow-y: auto;
+        }
+        @media (min-width: 640px) {
+            main { padding: 1.5rem; }
+        }
+        @media (min-width: 1024px) {
+            main { padding: 2rem 3rem; max-width: calc(100vw - 256px); }
         }
 
         .card {
@@ -107,6 +114,11 @@
             color: var(--text-muted);
         }
 
+        @media (max-width: 640px) {
+            .card { padding: 1rem; }
+            .stat-value { font-size: 1.5rem; }
+        }
+
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
@@ -119,7 +131,7 @@
 </head>
 <body>
 
-    <!-- Sidebar -->
+    <!-- Sidebar - Desktop -->
     <div class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0 h-screen sticky top-0">
       <div class="p-6 flex-1 flex flex-col overflow-hidden">
         
@@ -144,44 +156,78 @@
         </a>
       </div>
     </div>
+    <!-- Mobile sidebar drawer -->
+    <div id="mobile-sidebar" class="fixed inset-0 z-50 hidden lg:hidden">
+        <div id="mobile-sidebar-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+        <div class="absolute top-0 left-0 h-full w-[80%] max-w-[280px] bg-white dark:bg-[#1a2235] shadow-2xl flex flex-col overflow-hidden">
+            <div class="p-4 flex items-center justify-between border-b border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                <div class="flex items-center gap-3">
+                    <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
+                    <h1 class="text-lg font-bold">MCST Library</h1>
+                </div>
+                <button id="mobile-sidebar-close" type="button" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6">
+                {% include sidebar %}
+            </div>
+            <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                <div class="flex flex-col items-center mb-4">
+                    <h2 class="text-base font-bold text-center">{{ current_user.full_name }}</h2>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 text-center">{{ current_user.role }}</p>
+                </div>
+                <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors">
+                    <span class="material-symbols-outlined text-[18px]">logout</span> Log Out
+                </a>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Content Area -->
     <main>
+        <!-- Mobile top bar -->
+        <div class="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-[#1a2235] border-b border-[#cfd7e7] dark:border-gray-700 px-4 py-3 mb-4 -mx-4 sm:-mx-6 lg:-mx-8 -mt-4 sm:-mt-6 lg:-mt-8">
+            <button id="mobile-sidebar-open" type="button" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">menu</span></button>
+            <div class="flex items-center gap-2">
+                <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover">
+                <span class="font-bold text-sm">MCST Library</span>
+            </div>
+            <div class="w-10"></div>
+        </div>
         {% include 'components/flash_messages.html' %}
-        <div class="mb-10 animate-in">
-            <h1 class="text-4xl font-extrabold font-outfit text-gray-900 tracking-tight">System Overview</h1>
-            <p class="text-gray-500 mt-2 font-medium">Hello, {{ current_user.full_name.split()[0] }}. Here's what's happening in the library today.</p>
+        <div class="mb-6 sm:mb-10 animate-in">
+            <h1 class="text-2xl sm:text-3xl lg:text-4xl font-extrabold font-outfit text-gray-900 tracking-tight">System Overview</h1>
+            <p class="text-sm sm:text-base text-gray-500 mt-2 font-medium">Hello, {{ current_user.full_name.split()[0] }}. Here's what's happening in the library today.</p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10 animate-in" style="animation-delay: 0.1s;">
-            <div class="card border-l-4 border-l-indigo-500">
-                <div class="text-indigo-500 mb-2"><span class="material-symbols-outlined">menu_book</span></div>
-                <div class="stat-label">Total Collection</div>
-                <div class="stat-value">{{ stats.total_collection }}</div>
+        <div class="grid grid-cols-4 gap-1.5 sm:gap-4 lg:gap-6 mb-6 sm:mb-10 animate-in" style="animation-delay: 0.1s;">
+            <div class="card p-2 sm:p-4 lg:p-6">
+                <div class="text-indigo-500 mb-1 sm:mb-2"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">menu_book</span></div>
+                <div class="stat-label text-[9px] sm:text-xs leading-tight">Total Collection</div>
+                <div class="stat-value text-lg sm:text-2xl lg:text-[2rem] mt-0.5 sm:mt-2">{{ stats.total_collection }}</div>
             </div>
-            <div class="card border-l-4 border-l-emerald-500">
-                <div class="text-emerald-500 mb-2"><span class="material-symbols-outlined">sync_alt</span></div>
-                <div class="stat-label">Active Loans</div>
-                <div class="stat-value">{{ stats.active_loans }}</div>
+            <div class="card p-2 sm:p-4 lg:p-6">
+                <div class="text-emerald-500 mb-1 sm:mb-2"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">sync_alt</span></div>
+                <div class="stat-label text-[9px] sm:text-xs leading-tight">Active Loans</div>
+                <div class="stat-value text-lg sm:text-2xl lg:text-[2rem] mt-0.5 sm:mt-2">{{ stats.active_loans }}</div>
             </div>
-            <div class="card border-l-4 border-l-amber-500">
-                <div class="text-amber-500 mb-2"><span class="material-symbols-outlined">pending_actions</span></div>
-                <div class="stat-label">Open Requests</div>
-                <div class="stat-value">{{ stats.open_requests }}</div>
+            <div class="card p-2 sm:p-4 lg:p-6">
+                <div class="text-amber-500 mb-1 sm:mb-2"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">pending_actions</span></div>
+                <div class="stat-label text-[9px] sm:text-xs leading-tight">Open Requests</div>
+                <div class="stat-value text-lg sm:text-2xl lg:text-[2rem] mt-0.5 sm:mt-2">{{ stats.open_requests }}</div>
             </div>
-            <div class="card border-l-4 border-l-rose-500">
-                <div class="text-rose-500 mb-2"><span class="material-symbols-outlined">report_problem</span></div>
-                <div class="stat-label">Overdue Items</div>
-                <div class="stat-value">{{ stats.overdue_items }}</div>
+            <div class="card p-2 sm:p-4 lg:p-6">
+                <div class="text-rose-500 mb-1 sm:mb-2"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">report_problem</span></div>
+                <div class="stat-label text-[9px] sm:text-xs leading-tight">Overdue Items</div>
+                <div class="stat-value text-lg sm:text-2xl lg:text-[2rem] mt-0.5 sm:mt-2">{{ stats.overdue_items }}</div>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 animate-in" style="animation-delay: 0.2s;">
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 sm:gap-8 animate-in" style="animation-delay: 0.2s;">
             <div class="card">
-                <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
+                <h3 class="font-bold text-base sm:text-lg mb-3 sm:mb-4 flex items-center gap-2">
                     <span class="material-symbols-outlined text-primary">analytics</span> Borrowing Trends
                 </h3>
-                <div class="h-48 w-full bg-gray-50 rounded-lg flex items-end justify-between p-6 overflow-hidden">
+                <div class="h-40 sm:h-48 w-full bg-gray-50 rounded-lg flex items-end justify-between p-4 sm:p-6 overflow-hidden">
                     {% if daily %}
                         {% set max_val = daily|map(attribute=1)|max %}
                         {% for d, cnt in daily %}
@@ -204,10 +250,10 @@
             </div>
 
             <div class="card">
-                <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
+                <h3 class="font-bold text-base sm:text-lg mb-3 sm:mb-4 flex items-center gap-2">
                     <span class="material-symbols-outlined text-primary">history</span> Recent Activity
                 </h3>
-                <div class="space-y-4">
+                <div class="space-y-3 sm:space-y-4">
                     {% if activity %}
                     {% for a in activity %}
                     <div class="flex items-center justify-between {% if not loop.last %}pb-3 border-b border-gray-50{% endif %}">
@@ -228,6 +274,19 @@
             </div>
         </div>
     </main>
-
+<script>
+(function() {
+    var openBtn = document.getElementById('mobile-sidebar-open');
+    var closeBtn = document.getElementById('mobile-sidebar-close');
+    var drawer = document.getElementById('mobile-sidebar');
+    var backdrop = document.getElementById('mobile-sidebar-backdrop');
+    function open() { if (drawer) { drawer.classList.remove('hidden'); document.body.style.overflow = 'hidden'; } }
+    function close() { if (drawer) { drawer.classList.add('hidden'); document.body.style.overflow = ''; } }
+    if (openBtn) openBtn.addEventListener('click', open);
+    if (closeBtn) closeBtn.addEventListener('click', close);
+    if (backdrop) backdrop.addEventListener('click', close);
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && drawer && !drawer.classList.contains('hidden')) close(); });
+})();
+</script>
 </body>
 </html>

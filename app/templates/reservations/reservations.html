@@ -71,11 +71,22 @@
             border-radius: 10px;
         }
 
-        /* Main Content */
+        /* Main Content - responsive */
         main {
             flex: 1;
-            padding: 2rem 3rem;
-            max-width: calc(100vw - 256px);
+            padding: 1rem;
+            max-width: 100%;
+            overflow-y: auto;
+        }
+        @media (min-width: 640px) {
+            main { padding: 1.5rem; }
+        }
+        @media (min-width: 1024px) {
+            main { padding: 2rem 3rem; max-width: calc(100vw - 256px); }
+        }
+        @media (max-width: 640px) {
+            .card { margin-bottom: 1rem; }
+            th, td { padding: 0.75rem 1rem; font-size: 0.8125rem; }
         }
 
         .card {
@@ -180,7 +191,7 @@
 </head>
 <body>
 
-    <!-- Sidebar -->
+    <!-- Sidebar - Desktop -->
     <div class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0 h-screen sticky top-0">
       <div class="p-6 flex-1 flex flex-col overflow-hidden">
 
@@ -206,38 +217,74 @@
         </a>
       </div>
     </div>
+    <!-- Mobile sidebar drawer -->
+    <div id="mobile-sidebar" class="fixed inset-0 z-50 hidden lg:hidden">
+        <div id="mobile-sidebar-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+        <div class="absolute top-0 left-0 h-full w-[80%] max-w-[280px] bg-white dark:bg-[#1a2235] shadow-2xl flex flex-col overflow-hidden">
+            <div class="p-4 flex items-center justify-between border-b border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                <div class="flex items-center gap-3">
+                    <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
+                    <h1 class="text-lg font-bold">MCST Library</h1>
+                </div>
+                <button id="mobile-sidebar-close" type="button" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6">
+                {% include 'components/librarian_sidebar_nav.html' %}
+            </div>
+            <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                <div class="flex flex-col items-center mb-4">
+                    <h2 class="text-base font-bold text-center">{{ current_user.full_name }}</h2>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 text-center">{{ current_user.role }}</p>
+                </div>
+                <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors">
+                    <span class="material-symbols-outlined text-[18px]">logout</span> Log Out
+                </a>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Content Area -->
     <main>
+        <!-- Mobile top bar -->
+        <div class="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-[#1a2235] border-b border-[#cfd7e7] dark:border-gray-700 px-4 py-3 mb-4 -mx-4 sm:-mx-6 lg:-mx-0 -mt-4 sm:-mt-6 lg:-mt-0">
+            <button id="mobile-sidebar-open" type="button" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">menu</span></button>
+            <div class="flex items-center gap-2">
+                <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover">
+                <span class="font-bold text-sm">MCST Library</span>
+            </div>
+            <div class="w-10"></div>
+        </div>
         {% include 'components/flash_messages.html' %}
-        <div class="mb-8 animate-in">
-            <h1 class="text-3xl font-bold font-outfit">Reservation Management</h1>
-            <p class="text-gray-500 mt-1">Manage book reservations and pickup queues.</p>
+        <div class="mb-6 sm:mb-8 animate-in">
+            <h1 class="text-2xl sm:text-3xl font-bold font-outfit leading-tight">Reservation Management</h1>
+            <p class="text-sm sm:text-base text-gray-500 mt-1">Manage book reservations and pickup queues.</p>
         </div>
 
         <!-- Quick Stats -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 animate-in" style="animation-delay: 0.1s;">
-            <div class="card p-4 flex items-center gap-4">
-                <div class="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center"><span class="material-symbols-outlined">calendar_month</span></div>
-                <div><div class="text-xs text-gray-400 font-bold uppercase tracking-wider">Active Reservations</div><div class="text-xl font-bold">{{ stats.active }}</div></div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8 animate-in" style="animation-delay: 0.1s;">
+            <div class="card p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+                <div class="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined">calendar_month</span></div>
+                <div class="min-w-0"><div class="text-[11px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider truncate">Active Reservations</div><div class="text-xl font-bold">{{ stats.active }}</div></div>
             </div>
-            <div class="card p-4 flex items-center gap-4">
-                <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><span class="material-symbols-outlined">check_circle</span></div>
-                <div><div class="text-xs text-gray-400 font-bold uppercase tracking-wider">Ready for Pickup</div><div class="text-xl font-bold">{{ stats.ready }}</div></div>
+            <div class="card p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+                <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined">check_circle</span></div>
+                <div class="min-w-0"><div class="text-[11px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider truncate">Ready for Pickup</div><div class="text-xl font-bold">{{ stats.ready }}</div></div>
             </div>
-            <div class="card p-4 flex items-center gap-4">
-                <div class="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center"><span class="material-symbols-outlined">hourglass_top</span></div>
-                <div><div class="text-xs text-gray-400 font-bold uppercase tracking-wider">Waiting in Queue</div><div class="text-xl font-bold">{{ stats.pending }}</div></div>
+            <div class="card p-3 sm:p-4 flex items-center gap-3 sm:gap-4 sm:col-span-2 lg:col-span-1">
+                <div class="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined">hourglass_top</span></div>
+                <div class="min-w-0"><div class="text-[11px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider truncate">Waiting in Queue</div><div class="text-xl font-bold">{{ stats.pending }}</div></div>
             </div>
         </div>
 
         <!-- Reservation Table -->
-        <div class="card animate-in" style="animation-delay: 0.2s;">
-            <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/20">
-                <h3 class="font-bold text-xs uppercase tracking-wider text-gray-400">Reservation Tracking</h3>
+        <div class="card animate-in overflow-hidden" style="animation-delay: 0.2s;">
+            <div class="p-3 sm:p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/20">
+                <h3 class="font-bold text-[11px] sm:text-xs uppercase tracking-wider text-gray-400">Reservation Tracking</h3>
+                <span class="lg:hidden text-[10px] text-gray-400 flex items-center gap-1"><span class="material-symbols-outlined text-sm">swipe</span> swipe to see more</span>
             </div>
-            <div class="overflow-x-auto">
-                <table>
+            <!-- Desktop table -->
+            <div class="hidden lg:block overflow-x-auto">
+                <table class="min-w-[800px]">
                     <thead>
                         <tr>
                             <th>Book Title</th>
@@ -343,8 +390,104 @@
                     </tbody>
                 </table>
             </div>
+            <!-- Mobile cards -->
+            <div class="lg:hidden divide-y divide-gray-100">
+                {% for group in groups %}
+                <div class="p-4">
+                    <h4 class="font-bold text-gray-900 font-outfit text-sm truncate">{{ group[1] }}</h4>
+                    <p class="text-xs text-gray-500 truncate">{{ group[2] }}</p>
+                    <div class="grid grid-cols-5 gap-1.5 mt-3">
+                        <div class="text-center">
+                            <div class="text-[9px] font-bold uppercase tracking-wider text-gray-400">Reserved</div>
+                            <span class="mt-1 inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 font-bold text-xs">{{ group[3] }}</span>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-[9px] font-bold uppercase tracking-wider text-gray-400">Waiting</div>
+                            <span class="mt-1 inline-flex items-center justify-center w-8 h-8 rounded-full bg-amber-50 text-amber-700 font-bold text-xs">{{ group[4] }}</span>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-[9px] font-bold uppercase tracking-wider text-gray-400">Alloc</div>
+                            <span class="mt-1 inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-50 text-blue-700 font-bold text-xs">{{ group[5] }}</span>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-[9px] font-bold uppercase tracking-wider text-gray-400">Claimed</div>
+                            <span class="mt-1 inline-flex items-center justify-center w-8 h-8 rounded-full bg-emerald-50 text-emerald-700 font-bold text-xs">{{ group[6] }}</span>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-[9px] font-bold uppercase tracking-wider text-gray-400">Expired</div>
+                            <span class="mt-1 inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-gray-600 font-bold text-xs">{{ group[7] }}</span>
+                        </div>
+                    </div>
+                    <button class="mt-3 w-full flex items-center justify-center gap-1 text-primary font-bold text-xs border border-primary/20 rounded-lg py-2 hover:bg-primary/5 transition-colors"
+                            onclick="document.getElementById('mobile-res-group-{{ group[0] }}').classList.toggle('hidden'); this.querySelector('.material-symbols-outlined').textContent = document.getElementById('mobile-res-group-{{ group[0] }}').classList.contains('hidden') ? 'expand_more' : 'expand_less'">
+                        Details <span class="material-symbols-outlined text-sm">expand_more</span>
+                    </button>
+                    <div id="mobile-res-group-{{ group[0] }}" class="hidden mt-3 space-y-3">
+                        {% for res in reservations_by_book.get(group[0], []) %}
+                        <div class="bg-gray-50 dark:bg-slate-800/50 rounded-xl p-3 border border-gray-100 dark:border-gray-700">
+                            <div class="flex justify-between items-start gap-2">
+                                <div class="min-w-0 flex-1">
+                                    <div class="font-semibold text-sm truncate">{{ res[6] }}</div>
+                                    <div class="text-xs text-gray-500 font-mono truncate">{{ res[8] }}</div>
+                                    <div class="text-xs text-gray-500">{{ res[3].strftime('%b %d, %Y') if res[3] else '—' }}</div>
+                                </div>
+                                <div class="shrink-0">
+                                    {% if res[2] == 'waiting' %}
+                                    <span class="badge badge-waiting text-[11px]">Waiting</span>
+                                    {% elif res[2] == 'allocated' %}
+                                    <span class="badge badge-allocated text-[11px]">Allocated</span>
+                                    {% elif res[2] == 'claimed' %}
+                                    <span class="badge badge-claimed text-[11px]">Claimed</span>
+                                    {% else %}
+                                    <span class="badge badge-expired text-[11px]">Expired</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1.5 mt-1">
+                                <span class="text-[11px] text-gray-400 font-bold">#{{ res[1] }}</span>
+                            </div>
+                            <div class="flex flex-wrap gap-2 mt-3">
+                                {% if res[2] == 'waiting' %}
+                                <form method="POST" action="{{ url_for('circulation.reservation_action', reservation_id=res[0], action='allocate') }}" class="flex-1">
+                                    <button type="submit" class="btn-action btn-allocate w-full justify-center">Allocate</button>
+                                </form>
+                                {% endif %}
+                                {% if res[2] == 'allocated' %}
+                                <form method="POST" action="{{ url_for('circulation.reservation_action', reservation_id=res[0], action='claim') }}" class="flex-1">
+                                    <button type="submit" class="btn-action btn-claim w-full justify-center">Claim</button>
+                                </form>
+                                {% endif %}
+                                {% if res[2] in ('waiting', 'allocated') %}
+                                <form method="POST" action="{{ url_for('circulation.reservation_action', reservation_id=res[0], action='expire') }}" class="flex-1">
+                                    <button type="submit" class="btn-action btn-expire w-full justify-center">Expire</button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% else %}
+                        <p class="text-center text-gray-400 text-xs py-4">No reservations for this book.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="p-8 text-center text-gray-400 text-sm">No reservations have been placed yet.</div>
+                {% endfor %}
+            </div>
         </div>
     </main>
-
+<script>
+(function() {
+    var openBtn = document.getElementById('mobile-sidebar-open');
+    var closeBtn = document.getElementById('mobile-sidebar-close');
+    var drawer = document.getElementById('mobile-sidebar');
+    var backdrop = document.getElementById('mobile-sidebar-backdrop');
+    function open() { if (drawer) { drawer.classList.remove('hidden'); document.body.style.overflow = 'hidden'; } }
+    function close() { if (drawer) { drawer.classList.add('hidden'); document.body.style.overflow = ''; } }
+    if (openBtn) openBtn.addEventListener('click', open);
+    if (closeBtn) closeBtn.addEventListener('click', close);
+    if (backdrop) backdrop.addEventListener('click', close);
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && drawer && !drawer.classList.contains('hidden')) close(); });
+})();
+</script>
 </body>
 </html>

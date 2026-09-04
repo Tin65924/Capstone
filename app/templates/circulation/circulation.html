@@ -78,11 +78,25 @@
             border-radius: 10px;
         }
 
-        /* Main Content Adjustments */
+        /* Main Content - responsive */
         main {
             flex: 1;
-            padding: 2rem 3rem;
-            max-width: calc(100vw - 256px);
+            padding: 1rem;
+            max-width: 100%;
+            overflow-y: auto;
+        }
+        @media (min-width: 640px) {
+            main { padding: 1.5rem; }
+        }
+        @media (min-width: 1024px) {
+            main { padding: 2rem 3rem; max-width: calc(100vw - 256px); }
+        }
+        @media (max-width: 640px) {
+            .stat-card { padding: 0.75rem; }
+            .stat-value { font-size: 1.25rem; }
+            .stat-label { font-size: 0.7rem; }
+            .icon-box { width: 32px; height: 32px; margin-bottom: 0.25rem; }
+            th, td { padding: 0.75rem 1rem; font-size: 0.8125rem; }
         }
 
         .card {
@@ -165,35 +179,51 @@
 
         .stat-card {
             background: white;
-            padding: 1.5rem;
+            padding: 1rem;
             border-radius: var(--radius);
             border: 1px solid var(--border-color);
             box-shadow: var(--shadow-sm);
             display: flex;
             flex-direction: column;
-            gap: 0.5rem;
+            gap: 0.25rem;
         }
 
         .stat-value {
-            font-size: 1.75rem;
+            font-size: 1.5rem;
             font-weight: 700;
             color: var(--text-main);
+            line-height: 1;
         }
 
         .stat-label {
-            font-size: 0.875rem;
+            font-size: 0.75rem;
             color: var(--text-muted);
             font-weight: 500;
+            line-height: 1.2;
         }
 
         .icon-box {
-            width: 40px;
-            height: 40px;
-            border-radius: 10px;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+        .icon-box .material-symbols-outlined { font-size: 18px; }
+        @media (min-width: 640px) {
+            .stat-card { padding: 1.25rem; }
+            .stat-value { font-size: 1.5rem; }
+            .icon-box { width: 36px; height: 36px; }
+            .icon-box .material-symbols-outlined { font-size: 20px; }
+        }
+        @media (max-width: 640px) {
+            .stat-card { padding: 0.75rem; gap: 0.2rem; }
+            .stat-value { font-size: 1.25rem; }
+            .stat-label { font-size: 0.65rem; }
+            .icon-box { width: 28px; height: 28px; border-radius: 7px; margin-bottom: 0.2rem; }
+            .icon-box .material-symbols-outlined { font-size: 16px; }
         }
 
         .form-input, .form-select {
@@ -250,7 +280,7 @@
 </head>
 <body>
 
-    <!-- Sidebar -->
+    <!-- Sidebar - Desktop -->
     <div class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0 h-screen sticky top-0">
       <div class="p-6 flex-1 flex flex-col overflow-hidden">
 
@@ -276,45 +306,79 @@
         </a>
       </div>
     </div>
+    <!-- Mobile sidebar drawer -->
+    <div id="mobile-sidebar" class="fixed inset-0 z-50 hidden lg:hidden">
+        <div id="mobile-sidebar-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+        <div class="absolute top-0 left-0 h-full w-[80%] max-w-[280px] bg-white dark:bg-[#1a2235] shadow-2xl flex flex-col overflow-hidden">
+            <div class="p-4 flex items-center justify-between border-b border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                <div class="flex items-center gap-3">
+                    <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
+                    <h1 class="text-lg font-bold">MCST Library</h1>
+                </div>
+                <button id="mobile-sidebar-close" type="button" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6">
+                {% include 'components/librarian_sidebar_nav.html' %}
+            </div>
+            <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                <div class="flex flex-col items-center mb-4">
+                    <h2 class="text-base font-bold text-center">{{ current_user.full_name }}</h2>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 text-center">{{ current_user.role }}</p>
+                </div>
+                <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors">
+                    <span class="material-symbols-outlined text-[18px]">logout</span> Log Out
+                </a>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Content -->
     <main>
+        <!-- Mobile top bar -->
+        <div class="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-[#1a2235] border-b border-[#cfd7e7] dark:border-gray-700 px-4 py-3 mb-4 -mx-4 sm:-mx-6 lg:mx-0 -mt-4 sm:-mt-6 lg:mt-0">
+            <button id="mobile-sidebar-open" type="button" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">menu</span></button>
+            <div class="flex items-center gap-2">
+                <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover">
+                <span class="font-bold text-sm">Circulation</span>
+            </div>
+            <div class="w-10"></div>
+        </div>
         {% include 'components/flash_messages.html' %}
         <!-- Header Section -->
-        <div class="mb-10 animate-slide-up">
-            <h1 class="text-3xl font-bold text-gray-900 mb-2">Circulation Management</h1>
-            <p class="text-gray-500">Overview of loans, returns, and priority alerts.</p>
+        <div class="mb-6 sm:mb-10 animate-slide-up">
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 sm:mb-2 leading-tight">Circulation Management</h1>
+            <p class="text-sm sm:text-base text-gray-500">Overview of loans, returns, and priority alerts.</p>
         </div>
 
-        <!-- Quick Stats Row -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 animate-slide-up" style="animation-delay: 0.1s;">
+        <!-- Quick Stats Row — stays in a row on mobile, scaled down -->
+        <div class="grid grid-cols-3 gap-1.5 sm:gap-4 lg:gap-6 mb-6 sm:mb-10 animate-slide-up" style="animation-delay: 0.1s;">
             <div class="stat-card">
                 <div class="icon-box bg-blue-100 text-blue-600">
-                    <span class="material-symbols-outlined">import_export</span>
+                    <span class="material-symbols-outlined text-[18px] sm:text-[24px]">import_export</span>
                 </div>
                 <div class="stat-value">{{ stats.active_loans }}</div>
-                <div class="stat-label">Total Active Loans</div>
+                <div class="stat-label leading-tight">Total Active Loans</div>
             </div>
             <div class="stat-card">
                 <div class="icon-box bg-red-100 text-red-600">
-                    <span class="material-symbols-outlined">alarm_on</span>
+                    <span class="material-symbols-outlined text-[18px] sm:text-[24px]">alarm_on</span>
                 </div>
                 <div class="stat-value">{{ stats.overdue_items }}</div>
-                <div class="stat-label">Overdue Items</div>
+                <div class="stat-label leading-tight">Overdue Items</div>
             </div>
             <div class="stat-card">
                 <div class="icon-box bg-amber-100 text-amber-600">
-                    <span class="material-symbols-outlined">event_note</span>
+                    <span class="material-symbols-outlined text-[18px] sm:text-[24px]">event_note</span>
                 </div>
                 <div class="stat-value">{{ stats.due_in_days }}</div>
-                <div class="stat-label">Due in 48 Hours</div>
+                <div class="stat-label leading-tight">Due in 48 Hours</div>
             </div>
         </div>
 
         <!-- Borrow & Return Desk -->
-        <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-10 animate-slide-up" style="animation-delay: 0.15s;">
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 sm:gap-8 mb-8 sm:mb-10 animate-slide-up" style="animation-delay: 0.15s;">
             <!-- Borrower Lookup -->
-            <div class="card">
+            <div class="card !overflow-visible">
                 <div class="card-header">
                     <h3 class="card-title">
                         <span class="material-symbols-outlined text-primary">person_search</span>
@@ -389,10 +453,22 @@
                             </div>
                             <div class="sm:col-span-2">
                                 <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Borrow Type</label>
-                                <select name="borrow_type" class="form-select mt-1">
+                                <select name="borrow_type" id="borrow-type-native" class="sr-only" tabindex="-1" aria-hidden="true">
                                     <option value="overnight">Overnight</option>
                                     <option value="daily_circulation">In-Library (Daily Circulation)</option>
                                 </select>
+                                <div class="relative mt-1" id="borrow-type-wrapper">
+                                    <button type="button" id="borrow-type-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="borrow-type-dropdown"
+                                        class="w-full flex items-center justify-between gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-700 hover:border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
+                                        <span id="borrow-type-label" class="truncate">Overnight</span>
+                                        <span class="material-symbols-outlined text-gray-400 text-[20px] shrink-0 transition-transform duration-200" id="borrow-type-arrow">expand_more</span>
+                                    </button>
+                                    <ul id="borrow-type-dropdown" role="listbox" tabindex="-1"
+                                        class="hidden absolute z-50 top-full left-0 mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden py-1.5 text-sm">
+                                        <li role="option" data-value="overnight" tabindex="0" aria-selected="true" class="borrow-type-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-gray-50 transition-colors bg-primary/10 text-primary font-semibold"><span>Overnight</span><span class="material-symbols-outlined text-[18px] text-primary">check</span></li>
+                                        <li role="option" data-value="daily_circulation" tabindex="0" aria-selected="false" class="borrow-type-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-gray-50 transition-colors text-gray-700"><span>In-Library (Daily Circulation)</span></li>
+                                    </ul>
+                                </div>
                             </div>
                         </div>
                         <button type="submit" class="btn-primary w-full">Borrow Book</button>
@@ -591,6 +667,107 @@
             </div>
         </div>
     </main>
+<script>
+(function() {
+    var openBtn = document.getElementById('mobile-sidebar-open');
+    var closeBtn = document.getElementById('mobile-sidebar-close');
+    var drawer = document.getElementById('mobile-sidebar');
+    var backdrop = document.getElementById('mobile-sidebar-backdrop');
+    function open() { if (drawer) { drawer.classList.remove('hidden'); document.body.style.overflow = 'hidden'; } }
+    function close() { if (drawer) { drawer.classList.add('hidden'); document.body.style.overflow = ''; } }
+    if (openBtn) openBtn.addEventListener('click', open);
+    if (closeBtn) closeBtn.addEventListener('click', close);
+    if (backdrop) backdrop.addEventListener('click', close);
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && drawer && !drawer.classList.contains('hidden')) close(); });
+})();
 
+// Borrow Type custom select — fixes native dropdown clipped by card overflow-hidden
+(function() {
+    var btn = document.getElementById('borrow-type-btn');
+    var dropdown = document.getElementById('borrow-type-dropdown');
+    var label = document.getElementById('borrow-type-label');
+    var arrow = document.getElementById('borrow-type-arrow');
+    var native = document.getElementById('borrow-type-native');
+    var wrapper = document.getElementById('borrow-type-wrapper');
+    if (!btn || !dropdown || !native) return;
+
+    function setExpanded(expanded) {
+        btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        dropdown.classList.toggle('hidden', !expanded);
+        if (arrow) arrow.style.transform = expanded ? 'rotate(180deg)' : '';
+    }
+    function isOpen() { return !dropdown.classList.contains('hidden'); }
+
+    function selectValue(value, text) {
+        native.value = value;
+        if (label) label.textContent = text;
+        dropdown.querySelectorAll('[role="option"]').forEach(function(opt) {
+            var isSel = opt.getAttribute('data-value') === value;
+            opt.setAttribute('aria-selected', isSel ? 'true' : 'false');
+            opt.classList.toggle('bg-primary/10', isSel);
+            opt.classList.toggle('text-primary', isSel);
+            opt.classList.toggle('font-semibold', isSel);
+            var check = opt.querySelector('.material-symbols-outlined');
+            if (isSel) {
+                if (!check) {
+                    var c = document.createElement('span');
+                    c.className = 'material-symbols-outlined text-[18px] text-primary';
+                    c.textContent = 'check';
+                    opt.appendChild(c);
+                }
+            } else {
+                if (check) check.remove();
+            }
+        });
+    }
+
+    btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        setExpanded(!isOpen());
+    });
+
+    dropdown.querySelectorAll('[role="option"]').forEach(function(opt) {
+        opt.addEventListener('click', function() {
+            selectValue(opt.getAttribute('data-value'), opt.querySelector('span').textContent.trim());
+            setExpanded(false);
+            btn.focus();
+        });
+        opt.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                opt.click();
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                var next = opt.nextElementSibling;
+                if (next) next.focus();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                var prev = opt.previousElementSibling;
+                if (prev) prev.focus(); else btn.focus();
+            } else if (e.key === 'Escape') {
+                setExpanded(false);
+                btn.focus();
+            }
+        });
+    });
+
+    btn.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (!isOpen()) setExpanded(true);
+            var first = dropdown.querySelector('[role="option"]');
+            if (first) first.focus();
+        } else if (e.key === 'Escape' && isOpen()) {
+            setExpanded(false);
+        }
+    });
+
+    document.addEventListener('click', function(e) {
+        if (isOpen() && wrapper && !wrapper.contains(e.target)) {
+            setExpanded(false);
+        }
+    });
+})();
+</script>
 </body>
 </html>

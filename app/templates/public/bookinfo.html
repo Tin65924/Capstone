@@ -58,6 +58,24 @@
                 <span>Profile</span>
             </a>
         </nav>
+        <button id="bookinfo-mobile-menu-btn" type="button" class="md:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+            <span class="material-symbols-outlined">menu</span>
+        </button>
+    </div>
+    <!-- Mobile nav drawer -->
+    <div id="bookinfo-mobile-menu" class="hidden md:hidden fixed inset-0 z-50">
+        <div id="bookinfo-mobile-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+        <div class="absolute top-0 right-0 h-full w-[75%] max-w-[280px] bg-white dark:bg-slate-900 shadow-2xl p-6 flex flex-col">
+            <div class="flex items-center justify-between mb-6">
+                <span class="font-bold text-slate-800 dark:text-white">Menu</span>
+                <button id="bookinfo-mobile-close" type="button" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <nav class="flex flex-col gap-1">
+                <a class="px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 {% if request.endpoint == 'main.index' %}bg-primary text-white{% else %}text-slate-700 dark:text-slate-300{% endif %}" href="{{ url_for('main.index') }}">Home</a>
+                <a class="px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 {% if request.endpoint == 'cataloging.public_catalog' %}bg-primary text-white{% else %}text-slate-700 dark:text-slate-300{% endif %}" href="{{ url_for('cataloging.public_catalog') }}">Catalog</a>
+                <a class="px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300" href="{{ url_for('main.user_profile') if current_user.is_authenticated else url_for('auth.login') }}">Profile</a>
+            </nav>
+        </div>
     </div>
 </header>
 
@@ -75,27 +93,27 @@
         </ol>
     </nav>
 
-    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-8 mb-8">
-        <div class="flex flex-col md:flex-row justify-between items-start gap-6">
-            <div class="flex-grow">
-                <div class="flex items-center gap-4 mb-2">
-                    <h2 class="text-3xl font-extrabold text-slate-900 dark:text-white leading-tight">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 sm:p-6 lg:p-8 mb-6 sm:mb-8">
+        <div class="flex flex-col lg:flex-row justify-between items-start gap-4 sm:gap-6">
+            <div class="flex-grow min-w-0">
+                <div class="flex items-start gap-3 sm:gap-4 mb-2">
+                    <h2 class="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 dark:text-white leading-tight break-words">
                         {{ book[1] }}
                     </h2>
-                    <button class="text-slate-400 hover:text-amber-500 transition-colors" title="Save to favorites">
-                        <span class="material-symbols-outlined text-3xl">star</span>
+                    <button class="text-slate-400 hover:text-amber-500 transition-colors shrink-0 mt-1" title="Save to favorites">
+                        <span class="material-symbols-outlined text-2xl sm:text-3xl">star</span>
                     </button>
                 </div>
-                <p class="text-lg text-slate-600 dark:text-slate-400 font-medium">{{ book[2] }}</p>
+                <p class="text-sm sm:text-lg text-slate-600 dark:text-slate-400 font-medium break-words">{{ book[2] }}</p>
             </div>
-            <div class="flex flex-col items-end gap-4 min-w-[240px]">
+            <div class="flex flex-col items-stretch sm:items-end gap-3 sm:gap-4 w-full lg:w-auto lg:min-w-[240px]">
                 {% if any_available %}
-                <span class="inline-flex bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-4 py-2 rounded font-bold uppercase tracking-wider text-xs items-center gap-2 border border-green-200 dark:border-green-800">
+                <span class="inline-flex justify-center bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 sm:px-4 py-2 rounded font-bold uppercase tracking-wider text-[11px] sm:text-xs items-center gap-2 border border-green-200 dark:border-green-800">
                     <span class="w-2 h-2 rounded-full bg-green-500"></span>
                     Available in Library
                 </span>
                 {% else %}
-                <span class="inline-flex bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 px-4 py-2 rounded font-bold uppercase tracking-wider text-xs items-center gap-2 border border-slate-200 dark:border-slate-700">
+                <span class="inline-flex justify-center bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 px-3 sm:px-4 py-2 rounded font-bold uppercase tracking-wider text-[11px] sm:text-xs items-center gap-2 border border-slate-200 dark:border-slate-700">
                     <span class="w-2 h-2 rounded-full bg-slate-400"></span>
                     Not Available
                 </span>
@@ -112,11 +130,11 @@
                     {{ book[10] or 'No description available.' }}
                 </p>
             </div>
-            <div class="grid grid-cols-2 md:grid-cols-6 gap-6">
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6">
                 {% if book[5] %}
                 <div>
                     <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Copyright Year</h4>
-                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[5] }}</p>
+                    <p class="text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[5] }}</p>
                 </div>
                 {% endif %}
                 <div>
@@ -143,73 +161,69 @@
         </div>
     </div>
 
-    <div class="mt-12">
-        <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
+    <div class="mt-8 sm:mt-12">
+        <h3 class="text-base sm:text-lg font-bold text-slate-800 dark:text-white mb-4 sm:mb-6 flex items-center gap-2">
             <span class="material-icons text-slate-400">layers</span>
-            Other Copies ({{ accessions|length }})
+            Availability
         </h3>
-        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden shadow-sm">
-            <table class="w-full text-left border-collapse">
-                <thead>
-                    <tr class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Accession Number</th>
-                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">LOC Classification</th>
-                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status</th>
-                        <th class="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Action</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                    {% for acc, is_available in accessions %}
-                    <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                        <td class="px-6 py-4 text-sm font-medium">{{ acc[1] }}</td>
-                        <td class="px-6 py-4">
-                            <div class="text-sm text-slate-900 dark:text-slate-100 font-semibold">{{ book[7] or '—' }}</div>
-                        </td>
-                        <td class="px-6 py-4 text-sm">
-                            {% if is_available %}
-                            <span class="inline-flex items-center gap-1 text-green-600 dark:text-green-400 text-xs font-bold uppercase tracking-tight">
-                                <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                                Available
-                            </span>
-                            {% else %}
-                            <span class="inline-flex items-center gap-1 text-slate-400 text-xs font-bold uppercase tracking-tight">
-                                <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                                Borrowed
-                            </span>
-                            {% endif %}
-                        </td>
-                        <td class="px-6 py-4 text-right">
-                            {% if current_user.is_authenticated %}
-                                {% if is_available %}
-                                <button class="text-primary hover:underline text-xs font-bold"
-                                        onclick="openBorrowModal('{{ acc[0] }}')">Borrow</button>
-                                {% elif borrower_map.get(acc[0]) == current_user.id|int %}
-                                <button class="text-slate-300 text-xs font-bold cursor-not-allowed" disabled>Borrowed</button>
-                                {% else %}
-                                <form method="post" action="{{ url_for('circulation.user_reserve') }}" class="inline">
-                                    <input type="hidden" name="book_id" value="{{ book[0] }}">
-                                    <button type="submit" class="text-primary hover:underline text-xs font-bold">Reserve</button>
-                                </form>
-                                {% endif %}
-                            {% else %}
-                                {% if is_available %}
-                                <a class="text-primary hover:underline text-xs font-bold"
-                                   href="{{ url_for('auth.login', next=request.path) }}">Borrow</a>
-                                {% else %}
-                                <button class="text-slate-300 text-xs font-bold cursor-not-allowed" disabled>Borrowed</button>
-                                {% endif %}
-                            {% endif %}
-                        </td>
-                    </tr>
+        {% set ns = namespace(available=0) %}
+        {% for acc, is_available in accessions %}
+            {% if is_available %}{% set ns.available = ns.available + 1 %}{% endif %}
+        {% endfor %}
+        {% set user_has_book = current_user.is_authenticated and (current_user.id|int in borrower_map.values()) %}
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div class="min-w-0">
+                {% if user_has_book %}
+                <p class="text-sm font-bold text-slate-900 dark:text-slate-100">You have this book borrowed</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Return your copy before borrowing it again.</p>
+                {% elif any_available %}
+                <p class="text-sm font-bold text-slate-900 dark:text-slate-100">{{ ns.available }} of {{ accessions|length }} cop{{ 'y' if accessions|length == 1 else 'ies' }} available</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">A copy is ready — you can borrow it now.</p>
+                {% else %}
+                <p class="text-sm font-bold text-slate-900 dark:text-slate-100">No copies available</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">All {{ accessions|length }} cop{{ 'y' if accessions|length == 1 else 'ies' }} {{ 'is' if accessions|length == 1 else 'are' }} currently borrowed — reserve instead and we'll notify you.</p>
+                {% endif %}
+            </div>
+            <div class="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-end shrink-0">
+                {% if current_user.is_authenticated %}
+                    {% if user_has_book %}
+                    <button type="button" disabled title="You already have a copy of this book borrowed."
+                        class="px-5 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 text-sm font-bold cursor-not-allowed opacity-60">Borrowed</button>
+                    <button type="button" disabled title="You already have a copy of this book borrowed."
+                        class="px-5 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 text-sm font-bold cursor-not-allowed opacity-60 flex items-center justify-center gap-1">Reserve <span class="material-symbols-outlined text-[18px]">bookmark_add</span></button>
                     {% else %}
-                    <tr>
-                        <td colspan="4" class="px-6 py-8 text-center text-sm text-slate-400">
-                            No copies available for this title.
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                        {% if any_available %}
+                        <button type="button" onclick="openBorrowModal('')"
+                            class="px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors flex items-center justify-center gap-1">Borrow <span class="material-symbols-outlined text-[18px]">arrow_forward</span></button>
+                        {% else %}
+                        <button type="button" disabled
+                            class="px-5 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 text-sm font-bold cursor-not-allowed opacity-60">Borrow</button>
+                        {% endif %}
+                        {% if any_available %}
+                        <button type="button" disabled title="A copy is available — reserve is only enabled when all copies are borrowed."
+                            class="px-5 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 text-sm font-bold cursor-not-allowed opacity-60 flex items-center justify-center gap-1">Reserve <span class="material-symbols-outlined text-[18px]">bookmark_add</span></button>
+                        {% else %}
+                        <form method="post" action="{{ url_for('circulation.user_reserve') }}" class="inline">
+                            <input type="hidden" name="book_id" value="{{ book[0] }}">
+                            <button type="submit"
+                                class="px-5 py-2.5 rounded-lg border border-primary text-primary text-sm font-bold hover:bg-primary/5 transition-colors flex items-center justify-center gap-1">Reserve <span class="material-symbols-outlined text-[18px]">bookmark_add</span></button>
+                        </form>
+                        {% endif %}
+                    {% endif %}
+                {% else %}
+                    {% if any_available %}
+                    <a href="{{ url_for('auth.login', next=request.path) }}"
+                        class="px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors flex items-center justify-center gap-1">Borrow <span class="material-symbols-outlined text-[18px]">login</span></a>
+                    <button type="button" disabled title="Log in to reserve."
+                        class="px-5 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 text-sm font-bold cursor-not-allowed opacity-60">Reserve</button>
+                    {% else %}
+                    <button type="button" disabled
+                        class="px-5 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 text-sm font-bold cursor-not-allowed opacity-60">Borrow</button>
+                    <a href="{{ url_for('auth.login', next=request.path) }}"
+                        class="px-5 py-2.5 rounded-lg border border-primary text-primary text-sm font-bold hover:bg-primary/5 transition-colors flex items-center justify-center gap-1">Reserve <span class="material-symbols-outlined text-[18px]">login</span></a>
+                    {% endif %}
+                {% endif %}
+            </div>
         </div>
     </div>
 </main>
@@ -217,14 +231,14 @@
 <!-- Borrow Modal -->
 <div id="borrowModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
     <div class="absolute inset-0 bg-slate-900/60" onclick="closeBorrowModal()"></div>
-    <div class="relative bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 max-w-md w-full">
-        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
-            <h3 class="text-lg font-bold text-slate-900 dark:text-white">Borrow {{ book[1] }}</h3>
+    <div class="relative bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 max-w-[95vw] sm:max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-800">
+            <h3 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white">Borrow {{ book[1] }}</h3>
             <button onclick="closeBorrowModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
                 <span class="material-icons">close</span>
             </button>
         </div>
-        <form method="post" action="{{ url_for('circulation.user_borrow') }}" class="p-6 space-y-5">
+        <form method="post" action="{{ url_for('circulation.user_borrow') }}" class="p-4 sm:p-6 space-y-4 sm:space-y-5">
             <input type="hidden" name="book_id" value="{{ book[0] }}">
             <input type="hidden" id="borrowAccessionId" name="accession_id" value="">
             <p class="text-sm text-slate-500 dark:text-slate-400">Choose a borrow type. The due date is computed automatically based on your role.</p>
@@ -275,6 +289,20 @@
     function closeBorrowModal() {
         document.getElementById('borrowModal').classList.add('hidden');
     }
+
+    // Mobile menu for book details header
+    (function() {
+        var openBtn = document.getElementById('bookinfo-mobile-menu-btn');
+        var closeBtn = document.getElementById('bookinfo-mobile-close');
+        var drawer = document.getElementById('bookinfo-mobile-menu');
+        var backdrop = document.getElementById('bookinfo-mobile-backdrop');
+        function open() { if (drawer) { drawer.classList.remove('hidden'); document.body.style.overflow = 'hidden'; } }
+        function close() { if (drawer) { drawer.classList.add('hidden'); document.body.style.overflow = ''; } }
+        if (openBtn) openBtn.addEventListener('click', open);
+        if (closeBtn) closeBtn.addEventListener('click', close);
+        if (backdrop) backdrop.addEventListener('click', close);
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && drawer && !drawer.classList.contains('hidden')) close(); });
+    })();
 </script>
 
 </body>

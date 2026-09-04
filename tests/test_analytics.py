@@ -95,6 +95,30 @@ class TestAnalyticsPage:
         resp = librarian_client.get('/librarian/analytics?from=not-a-date&to=also-bad')
         assert resp.status_code == 200
 
+    def test_semester_ignores_stale_dates(self, librarian_client, mock_db):
+        from datetime import date
+        mock_db['fetch_one'].side_effect = [(10,), (2,)]
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get(
+            '/librarian/analytics?preset=semester&from=2020-01-01&to=2020-12-31')
+        assert resp.status_code == 200
+        today = date.today()
+        if today.month >= 8:
+            expected = (date(today.year, 8, 1), date(today.year, 12, 31))
+        else:
+            expected = (date(today.year, 1, 1), date(today.year, 5, 31))
+        params = mock_db['fetch_all'].call_args_list[0][0][1]
+        assert params == expected
+
+    def test_invalid_preset_ignores_dates(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [(10,), (2,)]
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get(
+            '/librarian/analytics?preset=bogus&from=2020-01-01&to=2020-12-31')
+        assert resp.status_code == 200
+        params = mock_db['fetch_all'].call_args_list[0][0][1]
+        assert params is None
+
 
 class TestKpiJson:
     def test_kpi_json_requires_login(self, client, mock_db):
@@ -205,3 +229,17 @@ class TestExportXlsx:
         assert resp.status_code == 200
         assert resp.content_type == 'application/pdf'
         assert resp.data[:4] == b'%PDF'
+
+    def test_export_all_honors_kpi_types_list(self, librarian_client, mock_db):
+        """Repeated kpi_types[] fields export only the selected KPIs."""
+        mock_db['fetch_one'].side_effect = [(10,), (2,)]
+        mock_db['fetch_all'].return_value = [('Clean Code', 50)]
+        resp = librarian_client.post(
+            '/librarian/analytics/export',
+            data={'kpi_type': 'all', 'format': 'pdf',
+                  'kpi_types[]': ['most_borrowed_titles', 'utilization_rate']})
+        assert resp.status_code == 200
+        assert resp.data[:4] == b'%PDF'
+        snapshots = [c[0][1][0] for c in mock_db['execute'].call_args_list
+                     if 'INSERT INTO analytics_cache' in c[0][0]]
+        assert sorted(snapshots) == ['most_borrowed_titles', 'utilization_rate']

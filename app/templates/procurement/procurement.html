@@ -35,11 +35,11 @@
     </script>
 </head>
 
-<body class="bg-background-light dark:bg-background-dark text-[#0f172a] dark:text-white font-display overflow-hidden">
+<body class="bg-background-light dark:bg-background-dark text-[#0f172a] dark:text-white font-display overflow-x-hidden">
     <div class="flex h-screen w-full flex-row">
-        <!-- Sidebar -->
+        <!-- Sidebar - Desktop -->
         <div
-            class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0">
+            class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0 h-screen sticky top-0">
             <div class="p-6 flex-1 flex flex-col overflow-hidden">
                 <div class="flex items-center gap-3 mb-8 shrink-0">
                     <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
@@ -58,28 +58,60 @@
                 </a>
             </div>
         </div>
+        <!-- Mobile sidebar drawer -->
+        <div id="mobile-sidebar" class="fixed inset-0 z-50 hidden lg:hidden">
+            <div id="mobile-sidebar-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+            <div class="absolute top-0 left-0 h-full w-[80%] max-w-[280px] bg-white dark:bg-[#1a2235] shadow-2xl flex flex-col overflow-hidden">
+                <div class="p-4 flex items-center justify-between border-b border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                    <div class="flex items-center gap-3">
+                        <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
+                        <h1 class="text-lg font-bold">MCST Library</h1>
+                    </div>
+                    <button id="mobile-sidebar-close" type="button" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">close</span></button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-6">
+                    {% include 'components/librarian_sidebar_nav.html' %}
+                </div>
+                <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                    <div class="flex flex-col items-center mb-4">
+                        <h2 class="text-base font-bold text-center">{{ current_user.full_name }}</h2>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 text-center">{{ current_user.role }}</p>
+                    </div>
+                    <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors">
+                        <span class="material-symbols-outlined text-[18px]">logout</span> Log Out
+                    </a>
+                </div>
+            </div>
+        </div>
         <!-- Main Content -->
         <main class="flex-1 h-full overflow-y-auto bg-background-light dark:bg-background-dark">
+            <!-- Mobile top bar -->
+            <div class="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-[#1a2235] border-b border-[#cfd7e7] dark:border-gray-700 px-4 py-3">
+                <button id="mobile-sidebar-open" type="button" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">menu</span></button>
+                <div class="flex items-center gap-2">
+                    <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover">
+                    <span class="font-bold text-sm">MCST Library</span>
+                </div>
+                <div class="w-10"></div>
+            </div>
             {% include 'components/flash_messages.html' %}
-            <div class="max-w-7xl mx-auto px-6 py-8">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
                 <!-- Header -->
-                <div class="mb-8">
-                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white" style="">Procurement Management<div>
-                            <br></div>
-                    </h1>
-                    <p class="text-gray-500 dark:text-gray-400 mt-1" style=""><br></p>
+                <div class="mb-6 sm:mb-8">
+                    <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white leading-tight">Procurement Management</h1>
+                    <p class="text-sm sm:text-base text-gray-500 dark:text-gray-400 mt-1">Track and update book procurement status.</p>
                 </div>
                 <!-- Recent Book Requests Section -->
-                <section class="mb-8">
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <section class="mb-6 sm:mb-8">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                         {% for item in items %}
-                        <div class="bg-white dark:bg-[#1a2235] rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm flex flex-col">
-                            <div class="p-5 flex-1">
-                                <h3 class="text-lg font-bold text-gray-900 dark:text-white leading-tight mb-1">
+                        <div class="bg-white dark:bg-[#1a2235] rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col overflow-visible">
+                            <div class="p-4 sm:p-5 flex-1">
+                                <h3 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white leading-tight mb-1 truncate">
                                     {{ item[7] }}
                                 </h3>
-                                <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">{{ item[8] or 'Author unknown' }}</p>
-                                <div class="mb-4">
+                                <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-3 truncate">{{ item[8] or 'Author unknown' }}</p>
+                                <div class="mb-3 sm:mb-4">
                                     <span class="inline-block px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded
                                         {% if item[2] == 'for_ordering' %}bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400
                                         {% elif item[2] == 'ordered' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
@@ -90,10 +122,9 @@
                                     </span>
                                 </div>
                                 <div>
-                                    <label class="block text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-2">Update Status</label>
-                                    <form method="POST" action="{{ url_for('procurement.update_status', procurement_id=item[0]) }}">
-                                        <select name="order_status" onchange="this.form.submit()"
-                                            class="w-full text-sm rounded-lg border-gray-200 dark:border-gray-700 dark:bg-[#111827] focus:ring-primary focus:border-primary transition-all">
+                                    <label class="block text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-1.5 sm:mb-2">Update Status</label>
+                                    <form method="POST" action="{{ url_for('procurement.update_status', procurement_id=item[0]) }}" id="procurement-form-{{ item[0] }}">
+                                        <select name="order_status" id="proc-status-native-{{ item[0] }}" class="sr-only" tabindex="-1" aria-hidden="true">
                                             {% for status_value, status_label in [
                                                 ('for_ordering', 'For Ordering'),
                                                 ('ordered', 'Ordered'),
@@ -105,6 +136,32 @@
                                             <option value="{{ status_value }}" {% if item[2] == status_value %}selected{% endif %}>{{ status_label }}</option>
                                             {% endfor %}
                                         </select>
+                                        <div class="relative" id="proc-status-wrapper-{{ item[0] }}">
+                                            <button type="button" id="proc-status-btn-{{ item[0] }}" aria-haspopup="listbox" aria-expanded="false"
+                                                class="w-full flex items-center justify-between gap-2 bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-700 px-3 sm:px-3.5 py-2.5 rounded-lg text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
+                                                <span id="proc-status-label-{{ item[0] }}" class="truncate">
+                                                    {% if item[2] == 'for_ordering' %}For Ordering{% elif item[2] == 'ordered' %}Ordered{% elif item[2] == 'delivered' %}Delivered{% elif item[2] == 'procured' %}Procured{% elif item[2] == 'cancelled' %}Cancelled{% elif item[2] == 'out_of_stock' %}Out of Stock{% else %}{{ item[2].replace('_', ' ').title() }}{% endif %}
+                                                </span>
+                                                <span class="material-symbols-outlined text-gray-400 text-[18px] sm:text-[20px] shrink-0 transition-transform duration-200" id="proc-status-arrow-{{ item[0] }}">expand_more</span>
+                                            </button>
+                                            <ul id="proc-status-dropdown-{{ item[0] }}" role="listbox"
+                                                class="hidden absolute z-50 top-full left-0 mt-2 w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl overflow-hidden py-1.5 text-xs sm:text-sm max-h-60 overflow-y-auto">
+                                                {% for status_value, status_label in [
+                                                    ('for_ordering', 'For Ordering'),
+                                                    ('ordered', 'Ordered'),
+                                                    ('delivered', 'Delivered'),
+                                                    ('procured', 'Procured'),
+                                                    ('cancelled', 'Cancelled'),
+                                                    ('out_of_stock', 'Out of Stock')
+                                                ] %}
+                                                {% set is_sel = item[2] == status_value %}
+                                                <li role="option" data-value="{{ status_value }}" tabindex="0" aria-selected="{{ 'true' if is_sel else 'false' }}"
+                                                    class="proc-status-option px-3 sm:px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors {% if is_sel %}bg-primary/10 text-primary font-semibold{% else %}text-gray-700 dark:text-gray-200{% endif %}">
+                                                    <span>{{ status_label }}</span>{% if is_sel %}<span class="material-symbols-outlined text-[16px] sm:text-[18px] text-primary">check</span>{% endif %}
+                                                </li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
                                     </form>
                                 </div>
                             </div>
@@ -135,6 +192,128 @@
             background: #1d4ed8;
         }
     </style>
+    <script>
+    // Mobile sidebar
+    (function() {
+        var openBtn = document.getElementById('mobile-sidebar-open');
+        var closeBtn = document.getElementById('mobile-sidebar-close');
+        var drawer = document.getElementById('mobile-sidebar');
+        var backdrop = document.getElementById('mobile-sidebar-backdrop');
+        function open() { if (drawer) { drawer.classList.remove('hidden'); document.body.style.overflow = 'hidden'; } }
+        function close() { if (drawer) { drawer.classList.add('hidden'); document.body.style.overflow = ''; } }
+        if (openBtn) openBtn.addEventListener('click', open);
+        if (closeBtn) closeBtn.addEventListener('click', close);
+        if (backdrop) backdrop.addEventListener('click', close);
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && drawer && !drawer.classList.contains('hidden')) close(); });
+    })();
+
+    // Procurement status custom selects — fixes native overflow
+    (function() {
+        document.querySelectorAll('[id^="proc-status-wrapper-"]').forEach(function(wrapper) {
+            var id = wrapper.id.replace('proc-status-wrapper-', '');
+            var btn = document.getElementById('proc-status-btn-' + id);
+            var dropdown = document.getElementById('proc-status-dropdown-' + id);
+            var label = document.getElementById('proc-status-label-' + id);
+            var arrow = document.getElementById('proc-status-arrow-' + id);
+            var native = document.getElementById('proc-status-native-' + id);
+            var form = document.getElementById('procurement-form-' + id);
+            if (!btn || !dropdown || !native || !form) return;
+
+            function setExpanded(expanded) {
+                btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                dropdown.classList.toggle('hidden', !expanded);
+                if (arrow) arrow.style.transform = expanded ? 'rotate(180deg)' : '';
+            }
+            function isOpen() { return !dropdown.classList.contains('hidden'); }
+
+            function selectValue(value, text) {
+                native.value = value;
+                if (label) label.textContent = text;
+                dropdown.querySelectorAll('[role="option"]').forEach(function(opt) {
+                    var isSel = opt.getAttribute('data-value') === value;
+                    opt.setAttribute('aria-selected', isSel ? 'true' : 'false');
+                    opt.classList.toggle('bg-primary/10', isSel);
+                    opt.classList.toggle('text-primary', isSel);
+                    opt.classList.toggle('font-semibold', isSel);
+                    var check = opt.querySelector('.material-symbols-outlined');
+                    if (isSel) {
+                        if (!check) {
+                            var c = document.createElement('span');
+                            c.className = 'material-symbols-outlined text-[16px] sm:text-[18px] text-primary';
+                            c.textContent = 'check';
+                            opt.appendChild(c);
+                        }
+                    } else {
+                        if (check) check.remove();
+                    }
+                });
+                form.submit();
+            }
+
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                document.querySelectorAll('[id^="proc-status-dropdown-"]').forEach(function(d) {
+                    if (d !== dropdown) d.classList.add('hidden');
+                });
+                document.querySelectorAll('[id^="proc-status-arrow-"]').forEach(function(a) {
+                    if (a !== arrow) a.style.transform = '';
+                });
+                document.querySelectorAll('[id^="proc-status-btn-"]').forEach(function(b) {
+                    if (b !== btn) b.setAttribute('aria-expanded', 'false');
+                });
+                setExpanded(!isOpen());
+            });
+
+            dropdown.querySelectorAll('[role="option"]').forEach(function(opt) {
+                opt.addEventListener('click', function() {
+                    selectValue(opt.getAttribute('data-value'), opt.querySelector('span').textContent.trim());
+                });
+                opt.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        opt.click();
+                    } else if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        var next = opt.nextElementSibling;
+                        if (next) next.focus();
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        var prev = opt.previousElementSibling;
+                        if (prev) prev.focus(); else btn.focus();
+                    } else if (e.key === 'Escape') {
+                        setExpanded(false);
+                        btn.focus();
+                    }
+                });
+            });
+
+            btn.addEventListener('keydown', function(e) {
+                if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    if (!isOpen()) setExpanded(true);
+                    var first = dropdown.querySelector('[role="option"]');
+                    if (first) first.focus();
+                } else if (e.key === 'Escape' && isOpen()) {
+                    setExpanded(false);
+                }
+            });
+        });
+
+        document.addEventListener('click', function(e) {
+            document.querySelectorAll('[id^="proc-status-wrapper-"]').forEach(function(wrapper) {
+                var id = wrapper.id.replace('proc-status-wrapper-', '');
+                var dropdown = document.getElementById('proc-status-dropdown-' + id);
+                var btn = document.getElementById('proc-status-btn-' + id);
+                var arrow = document.getElementById('proc-status-arrow-' + id);
+                if (dropdown && !wrapper.contains(e.target)) {
+                    dropdown.classList.add('hidden');
+                    if (btn) btn.setAttribute('aria-expanded', 'false');
+                    if (arrow) arrow.style.transform = '';
+                }
+            });
+        });
+    })();
+    </script>
 </body>
 
 </html>
