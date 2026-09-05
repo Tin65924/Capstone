@@ -343,12 +343,163 @@
                     <span class="hidden sm:inline">Export All</span>
                     <span class="sm:hidden">Export</span>
                 </button>
+                <button onclick="openExportAllModal()"
+                    class="hidden md:flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg bg-primary text-white hover:bg-blue-800 transition-all whitespace-nowrap">
+                    <span class="material-symbols-outlined text-lg">lab_profile</span>
+                    Export Report
+                </button>
             </div>
         </div>
 
         <!-- Board Wrapper -->
         <div class="workspace-container">
-            <div class="board" id="board"></div>
+            <div class="board !grid-cols-1 !max-w-[1400px] !mx-auto !w-full" id="riverside-root">
+                <!-- Riverside-style tab nav -->
+                <div class="flex items-center gap-2 flex-wrap">
+                    <button data-rtab="collection" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-primary text-white">Collection Tracking</button>
+                    <button data-rtab="library" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Library Analytics</button>
+                    <button data-rtab="usage" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Usage Analytics</button>
+                    <span class="ml-auto text-[11px] text-gray-400 font-semibold hidden sm:inline">Inspired by Riverside reference dashboards • live MCST data</span>
+                </div>
+
+                <!-- ============ TAB: Collection Tracking ============ -->
+                <section data-rtab-panel="collection" class="space-y-4">
+                    <div class="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 flex flex-wrap items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-white">library_books</span></div>
+                        <div class="min-w-0 flex-1">
+                            <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Collection Tracking Dashboard</h2>
+                            <p class="text-xs text-slate-500">What is the current status of books and copies?</p>
+                        </div>
+                        <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">May 1 – May 31, 2025</span>
+                        <button onclick="openExportAllModal()" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
+                    </div>
+                    <div id="collection-kpis" class="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3"></div>
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                        <div class="bg-white rounded-xl border border-slate-200 p-4">
+                            <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-extrabold">Collection by Category</h3><span class="text-[11px] text-slate-400 border rounded px-2 py-0.5">By Titles</span></div>
+                            <div class="flex items-center gap-4"><div id="donut-category" class="shrink-0"></div><div id="legend-category" class="flex-1 space-y-1 text-xs min-w-0"></div></div>
+                        </div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4">
+                            <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-extrabold">Copies by Status</h3><span class="text-[11px] text-slate-400 border rounded px-2 py-0.5">By Copies</span></div>
+                            <div class="flex items-center gap-4"><div id="donut-status" class="shrink-0"></div><div id="legend-status" class="flex-1 space-y-1 text-xs min-w-0"></div></div>
+                        </div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4">
+                            <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-extrabold">Collection Condition Summary</h3><span class="text-[11px] text-slate-400 border rounded px-2 py-0.5">By Copies</span></div>
+                            <div id="condition-bars" class="space-y-2.5"></div>
+                            <p class="text-[10px] text-slate-400 mt-2">Condition derived from inventory_state (no condition column in schema).</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                        <div class="xl:col-span-2 bg-white rounded-xl border border-slate-200 p-4 overflow-hidden">
+                            <div class="flex items-center gap-2 mb-3 flex-wrap">
+                                <h3 class="text-sm font-extrabold mr-auto">Recent Collection Status</h3>
+                                <span class="text-[11px] border rounded-lg px-3 py-1.5 text-slate-500">Search by title, author, or ID…</span>
+                                <span class="text-[11px] font-bold border rounded-lg px-3 py-1.5">Filters</span>
+                                <span class="text-[11px] font-bold border rounded-lg px-3 py-1.5">View All</span>
+                            </div>
+                            <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[760px]">
+                                <thead><tr class="text-left text-slate-500 border-b">
+                                    <th class="py-2 pr-2">Accession / Copy ID</th><th class="py-2 pr-2">Title</th><th class="py-2 pr-2">Category</th><th class="py-2 pr-2">Availability</th><th class="py-2 pr-2">Borrower / Note</th><th class="py-2">Due / Note</th>
+                                </tr></thead>
+                                <tbody id="recent-collection-body"></tbody>
+                            </table></div>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="bg-white rounded-xl border border-slate-200 p-4">
+                                <h3 class="text-sm font-extrabold mb-2">Items Requiring Attention</h3>
+                                <div id="attention-list" class="space-y-2 text-xs"></div>
+                            </div>
+                            <div class="bg-white rounded-xl border border-slate-200 p-4">
+                                <h3 class="text-sm font-extrabold mb-2">Librarian Quick Actions</h3>
+                                <div class="grid grid-cols-2 gap-2 text-[11px] font-bold">
+                                    <a href="#" onclick="return false;" class="border rounded-lg px-2 py-2.5 text-center hover:bg-gray-50">＋ Add New Book</a>
+                                    <span class="border rounded-lg px-2 py-2.5 text-center text-slate-400">⇪ Import Books</span>
+                                    <span class="border rounded-lg px-2 py-2.5 text-center text-slate-400">⚠ Mark Lost / Damaged</span>
+                                    <span class="border rounded-lg px-2 py-2.5 text-center text-slate-400">🗓 Schedule Maintenance</span>
+                                    <span class="border rounded-lg px-2 py-2.5 text-center text-slate-400">⎙ Print Labels</span>
+                                    <span class="border rounded-lg px-2 py-2.5 text-center text-slate-400">▌ Generate Barcodes</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ============ TAB: Library Analytics ============ -->
+                <section data-rtab-panel="library" class="space-y-4 hidden">
+                    <div class="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 flex flex-wrap items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-white">bar_chart</span></div>
+                        <div class="min-w-0 flex-1">
+                            <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Library Analytics Dashboard</h2>
+                            <p class="text-xs text-slate-500">What patterns are happening and what may happen next?</p>
+                        </div>
+                        <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">May 1 – May 31, 2025</span>
+                        <button onclick="openExportAllModal()" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
+                    </div>
+                    <div id="library-kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3"></div>
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-1">1. Borrowings Trend</h3><div id="trend-line" class="w-full overflow-hidden"></div><p class="text-[10px] text-slate-400 mt-1">Solid = actual borrowings • dashed = 30-day moving-average forecast.</p></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">2. Top Borrowed Categories</h3><div class="flex items-center gap-4"><div id="donut-topcats" class="shrink-0"></div><div id="legend-topcats" class="flex-1 space-y-1 text-xs min-w-0"></div></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">3. Peak Borrowing Periods</h3><div id="peak-bars" class="space-y-1.5"></div><p class="text-[10px] text-slate-400 mt-1">Grouped by day (borrow_date has no time-of-day).</p></div>
+                    </div>
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">4. Likely High-Demand Titles (Next 30 Days)</h3><div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[480px]"><thead><tr class="text-left text-slate-500 border-b"><th class="py-2">#</th><th class="py-2">Title</th><th class="py-2">Author</th><th class="py-2 text-right">Active</th></tr></thead><tbody id="high-demand-body"></tbody></table></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-1">5. Overdue Trend</h3><div id="overdue-line" class="w-full overflow-hidden"></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">6. Forecast Summary / Insights</h3><div id="insights-list" class="space-y-2.5 text-[11px] text-slate-600"></div></div>
+                    </div>
+                    <div class="bg-white rounded-xl border border-slate-200 p-4 overflow-hidden">
+                        <div class="flex items-center mb-2"><h3 class="text-sm font-extrabold mr-auto">7. Recent Circulation Activity</h3><span class="text-[11px] font-bold border rounded-lg px-3 py-1.5">View All Activity</span></div>
+                        <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[820px]">
+                            <thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-2">Date/Time</th><th class="py-2 pr-2">TXN</th><th class="py-2 pr-2">User</th><th class="py-2 pr-2">Title</th><th class="py-2 pr-2">Action</th><th class="py-2 pr-2">Due Date</th><th class="py-2">Status</th></tr></thead>
+                            <tbody id="recent-circ-body"></tbody>
+                        </table></div>
+                    </div>
+                </section>
+
+                <!-- ============ TAB: Usage Analytics ============ -->
+                <section data-rtab-panel="usage" class="space-y-4 hidden">
+                    <div class="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 flex flex-wrap items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-white">group</span></div>
+                        <div class="min-w-0 flex-1">
+                            <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Usage Analytics Dashboard</h2>
+                            <p class="text-xs text-slate-500">Who is using the library, what are they borrowing, and how often?</p>
+                        </div>
+                        <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">All Departments / Programs</span>
+                        <button onclick="openExportAllModal()" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
+                    </div>
+                    <div id="usage-kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3"></div>
+                    <div class="grid grid-cols-1 xl:grid-cols-4 gap-4">
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">1. Borrowings by Department / Program</h3><div id="dept-bars" class="space-y-1.5"></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-1">2. Borrowings Trend</h3><div id="usage-trend-line" class="w-full overflow-hidden"></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">3. Top Borrowed Books</h3><div id="top-books-list" class="space-y-2"></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">Quick Reports</h3>
+                            <div class="space-y-2 text-[11px]">
+                                <button onclick="doExportAll('pdf')" class="w-full text-left border rounded-lg px-3 py-2.5 hover:bg-gray-50"><b>Department Usage Report</b><br><span class="text-slate-500">Detailed borrowing activity by program.</span></button>
+                                <button onclick="doExportAll('pdf')" class="w-full text-left border rounded-lg px-3 py-2.5 hover:bg-gray-50"><b>Overdue Items Report</b><br><span class="text-slate-500">Overdue items with borrower and due dates.</span></button>
+                                <button onclick="doExportAll('pdf')" class="w-full text-left border rounded-lg px-3 py-2.5 hover:bg-gray-50"><b>Top Borrowed Books Report</b><br><span class="text-slate-500">Most borrowed books in the period.</span></button>
+                                <button onclick="doExportAll('pdf')" class="w-full text-left border rounded-lg px-3 py-2.5 hover:bg-gray-50"><b>Monthly Circulation Summary</b><br><span class="text-slate-500">Borrowing and return statistics.</span></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">4. Borrowings by User Type</h3><div class="flex items-center gap-4"><div id="donut-usertype" class="shrink-0"></div><div id="legend-usertype" class="flex-1 space-y-1 text-xs min-w-0"></div></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">5. Overdue Items by Department</h3><div id="overdue-dept-note" class="text-[11px] text-slate-500">Overdue counts are tracked per loan; department split reuses the borrowings mix.</div><div id="overdue-dept-bars" class="space-y-1.5 mt-2"></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">6. Borrowings by Time of Day</h3><div id="tod-bars" class="space-y-1.5"></div><p class="text-[10px] text-slate-400 mt-1">Bucketed by borrow day (no time-of-day column).</p></div>
+                    </div>
+                    <div class="bg-white rounded-xl border border-slate-200 p-4 overflow-hidden">
+                        <div class="flex items-center mb-2"><h3 class="text-sm font-extrabold mr-auto">7. Recent Borrowing Activity</h3><span class="text-[11px] font-bold border rounded-lg px-3 py-1.5">View All Activity</span></div>
+                        <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[820px]">
+                            <thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-2">Date &amp; Time</th><th class="py-2 pr-2">Borrower</th><th class="py-2 pr-2">Book Title</th><th class="py-2 pr-2">Action</th><th class="py-2 pr-2">Due Date</th><th class="py-2">Status</th></tr></thead>
+                            <tbody id="recent-usage-body"></tbody>
+                        </table></div>
+                    </div>
+                </section>
+
+                <!-- ============ Existing custom KPI board (kept for compatibility) ============ -->
+                <details class="bg-white rounded-xl border border-slate-200">
+                    <summary class="cursor-pointer px-4 py-3 text-sm font-extrabold list-none flex items-center gap-2"><span class="material-symbols-outlined text-primary">add_chart</span> Custom KPI Board <span class="text-[11px] font-semibold text-slate-400">(Add KPI • Export All • per-card filters — unchanged)</span></summary>
+                    <div class="board !p-4" id="board"></div>
+                </details>
+            </div>
         </div>
     </main>
 
@@ -553,6 +704,7 @@
     <!-- Server-side KPI payload -->
     <script type="application/json" id="kpi-data">{{ kpi_data | tojson }}</script>
     <script type="application/json" id="kpi-labels">{{ kpi_labels | tojson }}</script>
+    <script type="application/json" id="dashboard-data">{{ dashboard | tojson }}</script>
 
     <script>
         const KPI_DATA = JSON.parse(document.getElementById('kpi-data').textContent);
@@ -1092,6 +1244,194 @@ function syncGlobalFilterCustomDates() {
             };
         })();
 
+        /* ================= Riverside dashboards (live data) ================= */
+        var DASHBOARD = {};
+        try { DASHBOARD = JSON.parse(document.getElementById('dashboard-data').textContent); } catch (e) { DASHBOARD = {}; }
+        var RCOLORS = ['#2563eb', '#60a5fa', '#22c55e', '#a855f7', '#f59e0b', '#14b8a6', '#94a3b8', '#ef4444', '#0ea5e9', '#84cc16'];
+        function rNum(n) { return (n === null || n === undefined) ? 0 : Number(n).toLocaleString('en-US'); }
+
+        function kpiCard(icon, label, value, delta, iconBg) {
+            return '<div class="bg-white rounded-xl border border-slate-200 p-3">'
+                + '<div class="flex items-center gap-2"><span class="w-8 h-8 rounded-full ' + (iconBg || 'bg-blue-50') + ' flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] text-blue-700">' + icon + '</span></span>'
+                + '<span class="text-[11px] text-slate-500 font-semibold leading-tight">' + label + '</span></div>'
+                + '<div class="text-xl font-extrabold mt-1">' + value + '</div>'
+                + (delta ? '<div class="text-[10px] text-slate-400 font-semibold">' + delta + '</div>' : '') + '</div>';
+        }
+
+        function donutSVG(el, rows, total, centerTop, centerSub) {
+            if (!el) return;
+            var R = 52, C = 2 * Math.PI * R, off = 0;
+            var segs = '';
+            rows.slice(0, 8).forEach(function (r, i) {
+                var frac = total > 0 ? r[1] / total : 0;
+                var len = Math.max(frac * C - 2, 0.5);
+                segs += '<circle cx="70" cy="70" r="' + R + '" fill="none" stroke="' + RCOLORS[i % RCOLORS.length] + '" stroke-width="22" stroke-dasharray="' + len + ' ' + (C - len) + '" stroke-dashoffset="' + (-off) + '" transform="rotate(-90 70 70)"/>';
+                off += frac * C;
+            });
+            el.innerHTML = '<svg width="140" height="140" viewBox="0 0 140 140"><circle cx="70" cy="70" r="' + R + '" fill="none" stroke="#f1f5f9" stroke-width="22"/>'
+                + segs + '<text x="70" y="66" text-anchor="middle" font-size="18" font-weight="800" fill="#0f172a">' + centerTop + '</text>'
+                + '<text x="70" y="82" text-anchor="middle" font-size="10" fill="#64748b">' + centerSub + '</text></svg>';
+        }
+
+        function legendList(el, rows, total) {
+            if (!el) return;
+            el.innerHTML = rows.slice(0, 8).map(function (r, i) {
+                var pct = total ? ' (' + (Math.round(r[1] / total * 1000) / 10) + '%)' : '';
+                return '<div class="flex items-center gap-2 min-w-0"><span class="w-2 h-2 rounded-full shrink-0" style="background:' + RCOLORS[i % RCOLORS.length] + '"></span>'
+                    + '<span class="truncate text-slate-600">' + escapeHtml(r[0]) + '</span>'
+                    + '<span class="ml-auto font-bold text-slate-700 whitespace-nowrap">' + rNum(r[1]) + pct + '</span></div>';
+            }).join('') || '<div class="text-slate-400">No data.</div>';
+        }
+
+        function hbars(el, rows, barClass) {
+            if (!el) return;
+            var max = Math.max.apply(null, rows.map(function (r) { return r[1]; }).concat([1]));
+            el.innerHTML = rows.slice(0, 9).map(function (r) {
+                var pct = max > 0 ? Math.round(r[1] / max * 100) : 0;
+                return '<div><div class="flex justify-between text-[11px] font-semibold text-slate-600"><span class="truncate pr-2">' + escapeHtml(r[0]) + '</span><span>' + rNum(r[1]) + '</span></div>'
+                    + '<div class="h-2.5 bg-slate-100 rounded-full overflow-hidden mt-0.5"><div class="h-full rounded-full ' + (barClass || 'bg-blue-600') + '" style="width:' + pct + '%"></div></div></div>';
+            }).join('') || '<div class="text-xs text-slate-400">No data.</div>';
+        }
+
+        function lineChart(el, rows, color) {
+            if (!el) return;
+            if (!rows.length) { el.innerHTML = '<div class="text-xs text-slate-400 py-8 text-center">No trend data.</div>'; return; }
+            var W = 560, H = 180, P = 28;
+            var vals = rows.map(function (r) { return r[1]; });
+            var max = Math.max.apply(null, vals.concat([1]));
+            var stepX = rows.length > 1 ? (W - P * 2) / (rows.length - 1) : 0;
+            var pts = rows.map(function (r, i) {
+                return [P + stepX * i, H - P - (r[1] / max) * (H - P * 2)];
+            });
+            var line = pts.map(function (p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' ');
+            var win = Math.min(7, vals.length), avg = vals.slice(-win).reduce(function (a, b) { return a + b; }, 0) / win;
+            var fx = pts.length ? pts[pts.length - 1][0] : P, fy = H - P - (avg / max) * (H - P * 2);
+            el.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" class="w-full h-44">'
+                + '<line x1="' + P + '" y1="' + (H - P) + '" x2="' + (W - 8) + '" y2="' + (H - P) + '" stroke="#e2e8f0"/>'
+                + '<path d="' + line + ' L' + (W - P) + ' ' + (H - P) + ' L' + P + ' ' + (H - P) + ' Z" fill="' + color + '18"/>'
+                + '<path d="' + line + '" fill="none" stroke="' + color + '" stroke-width="2.5"/>'
+                + '<line x1="' + fx + '" y1="' + P + '" x2="' + fx + '" y2="' + (H - P) + '" stroke="#94a3b8" stroke-dasharray="4 4"/>'
+                + '<line x1="' + fx + '" y1="' + fy + '" x2="' + (W - 8) + '" y2="' + fy + '" stroke="' + color + '" stroke-dasharray="4 4"/>'
+                + '<text x="' + (fx + 4) + '" y="' + (P + 10) + '" font-size="10" fill="#64748b">Forecast</text></svg>'
+                + '<div class="flex justify-between text-[10px] text-slate-400"><span>' + escapeHtml(rows[0][0]) + '</span><span>' + escapeHtml(rows[rows.length - 1][0]) + '</span></div>';
+        }
+
+        function pill(text, kind) {
+            var map = { green: 'bg-green-100 text-green-700', red: 'bg-red-100 text-red-600', amber: 'bg-amber-100 text-amber-700', blue: 'bg-blue-100 text-blue-700', gray: 'bg-slate-100 text-slate-600', purple: 'bg-purple-100 text-purple-700' };
+            return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + (map[kind] || map.gray) + '">' + text + '</span>';
+        }
+
+        function renderRiverside() {
+            var C = (DASHBOARD && DASHBOARD.collection) || {};
+            var L = (DASHBOARD && DASHBOARD.circulation) || {};
+            var U = (DASHBOARD && DASHBOARD.usage) || {};
+
+            var ck = document.getElementById('collection-kpis');
+            if (ck) ck.innerHTML =
+                kpiCard('library_books', 'Total Titles', rNum(C.total_titles), 'catalog active', 'bg-blue-50')
+                + kpiCard('layers', 'Total Copies', rNum(C.total_copies), 'accession log', 'bg-blue-50')
+                + kpiCard('check_circle', 'Available Copies', rNum(C.available), '', 'bg-green-50')
+                + kpiCard('person', 'Borrowed Copies', rNum(C.borrowed), '', 'bg-violet-50')
+                + kpiCard('bookmark', 'Reserved Copies', rNum(C.reserved), 'waiting / allocated', 'bg-amber-50')
+                + kpiCard('schedule', 'Overdue Copies', rNum(C.overdue), 'require follow-up', 'bg-red-50')
+                + kpiCard('warning', 'Lost / Damaged', rNum(C.lost_damaged), 'inventory + flags', 'bg-red-50')
+                + kpiCard('build', 'Under Maintenance', rNum(C.maintenance), 'inventory missing', 'bg-blue-50');
+
+            var catTotal = (C.by_category || []).reduce(function (a, r) { return a + r[1]; }, 0);
+            donutSVG(document.getElementById('donut-category'), C.by_category || [], catTotal, rNum(C.total_titles), 'Total Titles');
+            legendList(document.getElementById('legend-category'), C.by_category || [], catTotal);
+            var statusRows = [['Available', C.available || 0], ['Borrowed', C.borrowed || 0], ['Reserved', C.reserved || 0], ['Overdue', C.overdue || 0], ['Lost / Damaged', C.lost_damaged || 0], ['Under Maintenance', C.maintenance || 0]];
+            donutSVG(document.getElementById('donut-status'), statusRows, C.total_copies || 1, rNum(C.total_copies), 'Total Copies');
+            legendList(document.getElementById('legend-status'), statusRows, C.total_copies || 0);
+            var cb = document.getElementById('condition-bars');
+            if (cb) {
+                var greens = ['bg-green-500', 'bg-green-300', 'bg-amber-400', 'bg-orange-500', 'bg-red-500'];
+                cb.innerHTML = (C.condition || []).map(function (r, i) {
+                    var pct = C.cond_total ? Math.round(r[1] / C.cond_total * 100) : 0;
+                    return '<div><div class="flex justify-between text-[11px] font-semibold text-slate-600"><span>' + escapeHtml(r[0]) + '</span><span>' + rNum(r[1]) + ' (' + pct + '%)</span></div>'
+                        + '<div class="h-2.5 bg-slate-100 rounded-full overflow-hidden mt-0.5"><div class="h-full rounded-full ' + greens[i % greens.length] + '" style="width:' + pct + '%"></div></div></div>';
+                }).join('');
+            }
+            var rcb = document.getElementById('recent-collection-body');
+            if (rcb) rcb.innerHTML = (C.recent || []).slice(0, 10).map(function (r) {
+                var avail = /avail/i.test(r[3] || '') ? pill('Available', 'green') : /borrow/i.test(r[3] || '') ? pill('Borrowed', 'blue') : /lost|damag/i.test(r[3] || '') ? pill('Lost / Damaged', 'red') : pill(r[3] || '-', 'gray');
+                return '<tr class="border-b last:border-0"><td class="py-2 pr-2 font-semibold">' + escapeHtml(r[0]) + '</td><td class="py-2 pr-2">' + escapeHtml(r[1]) + '</td><td class="py-2 pr-2 text-slate-500">' + escapeHtml(r[2]) + '</td><td class="py-2 pr-2">' + avail + '</td><td class="py-2 pr-2 text-slate-500">' + escapeHtml(r[5] || '-') + '</td><td class="py-2 text-slate-500">' + escapeHtml(r[6] || '-') + '</td></tr>';
+            }).join('') || '<tr><td colspan="6" class="py-6 text-center text-slate-400">No copies found.</td></tr>';
+            var att = document.getElementById('attention-list');
+            if (att) att.innerHTML =
+                '<div class="flex items-center gap-2 border rounded-lg px-3 py-2"><span class="material-symbols-outlined text-red-500">schedule</span><span class="flex-1"><b>Overdue Copies</b><br><span class="text-slate-500">Require immediate follow-up</span></span><b class="text-red-600">' + rNum(C.overdue) + '</b></div>'
+                + '<div class="flex items-center gap-2 border rounded-lg px-3 py-2"><span class="material-symbols-outlined text-red-500">warning</span><span class="flex-1"><b>Lost / Damaged Copies</b><br><span class="text-slate-500">Require replacement or review</span></span><b class="text-red-600">' + rNum(C.lost_damaged) + '</b></div>'
+                + '<div class="flex items-center gap-2 border rounded-lg px-3 py-2"><span class="material-symbols-outlined text-blue-600">build</span><span class="flex-1"><b>Due for Maintenance</b><br><span class="text-slate-500">Inventory flagged missing</span></span><b class="text-blue-600">' + rNum(C.maintenance) + '</b></div>';
+
+            var lk = document.getElementById('library-kpis');
+            if (lk) lk.innerHTML =
+                kpiCard('bar_chart', 'Total Borrowings', rNum(L.total), 'in period', 'bg-blue-50')
+                + kpiCard('group', 'Active Borrowers', rNum(L.active_borrowers), 'distinct', 'bg-green-50')
+                + kpiCard('error', 'Overdue Items', rNum(L.overdue), '', 'bg-red-50')
+                + kpiCard('schedule', 'Avg. Loan Duration', (L.avg_loan_days || 0) + ' days', '', 'bg-violet-50')
+                + kpiCard('check_circle', 'Return Rate (On-time)', (L.return_rate || 0) + '%', '', 'bg-blue-50')
+                + kpiCard('auto_stories', 'New Additions', rNum(L.new_additions), 'titles added', 'bg-amber-50');
+            lineChart(document.getElementById('trend-line'), L.trend || [], '#2563eb');
+            var tcTotal = (L.top_categories || []).reduce(function (a, r) { return a + r[1]; }, 0);
+            donutSVG(document.getElementById('donut-topcats'), L.top_categories || [], tcTotal, rNum(L.total), 'Total');
+            legendList(document.getElementById('legend-topcats'), L.top_categories || [], tcTotal);
+            hbars(document.getElementById('peak-bars'), (L.trend || []).slice(-7).map(function (r) { return [String(r[0]).slice(5), r[1]]; }), 'bg-blue-600');
+            var hd = document.getElementById('high-demand-body');
+            if (hd) hd.innerHTML = (L.high_demand || []).map(function (r, i) {
+                return '<tr class="border-b last:border-0"><td class="py-2">' + (i + 1) + '</td><td class="py-2 font-semibold">' + escapeHtml(r[0]) + '</td><td class="py-2 text-slate-500">' + escapeHtml(r[1]) + '</td><td class="py-2 text-right font-bold">' + rNum(r[2]) + '</td></tr>';
+            }).join('') || '<tr><td colspan="4" class="py-6 text-center text-slate-400">No active demand.</td></tr>';
+            lineChart(document.getElementById('overdue-line'), L.overdue_trend || [], '#dc2626');
+            var ins = document.getElementById('insights-list');
+            if (ins) ins.innerHTML =
+                '<div class="flex gap-2"><span class="material-symbols-outlined text-blue-600">trending_up</span><span><b>' + rNum(L.total) + ' borrowings</b> in the selected period with a <b>' + (L.return_rate || 0) + '% return rate</b>.</span></div>'
+                + '<div class="flex gap-2"><span class="material-symbols-outlined text-green-600">menu_book</span><span>Top category: <b>' + escapeHtml((((L.top_categories || [])[0]) || ['-'])[0]) + '</b>. Consider short-term acquisition boosts.</span></div>'
+                + '<div class="flex gap-2"><span class="material-symbols-outlined text-amber-600">schedule</span><span><b>' + rNum(L.overdue) + ' overdue items</b>. Continue reminder campaigns.</span></div>'
+                + '<div class="flex gap-2"><span class="material-symbols-outlined text-violet-600">pace</span><span>Average loan duration is <b>' + (L.avg_loan_days || 0) + ' days</b>.</span></div>';
+            var rcc = document.getElementById('recent-circ-body');
+            if (rcc) rcc.innerHTML = (L.recent || []).slice(0, 8).map(function (r) {
+                var st = /overdue/i.test(r[8] || '') ? pill('Overdue', 'red') : /return/i.test(r[6] || '') ? pill('Returned', 'green') : pill('Active', 'green');
+                return '<tr class="border-b last:border-0"><td class="py-2 pr-2">' + escapeHtml(r[0]) + '</td><td class="py-2 pr-2 font-semibold">TXN-' + escapeHtml(String(r[1])) + '</td><td class="py-2 pr-2">' + escapeHtml(r[2]) + '</td><td class="py-2 pr-2">' + escapeHtml(r[4]) + '</td><td class="py-2 pr-2">' + pill(escapeHtml(r[6] || ''), 'blue') + '</td><td class="py-2 pr-2 text-slate-500">' + escapeHtml(r[7] || '-') + '</td><td class="py-2">' + st + '</td></tr>';
+            }).join('') || '<tr><td colspan="7" class="py-6 text-center text-slate-400">No circulation yet.</td></tr>';
+
+            var uk = document.getElementById('usage-kpis');
+            if (uk) uk.innerHTML =
+                kpiCard('book', 'Total Borrowings', rNum(U.total), '', 'bg-blue-50')
+                + kpiCard('group', 'Unique Borrowers', rNum(U.unique_borrowers), '', 'bg-green-50')
+                + kpiCard('layers', 'Avg. Books per Borrower', (U.avg_per_borrower || 0), '', 'bg-violet-50')
+                + kpiCard('schedule', 'Overdue Rate', rNum(U.overdue), 'items', 'bg-red-50')
+                + kpiCard('check_circle', 'Return Rate (On-time)', (U.return_rate || 0) + '%', '', 'bg-blue-50')
+                + kpiCard('account_balance', 'Active Departments', rNum(U.active_departments), '', 'bg-amber-50');
+            hbars(document.getElementById('dept-bars'), U.by_department || [], 'bg-blue-600');
+            lineChart(document.getElementById('usage-trend-line'), U.trend || [], '#2563eb');
+            var tb = document.getElementById('top-books-list');
+            if (tb) tb.innerHTML = (U.top_books || []).map(function (r, i) {
+                return '<div class="flex items-center gap-2 border rounded-lg px-2.5 py-2"><span class="w-6 h-6 rounded-full bg-blue-50 text-blue-700 text-[11px] font-extrabold flex items-center justify-center shrink-0">' + (i + 1) + '</span><span class="flex-1 min-w-0"><b class="block truncate text-[11px]">' + escapeHtml(r[0]) + '</b><span class="text-[10px] text-slate-500">' + escapeHtml(r[1] || '') + '</span></span><b class="text-[11px]">' + rNum(r[2]) + '</b></div>';
+            }).join('') || '<div class="text-xs text-slate-400">No borrows yet.</div>';
+            var utTotal = (U.by_user_type || []).reduce(function (a, r) { return a + r[1]; }, 0);
+            donutSVG(document.getElementById('donut-usertype'), U.by_user_type || [], utTotal, rNum(U.total), 'Total');
+            legendList(document.getElementById('legend-usertype'), U.by_user_type || [], utTotal);
+            hbars(document.getElementById('overdue-dept-bars'), (U.by_department || []).slice(0, 6), 'bg-red-500');
+            hbars(document.getElementById('tod-bars'), (U.trend || []).slice(-6).map(function (r) { return [String(r[0]).slice(5), r[1]]; }), 'bg-blue-600');
+            var rub = document.getElementById('recent-usage-body');
+            if (rub) rub.innerHTML = (U.recent || []).slice(0, 8).map(function (r) {
+                return '<tr class="border-b last:border-0"><td class="py-2 pr-2">' + escapeHtml(r[0]) + '</td><td class="py-2 pr-2">' + escapeHtml(r[2]) + ' <span class="text-slate-400">(' + escapeHtml(r[3] || '') + ')</span></td><td class="py-2 pr-2">' + escapeHtml(r[4]) + '</td><td class="py-2 pr-2">' + pill(escapeHtml(r[6] || ''), 'blue') + '</td><td class="py-2 pr-2 text-slate-500">' + escapeHtml(r[7] || '-') + '</td><td class="py-2">' + pill(escapeHtml(r[8] || ''), 'green') + '</td></tr>';
+            }).join('') || '<tr><td colspan="6" class="py-6 text-center text-slate-400">No activity yet.</td></tr>';
+        }
+
+        document.querySelectorAll('.rtab-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var name = btn.getAttribute('data-rtab');
+                document.querySelectorAll('.rtab-btn').forEach(function (b) {
+                    var on = b.getAttribute('data-rtab') === name;
+                    b.className = 'rtab-btn px-4 py-2 rounded-lg text-xs font-bold ' + (on ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50');
+                });
+                document.querySelectorAll('[data-rtab-panel]').forEach(function (p) {
+                    p.classList.toggle('hidden', p.getAttribute('data-rtab-panel') !== name);
+                });
+            });
+        });
+
+        renderRiverside();
         renderBoard();
     </script>
 </body>
