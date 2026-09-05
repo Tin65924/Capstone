@@ -73,53 +73,35 @@
                     </div>
 
                     <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
-                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Availability</h3>
-                        <div class="space-y-1.5 text-[13px]">
-                            <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="availability" value="" {% if not availability %}checked{% endif %} onchange="this.form.submit()" class="accent-blue-900">
-                                <span class="text-slate-700 dark:text-slate-300">All</span>
-                            </label>
-                            <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="availability" value="available" {% if availability == 'available' %}checked{% endif %} onchange="this.form.submit()" class="accent-blue-900">
-                                <span class="text-slate-700 dark:text-slate-300">Available</span>
-                            </label>
-                            <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="availability" value="borrowed" {% if availability == 'borrowed' %}checked{% endif %} onchange="this.form.submit()" class="accent-blue-900">
-                                <span class="text-slate-700 dark:text-slate-300">Borrowed</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
                         <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Year</h3>
                         <div class="space-y-1.5 text-[13px]">
                             <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="year_preset" value="any" {% if year_preset == 'any' or (not year_preset and not year_from and not year_to) %}checked{% endif %} onchange="this.form.submit()" class="accent-blue-900">
+                                <input type="radio" name="year_preset" value="any" {% if year_preset == 'any' or (not year_preset and not year_from and not year_to) %}checked{% endif %} class="accent-blue-900">
                                 <span class="text-slate-700 dark:text-slate-300">Any time</span>
                             </label>
                             <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="year_preset" value="since_this_year" {% if year_preset == 'since_this_year' %}checked{% endif %} onchange="this.form.submit()" class="accent-blue-900">
+                                <input type="radio" name="year_preset" value="since_this_year" {% if year_preset == 'since_this_year' %}checked{% endif %} class="accent-blue-900">
                                 <span class="text-slate-700 dark:text-slate-300">Since {{ current_year }}</span>
                             </label>
                             <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="year_preset" value="since_last_year" {% if year_preset == 'since_last_year' %}checked{% endif %} onchange="this.form.submit()" class="accent-blue-900">
+                                <input type="radio" name="year_preset" value="since_last_year" {% if year_preset == 'since_last_year' %}checked{% endif %} class="accent-blue-900">
                                 <span class="text-slate-700 dark:text-slate-300">Since {{ current_year - 1 }}</span>
                             </label>
                             <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="year_preset" value="since_2023" {% if year_preset == 'since_2023' %}checked{% endif %} onchange="this.form.submit()" class="accent-blue-900">
+                                <input type="radio" name="year_preset" value="since_2023" {% if year_preset == 'since_2023' %}checked{% endif %} class="accent-blue-900">
                                 <span class="text-slate-700 dark:text-slate-300">Since 2023</span>
                             </label>
                             <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="year_preset" value="custom" {% if year_preset == 'custom' %}checked{% endif %} onchange="this.form.submit()" class="accent-blue-900">
+                                <input type="radio" name="year_preset" value="custom" {% if year_preset == 'custom' %}checked{% endif %} class="accent-blue-900">
                                 <span class="text-slate-700 dark:text-slate-300">Custom range...</span>
                             </label>
                         </div>
                         <div class="mt-2 space-y-2.5">
                             <div class="flex items-center gap-1.5">
-                                <input type="number" name="year_from" value="{{ year_from or '' }}" min="1000" max="2100" placeholder="From" onchange="this.form.submit()"
+                                <input type="number" name="year_from" value="{{ year_from or '' }}" min="1000" max="2100" placeholder="From"
                                     class="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-[13px] placeholder-slate-400 focus:ring-2 focus:ring-primary/20 outline-none transition-all">
                                 <span class="text-slate-400 text-[13px]">to</span>
-                                <input type="number" name="year_to" value="{{ year_to or '' }}" min="1000" max="2100" placeholder="To" onchange="this.form.submit()"
+                                <input type="number" name="year_to" value="{{ year_to or '' }}" min="1000" max="2100" placeholder="To"
                                     class="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-[13px] placeholder-slate-400 focus:ring-2 focus:ring-primary/20 outline-none transition-all">
                             </div>
                             <button type="submit"
@@ -193,23 +175,6 @@
                             <label class="flex items-center gap-2 cursor-pointer py-1">
                                 <input type="radio" name="material_type" value="physical" {% if material_type == 'physical' %}checked{% endif %} class="accent-blue-900">
                                 <span class="text-slate-700 dark:text-slate-300">Physical books</span>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
-                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Availability</h3>
-                        <div class="space-y-1.5 text-[13px]">
-                            <label class="flex items-center gap-2 cursor-pointer py-1">
-                                <input type="radio" name="availability" value="" {% if not availability %}checked{% endif %} class="accent-blue-900">
-                                <span class="text-slate-700 dark:text-slate-300">All</span>
-                            </label>
-                            <label class="flex items-center gap-2 cursor-pointer py-1">
-                                <input type="radio" name="availability" value="available" {% if availability == 'available' %}checked{% endif %} class="accent-blue-900">
-                                <span class="text-slate-700 dark:text-slate-300">Available</span>
-                            </label>
-                            <label class="flex items-center gap-2 cursor-pointer py-1">
-                                <input type="radio" name="availability" value="borrowed" {% if availability == 'borrowed' %}checked{% endif %} class="accent-blue-900">
-                                <span class="text-slate-700 dark:text-slate-300">Borrowed</span>
                             </label>
                         </div>
                     </div>
@@ -306,27 +271,23 @@
                                 Search Resources
                             </button>
                         </div>
-                        {% if year_from or year_to or category or material_type or availability or sort_by %}
+                        {% if year_from or year_to or category or material_type or sort_by %}
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="text-xs text-slate-400 font-medium">Active filters:</span>
                             {% if sort_by %}
-                            <a href="{{ url_for('cataloging.public_catalog', q=search_query, field=search_field, year_from=year_from, year_to=year_to, category=category, material_type=material_type, availability=availability) }}"
+                            <a href="{{ url_for('cataloging.public_catalog', q=search_query, field=search_field, year_from=year_from, year_to=year_to, category=category, material_type=material_type) }}"
                                 class="inline-flex items-center gap-1 text-xs font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full hover:bg-primary/20 transition-colors">Sort: {{ 'Title A-Z' if sort_by == 'title' else 'Newest First' if sort_by == 'year_desc' else sort_by }} <span class="material-symbols-outlined text-sm">close</span></a>
                             {% endif %}
                             {% if category %}
-                            <a href="{{ url_for('cataloging.public_catalog', q=search_query, field=search_field, year_from=year_from, year_to=year_to, sort_by=sort_by, material_type=material_type, availability=availability) }}"
+                            <a href="{{ url_for('cataloging.public_catalog', q=search_query, field=search_field, year_from=year_from, year_to=year_to, sort_by=sort_by, material_type=material_type) }}"
                                 class="inline-flex items-center gap-1 text-xs font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full hover:bg-primary/20 transition-colors">Category: {{ category }} <span class="material-symbols-outlined text-sm">close</span></a>
                             {% endif %}
                             {% if material_type %}
-                            <a href="{{ url_for('cataloging.public_catalog', q=search_query, field=search_field, year_from=year_from, year_to=year_to, sort_by=sort_by, category=category, availability=availability) }}"
+                            <a href="{{ url_for('cataloging.public_catalog', q=search_query, field=search_field, year_from=year_from, year_to=year_to, sort_by=sort_by, category=category) }}"
                                 class="inline-flex items-center gap-1 text-xs font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full hover:bg-primary/20 transition-colors">Type: {{ 'E-Book' if material_type == 'ebook' else 'Physical Book' if material_type == 'physical' else material_type }} <span class="material-symbols-outlined text-sm">close</span></a>
                             {% endif %}
-                            {% if availability %}
-                            <a href="{{ url_for('cataloging.public_catalog', q=search_query, field=search_field, year_from=year_from, year_to=year_to, sort_by=sort_by, category=category, material_type=material_type) }}"
-                                class="inline-flex items-center gap-1 text-xs font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full hover:bg-primary/20 transition-colors">Availability: {{ 'Available' if availability == 'available' else 'Borrowed' if availability == 'borrowed' else availability }} <span class="material-symbols-outlined text-sm">close</span></a>
-                            {% endif %}
                             {% if year_from or year_to %}
-                            <a href="{{ url_for('cataloging.public_catalog', q=search_query, field=search_field, sort_by=sort_by, category=category, material_type=material_type, availability=availability) }}"
+                            <a href="{{ url_for('cataloging.public_catalog', q=search_query, field=search_field, sort_by=sort_by, category=category, material_type=material_type) }}"
                                 class="inline-flex items-center gap-1 text-xs font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full hover:bg-primary/20 transition-colors">Year: {{ year_from or 'Any' }} – {{ year_to or 'Now' }} <span class="material-symbols-outlined text-sm">close</span></a>
                             {% endif %}
                             <a href="{{ url_for('cataloging.public_catalog') }}"
@@ -350,7 +311,7 @@
                 </div>
                 <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-1 shrink-0 self-start sm:self-center" role="group" aria-label="Catalog view">
                     {% set _view = view|default('grid') %}
-                    {% set _base_args = {'q': search_query, 'field': search_field, 'year_preset': year_preset, 'year_from': year_from, 'year_to': year_to, 'sort_by': sort_by, 'category': category, 'material_type': material_type, 'availability': availability} %}
+                    {% set _base_args = {'q': search_query, 'field': search_field, 'year_preset': year_preset, 'year_from': year_from, 'year_to': year_to, 'sort_by': sort_by, 'category': category, 'material_type': material_type} %}
                     <a href="{{ url_for('cataloging.public_catalog', view='grid', **_base_args) }}" title="Grid view"
                         class="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-colors {% if _view != 'list' %}bg-white dark:bg-slate-900 text-primary shadow-sm{% else %}text-slate-500 dark:text-slate-400 hover:text-slate-700{% endif %}">
                         <span class="material-symbols-outlined text-[18px]">grid_view</span><span class="hidden sm:inline">Grid</span>
@@ -506,7 +467,7 @@
             {% endif %}
             {% if total_pages > 1 %}
             <nav class="mt-8 sm:mt-10 flex items-center justify-center gap-1.5 sm:gap-2 flex-wrap" aria-label="Pagination">
-                {% set query_args = {'q': search_query, 'field': search_field, 'year_preset': year_preset, 'year_from': year_from, 'year_to': year_to, 'sort_by': sort_by, 'category': category, 'material_type': material_type, 'availability': availability, 'view': (view|default('grid'))} %}
+                {% set query_args = {'q': search_query, 'field': search_field, 'year_preset': year_preset, 'year_from': year_from, 'year_to': year_to, 'sort_by': sort_by, 'category': category, 'material_type': material_type, 'view': (view|default('grid'))} %}
                 {% if page > 1 %}
                 <a href="{{ url_for('cataloging.public_catalog', page=page-1, **query_args) }}"
                     class="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded border border-slate-300 dark:border-slate-700 text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
@@ -608,7 +569,7 @@
         var input = document.getElementById('catalog-search-input');
         var grid = document.getElementById('catalog-results-grid') || document.getElementById('catalog-results-list');
         if (!input || !grid) return;
-        var hasActiveFilter = {{ 'true' if (category or material_type or availability or year_from or year_to) else 'false' }};
+        var hasActiveFilter = {{ 'true' if (category or material_type or year_from or year_to) else 'false' }};
         var isSearching = {{ 'true' if has_search else 'false' }};
         var emptyPromptHTML = '<div id="catalog-empty-prompt" class="col-span-full flex flex-col items-center justify-center py-16 text-center">'
             + '<span class="material-symbols-outlined text-5xl text-slate-300 dark:text-slate-600 mb-4">search</span>'

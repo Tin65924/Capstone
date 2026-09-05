@@ -413,8 +413,9 @@ class TestPublicCatalog:
         assert resp.status_code == 200
         assert mock_db['fetch_all'].call_count == 2
         body = resp.get_data(as_text=True)
-        for label in ['Sort', 'Category', 'Type', 'Availability', 'Year']:
+        for label in ['Sort', 'Category', 'Type', 'Year']:
             assert label in body, f'missing sidebar section: {label}'
+        assert 'Availability' not in body
 
     def test_public_catalog_pagination(self, client, mock_db):
         many_books = [
@@ -471,7 +472,7 @@ class TestPublicCatalog:
         ]
         resp = client.get('/catalog?availability=available')
         assert resp.status_code == 200
-        assert b'Availability: Available' in resp.data
+        assert b'Availability: Available' not in resp.data
 
     def test_book_info_found(self, client, mock_db):
         mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
