@@ -1,5 +1,5 @@
-from flask import render_template, redirect, url_for, jsonify, request
-from datetime import date
+from flask import render_template, redirect, url_for, jsonify, request, flash, current_app
+from datetime import date, datetime
 from flask_login import login_required, current_user
 from . import main_bp
 from .models import get_dashboard_stats, get_recent_activity, get_daily_borrows
@@ -14,6 +14,26 @@ BOOK_FIELD_MAP = {
     'book_title': 'title', 'book_author': 'author', 'book_publisher': 'publisher',
     'book_subject': 'subject', 'book_isbn': 'isbn', 'book_search': 'search',
 }
+
+
+def _safe_next(default_endpoint):
+    """Return a validated redirect target for user-supplied `next`.
+
+    Only same-origin relative paths (single leading `/`, no scheme or
+    host) are honored; anything else falls back to `default_endpoint`.
+    Guards POST-then-redirect handlers against open redirects.
+    """
+    from urllib.parse import urlparse
+    fallback = url_for(default_endpoint)
+    nxt = request.form.get('next') or request.args.get('next')
+    if not nxt:
+        return fallback
+    parsed = urlparse(nxt)
+    if parsed.scheme or parsed.netloc:
+        return fallback
+    if not nxt.startswith('/') or nxt.startswith('//'):
+        return fallback
+    return nxt
 
 
 @main_bp.route('/')
@@ -31,15 +51,20 @@ def dashboard():
 @main_bp.route('/user/profile')
 @login_required
 def user_profile():
-    from flask import current_app
-    from app.auth.models import get_user_by_id
+    from app.auth.models import get_user_by_id, get_profile_by_user
     from app.circulation.models import (
         get_borrower_by_user, get_loans_by_borrower, count_active_loans,
-        get_reservations_by_borrower, get_notifications_by_borrower
+        get_reservations_by_borrower, get_notifications_by_borrower,
+        count_unread_notifications, get_fines_by_borrower, get_total_fines,
+        create_notification, notification_exists,
     )
     from app.requests.models import get_requests_by_borrower
 
     user_data = get_user_by_id(current_user.id)
+    try:
+        profile = get_profile_by_user(current_user.id)
+    except Exception:
+        profile = None
 
     borrower = get_borrower_by_user(current_user.id)
     loans = []
@@ -49,12 +74,18 @@ def user_profile():
     pickups = []
     my_requests = []
     notifications = []
+    unread_count = 0
+    fines = []
+    total_fines = 0
 
     if borrower:
         borrower_id = borrower[0]
-        loans = get_loans_by_borrower(borrower_id)
-        overdue_count = sum(1 for loan in loans if loan[4] == 'overdue')
-        active_count = count_active_loans(borrower_id)
+        loans = get_loans_by_borrower(borrower_id) or []
+        overdue_count = sum(1 for loan in loans if len(loan) > 4 and loan[4] == 'overdue')
+        try:
+            active_count = count_active_loans(borrower_id)
+        except Exception:
+            active_count = len(loans)
 
         role_name = user_data[2] if user_data else ''
         if role_name == 'Faculty':
@@ -62,37 +93,213 @@ def user_profile():
         else:
             borrow_limit = current_app.config.get('MAX_BORROW_LIMIT_STUDENT', 3)
 
-        reservations = get_reservations_by_borrower(borrower_id)
-        pickups = [r for r in reservations if r[2] == 'allocated']
-        borrowing_requests = [r for r in reservations if r[2] in ('waiting', 'allocated')]
+        try:
+            reservations = get_reservations_by_borrower(borrower_id) or []
+        except Exception:
+            reservations = []
+        pickups = [r for r in reservations if len(r) > 2 and r[2] == 'allocated']
+        borrowing_requests = [r for r in reservations if len(r) > 2 and r[2] in ('waiting', 'allocated')]
 
-        my_requests = get_requests_by_borrower(borrower_id)
-        notifications = get_notifications_by_borrower(borrower_id)
+        try:
+            my_requests = get_requests_by_borrower(borrower_id) or []
+        except Exception:
+            my_requests = []
+        try:
+            notifications = get_notifications_by_borrower(borrower_id) or []
+        except Exception:
+            notifications = []
+        try:
+            unread_count = count_unread_notifications(borrower_id)
+        except Exception:
+            unread_count = 0
+        try:
+            fines = get_fines_by_borrower(borrower_id) or []
+            total_fines = get_total_fines(borrower_id) or 0
+        except Exception:
+            fines = []
+            total_fines = 0
+
+        # Auto-generate due-soon / overdue reminders (once per day per loan).
+        try:
+            due_soon_days = int(current_app.config.get('DUE_SOON_NOTIFY_DAYS', 2))
+        except (TypeError, ValueError):
+            due_soon_days = 2
+        for loan in loans:
+            try:
+                circ_id = loan[0]
+                due = loan[2] if len(loan) > 2 else None
+                status = loan[4] if len(loan) > 4 else ''
+                title = loan[5] if len(loan) > 5 else f'loan #{circ_id}'
+                if isinstance(due, str):
+                    try:
+                        due = datetime.fromisoformat(due).date()
+                    except ValueError:
+                        continue
+                if not hasattr(due, 'timetuple'):
+                    continue
+                delta = (due - date.today()).days
+                if status == 'overdue' or delta < 0:
+                    if not notification_exists(borrower_id, 'overdue_reminder', str(circ_id)):
+                        create_notification(
+                            borrower_id,
+                            f'Overdue: "{title}" was due {due}. Please return it to avoid further fines.',
+                            'overdue_reminder',
+                            str(circ_id),
+                        )
+                elif 0 <= delta <= due_soon_days:
+                    if not notification_exists(borrower_id, 'due_soon', str(circ_id)):
+                        create_notification(
+                            borrower_id,
+                            f'Reminder: "{title}" is due {due} (in {delta} day(s)).',
+                            'due_soon',
+                            str(circ_id),
+                        )
+            except Exception:
+                continue
     else:
         borrowing_requests = []
 
     return render_template('users/user_profile.html', user_data=user_data,
+                           profile=profile,
                            loans=loans, overdue_count=overdue_count,
                            active_count=active_count, borrow_limit=borrow_limit,
                            pickups=pickups, my_requests=my_requests,
                            borrowing_requests=borrowing_requests,
-                           notifications=notifications)
+                           notifications=notifications, unread_count=unread_count,
+                           fines=fines, total_fines=total_fines)
+
+
+@main_bp.route('/user/profile/update', methods=['POST'])
+@login_required
+def update_profile():
+    import re
+    from app.auth.models import get_profile_by_user, update_own_profile, log_activity
+
+    full_name = request.form.get('full_name', '').strip()
+    phone_number = request.form.get('phone_number', '').strip() or None
+    department = request.form.get('department', '').strip() or None
+
+    if request.form.get('id_number', '').strip():
+        flash('Student ID cannot be changed. Contact the librarian for ID corrections.', 'error')
+        return redirect(url_for('main.user_profile'))
+
+    if not full_name:
+        flash('Full name is required.', 'error')
+        return redirect(url_for('main.user_profile'))
+
+    if phone_number and not re.fullmatch(r'[+\d][\d\s\-()]{6,19}', phone_number):
+        flash('Invalid phone number format.', 'error')
+        return redirect(url_for('main.user_profile'))
+
+    try:
+        profile = get_profile_by_user(current_user.id)
+    except Exception:
+        profile = None
+    if profile is None:
+        flash('Profile not found.', 'error')
+        return redirect(url_for('main.user_profile'))
+
+    update_own_profile(current_user.id, full_name, phone_number, department)
+    log_activity(current_user.id, 'profile:update')
+    flash('Profile updated.', 'success')
+    return redirect(url_for('main.user_profile'))
+
+
+@main_bp.route('/user/notifications')
+@login_required
+def user_notifications():
+    from app.circulation.models import (
+        get_borrower_by_user, get_notifications_by_borrower, count_unread_notifications
+    )
+    notifications = []
+    unread_count = 0
+    borrower = get_borrower_by_user(current_user.id)
+    if borrower:
+        try:
+            notifications = get_notifications_by_borrower(borrower[0]) or []
+        except Exception:
+            notifications = []
+        try:
+            unread_count = count_unread_notifications(borrower[0])
+        except Exception:
+            unread_count = 0
+    return render_template('users/user_notifications.html',
+                           notifications=notifications, unread_count=unread_count)
+
+
+@main_bp.route('/user/notifications/<int:notification_id>/read', methods=['POST'])
+@login_required
+def mark_notification_read_route(notification_id):
+    from app.circulation.models import get_borrower_by_user, mark_notification_read
+    from app.auth.models import log_activity
+    borrower = get_borrower_by_user(current_user.id)
+    if not borrower:
+        flash('No borrower record found.', 'error')
+        return redirect(url_for('main.user_profile'))
+    mark_notification_read(notification_id, borrower[0])
+    log_activity(current_user.id, f'notifications:read:{notification_id}')
+    return redirect(_safe_next('main.user_profile'))
+
+
+@main_bp.route('/user/notifications/read-all', methods=['POST'])
+@login_required
+def mark_all_notifications_read_route():
+    from app.circulation.models import get_borrower_by_user, mark_all_notifications_read
+    from app.auth.models import log_activity
+    borrower = get_borrower_by_user(current_user.id)
+    if not borrower:
+        flash('No borrower record found.', 'error')
+        return redirect(url_for('main.user_profile'))
+    mark_all_notifications_read(borrower[0])
+    log_activity(current_user.id, 'notifications:read_all')
+    flash('All notifications marked as read.', 'success')
+    return redirect(_safe_next('main.user_profile'))
 
 
 @main_bp.route('/user/history')
 @login_required
 def user_history():
-    from app.circulation.models import get_borrower_by_user, get_user_loan_history
+    from app.circulation.models import (
+        get_borrower_by_user, get_user_loan_history,
+        get_reservation_history_by_borrower, get_fines_by_borrower,
+        get_total_fines, get_notifications_by_borrower,
+    )
     from app.requests.models import get_requests_by_borrower
 
     transactions = []
     my_requests = []
+    reservations = []
+    fines = []
+    total_fines = 0
+    notifications = []
     borrower = get_borrower_by_user(current_user.id)
     if borrower:
-        transactions = get_user_loan_history(current_user.id)
-        my_requests = get_requests_by_borrower(borrower[0])
+        try:
+            transactions = get_user_loan_history(current_user.id) or []
+        except Exception:
+            transactions = []
+        try:
+            my_requests = get_requests_by_borrower(borrower[0]) or []
+        except Exception:
+            my_requests = []
+        try:
+            reservations = get_reservation_history_by_borrower(borrower[0]) or []
+        except Exception:
+            reservations = []
+        try:
+            fines = get_fines_by_borrower(borrower[0]) or []
+            total_fines = get_total_fines(borrower[0]) or 0
+        except Exception:
+            fines = []
+            total_fines = 0
+        try:
+            notifications = get_notifications_by_borrower(borrower[0]) or []
+        except Exception:
+            notifications = []
     return render_template('users/user_history.html',
-                           transactions=transactions, my_requests=my_requests)
+                           transactions=transactions, my_requests=my_requests,
+                           reservations=reservations, fines=fines,
+                           total_fines=total_fines, notifications=notifications)
 
 
 @main_bp.route('/api/bloom')

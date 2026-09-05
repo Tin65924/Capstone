@@ -28,9 +28,12 @@ CREATE TABLE IF NOT EXISTS borrowers (
     user_id         INT UNIQUE NOT NULL REFERENCES user_accounts(user_id),
     id_number       VARCHAR(30) UNIQUE NOT NULL,
     department      VARCHAR(100),
+    phone_number    VARCHAR(30),
     borrower_status VARCHAR(20) NOT NULL DEFAULT 'active'
                     CHECK (borrower_status IN ('active', 'blocked'))
 );
+
+ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS phone_number VARCHAR(30);
 
 CREATE TABLE IF NOT EXISTS book_catalog (
     book_id               SERIAL PRIMARY KEY,
@@ -152,10 +155,15 @@ CREATE TABLE IF NOT EXISTS notification_log (
     recipient_id    INT NOT NULL REFERENCES borrowers(borrower_id),
     message         VARCHAR(500) NOT NULL,
     notif_type      VARCHAR(30) NOT NULL
-                    CHECK (notif_type IN ('status_update', 'hold_ready', 'overdue_reminder')),
+                    CHECK (notif_type IN ('status_update', 'hold_ready', 'overdue_reminder',
+                                         'borrow', 'return', 'request_update', 'fine',
+                                         'due_soon', 'reservation')),
     related_reference VARCHAR(50),
+    is_read         BOOLEAN NOT NULL DEFAULT FALSE,
     date_sent       TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE notification_log ADD COLUMN IF NOT EXISTS is_read BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS user_favorites (
     favorite_id SERIAL PRIMARY KEY,
@@ -185,3 +193,23 @@ INSERT INTO roles (role_name) VALUES
     ('Librarian'),
     ('Admin')
 ON CONFLICT (role_name) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS library_settings (
+    setting_key   VARCHAR(60) PRIMARY KEY,
+    setting_value TEXT NOT NULL,
+    description   VARCHAR(255),
+    updated_at    TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_by    INT REFERENCES user_accounts(user_id)
+);
+
+INSERT INTO library_settings (setting_key, setting_value, description) VALUES
+    ('MAX_BORROW_LIMIT_STUDENT', '3', 'Max active loans for students'),
+    ('MAX_BORROW_LIMIT_FACULTY', '5', 'Max active loans for faculty'),
+    ('OVERNIGHT_DUE_DAYS_STUDENT', '2', 'Overnight loan due days for students'),
+    ('OVERNIGHT_DUE_DAYS_FACULTY', '30', 'Overnight loan due days for faculty'),
+    ('DAILY_CIRCULATION_DUE_DAYS', '0', 'Daily circulation due days (0 = same day)'),
+    ('OVERDUE_FINE_PER_DAY', '10.0', 'Overdue fine in pesos per day'),
+    ('OVERDUE_GRACE_DAYS', '0', 'Grace days before fines accrue'),
+    ('RESERVATION_CLAIM_DAYS', '2', 'Days to claim an allocated reservation'),
+    ('DUE_SOON_NOTIFY_DAYS', '2', 'Days before due date to send due-soon reminders')
+ON CONFLICT (setting_key) DO NOTHING;

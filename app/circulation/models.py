@@ -91,7 +91,7 @@ def count_active_loans(borrower_id):
     return row[0] if row else 0
 
 
-def calculate_fine(circulation_id, overdue_rate=10.0):
+def calculate_fine(circulation_id, overdue_rate=10.0, grace_days=0):
     record = db.fetch_one(
         'SELECT due_date, return_date FROM circulation_records WHERE circulation_id = %s',
         (circulation_id,)
@@ -100,7 +100,7 @@ def calculate_fine(circulation_id, overdue_rate=10.0):
         return 0
     due_date, return_date = record
     returned = return_date if return_date else date.today()
-    overdue_days = (returned - due_date).days
+    overdue_days = (returned - due_date).days - (grace_days or 0)
     return max(0, overdue_days * overdue_rate)
 
 
@@ -262,14 +262,95 @@ def get_user_loan_history(user_id):
     )
 
 
-def get_notifications_by_borrower(borrower_id):
-    return db.fetch_all(
-        '''SELECT notification_id, message, notif_type, related_reference, date_sent
+def get_notifications_by_borrower(borrower_id, limit=None):
+    query = (
+        '''SELECT notification_id, message, notif_type, related_reference, date_sent,
+                  COALESCE(is_read, FALSE) AS is_read
            FROM notification_log
            WHERE recipient_id = %s
-           ORDER BY date_sent DESC''',
-         (borrower_id,)
+           ORDER BY date_sent DESC'''
     )
+    params = [borrower_id]
+    if limit:
+        query += ' LIMIT %s'
+        params.append(limit)
+    return db.fetch_all(query, tuple(params))
+
+
+def count_unread_notifications(borrower_id):
+    row = db.fetch_one(
+        '''SELECT COUNT(*) FROM notification_log
+           WHERE recipient_id = %s AND COALESCE(is_read, FALSE) = FALSE''',
+        (borrower_id,)
+    )
+    return row[0] if row else 0
+
+
+def get_notification_by_id(notification_id, borrower_id):
+    return db.fetch_one(
+        '''SELECT notification_id, message, notif_type, related_reference, date_sent,
+                  COALESCE(is_read, FALSE) AS is_read
+           FROM notification_log
+           WHERE notification_id = %s AND recipient_id = %s''',
+        (notification_id, borrower_id)
+    )
+
+
+def mark_notification_read(notification_id, borrower_id):
+    return db.execute(
+        'UPDATE notification_log SET is_read = TRUE WHERE notification_id = %s AND recipient_id = %s',
+        (notification_id, borrower_id)
+    )
+
+
+def mark_all_notifications_read(borrower_id):
+    return db.execute(
+        'UPDATE notification_log SET is_read = TRUE WHERE recipient_id = %s AND COALESCE(is_read, FALSE) = FALSE',
+        (borrower_id,)
+    )
+
+
+def notification_exists(recipient_id, notif_type, related_reference):
+    row = db.fetch_one(
+        '''SELECT notification_id FROM notification_log
+           WHERE recipient_id = %s AND notif_type = %s AND related_reference = %s
+             AND DATE(date_sent) = CURRENT_DATE''',
+        (recipient_id, notif_type, related_reference)
+    )
+    return bool(row)
+
+
+def get_reservation_history_by_borrower(borrower_id):
+    return db.fetch_all(
+        '''SELECT r.reservation_id, r.queue_position, r.reservation_status, r.request_date, r.claim_deadline,
+                  b.title, b.author
+           FROM reservation_queue r
+           JOIN book_catalog b ON r.book_id = b.book_id
+           WHERE r.borrower_id = %s
+           ORDER BY r.request_date DESC''',
+        (borrower_id,)
+    )
+
+
+def get_fines_by_borrower(borrower_id):
+    return db.fetch_all(
+        '''SELECT c.circulation_id, c.borrow_date, c.due_date, c.return_date, c.fine_amount,
+                  b.title, a.accession_number
+           FROM circulation_records c
+           JOIN book_catalog b ON c.book_id = b.book_id
+           JOIN accession_log a ON c.accession_id = a.accession_id
+           WHERE c.borrower_id = %s AND c.fine_amount > 0
+           ORDER BY COALESCE(c.return_date, c.borrow_date) DESC''',
+        (borrower_id,)
+    )
+
+
+def get_total_fines(borrower_id):
+    row = db.fetch_one(
+        'SELECT COALESCE(SUM(fine_amount), 0) FROM circulation_records WHERE borrower_id = %s',
+        (borrower_id,)
+    )
+    return row[0] if row else 0
 
 
 def get_borrower_by_user(user_id):

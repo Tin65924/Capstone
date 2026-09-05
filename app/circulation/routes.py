@@ -26,17 +26,17 @@ VALID_BORROW_TYPES = ('overnight', 'daily_circulation')
 
 def _borrow_limit(role_name):
     if role_name == 'Student':
-        return current_app.config['MAX_BORROW_LIMIT_STUDENT']
-    return current_app.config['MAX_BORROW_LIMIT_FACULTY']
+        return current_app.config.get('MAX_BORROW_LIMIT_STUDENT', 3)
+    return current_app.config.get('MAX_BORROW_LIMIT_FACULTY', 5)
 
 
 def _compute_due_date(borrow_type, role_name):
     if borrow_type == 'daily_circulation':
-        days = current_app.config['DAILY_CIRCULATION_DUE_DAYS']
+        days = current_app.config.get('DAILY_CIRCULATION_DUE_DAYS', 0)
     elif role_name == 'Student':
-        days = current_app.config['OVERNIGHT_DUE_DAYS_STUDENT']
+        days = current_app.config.get('OVERNIGHT_DUE_DAYS_STUDENT', 2)
     else:
-        days = current_app.config['OVERNIGHT_DUE_DAYS_FACULTY']
+        days = current_app.config.get('OVERNIGHT_DUE_DAYS_FACULTY', 30)
     return date.today() + timedelta(days=days)
 
 
@@ -72,8 +72,8 @@ def circulation_page():
         borrower=borrower,
         borrower_loans=borrower_loans,
         today=date.today(),
-        borrow_limit_student=current_app.config['MAX_BORROW_LIMIT_STUDENT'],
-        borrow_limit_faculty=current_app.config['MAX_BORROW_LIMIT_FACULTY'],
+        borrow_limit_student=current_app.config.get('MAX_BORROW_LIMIT_STUDENT', 3),
+        borrow_limit_faculty=current_app.config.get('MAX_BORROW_LIMIT_FACULTY', 5),
     )
 
 
@@ -123,6 +123,12 @@ def desk_borrow():
 
     due_date = _compute_due_date(borrow_type, borrower_row[6])
     borrow_book(accession[2], accession[0], borrower_row[0], current_user.id, borrow_type, due_date)
+    create_notification(
+        borrower_row[0],
+        f'You borrowed copy {accession_number}. Due {due_date}.',
+        'borrow',
+        str(accession[0]),
+    )
     log_activity(current_user.id, f'circulation:borrow:{accession[0]}')
     flash(f'Borrowed — {accession_number} due {due_date}.', 'success')
     return redirect(url_for('circulation.circulation_page', search=borrower_row[1]))
@@ -146,15 +152,32 @@ def desk_return():
         flash(f'Accession {accession_number} is not currently borrowed.', 'error')
         return redirect(url_for('circulation.circulation_page'))
 
-    fine = calculate_fine(loan[0], current_app.config['OVERDUE_FINE_PER_DAY'])
+    fine = calculate_fine(loan[0], current_app.config.get('OVERDUE_FINE_PER_DAY', 10.0),
+                          current_app.config.get('OVERDUE_GRACE_DAYS', 0))
     return_book(loan[0], fine, damage_notes, lost_flag)
+    borrower_id_for_loan = loan[3] if len(loan) > 3 else None
+    if borrower_id_for_loan is not None:
+        create_notification(
+            borrower_id_for_loan,
+            f'You returned copy {accession_number}.'
+            + (f' Overdue fine: ₱{fine:.2f}.' if fine > 0 else ' Thank you!'),
+            'return',
+            str(loan[0]),
+        )
+        if fine > 0:
+            create_notification(
+                borrower_id_for_loan,
+                f'Overdue fine of ₱{fine:.2f} assessed for copy {accession_number}. Please settle at the desk.',
+                'fine',
+                str(loan[0]),
+            )
     log_activity(current_user.id, f'circulation:return:{loan[0]}')
 
     waiting = next_in_queue(accession[2])
     if waiting:
         create_notification(
             waiting[2],
-            f'A reserved copy of "{get_book_by_id(accession[2])[1]}" is ready for pickup.',
+            f'A reserved copy (accession {accession_number}) is ready for pickup.',
             'hold_ready',
             str(waiting[0]),
         )
@@ -235,12 +258,18 @@ def reservation_action(reservation_id, action):
             borrower_name = borrower_detail[4] if borrower_detail else 'Borrower'
             flash(f'Cannot allocate — {borrower_name} has reached the borrow limit ({limit} books).', 'error')
             return redirect(url_for('circulation.reservations_page', **status_args))
-        deadline = datetime.now() + timedelta(days=2)
+        deadline = datetime.now() + timedelta(days=current_app.config.get('RESERVATION_CLAIM_DAYS', 2))
         allocate_reservation(reservation_id, deadline)
         create_notification(
             reservation[2],
             f'Your reserved book is ready. Claim within 2 days.',
             'hold_ready',
+            str(reservation_id),
+        )
+        create_notification(
+            reservation[2],
+            f'Reservation #{reservation_id} allocated. Claim by {deadline.strftime("%b %d, %Y")}.',
+            'reservation',
             str(reservation_id),
         )
         log_activity(current_user.id, f'circulation:allocate_reservation:{reservation_id}')
@@ -267,6 +296,12 @@ def reservation_action(reservation_id, action):
         due_date = _compute_due_date('overnight', role_name)
         borrow_book(reservation[1], accession[0], reservation[2], current_user.id, 'overnight', due_date)
         claim_reservation(reservation_id)
+        create_notification(
+            reservation[2],
+            f'Reservation #{reservation_id} claimed. Book due {due_date}.',
+            'reservation',
+            str(reservation_id),
+        )
         log_activity(current_user.id, f'circulation:claim_reservation:{reservation_id}')
         flash(f'Reservation claimed — booked as an overnight borrow due {due_date}.', 'success')
     elif action == 'expire':
@@ -274,6 +309,12 @@ def reservation_action(reservation_id, action):
             flash('This reservation is already finished.', 'error')
             return redirect(url_for('circulation.reservations_page', **status_args))
         expire_reservation(reservation_id)
+        create_notification(
+            reservation[2],
+            f'Reservation #{reservation_id} expired/cancelled.',
+            'reservation',
+            str(reservation_id),
+        )
         log_activity(current_user.id, f'circulation:expire_reservation:{reservation_id}')
         flash('Reservation expired.', 'success')
     else:
@@ -320,6 +361,12 @@ def user_borrow():
             return redirect(url_for('cataloging.book_info', book_id=book_id))
         position = get_next_queue_position(book_id)
         create_reservation(book_id, borrower_row[0], position)
+        create_notification(
+            borrower_row[0],
+            f'Overnight borrow request for "{book[1]}" submitted (queue #{position}). Awaiting librarian approval.',
+            'reservation',
+            str(book_id),
+        )
         log_activity(current_user.id, f'circulation:user_borrow_request:{book_id}')
         flash('Overnight borrow request submitted. A librarian must approve it before the book leaves the library.', 'success')
         return redirect(url_for('cataloging.book_info', book_id=book_id))
@@ -346,6 +393,12 @@ def user_borrow():
 
     due_date = _compute_due_date(borrow_type, current_user.role)
     borrow_book(book_id, accession[0], borrower_row[0], current_user.id, borrow_type, due_date)
+    create_notification(
+        borrower_row[0],
+        f'You borrowed "{book[1]}". Due {due_date}.',
+        'borrow',
+        str(accession[0]),
+    )
     log_activity(current_user.id, f'circulation:user_borrow:{book_id}')
     flash(f'Book borrowed — due {due_date}.', 'success')
     return redirect(url_for('cataloging.book_info', book_id=book_id))
@@ -380,6 +433,12 @@ def user_reserve():
 
     position = get_next_queue_position(book_id)
     create_reservation(book_id, borrower_row[0], position)
+    create_notification(
+        borrower_row[0],
+        f'Reservation for "{book[1]}" placed (queue #{position}). You will be notified when ready.',
+        'reservation',
+        str(book_id),
+    )
     log_activity(current_user.id, f'circulation:user_reserve:{book_id}')
     flash('Reservation placed. You will be notified when a copy is ready.', 'success')
     return redirect(url_for('cataloging.book_info', book_id=book_id))
@@ -402,15 +461,30 @@ def user_return():
         flash('Overnight books must be returned at the circulation desk for inspection.', 'error')
         return redirect(url_for('main.user_profile'))
 
-    fine = calculate_fine(loan[0], current_app.config['OVERDUE_FINE_PER_DAY'])
+    fine = calculate_fine(loan[0], current_app.config.get('OVERDUE_FINE_PER_DAY', 10.0),
+                          current_app.config.get('OVERDUE_GRACE_DAYS', 0))
     return_book(loan[0], fine)
+    create_notification(
+        loan[2],
+        'You returned your book.'
+        + (f' Overdue fine: ₱{fine:.2f}.' if fine > 0 else ' Thank you!'),
+        'return',
+        str(loan[0]),
+    )
+    if fine > 0:
+        create_notification(
+            loan[2],
+            f'Overdue fine of ₱{fine:.2f} assessed. Please settle at the desk.',
+            'fine',
+            str(loan[0]),
+        )
     log_activity(current_user.id, f'circulation:user_return:{loan[0]}')
 
     waiting = next_in_queue(loan[1])
     if waiting:
         create_notification(
             waiting[2],
-            f'A reserved copy of "{get_book_by_id(loan[1])[1]}" is ready for pickup.',
+            'A reserved copy you queued for is ready for pickup.',
             'hold_ready',
             str(waiting[0]),
         )

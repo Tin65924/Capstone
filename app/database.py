@@ -79,6 +79,23 @@ def run_schema(app):
                 ADD CONSTRAINT accession_log_source_check
                 CHECK (source IN ('purchase', 'donation', 'others'));
             """)
+            cur.execute("""
+                ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS phone_number VARCHAR(30);
+            """)
+            cur.execute("""
+                ALTER TABLE notification_log ADD COLUMN IF NOT EXISTS is_read BOOLEAN NOT NULL DEFAULT FALSE;
+            """)
+            cur.execute("""
+                ALTER TABLE notification_log
+                DROP CONSTRAINT IF EXISTS notification_log_notif_type_check;
+            """)
+            cur.execute("""
+                ALTER TABLE notification_log
+                ADD CONSTRAINT notification_log_notif_type_check
+                CHECK (notif_type IN ('status_update', 'hold_ready', 'overdue_reminder',
+                                      'borrow', 'return', 'request_update', 'fine',
+                                      'due_soon', 'reservation'));
+            """)
         conn.commit()
         app.logger.info('Database schema initialized successfully.')
     except Exception as e:
