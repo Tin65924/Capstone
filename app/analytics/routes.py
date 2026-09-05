@@ -83,6 +83,168 @@ def compute_all_kpis(start_date, end_date):
     }
 
 
+def _normalize_range(preset, from_str, to_str):
+    if preset in ('semester', 'year'):
+        from_str = to_str = ''
+    elif preset not in ('custom', 'all'):
+        from_str = to_str = ''
+    return preset, from_str, to_str
+
+
+def compute_dashboard(start_date, end_date):
+    """Assemble Riverside-style dashboard payload from model queries.
+
+    Returns JSON-serializable dicts/lists only (dates stringified); the
+    template embeds it as ``dashboard-data`` and renders the three tabs
+    client-side.  Missing tables/rows degrade to zeros/empty lists.
+    """
+    def _safe(fn, *args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except Exception:
+            return None
+
+    def _pair(rows):
+        out = []
+        for r in rows or []:
+            try:
+                out.append([r[0], int(r[1] or 0)])
+            except (IndexError, TypeError, ValueError):
+                continue
+        return out
+
+    def _triple(rows):
+        out = []
+        for r in rows or []:
+            try:
+                out.append([r[0], r[1] if len(r) > 1 else '', int(r[2] or 0) if len(r) > 2 else 0])
+            except (IndexError, TypeError, ValueError):
+                continue
+        return out
+
+    total_titles = _safe(models.count_active_titles) or 0
+    total_copies = _safe(models.count_total_copies) or 0
+    status_rows = _safe(models.count_circulation_status, start_date, end_date) or []
+    status = {}
+    for r in status_rows:
+        try:
+            status[str(r[0])] = int(r[1] or 0)
+        except (IndexError, TypeError, ValueError):
+            continue
+    lost_flagged = _safe(models.count_lost_flagged, start_date, end_date)
+    lost_flagged = int(lost_flagged[0]) if lost_flagged else 0
+    reserved = _safe(models.count_reservations) or 0
+    inv_rows = _safe(models.inventory_state_counts) or []
+    inv = {}
+    for r in inv_rows:
+        try:
+            inv[str(r[0])] = int(r[1] or 0)
+        except (IndexError, TypeError, ValueError):
+            continue
+    inv_lost = inv.get('lost', 0)
+    inv_damaged = inv.get('damaged', 0)
+    inv_missing = inv.get('missing', 0)
+
+    borrowed = status.get('active', 0)
+    overdue = status.get('overdue', 0)
+    lost_damaged = inv_lost + inv_damaged + lost_flagged
+    maintenance = inv_missing
+    available = max(total_copies - borrowed - overdue - lost_damaged - maintenance, 0)
+
+    by_category = _pair(_safe(models.collection_by_category, start_date, end_date))
+    by_user_type = _pair(_safe(models.borrowings_by_user_type, start_date, end_date))
+    by_program = _pair(_safe(models.books_borrowed_per_program, start_date, end_date))
+    trend = _pair(_safe(models.borrowings_trend, start_date, end_date))
+    overdue_t = _pair(_safe(models.overdue_trend, start_date, end_date))
+    top_cats = _pair(_safe(models.top_borrowed_categories, start_date, end_date))
+    top_books = _triple(_safe(models.top_borrowed_books_detailed, start_date, end_date))
+    high_demand = _triple(_safe(models.high_demand_titles, start_date, end_date))
+    overview = _safe(models.circulation_overview, start_date, end_date)
+    if not overview:
+        overview = (0, 0, 0, 0.0, 0.0, 0)
+    recent_circ_raw = _safe(models.recent_circulation) or []
+    recent_circ = []
+    for c in recent_circ_raw:
+        try:
+            recent_circ.append([
+                str(c[0]), c[1] if len(c) > 1 else '', c[2] if len(c) > 2 else '',
+                c[3] if len(c) > 3 else '', c[4] if len(c) > 4 else '',
+                c[5] if len(c) > 5 else '', c[6] if len(c) > 6 else '',
+                str(c[7]) if len(c) > 7 and c[7] else '',
+                c[8] if len(c) > 8 else '',
+            ])
+        except (IndexError, TypeError):
+            continue
+    recent_coll_raw = _safe(models.recent_collection_status) or []
+    recent_coll = []
+    for c in recent_coll_raw:
+        try:
+            recent_coll.append([
+                c[0] if len(c) > 0 else '', c[1] if len(c) > 1 else '',
+                c[2] if len(c) > 2 else '', c[3] if len(c) > 3 else '',
+                c[4] if len(c) > 4 else '', c[5] if len(c) > 5 else '',
+                str(c[6]) if len(c) > 6 and c[6] else '',
+            ])
+        except (IndexError, TypeError):
+            continue
+
+    # Condition buckets derived from inventory_state (no condition column).
+    cond_total = max(sum(inv.values()), 1)
+    condition = [
+        ['New / Excellent', inv.get('available', 0)],
+        ['Very Good', inv.get('borrowed', 0)],
+        ['Good', 0],
+        ['Fair', inv.get('damaged', 0) + inv.get('missing', 0)],
+        ['Poor', inv.get('lost', 0) + lost_flagged],
+    ]
+    if sum(c[1] for c in condition) == 0 and total_copies:
+        condition[0][1] = available
+        condition[1][1] = borrowed
+
+    return {
+        'collection': {
+            'total_titles': total_titles,
+            'total_copies': total_copies,
+            'available': available,
+            'borrowed': borrowed,
+            'reserved': reserved,
+            'overdue': overdue,
+            'lost_damaged': lost_damaged,
+            'maintenance': maintenance,
+            'by_category': by_category,
+            'condition': condition,
+            'cond_total': cond_total,
+            'recent': recent_coll,
+        },
+        'circulation': {
+            'total': overview[0],
+            'active_borrowers': overview[1],
+            'overdue': overview[2],
+            'avg_loan_days': overview[3],
+            'return_rate': overview[4],
+            'new_additions': overview[5],
+            'trend': trend,
+            'overdue_trend': overdue_t,
+            'top_categories': top_cats,
+            'high_demand': high_demand,
+            'recent': recent_circ,
+        },
+        'usage': {
+            'total': overview[0],
+            'unique_borrowers': overview[1],
+            'avg_per_borrower': round(overview[0] / overview[1], 2) if overview[1] else 0.0,
+            'overdue': overview[2],
+            'return_rate': overview[4],
+            'active_departments': len(by_program),
+            'by_department': by_program,
+            'trend': trend,
+            'top_books': top_books,
+            'by_user_type': by_user_type,
+            'recent': recent_circ,
+        },
+    }
+
+
 @analytics_bp.route('/librarian/analytics')
 @login_required
 @librarian_required
@@ -92,12 +254,10 @@ def analytics_page():
     to_str = request.args.get('to', '').strip()
     # Normalize: semester/year presets ignore stale custom dates in the URL;
     # invalid presets fall back to no bounds (same as kpi_json/export_report).
-    if preset in ('semester', 'year'):
-        from_str = to_str = ''
-    elif preset not in ('custom', 'all'):
-        from_str = to_str = ''
+    preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
     start_date, end_date = resolve_dates(preset, from_str, to_str)
     kpi_data = compute_all_kpis(start_date, end_date)
+    dashboard = compute_dashboard(start_date, end_date)
     return render_template(
         'analytics/analytics.html',
         kpi_data=kpi_data,
@@ -106,7 +266,21 @@ def analytics_page():
         preset=preset,
         from_date=from_str,
         to_date=to_str,
+        dashboard=dashboard,
     )
+
+
+@analytics_bp.route('/librarian/analytics/dashboard')
+@login_required
+@librarian_required
+def dashboard_json():
+    """Return the Riverside dashboard payload for the requested range."""
+    preset = request.args.get('preset', 'all')
+    from_str = request.args.get('from', '').strip()
+    to_str = request.args.get('to', '').strip()
+    preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
+    start_date, end_date = resolve_dates(preset, from_str, to_str)
+    return jsonify(compute_dashboard(start_date, end_date))
 
 
 @analytics_bp.route('/librarian/analytics/kpi')
