@@ -95,7 +95,8 @@
                 </div>
                 <button type="button" onclick="openNotificationsModal()" class="relative p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
                     <span class="material-symbols-outlined text-[20px]">notifications</span>
-                    {% if notifications %}<span class="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">{{ notifications|length }}</span>{% endif %}
+                    {% set _unread_m = unread_count if unread_count is defined else (notifications|length) %}
+                    {% if _unread_m %}<span class="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">{{ _unread_m }}</span>{% endif %}
                 </button>
             </div>
             {% include 'components/flash_messages.html' %}
@@ -113,9 +114,10 @@
                             style="">
                             <span class="material-symbols-outlined text-[18px] sm:text-[20px]" style="">notifications</span>
                             <span class="" style="">Notifications</span>
-                            {% if notifications %}
+                            {% set _unread = unread_count if unread_count is defined else (notifications|length) %}
+                            {% if _unread %}
                             <span
-                                class="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">{{ notifications|length }}</span>
+                                class="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">{{ _unread }}</span>
                             {% endif %}
                         </button>
                         <a href="{{ url_for('cataloging.public_catalog') }}"
@@ -126,6 +128,42 @@
                         </a>
                     </div>
                 </div>
+                <!-- Profile Information -->
+                <section class="bg-white dark:bg-[#1a2235] rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 sm:p-6 mb-6 sm:mb-8">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="min-w-0">
+                            <h2 class="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">Profile Information</h2>
+                            <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Update your contact details. Your student ID cannot be changed here.</p>
+                        </div>
+                        <button type="button" onclick="openProfileModal()"
+                            class="shrink-0 px-4 py-2 text-sm font-bold text-primary border border-primary rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all">Edit Profile</button>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-4 text-sm">
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-wider text-gray-400">Full Name</p>
+                            <p class="font-semibold text-gray-900 dark:text-white truncate">{{ (profile[3] if profile and profile|length > 3 else (user_data[3] if user_data else current_user.full_name)) }}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-wider text-gray-400">Student / ID Number</p>
+                            <p class="font-semibold text-gray-900 dark:text-white truncate">{{ (profile[5] if profile and profile|length > 5 and profile[5] else '—') }}</p>
+                            <p class="text-[11px] text-gray-400">Locked — contact a librarian to correct it.</p>
+                        </div>
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-wider text-gray-400">Program / Department</p>
+                            <p class="font-semibold text-gray-900 dark:text-white truncate">{{ (profile[6] if profile and profile|length > 6 and profile[6] else '—') }}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-wider text-gray-400">Phone Number</p>
+                            <p class="font-semibold text-gray-900 dark:text-white truncate">{{ (profile[7] if profile and profile|length > 7 and profile[7] else 'Not set') }}</p>
+                        </div>
+                    </div>
+                    {% if total_fines is defined and total_fines %}
+                    <div class="mt-4 flex items-center gap-2 text-sm font-bold text-red-600 dark:text-red-400">
+                        <span class="material-symbols-outlined text-[18px]">payments</span>
+                        <span>Outstanding fines: ₱{{ '%.2f'|format(total_fines|float) }}</span>
+                    </div>
+                    {% endif %}
+                </section>
                 <!-- Stats Cards -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
                     <div
@@ -341,21 +379,39 @@
         <div class="bg-white dark:bg-[#1a2235] rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col">
             <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-700">
                 <h2 class="text-lg font-bold text-gray-900 dark:text-white">Notifications</h2>
-                <button type="button" onclick="closeNotificationsModal()"
-                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                    <span class="material-symbols-outlined">close</span>
-                </button>
+                <div class="flex items-center gap-2">
+                    <a href="{{ url_for('main.user_notifications') }}" class="text-xs font-bold text-primary hover:underline">View all</a>
+                    <button type="button" onclick="closeNotificationsModal()"
+                        class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+            </div>
+            <div class="px-5 pt-3">
+                {% if notifications %}
+                <form method="POST" action="{{ url_for('main.mark_all_notifications_read_route', next=url_for('main.user_profile')) }}">
+                    <button type="submit" class="text-xs font-bold text-primary hover:underline">Mark all as read</button>
+                </form>
+                {% endif %}
             </div>
             <div class="overflow-y-auto p-5 flex flex-col gap-3">
-                {% for notif in notifications %}
+                {% for notif in notifications[:20] %}
+                {% set _read = (notif|length > 5 and notif[5]) %}
                 <div
-                    class="p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
+                    class="p-4 rounded-lg border {% if _read %}bg-white dark:bg-transparent border-gray-100 dark:border-gray-700 opacity-70{% else %}bg-gray-50 dark:bg-gray-800/50 border-gray-100 dark:border-gray-700{% endif %}">
                     <div class="flex justify-between items-start gap-2">
                         <p class="text-sm text-gray-700 dark:text-gray-200 font-medium">{{ notif[1] }}</p>
                         <span
-                            class="shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full {% if notif[2] == 'overdue_reminder' %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300{% elif notif[2] == 'hold_ready' %}bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300{% else %}bg-gray-100 text-gray-600{% endif %}">{{ notif[2]|replace('_', ' ')|title }}</span>
+                            class="shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full {% if notif[2] == 'overdue_reminder' or notif[2] == 'fine' %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300{% elif notif[2] in ('hold_ready', 'due_soon') %}bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300{% elif notif[2] in ('borrow', 'return', 'reservation', 'request_update') %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300{% else %}bg-gray-100 text-gray-600{% endif %}">{{ notif[2]|replace('_', ' ')|title }}</span>
                     </div>
-                    <p class="text-xs text-gray-400 mt-1">{{ notif[4] }}</p>
+                    <div class="flex items-center justify-between mt-1">
+                        <p class="text-xs text-gray-400">{{ notif[4] }}</p>
+                        {% if not _read %}
+                        <form method="POST" action="{{ url_for('main.mark_notification_read_route', notification_id=notif[0], next=url_for('main.user_profile')) }}">
+                            <button type="submit" class="text-[11px] font-bold text-primary hover:underline">Mark as read</button>
+                        </form>
+                        {% endif %}
+                    </div>
                 </div>
                 {% else %}
                 <p class="text-sm text-gray-400">You have no notifications.</p>
@@ -393,6 +449,48 @@
         </div>
     </div>
 
+    <!-- Edit Profile Modal -->
+    <div id="profileModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4">
+        <div class="bg-white dark:bg-[#1a2235] rounded-2xl shadow-2xl max-w-md w-full">
+            <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-700">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white">Edit Profile</h2>
+                <button type="button" onclick="closeProfileModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <form method="POST" action="{{ url_for('main.update_profile') }}" class="p-5 flex flex-col gap-4">
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1" for="profile-full-name">Full Name</label>
+                    <input id="profile-full-name" name="full_name" type="text" required
+                        value="{{ (profile[3] if profile and profile|length > 3 else (user_data[3] if user_data else '')) }}"
+                        class="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Student / ID Number (locked)</label>
+                    <input type="text" disabled value="{{ (profile[5] if profile and profile|length > 5 and profile[5] else '') }}"
+                        class="w-full px-3 py-2.5 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-gray-500 cursor-not-allowed">
+                    <p class="text-[11px] text-gray-400 mt-1">Students are not allowed to change their student IDs.</p>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1" for="profile-dept">Program / Department</label>
+                    <input id="profile-dept" name="department" type="text" data-suggest="student_program"
+                        value="{{ (profile[6] if profile and profile|length > 6 and profile[6] else '') }}"
+                        placeholder="e.g. BS Computer Science"
+                        class="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1" for="profile-phone">Phone Number</label>
+                    <input id="profile-phone" name="phone_number" type="tel"
+                        value="{{ (profile[7] if profile and profile|length > 7 and profile[7] else '') }}"
+                        placeholder="e.g. +63 912 345 6789"
+                        class="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+                </div>
+                <button type="submit" class="w-full px-4 py-2.5 text-sm font-bold text-white bg-primary rounded-lg hover:bg-blue-800 transition-all">Save Changes</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/autosuggest.js') }}"></script>
     <script>
         function openNotificationsModal() {
             var modal = document.getElementById('notificationsModal');
@@ -401,6 +499,16 @@
         }
         function closeNotificationsModal() {
             var modal = document.getElementById('notificationsModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+        function openProfileModal() {
+            var modal = document.getElementById('profileModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+        function closeProfileModal() {
+            var modal = document.getElementById('profileModal');
             modal.classList.add('hidden');
             modal.classList.remove('flex');
         }
@@ -428,6 +536,10 @@
         });
         document.getElementById('borrowingModal').addEventListener('click', function (e) {
             if (e.target === this) closeBorrowingModal();
+        });
+        var profileModal = document.getElementById('profileModal');
+        if (profileModal) profileModal.addEventListener('click', function (e) {
+            if (e.target === this) closeProfileModal();
         });
 
         // Mobile sidebar

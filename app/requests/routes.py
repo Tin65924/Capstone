@@ -75,6 +75,21 @@ def review_request(request_id, action):
     if action == 'approve':
         create_procurement(request_id)
 
+    try:
+        from app.circulation.models import create_notification
+        borrower_id = existing[1] if len(existing) > 1 else None
+        title = existing[2] if len(existing) > 2 else f'request #{request_id}'
+        if borrower_id is not None:
+            create_notification(
+                borrower_id,
+                f'Your book request for "{title}" was {status}.'
+                + (f' Remarks: {remarks}' if remarks else ''),
+                'request_update',
+                str(request_id),
+            )
+    except Exception:
+        pass
+
     log_activity(current_user.id, f'requests:{action}:{request_id}')
     flash(f'Request {status}.', 'success')
     return redirect(url_for('requests.list_requests'))
@@ -101,6 +116,16 @@ def user_request_book():
             return redirect(url_for('requests.user_request_book'))
 
         new_request_id = create_request(borrower_id, book_title, author)
+        try:
+            from app.circulation.models import create_notification
+            create_notification(
+                borrower_id,
+                f'Book request for "{book_title}" submitted and pending review.',
+                'request_update',
+                str(new_request_id),
+            )
+        except Exception:
+            pass
         log_activity(current_user.id, f'requests:create:{new_request_id}')
         flash('Your request has been submitted!', 'success')
         return redirect(url_for('requests.user_request_book'))

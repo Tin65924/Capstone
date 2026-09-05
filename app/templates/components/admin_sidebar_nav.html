@@ -16,6 +16,10 @@
                 <span class="material-symbols-outlined">manage_accounts</span>
                 <span class="text-sm leading-tight">User Management & Access Control</span>
             </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint and 'settings' in request.endpoint %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('settings.settings_page') }}">
+                <span class="material-symbols-outlined">settings</span>
+                <span class="text-sm">Library Settings</span>
+            </a>
             <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'backup.backup_page' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('backup.backup_page') }}">
                 <span class="material-symbols-outlined">settings_backup_restore</span>
                 <span class="text-sm">Backup & Recovery</span>

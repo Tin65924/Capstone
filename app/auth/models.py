@@ -184,3 +184,32 @@ def get_admin_count():
            WHERE r.role_name = 'Admin' AND u.account_status = 'active' '''
     )
     return row[0] if row else 0
+
+
+def get_profile_by_user(user_id):
+    """Full self-service profile: user + borrower details incl. phone.
+
+    Returns (user_id, email, role_name, full_name, borrower_id, id_number,
+             department, phone_number, borrower_status) or None.
+    """
+    return db.fetch_one(
+        '''SELECT u.user_id, u.email, r.role_name, u.full_name,
+                  b.borrower_id, b.id_number, b.department, b.phone_number, b.borrower_status
+           FROM user_accounts u
+           JOIN roles r ON u.role_id = r.role_id
+           LEFT JOIN borrowers b ON u.user_id = b.user_id
+           WHERE u.user_id = %s''',
+        (user_id,)
+    )
+
+
+def update_own_profile(user_id, full_name, phone_number=None, department=None):
+    """Update editable self-service fields. Never touches id_number."""
+    db.execute(
+        'UPDATE user_accounts SET full_name = %s WHERE user_id = %s',
+        (full_name, user_id)
+    )
+    db.execute(
+        'UPDATE borrowers SET phone_number = %s, department = %s WHERE user_id = %s',
+        (phone_number, department, user_id)
+    )

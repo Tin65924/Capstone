@@ -28,6 +28,7 @@ def create_app(test_config=None):
     from .inventory import inventory_bp
     from .analytics import analytics_bp
     from .backup import backup_bp
+    from .settings import settings_bp
     from .main import main_bp
 
     app.register_blueprint(auth_bp)
@@ -38,7 +39,18 @@ def create_app(test_config=None):
     app.register_blueprint(inventory_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(backup_bp)
+    app.register_blueprint(settings_bp)
     app.register_blueprint(main_bp)
+
+    try:
+        # Skip DB-backed settings sync in tests so mocked db call counts
+        # in tests (analytics/catalog/autosuggest) stay deterministic.
+        if not app.config.get('TESTING'):
+            with app.app_context():
+                from .settings.models import sync_settings_to_config
+                sync_settings_to_config(app)
+    except Exception:
+        pass
 
     register_error_handlers(app)
 

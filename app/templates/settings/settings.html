@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Library Settings{% endblock %}
+{% block content %}
+<main class="flex-grow mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 w-full max-w-[900px]">
+    {% include 'components/flash_messages.html' %}
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+            <span class="material-symbols-outlined">settings</span> Library Settings
+        </h1>
+        <p class="text-sm text-slate-500 mt-1">Configure borrow limits, due dates, and fines. Changes apply immediately to new loans and fine calculations.</p>
+    </div>
+    <form method="POST" action="{{ url_for('settings.update_settings') }}" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
+        <div class="divide-y divide-slate-100 dark:divide-slate-800">
+            {% for key, meta in defs.items() %}
+            <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-4 sm:px-6 py-4">
+                <div class="flex-1 min-w-0">
+                    <label for="setting-{{ key }}" class="block text-sm font-bold text-slate-800 dark:text-slate-100">{{ meta[0] }}</label>
+                    <p class="text-xs text-slate-500">{{ meta[2] }} <span class="font-mono text-slate-400">{{ key }}</span></p>
+                </div>
+                <input id="setting-{{ key }}" name="{{ key }}" type="number" {% if meta[1] == 'float' %}step="0.01"{% else %}step="1"{% endif %} min="0"
+                    value="{{ values.get(key, '') }}"
+                    class="w-full sm:w-40 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+            </div>
+            {% endfor %}
+        </div>
+        <div class="px-4 sm:px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2">
+            <a href="{{ url_for('main.librarian_dashboard') }}" class="px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg text-center hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</a>
+            <button type="submit" class="px-6 py-2.5 text-sm font-bold text-white bg-primary rounded-lg hover:bg-primary/90">Save Settings</button>
+        </div>
+    </form>
+</main>
+{% endblock %}

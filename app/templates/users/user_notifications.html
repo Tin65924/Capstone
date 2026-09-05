@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Notifications - MCST Library</title>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = { darkMode: "class", theme: { extend: { colors: { primary: "#1e3a8a", "background-light": "#f7f7f7", "background-dark": "#0f172a" }, fontFamily: { display: "Manrope" } } } };
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-[#0f172a] dark:text-white font-display">
+    <div class="flex h-screen w-full flex-row">
+        <div class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0">
+            <div class="p-6">
+                <div class="flex items-center gap-3 mb-8">
+                    <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
+                    <h1 class="text-xl font-bold tracking-tight">Profile</h1>
+                </div>
+                {% include 'components/user_sidebar_nav.html' %}
+            </div>
+            <div class="mt-auto p-6 border-t border-[#cfd7e7] dark:border-gray-700">
+                <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-700 transition-colors">
+                    <span class="material-symbols-outlined text-[18px]">logout</span><span>Log Out</span>
+                </a>
+            </div>
+        </div>
+        <main class="flex-1 h-full overflow-y-auto">
+            {% include 'components/flash_messages.html' %}
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                    <div>
+                        <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight uppercase">Notifications</h1>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Borrowing, returns, requests, fines, and due-date reminders. ({{ unread_count }} unread)</p>
+                    </div>
+                    {% if notifications %}
+                    <form method="POST" action="{{ url_for('main.mark_all_notifications_read_route', next=url_for('main.user_notifications')) }}">
+                        <button type="submit" class="px-4 py-2 text-sm font-bold text-primary border border-primary rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20">Mark all as read</button>
+                    </form>
+                    {% endif %}
+                </div>
+                <div class="flex flex-col gap-3">
+                    {% for notif in notifications %}
+                    {% set _read = (notif|length > 5 and notif[5]) %}
+                    <div class="p-4 rounded-xl border {% if _read %}bg-white dark:bg-[#1a2235] border-gray-100 dark:border-gray-700 opacity-70{% else %}bg-white dark:bg-[#1a2235] border-primary/30 shadow-sm{% endif %} flex flex-col sm:flex-row sm:items-center gap-3">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full {% if notif[2] == 'overdue_reminder' or notif[2] == 'fine' %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300{% elif notif[2] in ('hold_ready', 'due_soon') %}bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300{% elif notif[2] in ('borrow', 'return', 'reservation', 'request_update') %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300{% else %}bg-gray-100 text-gray-600{% endif %}">{{ notif[2]|replace('_', ' ')|title }}</span>
+                                {% if not _read %}<span class="w-2 h-2 rounded-full bg-primary"></span>{% endif %}
+                            </div>
+                            <p class="text-sm font-medium mt-1">{{ notif[1] }}</p>
+                            <p class="text-xs text-gray-400 mt-1">{{ notif[4] }}</p>
+                        </div>
+                        {% if not _read %}
+                        <form method="POST" action="{{ url_for('main.mark_notification_read_route', notification_id=notif[0], next=url_for('main.user_notifications')) }}" class="shrink-0">
+                            <button type="submit" class="px-3 py-1.5 text-xs font-bold text-primary border border-primary rounded-lg hover:bg-blue-50">Mark as read</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <p class="text-gray-500 dark:text-gray-400">You have no notifications.</p>
+                    {% endfor %}
+                </div>
+                <div class="mt-6">
+                    <a href="{{ url_for('main.user_history') }}" class="text-sm font-bold text-primary hover:underline">View full borrowing &amp; request history →</a>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

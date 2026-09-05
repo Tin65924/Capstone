@@ -655,6 +655,9 @@ def public_catalog():
     category = request.args.get('category', '').strip()
     material_type = request.args.get('material_type', '').strip()
     availability = request.args.get('availability', '').strip()
+    view = request.args.get('view', 'grid').strip().lower()
+    if view not in ('grid', 'list'):
+        view = 'grid'
 
     current_year = datetime.now().year
     if year_preset == 'since_this_year':
@@ -706,7 +709,7 @@ def public_catalog():
                            material_type=material_type, availability=availability,
                            current_year=current_year,
                            categories=categories,
-                           has_search=has_search,
+                           has_search=has_search, view=view,
                            page=page, total_pages=total_pages, total=total, per_page=per_page)
 
 

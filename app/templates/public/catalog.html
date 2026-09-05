@@ -13,6 +13,7 @@
             <form method="GET" action="{{ url_for('cataloging.public_catalog') }}" id="filter-form" class="sticky top-8">
                     <input type="hidden" name="q" value="{{ search_query or '' }}">
                     <input type="hidden" name="field" value="{{ search_field or '' }}">
+                    <input type="hidden" name="view" value="{{ view|default('grid') }}">
                     <div class="space-y-6 pr-3">
 
                     <div>
@@ -141,6 +142,7 @@
                 <form method="GET" action="{{ url_for('cataloging.public_catalog') }}" class="p-4 space-y-6">
                     <input type="hidden" name="q" value="{{ search_query or '' }}">
                     <input type="hidden" name="field" value="{{ search_field or '' }}">
+                    <input type="hidden" name="view" value="{{ view|default('grid') }}">
                     <div>
                         <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Sort</h3>
                         <div class="space-y-1.5 text-[13px]">
@@ -256,6 +258,7 @@
         <!-- Results -->
         <div class="flex-1 min-w-0 w-full">
             <form method="GET" action="{{ url_for('cataloging.public_catalog') }}" class="flex flex-col gap-3 sm:gap-4">
+                        <input type="hidden" name="view" value="{{ view|default('grid') }}">
                         <div class="flex flex-col sm:flex-row gap-3">
                             <div class="relative w-full sm:w-auto sm:min-w-[180px]" id="field-select-wrapper">
                                 <!-- Hidden native select for form submission / no-JS fallback -->
@@ -345,7 +348,79 @@
                         {% endif %}
                     </p>
                 </div>
+                <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-1 shrink-0 self-start sm:self-center" role="group" aria-label="Catalog view">
+                    {% set _view = view|default('grid') %}
+                    {% set _base_args = {'q': search_query, 'field': search_field, 'year_preset': year_preset, 'year_from': year_from, 'year_to': year_to, 'sort_by': sort_by, 'category': category, 'material_type': material_type, 'availability': availability} %}
+                    <a href="{{ url_for('cataloging.public_catalog', view='grid', **_base_args) }}" title="Grid view"
+                        class="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-colors {% if _view != 'list' %}bg-white dark:bg-slate-900 text-primary shadow-sm{% else %}text-slate-500 dark:text-slate-400 hover:text-slate-700{% endif %}">
+                        <span class="material-symbols-outlined text-[18px]">grid_view</span><span class="hidden sm:inline">Grid</span>
+                    </a>
+                    <a href="{{ url_for('cataloging.public_catalog', view='list', **_base_args) }}" title="List view"
+                        class="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-colors {% if _view == 'list' %}bg-white dark:bg-slate-900 text-primary shadow-sm{% else %}text-slate-500 dark:text-slate-400 hover:text-slate-700{% endif %}">
+                        <span class="material-symbols-outlined text-[18px]">view_list</span><span class="hidden sm:inline">List</span>
+                    </a>
+                </div>
             </div>
+            {% set _view = view|default('grid') %}
+            {% if _view == 'list' %}
+            <div id="catalog-results-list" class="flex flex-col gap-3">
+                {% if not has_search %}
+                    <div class="flex flex-col items-center justify-center py-16 text-center">
+                        <span class="material-symbols-outlined text-5xl text-slate-300 dark:text-slate-600 mb-4">search</span>
+                        <h3 class="text-lg font-bold text-slate-700 dark:text-slate-300 mb-1">Search to explore the catalog</h3>
+                        <p class="text-sm text-slate-500 max-w-md">Enter a keyword, title, author, ISBN or category in the search box above — or use the filters on the left — to see matching books and related titles.</p>
+                    </div>
+                {% elif books %}
+                    {% for book in books %}
+                    {% set is_ebook = book[9] == 'E-Book' %}
+                    {% set avail_status = book[13] if book|length > 14 else 'available' %}
+                    {% set avail_count = book[14] if book|length > 14 else 1 %}
+                    {% if is_ebook %}
+                        {% set has_available = true %}
+                    {% elif book|length > 14 %}
+                        {% set has_available = avail_status != 'borrowed' and (avail_count|string|int(0) > 0) %}
+                    {% else %}
+                        {% set has_available = avail_status != 'borrowed' %}
+                    {% endif %}
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 hover:shadow-md hover:border-primary/30 transition-all">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                {% if is_ebook %}
+                                <span class="inline-flex bg-primary/10 text-primary px-2 py-0.5 rounded text-[10px] font-bold uppercase">E-Book</span>
+                                {% elif not has_available %}
+                                <span class="inline-flex bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Not Available</span>
+                                {% else %}
+                                <span class="inline-flex bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Available</span>
+                                {% endif %}
+                                <a href="{{ url_for('cataloging.book_info', book_id=book[0]) }}" class="text-primary font-bold text-sm leading-tight truncate hover:underline">{{ book[1] }}</a>
+                            </div>
+                            <p class="text-xs text-slate-500 truncate mt-1">{{ book[2] }}{% if book[5] %} · {{ book[5] }}{% endif %}{% if book[8] %} · ISBN {{ book[8] }}{% endif %}{% if book[7] %} · {{ book[7] }}{% endif %}</p>
+                            <p class="text-[11px] {% if has_available %}text-green-600 dark:text-green-400{% else %}text-slate-400{% endif %} font-semibold mt-0.5">
+                                {% if is_ebook %}Available online{% elif has_available %}{% if book|length > 14 %}{{ avail_count }} cop{{ 'y' if (avail_count|string|int(0)) == 1 else 'ies' }} available{% else %}Available{% endif %}{% else %}No copies available{% endif %}
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <a href="{{ url_for('cataloging.book_info', book_id=book[0]) }}" class="text-primary text-xs font-bold hover:underline whitespace-nowrap">View Details</a>
+                            {% if has_available %}
+                            <a href="{{ url_for('cataloging.book_info', book_id=book[0]) }}" class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-primary text-white hover:bg-primary/90 whitespace-nowrap">Borrow</a>
+                            {% else %}
+                            <form method="post" action="{{ url_for('circulation.user_reserve') }}" class="inline">
+                                <input type="hidden" name="book_id" value="{{ book[0] }}">
+                                <button type="submit" class="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-primary text-primary hover:bg-primary/5 whitespace-nowrap">Reserve</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="flex flex-col items-center justify-center py-16 text-center">
+                        <span class="material-symbols-outlined text-5xl text-slate-300 dark:text-slate-600 mb-4">search_off</span>
+                        <h3 class="text-lg font-bold text-slate-700 dark:text-slate-300 mb-1">No books found</h3>
+                        <p class="text-sm text-slate-500">Try adjusting your search terms or filters.</p>
+                    </div>
+                {% endif %}
+            </div>
+            {% else %}
             <div id="catalog-results-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
                 {% if not has_search %}
                     <div id="catalog-empty-prompt" class="col-span-full flex flex-col items-center justify-center py-16 text-center">
@@ -428,9 +503,10 @@
                     </div>
                 {% endif %}
             </div>
+            {% endif %}
             {% if total_pages > 1 %}
             <nav class="mt-8 sm:mt-10 flex items-center justify-center gap-1.5 sm:gap-2 flex-wrap" aria-label="Pagination">
-                {% set query_args = {'q': search_query, 'field': search_field, 'year_preset': year_preset, 'year_from': year_from, 'year_to': year_to, 'sort_by': sort_by, 'category': category, 'material_type': material_type, 'availability': availability} %}
+                {% set query_args = {'q': search_query, 'field': search_field, 'year_preset': year_preset, 'year_from': year_from, 'year_to': year_to, 'sort_by': sort_by, 'category': category, 'material_type': material_type, 'availability': availability, 'view': (view|default('grid'))} %}
                 {% if page > 1 %}
                 <a href="{{ url_for('cataloging.public_catalog', page=page-1, **query_args) }}"
                     class="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded border border-slate-300 dark:border-slate-700 text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
