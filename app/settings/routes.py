@@ -1,5 +1,6 @@
 from flask import render_template, request, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
+import re
 from . import settings_bp
 from .models import SETTING_DEFS, get_settings_dict, update_setting, sync_settings_to_config
 from app.auth.decorators import librarian_required
@@ -34,9 +35,10 @@ def update_settings():
                 if value < 0:
                     raise ValueError('must be >= 0')
             else:
-                value = int(float(raw)) if '.' in raw else int(raw)
-                if value < 0:
-                    raise ValueError('must be >= 0')
+                # Strict integers: reject decimals like "2.5" instead of truncating.
+                if not re.fullmatch(r'\d+', raw):
+                    raise ValueError('must be a whole number')
+                value = int(raw)
                 if 'LIMIT' in key and value == 0:
                     raise ValueError('must be at least 1')
         except ValueError:

@@ -16,6 +16,26 @@ BOOK_FIELD_MAP = {
 }
 
 
+def _safe_next(default_endpoint):
+    """Return a validated redirect target for user-supplied `next`.
+
+    Only same-origin relative paths (single leading `/`, no scheme or
+    host) are honored; anything else falls back to `default_endpoint`.
+    Guards POST-then-redirect handlers against open redirects.
+    """
+    from urllib.parse import urlparse
+    fallback = url_for(default_endpoint)
+    nxt = request.form.get('next') or request.args.get('next')
+    if not nxt:
+        return fallback
+    parsed = urlparse(nxt)
+    if parsed.scheme or parsed.netloc:
+        return fallback
+    if not nxt.startswith('/') or nxt.startswith('//'):
+        return fallback
+    return nxt
+
+
 @main_bp.route('/')
 def index():
     new_arrivals = get_recent_books(5)
@@ -218,8 +238,7 @@ def mark_notification_read_route(notification_id):
         return redirect(url_for('main.user_profile'))
     mark_notification_read(notification_id, borrower[0])
     log_activity(current_user.id, f'notifications:read:{notification_id}')
-    next_page = request.form.get('next') or request.args.get('next') or url_for('main.user_profile')
-    return redirect(next_page)
+    return redirect(_safe_next('main.user_profile'))
 
 
 @main_bp.route('/user/notifications/read-all', methods=['POST'])
@@ -234,8 +253,7 @@ def mark_all_notifications_read_route():
     mark_all_notifications_read(borrower[0])
     log_activity(current_user.id, 'notifications:read_all')
     flash('All notifications marked as read.', 'success')
-    next_page = request.form.get('next') or request.args.get('next') or url_for('main.user_profile')
-    return redirect(next_page)
+    return redirect(_safe_next('main.user_profile'))
 
 
 @main_bp.route('/user/history')

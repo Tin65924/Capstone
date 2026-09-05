@@ -603,9 +603,10 @@
         if (e.target === this) closeCategoryModal();
     });
     // When the search box is cleared, return to the empty catalog state instantly.
+    // Works for both grid (catalog-results-grid) and list (catalog-results-list) views.
     (function() {
         var input = document.getElementById('catalog-search-input');
-        var grid = document.getElementById('catalog-results-grid');
+        var grid = document.getElementById('catalog-results-grid') || document.getElementById('catalog-results-list');
         if (!input || !grid) return;
         var hasActiveFilter = {{ 'true' if (category or material_type or availability or year_from or year_to) else 'false' }};
         var isSearching = {{ 'true' if has_search else 'false' }};
