@@ -58,9 +58,13 @@
 
     <main>
         {% include 'components/flash_messages.html' %}
-        <a href="{{ url_for('circulation.user_history_list') }}" class="inline-flex items-center gap-1 text-primary font-bold text-sm hover:underline mb-4">
-            <span class="material-symbols-outlined text-base">arrow_back</span> Back to borrowers
-        </a>
+        <nav class="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm text-gray-500 mb-4">
+            <a href="{{ url_for('auth.admin_users') }}" class="hover:text-primary hover:underline font-medium">User Management & Access Control</a>
+            <span class="material-symbols-outlined text-sm">chevron_right</span>
+            <a href="{{ url_for('circulation.user_history_list') }}" class="hover:text-primary hover:underline font-medium">User History</a>
+            <span class="material-symbols-outlined text-sm">chevron_right</span>
+            <span class="text-gray-900 font-bold">{{ user_data[3] }}</span>
+        </nav>
         <div class="card p-5 sm:p-6">
             <h1 class="text-xl sm:text-2xl font-bold">{{ user_data[3] }}</h1>
             <p class="text-sm text-gray-500 mt-1">{{ user_data[1] }} · {{ user_data[2] }} · ID {{ borrower[2] }}{% if borrower[3] %} · {{ borrower[3] }}{% endif %}</p>

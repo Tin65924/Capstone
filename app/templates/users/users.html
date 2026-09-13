@@ -245,6 +245,10 @@
                 <p class="text-sm sm:text-base text-gray-500 mt-1">Control access roles and monitor library members.</p>
             </div>
             <div class="flex gap-2 sm:gap-3 shrink-0">
+                <a href="{{ url_for('circulation.user_history_list') }}"
+                   class="inline-flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-bold rounded-lg border border-gray-200 bg-white text-gray-700 hover:border-primary hover:text-primary transition-colors">
+                    <span class="material-symbols-outlined text-[16px] sm:text-[18px]">history</span> User History
+                </a>
                 <button onclick="openUsersExportModal()"
                    class="inline-flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-bold rounded-lg border border-gray-200 bg-white text-gray-700 hover:border-primary hover:text-primary transition-colors">
                     <span class="material-symbols-outlined text-[16px] sm:text-[18px]">download</span> Export
@@ -414,6 +418,10 @@
                                         class="btn-action hover:border-blue-500 hover:text-blue-500" title="Edit">
                                         <span class="material-symbols-outlined text-lg">edit</span>
                                     </button>
+                                    <a href="{{ url_for('circulation.user_history_detail', user_id=u[0]) }}"
+                                        class="btn-action hover:border-indigo-500 hover:text-indigo-600" title="View user history">
+                                        <span class="material-symbols-outlined text-lg">history</span>
+                                    </a>
                                     {% if u[4] == 'active' %}
                                     <button class="btn-action hover:border-rose-500 hover:text-rose-500"
                                         data-confirm-title="Deactivate User"
@@ -500,6 +508,7 @@
                     </div>
                     <div class="flex flex-wrap gap-1.5 mb-3">
                         <button data-user-id="{{ u[0] }}" data-user-name="{{ u[2]|escape }}" data-user-idnum="{{ u[6] or '' }}" data-user-dept="{{ u[7] or '' }}" onclick="openEditModal(this)" class="flex-1 py-2 rounded-lg border border-gray-200 bg-white text-xs font-bold flex items-center justify-center gap-1" title="Edit"><span class="material-symbols-outlined text-[16px]">edit</span> Edit</button>
+                        <a href="{{ url_for('circulation.user_history_detail', user_id=u[0]) }}" class="flex-1 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-bold flex items-center justify-center gap-1" title="View user history"><span class="material-symbols-outlined text-[16px]">history</span> History</a>
                         {% if u[4] == 'active' %}
                         <button class="flex-1 py-2 rounded-lg border border-rose-200 bg-rose-50 text-rose-600 text-xs font-bold flex items-center justify-center gap-1" data-confirm-title="Deactivate User" data-confirm-message="Are you sure you want to deactivate &#34;{{ u[2] }}&#34;?" data-confirm-action="{{ url_for('auth.toggle_user_status_route', user_id=u[0]) }}" data-confirm-button="Deactivate" data-confirm-class="bg-rose-600 hover:bg-rose-700" data-confirm-icon="person_off" onclick="confirmFromData(this)" title="Deactivate"><span class="material-symbols-outlined text-[16px]">person_off</span> Deactivate</button>
                         {% elif u[4] == 'disabled' %}
