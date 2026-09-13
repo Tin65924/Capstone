@@ -311,13 +311,44 @@ class TestReservationFilters:
     def _mock_page(self, mock_db):
         mock_db['fetch_all'].side_effect = [self.GROUPS, self.BOOK_A_ROWS, self.BOOK_B_ROWS]
 
-    def test_no_filter_shows_everything(self, librarian_client, mock_db):
+    def test_no_filter_defaults_to_active(self, librarian_client, mock_db):
+        # Finished (claimed/expired) history is auto-removed from the default view.
         self._mock_page(mock_db)
         resp = librarian_client.get('/librarian/reservations')
         assert resp.status_code == 200
+        assert b'Alice' in resp.data
+        assert b'Bob' in resp.data
+        assert b'Book A' in resp.data
+        for name in (b'Cara', b'Dan'):
+            assert name not in resp.data
+        assert b'Book B' not in resp.data
+        assert b'Back to active' not in resp.data
+
+    def test_filter_all_shows_everything(self, librarian_client, mock_db):
+        self._mock_page(mock_db)
+        resp = librarian_client.get('/librarian/reservations?status=all')
+        assert resp.status_code == 200
         for name in (b'Alice', b'Bob', b'Cara', b'Dan', b'Book A', b'Book B'):
             assert name in resp.data
-        assert b'Clear filter' not in resp.data
+        assert b'Back to active' in resp.data
+
+    def test_filter_history_shows_claimed_and_expired(self, librarian_client, mock_db):
+        self._mock_page(mock_db)
+        resp = librarian_client.get('/librarian/reservations?status=history')
+        assert resp.status_code == 200
+        assert b'Cara' in resp.data
+        assert b'Dan' in resp.data
+        for name in (b'Alice', b'Bob'):
+            assert name not in resp.data
+        assert b'finished (claimed' in resp.data
+
+    def test_page_auto_expires_overdue(self, librarian_client, mock_db):
+        self._mock_page(mock_db)
+        resp = librarian_client.get('/librarian/reservations')
+        assert resp.status_code == 200
+        first_call = mock_db['execute'].call_args_list[0]
+        assert "reservation_status = 'expired'" in first_call[0][0]
+        assert 'claim_deadline' in first_call[0][0]
 
     def test_filter_waiting(self, librarian_client, mock_db):
         self._mock_page(mock_db)
@@ -346,15 +377,19 @@ class TestReservationFilters:
         assert b'Bob' in resp.data
         for name in (b'Cara', b'Dan'):
             assert name not in resp.data
-        assert b'>active</strong> reservations' in resp.data
+        # Active is the default view: no banner, but history/all pills exist.
+        assert b'status=history' in resp.data
+        assert b'status=all' in resp.data
 
-    def test_invalid_filter_ignored(self, librarian_client, mock_db):
+    def test_invalid_filter_falls_back_to_active(self, librarian_client, mock_db):
         self._mock_page(mock_db)
         resp = librarian_client.get('/librarian/reservations?status=bogus')
         assert resp.status_code == 200
-        for name in (b'Alice', b'Bob', b'Cara', b'Dan'):
-            assert name in resp.data
-        assert b'Clear filter' not in resp.data
+        assert b'Alice' in resp.data
+        assert b'Bob' in resp.data
+        for name in (b'Cara', b'Dan'):
+            assert name not in resp.data
+        assert b'Back to active' not in resp.data
 
     def test_kpi_cards_link_to_filters(self, librarian_client, mock_db):
         self._mock_page(mock_db)
@@ -370,6 +405,106 @@ class TestReservationFilters:
         assert resp.status_code == 200
         assert b'>Cancel</button>' in resp.data
         assert b'>Expire</button>' not in resp.data
+
+
+class TestStaffUserHistory:
+    BORROWERS = [
+        (1, 'Test Student', 'student@mcst.edu.ph', 'Student', 1, '2024-0001', 'CS'),
+        (2, 'Test Faculty', 'faculty@mcst.edu.ph', 'Faculty', 2, '2024-0002', 'CS'),
+    ]
+
+    def test_student_forbidden_from_history_list(self, student_client):
+        resp = student_client.get('/librarian/users/history')
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
+
+    def test_student_forbidden_from_history_detail(self, student_client):
+        resp = student_client.get('/librarian/users/1/history')
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
+
+    def test_history_list_renders(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = self.BORROWERS
+        resp = librarian_client.get('/librarian/users/history')
+        assert resp.status_code == 200
+        assert b'Test Student' in resp.data
+        assert b'2024-0001' in resp.data
+        assert b'/librarian/users/1/history' in resp.data
+
+    def test_history_list_search_filters(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [self.BORROWERS[0]]
+        resp = librarian_client.get('/librarian/users/history?search=Student')
+        assert resp.status_code == 200
+        assert b'Test Student' in resp.data
+        call_args = mock_db['fetch_all'].call_args_list[0]
+        assert 'ILIKE' in call_args[0][0]
+        assert '%Student%' in call_args[0][1]
+
+    def test_admin_can_view_history_list(self, admin_client, mock_db):
+        mock_db['fetch_all'].return_value = self.BORROWERS
+        resp = admin_client.get('/librarian/users/history')
+        assert resp.status_code == 200
+        assert b'Test Student' in resp.data
+
+    def test_history_detail_shows_full_history(self, librarian_client, mock_db):
+        # get_user_by_id is mocked in conftest (user 1 exists);
+        # fetch_one calls: borrower row, then total fines.
+        mock_db['fetch_one'].side_effect = [
+            (1, 1, '2024-0001', 'CS', '0917', 'active'),
+            (25.0,),
+        ]
+        mock_db['fetch_all'].side_effect = [
+            [(55, date(2026, 8, 1), date(2026, 8, 2), date(2026, 8, 2), 'overnight',
+              'returned', 0, 'Intro to Algorithms', 'Cormen', '2024-00123')],
+            [(11, 1, 'waiting', datetime(2026, 8, 1, 10, 0), None, 'Book A', 'Auth A'),
+             (12, 2, 'claimed', datetime(2026, 8, 2, 10, 0), None, 'Book B', 'Auth B'),
+             (13, 3, 'expired', datetime(2026, 8, 3, 10, 0), None, 'Book C', 'Auth C')],
+            [(7, 'Wanted Book', 'Some Author', 'approved', date(2026, 8, 1), None)],
+            [(55, date(2026, 8, 1), date(2026, 8, 2), date(2026, 8, 2), 25.0,
+              'Intro to Algorithms', '2024-00123')],
+        ]
+        resp = librarian_client.get('/librarian/users/1/history')
+        assert resp.status_code == 200
+        assert b'Test Student' in resp.data
+        assert b'Intro to Algorithms' in resp.data
+        # Staff see the FULL reservation history, including finished items
+        # that are auto-removed from the user's own history view.
+        assert b'claimed' in resp.data
+        assert b'expired' in resp.data
+        assert b'Wanted Book' in resp.data
+
+    def test_history_detail_user_not_found(self, librarian_client, mock_db):
+        resp = librarian_client.get('/librarian/users/99/history')
+        assert resp.status_code == 302
+        assert '/librarian/users/history' in resp.location
+
+    def test_history_detail_no_borrower(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = None  # no borrower row
+        resp = librarian_client.get('/librarian/users/1/history')
+        assert resp.status_code == 302
+        assert '/librarian/users/history' in resp.location
+
+
+class TestActiveReservationHistory:
+    def test_user_history_hides_finished(self, student_client, mock_db):
+        from app.circulation import models as circ_models
+        circ_models.get_reservation_history_by_borrower(1)
+        call_args = mock_db['fetch_all'].call_args_list[0]
+        assert "IN ('waiting', 'allocated')" in call_args[0][0]
+
+    def test_full_history_kept_for_staff(self, student_client, mock_db):
+        from app.circulation import models as circ_models
+        circ_models.get_full_reservation_history_by_borrower(1)
+        call_args = mock_db['fetch_all'].call_args_list[0]
+        assert 'reservation_status' in call_args[0][0]
+        assert 'waiting' not in call_args[0][0]  # no status filter: full history
+
+    def test_expire_overdue_targets_deadlines(self, student_client, mock_db):
+        from app.circulation import models as circ_models
+        circ_models.expire_overdue_reservations()
+        call_args = mock_db['execute'].call_args_list[0]
+        assert "reservation_status = 'expired'" in call_args[0][0]
+        assert 'claim_deadline < NOW()' in call_args[0][0]
 
 
 class TestUserBorrow:

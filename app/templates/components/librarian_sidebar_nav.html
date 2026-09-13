@@ -20,6 +20,10 @@
                 <span class="material-symbols-outlined">event_available</span>
                 <span class="text-sm">Reservation Management</span>
             </a>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'circulation.user_history_list' or request.endpoint == 'circulation.user_history_detail' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('circulation.user_history_list') }}">
+                <span class="material-symbols-outlined">history</span>
+                <span class="text-sm">User History</span>
+            </a>
             <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'procurement.procurement_dashboard' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('procurement.procurement_dashboard') }}">
                 <span class="material-symbols-outlined">shopping_cart</span>
                 <span class="text-sm">Procurement Management</span>
