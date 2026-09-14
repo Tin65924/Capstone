@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ user_data[3] }} — History | MCST Library</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,1" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: { extend: { colors: { primary: "#1e3a8a" }, fontFamily: { display: "Manrope" } } }
+        };
+    </script>
+    <style>
+        * { font-family: 'Manrope', sans-serif; }
+        body { background-color: #f8fafc; color: #1e293b; display: flex; min-height: 100vh; }
+        main { flex: 1; padding: 1rem; max-width: 100%; overflow-y: auto; }
+        @media (min-width: 640px) { main { padding: 1.5rem; } }
+        @media (min-width: 1024px) { main { padding: 2rem 3rem; max-width: calc(100vw - 256px); } }
+        .card { background: white; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden; margin-bottom: 1.5rem; }
+        .badge { padding: 0.25rem 0.625rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; }
+        .badge-green { background: #dcfce7; color: #166534; }
+        .badge-red { background: #fee2e2; color: #991b1b; }
+        .badge-blue { background: #dbeafe; color: #1e40af; }
+        .badge-amber { background: #fef3c7; color: #92400e; }
+        .badge-gray { background: #f1f5f9; color: #475569; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { background: #f8fafc; padding: 0.75rem 1.25rem; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+        td { padding: 0.75rem 1.25rem; border-bottom: 1px solid #e2e8f0; font-size: 0.8125rem; }
+        tr:last-child td { border-bottom: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cfd7e7; border-radius: 10px; }
+    </style>
+</head>
+<body>
+    <div class="hidden lg:flex flex-col w-64 border-r border-[#cfd7e7] bg-white shrink-0 h-screen sticky top-0">
+        <div class="p-6 flex-1 flex flex-col overflow-hidden">
+            <div class="flex items-center gap-3 mb-8 shrink-0">
+                <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
+                <h1 class="text-xl font-bold tracking-tight">MCST Library</h1>
+            </div>
+            {% include 'components/librarian_sidebar_nav.html' %}
+        </div>
+        <div class="p-6 border-t border-[#cfd7e7] shrink-0">
+            <div class="flex flex-col items-center mb-4">
+                <h2 class="text-lg font-bold text-center">{{ current_user.full_name }}</h2>
+                <p class="text-sm text-gray-500">{{ current_user.role }}</p>
+            </div>
+            <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors">
+                <span class="material-symbols-outlined text-[18px]">logout</span><span>Log Out</span>
+            </a>
+        </div>
+    </div>
+
+    <main>
+        {% include 'components/flash_messages.html' %}
+        <nav class="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm text-gray-500 mb-4">
+            <a href="{{ url_for('auth.admin_users') }}" class="hover:text-primary hover:underline font-medium">User Management & Access Control</a>
+            <span class="material-symbols-outlined text-sm">chevron_right</span>
+            <a href="{{ url_for('circulation.user_history_list') }}" class="hover:text-primary hover:underline font-medium">User History</a>
+            <span class="material-symbols-outlined text-sm">chevron_right</span>
+            <span class="text-gray-900 font-bold">{{ user_data[3] }}</span>
+        </nav>
+        <div class="card p-5 sm:p-6">
+            <h1 class="text-xl sm:text-2xl font-bold">{{ user_data[3] }}</h1>
+            <p class="text-sm text-gray-500 mt-1">{{ user_data[1] }} · {{ user_data[2] }} · ID {{ borrower[2] }}{% if borrower[3] %} · {{ borrower[3] }}{% endif %}</p>
+            <div class="flex flex-wrap gap-4 mt-4 text-sm">
+                <span class="text-gray-500">Loans <strong class="text-gray-900">{{ transactions|length }}</strong></span>
+                <span class="text-gray-500">Reservations <strong class="text-gray-900">{{ reservations|length }}</strong></span>
+                <span class="text-gray-500">Requests <strong class="text-gray-900">{{ my_requests|length }}</strong></span>
+                <span class="{% if total_fines %}text-red-600 font-bold{% else %}text-green-600 font-bold{% endif %}">Fines ₱{{ '%.2f'|format((total_fines or 0)|float) }}</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="p-4 border-b border-gray-100 bg-gray-50/20"><h3 class="font-bold text-xs uppercase tracking-wider text-gray-400">Borrowing history ({{ transactions|length }})</h3></div>
+            <div class="overflow-x-auto">
+                <table class="min-w-[720px]">
+                    <thead><tr><th>Title</th><th>Copy</th><th>Borrowed</th><th>Due</th><th>Returned</th><th>Status</th><th class="text-right">Fine</th></tr></thead>
+                    <tbody>
+                        {% for t in transactions %}
+                        <tr>
+                            <td class="font-bold">{{ t[7] }}<div class="font-normal text-gray-500 text-xs">{{ t[8] }}</div></td>
+                            <td class="font-mono text-gray-500">{{ t[9] }}</td>
+                            <td class="text-gray-500">{{ t[1] }}</td>
+                            <td class="text-gray-500">{{ t[2] }}</td>
+                            <td class="text-gray-500">{{ t[3] or '—' }}</td>
+                            <td><span class="badge {% if t[5] == 'returned' %}badge-green{% elif t[5] == 'overdue' %}badge-red{% else %}badge-blue{% endif %}">{{ t[5] }}</span></td>
+                            <td class="text-right font-bold {% if t[6] %}text-red-600{% else %}text-gray-400{% endif %}">{% if t[6] %}₱{{ '%.2f'|format(t[6]|float) }}{% else %}—{% endif %}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="7" class="text-center text-gray-400 py-6">No borrowing records.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="p-4 border-b border-gray-100 bg-gray-50/20"><h3 class="font-bold text-xs uppercase tracking-wider text-gray-400">Reservation history — full, incl. claimed &amp; expired ({{ reservations|length }})</h3></div>
+            <div class="overflow-x-auto">
+                <table class="min-w-[720px]">
+                    <thead><tr><th>Title</th><th>Queue #</th><th>Requested</th><th>Claim by</th><th>Status</th></tr></thead>
+                    <tbody>
+                        {% for r in reservations %}
+                        <tr>
+                            <td class="font-bold">{{ r[5] }}<div class="font-normal text-gray-500 text-xs">{{ r[6] or '' }}</div></td>
+                            <td class="text-gray-500">#{{ r[1] }}</td>
+                            <td class="text-gray-500">{{ r[3] }}</td>
+                            <td class="text-gray-500">{{ r[4] or '—' }}</td>
+                            <td><span class="badge {% if r[2] == 'claimed' %}badge-green{% elif r[2] == 'expired' %}badge-gray{% elif r[2] == 'allocated' %}badge-blue{% else %}badge-amber{% endif %}">{{ r[2] }}</span></td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5" class="text-center text-gray-400 py-6">No reservation records.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="p-4 border-b border-gray-100 bg-gray-50/20"><h3 class="font-bold text-xs uppercase tracking-wider text-gray-400">Book requests ({{ my_requests|length }})</h3></div>
+            <div class="overflow-x-auto">
+                <table class="min-w-[720px]">
+                    <thead><tr><th>Title</th><th>Author</th><th>Date</th><th>Status</th></tr></thead>
+                    <tbody>
+                        {% for q in my_requests %}
+                        <tr>
+                            <td class="font-bold">{{ q[1] }}</td>
+                            <td class="text-gray-500">{{ q[2] or '—' }}</td>
+                            <td class="text-gray-500">{{ q[4] }}</td>
+                            <td><span class="badge {% if q[3] == 'approved' %}badge-green{% elif q[3] == 'rejected' %}badge-red{% else %}badge-blue{% endif %}">{{ q[3]|replace('_', ' ') }}</span></td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="4" class="text-center text-gray-400 py-6">No book requests.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="p-4 border-b border-gray-100 bg-gray-50/20 flex justify-between items-center">
+                <h3 class="font-bold text-xs uppercase tracking-wider text-gray-400">Fines ({{ fines|length }})</h3>
+                <span class="text-sm font-bold {% if total_fines %}text-red-600{% else %}text-green-600{% endif %}">Total ₱{{ '%.2f'|format((total_fines or 0)|float) }}</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-[720px]">
+                    <thead><tr><th>Title</th><th>Copy</th><th>Due</th><th>Returned</th><th class="text-right">Amount</th></tr></thead>
+                    <tbody>
+                        {% for f in fines %}
+                        <tr>
+                            <td class="font-bold">{{ f[5] }}</td>
+                            <td class="font-mono text-gray-500">{{ f[6] }}</td>
+                            <td class="text-gray-500">{{ f[2] }}</td>
+                            <td class="text-gray-500">{{ f[3] or '—' }}</td>
+                            <td class="text-right font-bold text-red-600">₱{{ '%.2f'|format(f[4]|float) }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5" class="text-center text-gray-400 py-6">No fines.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

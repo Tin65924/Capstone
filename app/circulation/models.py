@@ -321,6 +321,20 @@ def notification_exists(recipient_id, notif_type, related_reference):
 
 
 def get_reservation_history_by_borrower(borrower_id):
+    # Active-only: finished (claimed/expired) reservations are auto-removed
+    # from user-facing history. Staff use get_full_reservation_history_by_borrower.
+    return db.fetch_all(
+        '''SELECT r.reservation_id, r.queue_position, r.reservation_status, r.request_date, r.claim_deadline,
+                  b.title, b.author
+           FROM reservation_queue r
+           JOIN book_catalog b ON r.book_id = b.book_id
+           WHERE r.borrower_id = %s AND r.reservation_status IN ('waiting', 'allocated')
+           ORDER BY r.request_date DESC''',
+        (borrower_id,)
+    )
+
+
+def get_full_reservation_history_by_borrower(borrower_id):
     return db.fetch_all(
         '''SELECT r.reservation_id, r.queue_position, r.reservation_status, r.request_date, r.claim_deadline,
                   b.title, b.author
@@ -330,6 +344,33 @@ def get_reservation_history_by_borrower(borrower_id):
            ORDER BY r.request_date DESC''',
         (borrower_id,)
     )
+
+
+def expire_overdue_reservations():
+    return db.execute(
+        """UPDATE reservation_queue SET reservation_status = 'expired'
+           WHERE reservation_status = 'allocated'
+             AND claim_deadline IS NOT NULL
+             AND claim_deadline < NOW()"""
+    )
+
+
+def get_borrowers_for_history(search=None, limit=100):
+    base_query = (
+        '''SELECT u.user_id, u.full_name, u.email, r.role_name,
+                  b.borrower_id, b.id_number, b.department
+           FROM user_accounts u
+           JOIN roles r ON u.role_id = r.role_id
+           JOIN borrowers b ON b.user_id = u.user_id'''
+    )
+    params = []
+    if search:
+        base_query += ' WHERE u.full_name ILIKE %s OR u.email ILIKE %s OR b.id_number ILIKE %s'
+        like = f'%{search}%'
+        params.extend([like, like, like])
+    base_query += ' ORDER BY u.full_name ASC LIMIT %s'
+    params.append(limit)
+    return db.fetch_all(base_query, tuple(params))
 
 
 def get_fines_by_borrower(borrower_id):
@@ -430,12 +471,14 @@ def get_reservations_by_book(book_id):
     )
 
 def get_reservations_by_borrower(borrower_id):
+    # Active-only: finished (claimed/expired) reservations are auto-removed
+    # from user-facing views. Staff use get_full_reservation_history_by_borrower.
     return db.fetch_all(
         '''SELECT r.reservation_id, r.queue_position, r.reservation_status, r.request_date, r.claim_deadline,
                   b.title, b.author
            FROM reservation_queue r
            JOIN book_catalog b ON r.book_id = b.book_id
-           WHERE r.borrower_id = %s
+           WHERE r.borrower_id = %s AND r.reservation_status IN ('waiting', 'allocated')
            ORDER BY r.queue_position''',
         (borrower_id,)
     )

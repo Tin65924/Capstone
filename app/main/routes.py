@@ -56,7 +56,7 @@ def user_profile():
         get_borrower_by_user, get_loans_by_borrower, count_active_loans,
         get_reservations_by_borrower, get_notifications_by_borrower,
         count_unread_notifications, get_fines_by_borrower, get_total_fines,
-        create_notification, notification_exists,
+        create_notification, notification_exists, expire_overdue_reservations,
     )
     from app.requests.models import get_requests_by_borrower
 
@@ -80,6 +80,7 @@ def user_profile():
 
     if borrower:
         borrower_id = borrower[0]
+        expire_overdue_reservations()
         loans = get_loans_by_borrower(borrower_id) or []
         overdue_count = sum(1 for loan in loans if len(loan) > 4 and loan[4] == 'overdue')
         try:
@@ -263,6 +264,7 @@ def user_history():
         get_borrower_by_user, get_user_loan_history,
         get_reservation_history_by_borrower, get_fines_by_borrower,
         get_total_fines, get_notifications_by_borrower,
+        expire_overdue_reservations,
     )
     from app.requests.models import get_requests_by_borrower
 
@@ -274,6 +276,7 @@ def user_history():
     notifications = []
     borrower = get_borrower_by_user(current_user.id)
     if borrower:
+        expire_overdue_reservations()
         try:
             transactions = get_user_loan_history(current_user.id) or []
         except Exception:

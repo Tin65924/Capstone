@@ -19,6 +19,9 @@ from .models import (
     allocate_reservation, claim_reservation, expire_reservation, next_in_queue,
     get_available_accession_by_book, create_notification,
     get_user_active_loans, get_active_loan_by_id_and_user,
+    expire_overdue_reservations, get_borrowers_for_history,
+    get_full_reservation_history_by_borrower, get_user_loan_history,
+    get_fines_by_borrower, get_total_fines,
 )
 
 VALID_BORROW_TYPES = ('overnight', 'daily_circulation')
@@ -195,14 +198,21 @@ def desk_return():
 @login_required
 @librarian_required
 def reservations_page():
-    status_filter = request.args.get('status', '').strip().lower()
+    # Auto-expire past-deadline allocations so they leave the active queue,
+    # and auto-remove finished (claimed/expired) history from the default view.
+    expire_overdue_reservations()
+    status_filter = request.args.get('status', 'active').strip().lower()
     if status_filter == 'active':
         wanted = ('waiting', 'allocated')
     elif status_filter in ('waiting', 'allocated'):
         wanted = (status_filter,)
-    else:
-        status_filter = ''
+    elif status_filter == 'history':
+        wanted = ('claimed', 'expired')
+    elif status_filter == 'all':
         wanted = None
+    else:
+        status_filter = 'active'
+        wanted = ('waiting', 'allocated')
 
     groups = get_reservations_grouped()
     reservations_by_book = {
@@ -234,7 +244,7 @@ def reservations_page():
 @librarian_required
 def reservation_action(reservation_id, action):
     keep_status = request.form.get('status', '').strip().lower()
-    status_args = {'status': keep_status} if keep_status in ('active', 'waiting', 'allocated') else {}
+    status_args = {'status': keep_status} if keep_status in ('active', 'waiting', 'allocated', 'history', 'all') else {}
     reservation = get_reservation_by_id(reservation_id)
     if not reservation:
         flash('Reservation not found.', 'error')
@@ -494,3 +504,53 @@ def user_return():
     else:
         flash('Book returned.', 'success')
     return redirect(url_for('main.user_profile'))
+
+
+@circulation_bp.route('/librarian/users/history')
+@login_required
+@librarian_required
+def user_history_list():
+    search = request.args.get('search', '').strip() or None
+    borrowers = get_borrowers_for_history(search=search)
+    return render_template(
+        'circulation/user_history_list.html',
+        borrowers=borrowers,
+        search=search or '',
+    )
+
+
+@circulation_bp.route('/librarian/users/<int:user_id>/history')
+@login_required
+@librarian_required
+def user_history_detail(user_id):
+    from app.auth.models import get_user_by_id
+    from app.requests.models import get_requests_by_borrower
+
+    user_data = get_user_by_id(user_id)
+    if not user_data:
+        flash('User not found.', 'error')
+        return redirect(url_for('circulation.user_history_list'))
+    borrower = get_borrower_by_user(user_id)
+    if not borrower:
+        flash('No borrower record found for this user.', 'error')
+        return redirect(url_for('circulation.user_history_list'))
+
+    borrower_id = borrower[0]
+    transactions = get_user_loan_history(user_id) or []
+    reservations = get_full_reservation_history_by_borrower(borrower_id) or []
+    try:
+        my_requests = get_requests_by_borrower(borrower_id) or []
+    except Exception:
+        my_requests = []
+    fines = get_fines_by_borrower(borrower_id) or []
+    total_fines = get_total_fines(borrower_id) or 0
+    return render_template(
+        'circulation/user_history_detail.html',
+        user_data=user_data,
+        borrower=borrower,
+        transactions=transactions,
+        reservations=reservations,
+        my_requests=my_requests,
+        fines=fines,
+        total_fines=total_fines,
+    )
