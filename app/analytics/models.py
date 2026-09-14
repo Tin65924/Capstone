@@ -239,17 +239,17 @@ def circulation_overview(start_date=None, end_date=None):
     borrowers = db.fetch_one(
         'SELECT COUNT(DISTINCT borrower_id) FROM circulation_records {}'.format(where), p)
     overdue = db.fetch_one(
-        'SELECT COUNT(*) FROM circulation_records {} {}'.format(
+        'SELECT COUNT(*) FROM circulation_records {}'.format(
             where + (' AND ' if where else 'WHERE ') + "transaction_status = 'overdue'"),
         p)
     avg_loan = db.fetch_one(
         '''SELECT AVG(return_date - borrow_date) FROM circulation_records
-           {} {} return_date IS NOT NULL'''.format(
-            where + (' AND ' if where else 'WHERE ') if parts else 'WHERE ',
+           {} return_date IS NOT NULL'''.format(
+            (where + ' AND ' if where else 'WHERE ') if parts else 'WHERE ',
         ),
         p)
     returned = db.fetch_one(
-        'SELECT COUNT(*) FROM circulation_records {} {}'.format(
+        'SELECT COUNT(*) FROM circulation_records {}'.format(
             where + (' AND ' if where else 'WHERE ') + "transaction_status = 'returned'"),
         p)
     # New additions filter on book_catalog.date_added with the same range.
@@ -263,7 +263,12 @@ def circulation_overview(start_date=None, end_date=None):
     r = returned[0] if returned else 0
     rate = round(r / t * 100, 1) if t else 0.0
     try:
-        avg_days = float(avg_loan[0]) if avg_loan and avg_loan[0] is not None else 0.0
+        raw_avg = avg_loan[0] if avg_loan and avg_loan[0] is not None else 0.0
+        # DATE - DATE yields int days in Postgres; guard timedelta/Decimal too.
+        if hasattr(raw_avg, 'total_seconds'):
+            avg_days = raw_avg.total_seconds() / 86400
+        else:
+            avg_days = float(raw_avg)
     except (TypeError, ValueError):
         avg_days = 0.0
     return (

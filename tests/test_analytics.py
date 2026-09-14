@@ -63,6 +63,19 @@ class TestAnalyticsModels:
         mock_db['fetch_all'].return_value = [('Rare Book',)]
         assert underutilized_titles() == [('Rare Book',)]
 
+    def test_circulation_overview_returns_tuple(self, mock_db):
+        from app.analytics.models import circulation_overview
+        mock_db['fetch_one'].side_effect = [(10,), (4,), (2,), (3.0,), (6,), (7,)]
+        assert circulation_overview() == (10, 4, 2, 3.0, 60.0, 7)
+
+    def test_circulation_overview_scoped_by_date(self, mock_db):
+        from datetime import date
+        from app.analytics.models import circulation_overview
+        mock_db['fetch_one'].side_effect = [(1,), (1,), (0,), (1.0,), (1,), (1,)]
+        circulation_overview(date(2026, 1, 1), date(2026, 12, 31))
+        params = mock_db['fetch_one'].call_args_list[0][0][1]
+        assert params == (date(2026, 1, 1), date(2026, 12, 31))
+
     def test_save_report_snapshot(self, mock_db):
         from app.analytics.models import save_report_snapshot
         save_report_snapshot('most_borrowed_titles', {'preset': 'all'}, [['Clean Code', 5]], 3)

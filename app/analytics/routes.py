@@ -108,7 +108,13 @@ def compute_dashboard(start_date, end_date):
         out = []
         for r in rows or []:
             try:
-                out.append([r[0], int(r[1] or 0)])
+                label = r[0]
+                # Trend queries return DATEs; Flask jsonify would render them
+                # as RFC-2822 ("Sat, 15 Aug 2026...") which breaks the chart
+                # x-axis slicing. Normalize to ISO YYYY-MM-DD instead.
+                if hasattr(label, 'isoformat'):
+                    label = label.isoformat()
+                out.append([label, int(r[1] or 0)])
             except (IndexError, TypeError, ValueError):
                 continue
         return out
