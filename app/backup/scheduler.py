@@ -1,0 +1,85 @@
+import os
+
+_scheduler = None
+
+
+def run_scheduled_backup(app):
+    """Monthly job body: backup + log + retention. Failures become 'failed' rows."""
+    with app.app_context():
+        from .models import log_backup, delete_backup_row, get_stale_backups
+        from .utils import create_backup, resolve_backup_path
+
+        keep_n = app.config.get('BACKUP_KEEP', 12)
+        try:
+            filename, size_bytes = create_backup()
+        except Exception as e:  # noqa: BLE001 — must not raise out of the scheduler
+            app.logger.exception('Scheduled backup failed')
+            log_backup(
+                filename='scheduled_backup_failed.sql',
+                backup_type='scheduled',
+                status='failed',
+                error_msg=str(e)[:500],
+            )
+            return
+        log_backup(filename, size_bytes, backup_type='scheduled', status='completed')
+        _apply_retention(app, keep_n)
+
+
+def _apply_retention(app, keep_n):
+    from .models import delete_backup_row, get_stale_backups
+    from .utils import resolve_backup_path
+
+    try:
+        stale = get_stale_backups(keep_n)
+    except Exception:  # noqa: BLE001 — retention must never break the request/job
+        app.logger.exception('Backup retention lookup failed')
+        return
+    for row in stale or []:
+        backup_id, filename = row[0], row[1]
+        try:
+            path = resolve_backup_path(filename)
+            if os.path.isfile(path):
+                os.remove(path)
+        except Exception:  # noqa: BLE001 — keep deleting other rows
+            app.logger.exception('Failed to delete stale backup file %s', filename)
+            continue
+        try:
+            delete_backup_row(backup_id)
+        except Exception:  # noqa: BLE001
+            app.logger.exception('Failed to delete stale backup row %s', backup_id)
+
+
+def apply_retention(app, keep_n):
+    """Retention helper shared by routes (public for testing)."""
+    _apply_retention(app, keep_n)
+
+
+def start_scheduler(app):
+    """Start the monthly APScheduler cron job. No-op in tests / if running."""
+    global _scheduler
+    if app.config.get('TESTING'):
+        return None
+    if _scheduler is not None and _scheduler.running:
+        return _scheduler
+
+    # Avoid double-start under the Werkzeug reloader (only the child serves).
+    if os.environ.get('WERKZEUG_RUN_MAIN') == 'false':
+        return None
+
+    from apscheduler.schedulers.background import BackgroundScheduler
+
+    day = app.config.get('BACKUP_DAY', 1)
+    hour = app.config.get('BACKUP_HOUR', 2)
+    _scheduler = BackgroundScheduler()
+    _scheduler.add_job(
+        lambda: run_scheduled_backup(app),
+        'cron',
+        day=int(day),
+        hour=int(hour),
+        minute=0,
+        id='monthly_backup',
+        replace_existing=True,
+    )
+    _scheduler.start()
+    app.logger.info('Backup scheduler started (monthly: day=%s hour=%s).', day, hour)
+    return _scheduler

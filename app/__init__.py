@@ -54,6 +54,13 @@ def create_app(test_config=None):
 
     register_error_handlers(app)
 
+    try:
+        if not app.config.get('TESTING'):
+            from .backup.scheduler import start_scheduler
+            start_scheduler(app)
+    except Exception:
+        pass
+
     return app
 
 

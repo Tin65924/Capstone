@@ -194,6 +194,18 @@ INSERT INTO roles (role_name) VALUES
     ('Admin')
 ON CONFLICT (role_name) DO NOTHING;
 
+CREATE TABLE IF NOT EXISTS backup_log (
+    backup_id   SERIAL PRIMARY KEY,
+    filename    VARCHAR(255) NOT NULL,
+    size_bytes  BIGINT,
+    status      VARCHAR(20) NOT NULL DEFAULT 'completed'
+                CHECK (status IN ('completed', 'failed')),
+    backup_type VARCHAR(20) NOT NULL DEFAULT 'manual'
+                CHECK (backup_type IN ('manual', 'scheduled')),
+    error_msg   VARCHAR(500),
+    created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS library_settings (
     setting_key   VARCHAR(60) PRIMARY KEY,
     setting_value TEXT NOT NULL,
