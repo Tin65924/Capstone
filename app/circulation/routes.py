@@ -200,7 +200,10 @@ def desk_return():
 def reservations_page():
     # Auto-expire past-deadline allocations so they leave the active queue,
     # and auto-remove finished (claimed/expired) history from the default view.
-    expire_overdue_reservations()
+    try:
+        expire_overdue_reservations()
+    except Exception:
+        current_app.logger.warning('expire_overdue_reservations failed', exc_info=True)
     status_filter = request.args.get('status', 'active').strip().lower()
     if status_filter == 'active':
         wanted = ('waiting', 'allocated')

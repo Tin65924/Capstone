@@ -350,6 +350,14 @@ class TestReservationFilters:
         assert "reservation_status = 'expired'" in first_call[0][0]
         assert 'claim_deadline' in first_call[0][0]
 
+    def test_page_renders_when_expire_fails(self, librarian_client, mock_db):
+        from unittest.mock import patch
+        self._mock_page(mock_db)
+        with patch('app.circulation.routes.expire_overdue_reservations',
+                   side_effect=Exception('db down')):
+            resp = librarian_client.get('/librarian/reservations')
+        assert resp.status_code == 200
+
     def test_filter_waiting(self, librarian_client, mock_db):
         self._mock_page(mock_db)
         resp = librarian_client.get('/librarian/reservations?status=waiting')

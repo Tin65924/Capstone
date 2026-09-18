@@ -80,7 +80,10 @@ def user_profile():
 
     if borrower:
         borrower_id = borrower[0]
-        expire_overdue_reservations()
+        try:
+            expire_overdue_reservations()
+        except Exception:
+            current_app.logger.warning('expire_overdue_reservations failed', exc_info=True)
         loans = get_loans_by_borrower(borrower_id) or []
         overdue_count = sum(1 for loan in loans if len(loan) > 4 and loan[4] == 'overdue')
         try:
@@ -276,7 +279,10 @@ def user_history():
     notifications = []
     borrower = get_borrower_by_user(current_user.id)
     if borrower:
-        expire_overdue_reservations()
+        try:
+            expire_overdue_reservations()
+        except Exception:
+            current_app.logger.warning('expire_overdue_reservations failed', exc_info=True)
         try:
             transactions = get_user_loan_history(current_user.id) or []
         except Exception:

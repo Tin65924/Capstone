@@ -63,6 +63,19 @@ class TestAnalyticsModels:
         mock_db['fetch_all'].return_value = [('Rare Book',)]
         assert underutilized_titles() == [('Rare Book',)]
 
+    def test_circulation_overview_returns_tuple(self, mock_db):
+        from app.analytics.models import circulation_overview
+        mock_db['fetch_one'].side_effect = [(10,), (4,), (2,), (3.0,), (6,), (7,)]
+        assert circulation_overview() == (10, 4, 2, 3.0, 60.0, 7)
+
+    def test_circulation_overview_scoped_by_date(self, mock_db):
+        from datetime import date
+        from app.analytics.models import circulation_overview
+        mock_db['fetch_one'].side_effect = [(1,), (1,), (0,), (1.0,), (1,), (1,)]
+        circulation_overview(date(2026, 1, 1), date(2026, 12, 31))
+        params = mock_db['fetch_one'].call_args_list[0][0][1]
+        assert params == (date(2026, 1, 1), date(2026, 12, 31))
+
     def test_save_report_snapshot(self, mock_db):
         from app.analytics.models import save_report_snapshot
         save_report_snapshot('most_borrowed_titles', {'preset': 'all'}, [['Clean Code', 5]], 3)
@@ -243,3 +256,24 @@ class TestExportXlsx:
         snapshots = [c[0][1][0] for c in mock_db['execute'].call_args_list
                      if 'INSERT INTO analytics_cache' in c[0][0]]
         assert sorted(snapshots) == ['most_borrowed_titles', 'utilization_rate']
+
+
+class TestDashboardNormalization:
+    def test_pair_normalizes_dates_to_iso(self, librarian_client, mock_db):
+        """Trend DATEs must render as ISO YYYY-MM-DD, not RFC-2822."""
+        from datetime import date
+        mock_db['fetch_one'].return_value = None
+        mock_db['fetch_all'].return_value = [(date(2026, 8, 15), 3)]
+        resp = librarian_client.get('/librarian/analytics/dashboard')
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body['circulation']['trend'] == [['2026-08-15', 3]]
+        assert 'Aug' not in str(body['circulation']['trend'])
+
+    def test_circulation_overview_timedelta_avg(self, mock_db):
+        """timedelta AVG (interval) converts to fractional days."""
+        from datetime import timedelta
+        from app.analytics.models import circulation_overview
+        mock_db['fetch_one'].side_effect = [
+            (10,), (4,), (2,), (timedelta(days=3, hours=12),), (6,), (7,)]
+        assert circulation_overview() == (10, 4, 2, 3.5, 60.0, 7)
