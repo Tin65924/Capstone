@@ -330,7 +330,8 @@ class TestReservationFilters:
         assert resp.status_code == 200
         for name in (b'Alice', b'Bob', b'Cara', b'Dan', b'Book A', b'Book B'):
             assert name in resp.data
-        assert b'Back to active' in resp.data
+        # Filter banner was removed: no "Back to active" notice in any view.
+        assert b'Back to active' not in resp.data
 
     def test_filter_history_shows_claimed_and_expired(self, librarian_client, mock_db):
         self._mock_page(mock_db)
@@ -340,7 +341,6 @@ class TestReservationFilters:
         assert b'Dan' in resp.data
         for name in (b'Alice', b'Bob'):
             assert name not in resp.data
-        assert b'finished (claimed' in resp.data
 
     def test_page_auto_expires_overdue(self, librarian_client, mock_db):
         self._mock_page(mock_db)
@@ -358,7 +358,6 @@ class TestReservationFilters:
         for name in (b'Bob', b'Cara', b'Dan'):
             assert name not in resp.data
         assert b'Book B' not in resp.data
-        assert b'>waiting</strong> reservations' in resp.data
 
     def test_filter_allocated(self, librarian_client, mock_db):
         self._mock_page(mock_db)
@@ -367,7 +366,6 @@ class TestReservationFilters:
         assert b'Bob' in resp.data
         for name in (b'Alice', b'Cara', b'Dan'):
             assert name not in resp.data
-        assert b'ready for pickup' in resp.data
 
     def test_filter_active_shows_waiting_and_allocated(self, librarian_client, mock_db):
         self._mock_page(mock_db)

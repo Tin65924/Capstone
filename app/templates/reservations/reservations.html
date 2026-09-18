@@ -282,12 +282,6 @@
             </a>
         </div>
 
-        {% if status_filter and status_filter != 'active' %}
-        <div class="mb-4 flex items-center justify-between gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 text-sm">
-            <p class="text-gray-600">Showing <strong class="text-gray-900">{% if status_filter == 'allocated' %}ready for pickup{% elif status_filter == 'waiting' %}waiting{% elif status_filter == 'history' %}finished (claimed &amp; expired) history{% elif status_filter == 'all' %}all including history{% else %}{{ status_filter }}{% endif %}</strong> reservations ({{ groups|length }} book{{ 's' if groups|length != 1 }})</p>
-            <a href="{{ url_for('circulation.reservations_page', status='active') }}" class="text-primary font-bold text-xs hover:underline shrink-0">Back to active</a>
-        </div>
-        {% endif %}
         <div class="mb-4 flex flex-wrap items-center gap-2 text-xs font-bold">
             <span class="text-gray-400 uppercase tracking-wider mr-1"></span>
             <a href="{{ url_for('circulation.reservations_page', status='active') }}" class="px-3 py-1.5 rounded-full {% if status_filter == 'active' %}bg-primary text-white{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">Active</a>
