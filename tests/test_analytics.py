@@ -769,29 +769,32 @@ class TestChartJson:
 
 
 class TestChartFilterControls:
-    def test_page_embeds_chart_filters(self, librarian_client, mock_db):
+    def test_page_embeds_filter_modal(self, librarian_client, mock_db):
+        """Each card gets one filter button opening the shared modal."""
         mock_db['fetch_one'].return_value = (5,)
         mock_db['fetch_all'].return_value = []
         resp = librarian_client.get('/librarian/analytics')
         assert resp.status_code == 200
-        for name in (b'data-chart="collection_by_category"',
-                     b'data-chart="copies_by_status"',
-                     b'data-chart="borrowings_trend"',
-                     b'data-chart="overdue_trend"',
-                     b'data-chart="top_categories"',
-                     b'data-chart="top_books"',
-                     b'data-chart="high_demand"',
-                     b'data-chart="borrowings_by_department"',
-                     b'data-chart="borrowings_by_user_type"'):
+        assert b'id="chartFilterModal"' in resp.data
+        assert b'id="chartFilterBody"' in resp.data
+        assert b'id="chartFilterApply"' in resp.data
+        assert b'id="chartFilterReset"' in resp.data
+        assert b'CHART_FILTER_DEFS' in resp.data
+        assert b'FILTER_BUTTON_CARDS' in resp.data
+        assert b'openChartFilter' in resp.data
+        assert b'data-cbadge' in resp.data
+        for name in (b'collection_by_category', b'copies_by_status',
+                     b'borrowings_trend', b'borrowings_by_department',
+                     b'borrowings_by_user_type'):
             assert name in resp.data
-        assert b'id="dept-checks"' in resp.data
-        assert b'id="role-checks"' in resp.data
-        assert b'/librarian/analytics/chart' in resp.data
-        # borrow-type selector is injected for circulation-backed charts
-        assert b'BORROW_TYPE_CHARTS' in resp.data
-        assert b'data-f="borrow_type"' in resp.data
+        # borrow-type option lives in the modal definition
         assert b'value="overnight"' in resp.data
         assert b'value="daily_circulation"' in resp.data
+        assert b'/librarian/analytics/chart' in resp.data
+        # inline filter rows are gone: cards stay compact
+        assert b'class="chart-filter ' not in resp.data
+        assert b'id="dept-checks"' not in resp.data
+        assert b'id="role-checks"' not in resp.data
 
     def test_collection_table_controls_work(self, librarian_client, mock_db):
         """Search + status filter are real inputs; View All links go somewhere."""

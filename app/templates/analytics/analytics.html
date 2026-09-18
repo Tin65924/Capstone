@@ -248,26 +248,12 @@
                     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
                         <div class="bg-white rounded-xl border border-slate-200 p-4">
                             <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-extrabold">Collection by Category</h3><span class="text-[11px] text-slate-400 border rounded px-2 py-0.5">By Titles</span></div>
-                            <div class="chart-filter flex flex-wrap items-center gap-2 mb-2" data-chart="collection_by_category">
-                                <input type="text" data-f="q" placeholder="Only titles matching…" class="text-[11px] border rounded-lg px-2.5 py-1.5 outline-none focus:border-primary flex-1 min-w-[130px]">
-                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
-                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
-                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
-                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
-                            </div>
+                            
                             <div class="flex items-center gap-4"><div id="donut-category" class="shrink-0"></div><div id="legend-category" class="flex-1 space-y-1 text-xs min-w-0"></div></div>
                         </div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4">
                             <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-extrabold">Copies by Status</h3><span class="text-[11px] text-slate-400 border rounded px-2 py-0.5">By Copies</span></div>
-                            <div class="chart-filter flex flex-wrap items-center gap-2 mb-2" data-chart="copies_by_status">
-                                <input type="date" data-f="from" value="{{ from_date }}" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
-                                <span class="text-[11px] text-slate-400">–</span>
-                                <input type="date" data-f="to" value="{{ to_date }}" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
-                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
-                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
-                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
-                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
-                            </div>
+                            
                             <div class="flex items-center gap-4"><div id="donut-status" class="shrink-0"></div><div id="legend-status" class="flex-1 space-y-1 text-xs min-w-0"></div></div>
                         </div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4">
@@ -320,61 +306,21 @@
                     <div id="library-kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3"></div>
                     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-1">1. Borrowings Trend</h3>
-                            <div class="chart-filter flex flex-wrap items-center gap-2 my-2" data-chart="borrowings_trend">
-                                <input type="date" data-f="from" value="{{ from_date }}" aria-label="Trend start date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
-                                <span class="text-[11px] text-slate-400">–</span>
-                                <input type="date" data-f="to" value="{{ to_date }}" aria-label="Trend end date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
-                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
-                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
-                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
-                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
-                            </div>
+                            
                         <div id="trend-line" class="w-full overflow-hidden"></div><p class="text-[10px] text-slate-400 mt-1">Solid = actual borrowings • dashed = 30-day moving-average forecast.</p></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">2. Top Borrowed Categories</h3>
-                            <div class="chart-filter flex flex-wrap items-center gap-2 mb-2" data-chart="top_categories">
-                                <input type="date" data-f="from" value="{{ from_date }}" aria-label="Categories start date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
-                                <span class="text-[11px] text-slate-400">–</span>
-                                <input type="date" data-f="to" value="{{ to_date }}" aria-label="Categories end date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
-                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
-                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
-                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
-                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
-                            </div>
+                            
                         <div class="flex items-center gap-4"><div id="donut-topcats" class="shrink-0"></div><div id="legend-topcats" class="flex-1 space-y-1 text-xs min-w-0"></div></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">3. Peak Borrowing Periods</h3>
-                            <div class="chart-filter flex flex-wrap items-center gap-2 mb-2" data-chart="borrowings_trend">
-                                <input type="date" data-f="from" value="{{ from_date }}" aria-label="Peak periods start date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
-                                <span class="text-[11px] text-slate-400">–</span>
-                                <input type="date" data-f="to" value="{{ to_date }}" aria-label="Peak periods end date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
-                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
-                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
-                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
-                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
-                            </div>
+                            
                         <div id="peak-bars" class="space-y-1.5"></div><p class="text-[10px] text-slate-400 mt-1">Grouped by day (borrow_date has no time-of-day).</p></div>
                     </div>
                     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">4. Likely High-Demand Titles (Next 30 Days)</h3>
-                            <div class="chart-filter flex flex-wrap items-center gap-2 mb-2" data-chart="high_demand">
-                                <input type="date" data-f="from" value="{{ from_date }}" aria-label="High-demand start date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
-                                <span class="text-[11px] text-slate-400">–</span>
-                                <input type="date" data-f="to" value="{{ to_date }}" aria-label="High-demand end date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
-                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
-                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
-                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
-                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
-                            </div>
+                            
                         <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[480px]"><thead><tr class="text-left text-slate-500 border-b"><th class="py-2">#</th><th class="py-2">Title</th><th class="py-2">Author</th><th class="py-2 text-right">Active</th></tr></thead><tbody id="high-demand-body"></tbody></table></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-1">5. Overdue Trend</h3>
-                            <div class="chart-filter flex flex-wrap items-center gap-2 my-2" data-chart="overdue_trend">
-                                <input type="date" data-f="from" value="{{ from_date }}" aria-label="Overdue trend start date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
-                                <span class="text-[11px] text-slate-400">–</span>
-                                <input type="date" data-f="to" value="{{ to_date }}" aria-label="Overdue trend end date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
-                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
-                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
-                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
-                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
-                            </div>
+                            
                         <div id="overdue-line" class="w-full overflow-hidden"></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">6. Forecast Summary / Insights</h3><div id="insights-list" class="space-y-2.5 text-[11px] text-slate-600"></div></div>
                     </div>
@@ -401,38 +347,13 @@
                     <div id="usage-kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3"></div>
                     <div class="grid grid-cols-1 xl:grid-cols-4 gap-4">
                         <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">1. Borrowings by Department / Program</h3>
-                            <div class="chart-filter flex flex-wrap items-center gap-2 mb-2" data-chart="borrowings_by_department" data-param="department">
-                                <div class="relative">
-                                    <button type="button" data-dropbtn class="text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Departments ▾</button>
-                                    <div data-drop class="hidden absolute z-20 mt-1 w-52 max-h-48 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-xl py-1" id="dept-checks"></div>
-                                </div>
-                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
-                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
-                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
-                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
-                            </div>
+                            
                         <div id="dept-bars" class="space-y-1.5"></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-1">2. Borrowings Trend</h3>
-                            <div class="chart-filter flex flex-wrap items-center gap-2 my-2" data-chart="borrowings_trend">
-                                <input type="date" data-f="from" value="{{ from_date }}" aria-label="Usage trend start date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
-                                <span class="text-[11px] text-slate-400">–</span>
-                                <input type="date" data-f="to" value="{{ to_date }}" aria-label="Usage trend end date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
-                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
-                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
-                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
-                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
-                            </div>
+                            
                         <div id="usage-trend-line" class="w-full overflow-hidden"></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">3. Top Borrowed Books</h3>
-                            <div class="chart-filter flex flex-wrap items-center gap-2 mb-2" data-chart="top_books">
-                                <input type="date" data-f="from" value="{{ from_date }}" aria-label="Top books start date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
-                                <span class="text-[11px] text-slate-400">–</span>
-                                <input type="date" data-f="to" value="{{ to_date }}" aria-label="Top books end date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
-                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
-                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
-                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
-                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
-                            </div>
+                            
                         <div id="top-books-list" class="space-y-2"></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">Quick Reports</h3>
                             <div class="space-y-2 text-[11px]">
@@ -445,28 +366,11 @@
                     </div>
                     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">4. Borrowings by User Type</h3>
-                            <div class="chart-filter flex flex-wrap items-center gap-2 mb-2" data-chart="borrowings_by_user_type" data-param="role">
-                                <div class="relative">
-                                    <button type="button" data-dropbtn class="text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">User types ▾</button>
-                                    <div data-drop class="hidden absolute z-20 mt-1 w-52 max-h-48 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-xl py-1" id="role-checks"></div>
-                                </div>
-                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
-                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
-                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
-                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
-                            </div>
+                            
                         <div class="flex items-center gap-4"><div id="donut-usertype" class="shrink-0"></div><div id="legend-usertype" class="flex-1 space-y-1 text-xs min-w-0"></div></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">5. Overdue Items by Department</h3><div id="overdue-dept-note" class="text-[11px] text-slate-500">Overdue counts are tracked per loan; department split reuses the borrowings mix and follows the department filter in card 1.</div><div id="overdue-dept-bars" class="space-y-1.5 mt-2"></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">6. Borrowings by Time of Day</h3>
-                            <div class="chart-filter flex flex-wrap items-center gap-2 mb-2" data-chart="borrowings_trend">
-                                <input type="date" data-f="from" value="{{ from_date }}" aria-label="Time-of-day start date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
-                                <span class="text-[11px] text-slate-400">–</span>
-                                <input type="date" data-f="to" value="{{ to_date }}" aria-label="Time-of-day end date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
-                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
-                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
-                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
-                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
-                            </div>
+                            
                         <div id="tod-bars" class="space-y-1.5"></div><p class="text-[10px] text-slate-400 mt-1">Bucketed by borrow day (no time-of-day column).</p></div>
                     </div>
                     <div class="bg-white rounded-xl border border-slate-200 p-4 overflow-hidden">
@@ -516,6 +420,31 @@
             </div>
         </div>
     </main>
+
+    <!-- Per-chart Filter Modal -->
+    <div id="chartFilterModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-900/60" onclick="closeChartFilterModal()"></div>
+        <div class="relative bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 max-w-[95vw] sm:max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-800">
+                <h3 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white">Filter <span id="chartFilterTitle" class="text-primary"></span></h3>
+                <button onclick="closeChartFilterModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div id="chartFilterBody" class="p-4 sm:p-6 space-y-4"></div>
+            <div class="px-4 sm:px-6 pb-4 sm:pb-6 flex gap-3">
+                <button id="chartFilterApply"
+                    class="flex-1 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 rounded font-bold text-sm transition-all">
+                    Apply Filter
+                </button>
+                <button id="chartFilterReset"
+                    class="px-4 py-2.5 rounded font-bold text-sm border border-gray-200 hover:bg-gray-50 transition-all">
+                    Reset
+                </button>
+            </div>
+            <p id="chartFilterError" class="hidden px-4 sm:px-6 pb-4 text-xs text-red-600">Couldn't load data. Try again.</p>
+        </div>
+    </div>
 
     <!-- Global Filter Modal -->
     <div id="globalFilterModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -991,92 +920,202 @@ function syncGlobalFilterCustomDates() {
             }).join('') || '<tr><td colspan="6" class="py-6 text-center text-slate-400">No activity yet.</td></tr>';
         }
 
-        /* ============ Per-chart filters ============
-           Each .chart-filter row fetches fresh rows for its own data-chart
-           from chart_json and repaints via the painters above. Empty date
-           inputs inherit the page-level (GLOBAL) range; empty checkbox sets
-           and blank search mean "no restriction". */
+        /* ============ Per-chart filters (one modal per card) ============
+           Each chart card carries a single filter button (data-chart-filter)
+           that opens #chartFilterModal configured for that chart. Selections
+           persist per chart in chartFilterState; empty means "inherit the
+           page-level range / no restriction". */
+        var CHART_FILTER_DEFS = {
+            collection_by_category: { title: 'Collection by Category', controls: ['q'], qLabel: 'Only titles matching…' },
+            copies_by_status: { title: 'Copies by Status', controls: ['dates', 'borrow_type'] },
+            borrowings_trend: { title: 'Borrowings Trend', controls: ['dates', 'borrow_type'] },
+            top_categories: { title: 'Top Borrowed Categories', controls: ['dates', 'borrow_type'] },
+            overdue_trend: { title: 'Overdue Trend', controls: ['dates', 'borrow_type'] },
+            high_demand: { title: 'High-Demand Titles', controls: ['dates', 'borrow_type'] },
+            borrowings_by_department: { title: 'Borrowings by Department', param: 'department', options: 'departments', controls: ['options', 'borrow_type'] },
+            top_books: { title: 'Top Borrowed Books', controls: ['dates', 'borrow_type'] },
+            borrowings_by_user_type: { title: 'Borrowings by User Type', param: 'role', options: 'roles', controls: ['options', 'borrow_type'] }
+        };
+        var FILTER_BUTTON_CARDS = [
+            ['donut-category', 'collection_by_category'],
+            ['donut-status', 'copies_by_status'],
+            ['trend-line', 'borrowings_trend'],
+            ['donut-topcats', 'top_categories'],
+            ['peak-bars', 'borrowings_trend'],
+            ['high-demand-body', 'high_demand'],
+            ['overdue-line', 'overdue_trend'],
+            ['dept-bars', 'borrowings_by_department'],
+            ['usage-trend-line', 'borrowings_trend'],
+            ['top-books-list', 'top_books'],
+            ['donut-usertype', 'borrowings_by_user_type'],
+            ['tod-bars', 'borrowings_trend']
+        ];
+        var chartFilterState = {};
+        var chartFilterName = null;
+
         function escAttr(s) {
             return escapeHtml(s).replace(/"/g, '&quot;');
         }
 
-        function buildCheckboxes(containerId, values) {
-            var el = document.getElementById(containerId);
-            if (!el) return;
-            el.innerHTML = (values || []).map(function (v) {
-                return '<label class="flex items-center gap-2 px-3 py-1.5 text-[11px] text-slate-700 hover:bg-gray-50 cursor-pointer"><input type="checkbox" value="' + escAttr(v) + '" class="rounded border-gray-300"> <span class="truncate">' + escapeHtml(v) + '</span></label>';
-            }).join('') || '<div class="px-3 py-2 text-[11px] text-slate-400">No values.</div>';
+        function defaultChartState() {
+            return { from: '', to: '', q: '', values: [], borrowType: '' };
         }
 
-        function setChartLoading(filterEl, loading) {
-            var applyBtn = filterEl.querySelector('[data-apply]');
-            if (applyBtn) {
-                applyBtn.disabled = loading;
-                applyBtn.textContent = loading ? '…' : 'Apply';
-            }
+        function getChartState(name) {
+            return chartFilterState[name] || defaultChartState();
         }
 
-        function refreshChart(filterEl, isReset) {
-            var name = filterEl.getAttribute('data-chart');
-            var resetBtn = filterEl.querySelector('[data-reset]');
-            var badge = filterEl.querySelector('[data-badge]');
-            var errBox = filterEl.querySelector('[data-error]');
+        function addChartFilterButtons() {
+            FILTER_BUTTON_CARDS.forEach(function (pair) {
+                var anchor = document.getElementById(pair[0]);
+                if (!anchor) return;
+                var card = anchor.closest('div.bg-white');
+                if (!card) return;
+                var head = card.querySelector('h3');
+                if (!head || head.querySelector('[data-chart-filter]')) return;
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.setAttribute('data-chart-filter', pair[1]);
+                btn.title = 'Filter this chart';
+                btn.className = 'ml-1 align-middle text-slate-400 hover:text-primary';
+                btn.innerHTML = '<span class="material-symbols-outlined text-[18px]" style="vertical-align:-4px">tune</span>';
+                head.appendChild(btn);
+                var badge = document.createElement('span');
+                badge.setAttribute('data-cbadge', pair[1]);
+                badge.className = 'hidden ml-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 align-middle';
+                badge.textContent = 'Filtered';
+                head.appendChild(badge);
+                btn.addEventListener('click', function () { openChartFilter(pair[1]); });
+            });
+        }
+
+        function chartOptionValues(kind) {
+            var U = (DASHBOARD && DASHBOARD.usage) || {};
+            var rows = kind === 'departments' ? (U.by_department || []) : (U.by_user_type || []);
+            return rows.map(function (r) { return r[0]; });
+        }
+
+        function openChartFilter(name) {
+            var def = CHART_FILTER_DEFS[name];
+            if (!def) return;
+            chartFilterName = name;
+            var st = getChartState(name);
+            document.getElementById('chartFilterTitle').textContent = def.title;
+            var html = '';
+            def.controls.forEach(function (c) {
+                if (c === 'dates') {
+                    html += '<div><span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Date range</span>'
+                        + '<div class="grid grid-cols-2 gap-2 mt-2">'
+                        + '<input type="date" data-mf="from" value="' + escAttr(st.from || GLOBAL.from || '') + '" class="bg-gray-100 border-none text-sm rounded-lg px-3 py-2 outline-none">'
+                        + '<input type="date" data-mf="to" value="' + escAttr(st.to || GLOBAL.to || '') + '" class="bg-gray-100 border-none text-sm rounded-lg px-3 py-2 outline-none"></div></div>';
+                } else if (c === 'q') {
+                    html += '<div><span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Title contains</span>'
+                        + '<input type="text" data-mf="q" value="' + escAttr(st.q) + '" placeholder="' + escAttr(def.qLabel || 'Search…') + '" class="mt-2 w-full bg-gray-100 border-none text-sm rounded-lg px-3 py-2 outline-none"></div>';
+                } else if (c === 'borrow_type') {
+                    html += '<div><span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Borrow type</span>'
+                        + '<select data-mf="borrow_type" class="mt-2 w-full bg-gray-100 border-none text-sm rounded-lg px-3 py-2 outline-none">'
+                        + '<option value="">All types</option>'
+                        + '<option value="overnight"' + (st.borrowType === 'overnight' ? ' selected' : '') + '>Overnight</option>'
+                        + '<option value="daily_circulation"' + (st.borrowType === 'daily_circulation' ? ' selected' : '') + '>Daily circulation</option>'
+                        + '</select></div>';
+                } else if (c === 'options') {
+                    var vals = chartOptionValues(def.options);
+                    html += '<div><span class="text-xs font-bold text-slate-500 uppercase tracking-widest">'
+                        + (def.options === 'departments' ? 'Departments / programs' : 'User types') + '</span>'
+                        + '<div class="mt-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">'
+                        + (vals.map(function (v) {
+                            return '<label class="flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"><input type="checkbox" data-mf="opt" value="' + escAttr(v) + '"' + (st.values.indexOf(v) !== -1 ? ' checked' : '') + ' class="rounded border-gray-300"> <span class="truncate">' + escapeHtml(v) + '</span></label>';
+                        }).join('') || '<div class="px-3 py-2 text-xs text-slate-400">No values.</div>') + '</div>'
+                        + '<p class="text-[11px] text-slate-400 mt-1">Empty selection means all.</p></div>';
+                }
+            });
+            document.getElementById('chartFilterBody').innerHTML = html;
+            document.getElementById('chartFilterError').classList.add('hidden');
+            document.getElementById('chartFilterModal').classList.remove('hidden');
+        }
+
+        function closeChartFilterModal() {
+            document.getElementById('chartFilterModal').classList.add('hidden');
+            chartFilterName = null;
+        }
+
+        function chartFetchParams(name, st) {
+            var def = CHART_FILTER_DEFS[name];
             var params = new URLSearchParams({ name: name });
-            var fromInput = filterEl.querySelector('[data-f="from"]');
-            var toInput = filterEl.querySelector('[data-f="to"]');
-            var qInput = filterEl.querySelector('[data-f="q"]');
-            var from = (!isReset && fromInput && fromInput.value) ? fromInput.value : '';
-            var to = (!isReset && toInput && toInput.value) ? toInput.value : '';
-            if (from || to) {
+            if (st.from || st.to) {
                 params.set('preset', 'custom');
-                if (from) params.set('from', from);
-                if (to) params.set('to', to);
+                if (st.from) params.set('from', st.from);
+                if (st.to) params.set('to', st.to);
             } else {
                 params.set('preset', GLOBAL.preset || 'all');
                 if (GLOBAL.from) params.set('from', GLOBAL.from);
                 if (GLOBAL.to) params.set('to', GLOBAL.to);
             }
-            var param = filterEl.getAttribute('data-param');
-            var checked = [];
-            if (!isReset && param) {
-                filterEl.querySelectorAll('input[type="checkbox"]:checked').forEach(function (c) {
-                    checked.push(c.value);
-                    params.append(param, c.value);
-                });
+            if (def && def.param) st.values.forEach(function (v) { params.append(def.param, v); });
+            if (st.q) params.set('q', st.q);
+            if (st.borrowType) params.set('borrow_type', st.borrowType);
+            return params;
+        }
+
+        function markChartFiltered(name, filtered) {
+            document.querySelectorAll('[data-cbadge="' + name + '"]').forEach(function (b) {
+                b.classList.toggle('hidden', !filtered);
+            });
+        }
+
+        function applyChartFilter() {
+            if (!chartFilterName) return;
+            var def = CHART_FILTER_DEFS[chartFilterName];
+            var body = document.getElementById('chartFilterBody');
+            var val = function (sel) {
+                var el = body.querySelector(sel);
+                return el ? el.value : '';
+            };
+            var st = defaultChartState();
+            st.from = val('[data-mf="from"]');
+            st.to = val('[data-mf="to"]');
+            st.q = val('[data-mf="q"]').trim();
+            st.borrowType = val('[data-mf="borrow_type"]');
+            if (def && def.param) {
+                body.querySelectorAll('[data-mf="opt"]:checked').forEach(function (c) { st.values.push(c.value); });
             }
-            var q = (!isReset && qInput) ? qInput.value.trim() : '';
-            if (q) params.set('q', q);
-            var typeSel = filterEl.querySelector('[data-f="borrow_type"]');
-            var borrowType = (!isReset && typeSel) ? typeSel.value : '';
-            if (borrowType) params.set('borrow_type', borrowType);
-            var filtered = !!(from || to || q || checked.length || borrowType);
+            var applyBtn = document.getElementById('chartFilterApply');
+            var errBox = document.getElementById('chartFilterError');
             if (errBox) errBox.classList.add('hidden');
-            setChartLoading(filterEl, true);
-            fetch(CHART_URL + '?' + params.toString())
+            if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = 'Loading…'; }
+            fetch(CHART_URL + '?' + chartFetchParams(chartFilterName, st).toString())
+                .then(function (r) {
+                    if (!r.ok) throw new Error('status ' + r.status);
+                    return r.json();
+                })
+                .then(function (json) {
+                    chartFilterState[chartFilterName] = st;
+                    paintChart(chartFilterName, json.data || []);
+                    markChartFiltered(chartFilterName, !!(st.from || st.to || st.q || st.values.length || st.borrowType));
+                    closeChartFilterModal();
+                    if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = 'Apply'; }
+                })
+                .catch(function () {
+                    if (errBox) errBox.classList.remove('hidden');
+                    if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = 'Apply'; }
+                });
+        }
+
+        function resetChartFilterModal() {
+            if (!chartFilterName) return;
+            var name = chartFilterName;
+            delete chartFilterState[name];
+            closeChartFilterModal();
+            fetch(CHART_URL + '?' + chartFetchParams(name, defaultChartState()).toString())
                 .then(function (r) {
                     if (!r.ok) throw new Error('status ' + r.status);
                     return r.json();
                 })
                 .then(function (json) {
                     paintChart(name, json.data || []);
-                    if (badge) badge.classList.toggle('hidden', !filtered);
-                    if (resetBtn) resetBtn.classList.toggle('hidden', !filtered);
-                    setChartLoading(filterEl, false);
+                    markChartFiltered(name, false);
                 })
-                .catch(function () {
-                    if (errBox) errBox.classList.remove('hidden');
-                    setChartLoading(filterEl, false);
-                });
-        }
-
-        function resetChartFilter(filterEl) {
-            filterEl.querySelectorAll('input').forEach(function (i) {
-                if (i.type === 'checkbox') { i.checked = false; }
-                else if (i.type === 'date') { i.value = ''; }
-                else { i.value = ''; }
-            });
-            filterEl.querySelectorAll('select').forEach(function (s) { s.value = ''; });
-            refreshChart(filterEl, true);
+                .catch(function () { /* data keeps last good paint */ });
         }
 
         /* Search + availability filter for the Recent Collection Status table.
@@ -1112,48 +1151,13 @@ function syncGlobalFilterCustomDates() {
 
         /* Charts backed by circulation_records get an Overnight / Daily
            Circulation selector alongside their other controls. */
-        var BORROW_TYPE_CHARTS = ['copies_by_status', 'borrowings_trend', 'overdue_trend',
-            'top_categories', 'high_demand', 'borrowings_by_department',
-            'top_books', 'borrowings_by_user_type'];
-
-        function addBorrowTypeSelect(filterEl) {
-            if (BORROW_TYPE_CHARTS.indexOf(filterEl.getAttribute('data-chart')) === -1) return;
-            if (filterEl.querySelector('[data-f="borrow_type"]')) return;
-            var applyBtn = filterEl.querySelector('[data-apply]');
-            if (!applyBtn) return;
-            var sel = document.createElement('select');
-            sel.setAttribute('data-f', 'borrow_type');
-            sel.setAttribute('aria-label', 'Borrow type');
-            sel.className = 'text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary bg-white';
-            sel.innerHTML = '<option value="">All types</option>'
-                + '<option value="overnight">Overnight</option>'
-                + '<option value="daily_circulation">Daily Circ.</option>';
-            filterEl.insertBefore(sel, applyBtn);
-        }
-
         function initChartFilters() {
-            var U = (DASHBOARD && DASHBOARD.usage) || {};
-            buildCheckboxes('dept-checks', (U.by_department || []).map(function (r) { return r[0]; }));
-            buildCheckboxes('role-checks', (U.by_user_type || []).map(function (r) { return r[0]; }));
-            document.querySelectorAll('.chart-filter').forEach(function (filterEl) {
-                addBorrowTypeSelect(filterEl);
-                var applyBtn = filterEl.querySelector('[data-apply]');
-                var resetBtn = filterEl.querySelector('[data-reset]');
-                if (applyBtn) applyBtn.addEventListener('click', function () { refreshChart(filterEl, false); });
-                if (resetBtn) resetBtn.addEventListener('click', function () { resetChartFilter(filterEl); });
-                var dropBtn = filterEl.querySelector('[data-dropbtn]');
-                if (dropBtn) dropBtn.addEventListener('click', function (e) {
-                    e.stopPropagation();
-                    var drop = filterEl.querySelector('[data-drop]');
-                    var willOpen = drop.classList.contains('hidden');
-                    document.querySelectorAll('.chart-filter [data-drop]').forEach(function (d) { d.classList.add('hidden'); });
-                    if (willOpen) drop.classList.remove('hidden');
-                });
-            });
-            document.addEventListener('click', function (e) {
-                if (!e.target.closest || !e.target.closest('.chart-filter')) {
-                    document.querySelectorAll('.chart-filter [data-drop]').forEach(function (d) { d.classList.add('hidden'); });
-                }
+            addChartFilterButtons();
+            document.getElementById('chartFilterApply').addEventListener('click', applyChartFilter);
+            document.getElementById('chartFilterReset').addEventListener('click', resetChartFilterModal);
+            document.addEventListener('keydown', function (e) {
+                var modal = document.getElementById('chartFilterModal');
+                if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) closeChartFilterModal();
             });
         }
 
