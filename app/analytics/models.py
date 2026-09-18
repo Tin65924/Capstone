@@ -180,7 +180,9 @@ def copies_by_status_summary(start_date=None, end_date=None, borrow_type=None):
     """Return [(status, copies)] for the Copies-by-Status chart/export.
 
     Available = active-catalog copies minus borrowed, overdue, reserved,
-    lost/damaged and missing (maintenance) copies, floored at zero.
+    lost/damaged (including lost-flagged loans) and missing (maintenance)
+    copies, floored at zero. This matches ``compute_dashboard`` in
+    ``app/analytics/routes.py`` so the KPI card and chart agree.
     """
     total = count_total_copies()
     status_rows = count_circulation_status(start_date, end_date, borrow_type) or []
@@ -200,7 +202,12 @@ def copies_by_status_summary(start_date=None, end_date=None, borrow_type=None):
             inv[str(r[0])] = int(r[1] or 0)
         except (IndexError, TypeError, ValueError):
             continue
-    lost_damaged = inv.get('lost', 0) + inv.get('damaged', 0)
+    lost_flagged_row = count_lost_flagged(start_date, end_date)
+    try:
+        lost_flagged = int(lost_flagged_row[0]) if lost_flagged_row else 0
+    except (IndexError, TypeError, ValueError):
+        lost_flagged = 0
+    lost_damaged = inv.get('lost', 0) + inv.get('damaged', 0) + lost_flagged
     maintenance = inv.get('missing', 0)
     available = max(total - borrowed - overdue - reserved - lost_damaged - maintenance, 0)
     return [('Available', available), ('Borrowed', borrowed), ('Reserved', reserved),

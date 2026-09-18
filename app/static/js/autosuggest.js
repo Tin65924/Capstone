@@ -91,6 +91,7 @@
             .then(function (data) {
                 if (data.book_record) recordFilters.book_record = decodePayload(data.book_record);
                 if (data.student_record) recordFilters.student_record = decodePayload(data.student_record);
+                if (data.category_record) recordFilters.category_record = decodePayload(data.category_record);
             })
             .catch(function () { /* bloom unavailable — DB check still runs */ });
     }

@@ -183,7 +183,9 @@ def compute_dashboard(start_date, end_date):
     overdue = status.get('overdue', 0)
     lost_damaged = inv_lost + inv_damaged + lost_flagged
     maintenance = inv_missing
-    available = max(total_copies - borrowed - overdue - lost_damaged - maintenance, 0)
+    # Unified with models.copies_by_status_summary: reserved copies are not
+    # available, and lost-flagged loans count as lost/damaged.
+    available = max(total_copies - borrowed - overdue - reserved - lost_damaged - maintenance, 0)
 
     by_category = _pair(_safe(models.collection_by_category, start_date, end_date))
     by_user_type = _pair(_safe(models.borrowings_by_user_type, start_date, end_date))

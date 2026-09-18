@@ -485,7 +485,7 @@ class TestChartFilterModels:
 
     def test_copies_by_status_summary(self, mock_db):
         from app.analytics.models import copies_by_status_summary
-        mock_db['fetch_one'].side_effect = [(100,), (5,)]
+        mock_db['fetch_one'].side_effect = [(100,), (5,), (0,)]
         mock_db['fetch_all'].side_effect = [
             [('active', 20), ('overdue', 3)],
             [('available', 60), ('borrowed', 20), ('lost', 1)],
@@ -739,7 +739,7 @@ class TestChartJson:
         assert resp.status_code == 200
 
     def test_chart_copies_by_status(self, librarian_client, mock_db):
-        mock_db['fetch_one'].side_effect = [(50,), (2,)]
+        mock_db['fetch_one'].side_effect = [(50,), (2,), (0,)]
         mock_db['fetch_all'].side_effect = [[('active', 10)], [('available', 30)]]
         resp = librarian_client.get('/librarian/analytics/chart?name=copies_by_status')
         assert resp.status_code == 200
@@ -837,3 +837,39 @@ class TestChartFilterControls:
         # View All destinations resolve to real pages
         assert b'/librarian/cataloging' in resp.data
         assert b'/librarian/circulation' in resp.data
+
+
+
+class TestReviewFeedbackRegression:
+    def test_copies_available_includes_reserved_and_lost_flagged(self, mock_db):
+        """KPI card and Copies-by-Status chart must use one Available formula."""
+        from app.analytics.models import copies_by_status_summary
+        mock_db['fetch_one'].side_effect = [(100,), (5,), (4,)]
+        mock_db['fetch_all'].side_effect = [
+            [('active', 20), ('overdue', 3)],
+            [('available', 60), ('borrowed', 20), ('lost', 1), ('damaged', 2)],
+        ]
+        rows = dict(copies_by_status_summary())
+        # total - borrowed - overdue - reserved - (lost+damaged+flagged) - missing
+        assert rows['Available'] == 100 - 20 - 3 - 5 - (1 + 2 + 4) - 0
+        assert rows['Lost / Damaged'] == 1 + 2 + 4
+
+    def test_dashboard_initial_paint_trend_labels_are_iso(self, mock_db):
+        """Initial page-load trend labels must be ISO dates, not RFC-2822."""
+        from datetime import date
+        from app.analytics import routes
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        real_trend = routes.models.borrowings_trend
+        try:
+            routes.models.borrowings_trend = lambda *a, **k: [(date(2026, 8, 15), 7)]
+            dashboard = routes.compute_dashboard(None, None)
+        finally:
+            routes.models.borrowings_trend = real_trend
+        assert dashboard['usage']['trend'][0][0] == '2026-08-15'
+
+    def test_autosuggest_loads_category_record(self):
+        """Category bloom warning is dead unless the loader decodes it."""
+        import pathlib
+        js = pathlib.Path('app/static/js/autosuggest.js').read_text(encoding='utf-8')
+        assert 'data.category_record' in js
