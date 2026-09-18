@@ -14,16 +14,19 @@ from .utils import create_backup, resolve_backup_path, restore_backup
 
 
 def _backup_stats(logs):
-    total_size = sum((row[2] or 0) for row in logs)
+    completed = [row for row in logs if row[3] == 'completed']
+    total_size = sum((row[2] or 0) for row in completed)
     last = logs[0] if logs else None
+    # Healthy only when the newest run succeeded and is recent — a failed
+    # latest run must show Warning, never Healthy.
     healthy = False
-    if last and last[6]:
+    if last and last[3] == 'completed' and last[6]:
         created = last[6]
-        if created.tzinfo is None:
+        if getattr(created, 'tzinfo', None) is None:
             created = created.replace(tzinfo=timezone.utc)
         healthy = (datetime.now(timezone.utc) - created) <= timedelta(days=35)
     return {
-        'count': len(logs),
+        'count': len(completed),
         'total_size': total_size,
         'last': last,
         'healthy': healthy,

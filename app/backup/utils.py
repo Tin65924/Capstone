@@ -1,4 +1,6 @@
+import glob
 import os
+import shutil
 import subprocess
 from datetime import datetime
 
@@ -9,6 +11,44 @@ DEFAULT_BACKUP_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     'backups',
 )
+
+# Windows PostgreSQL installers do not add bin/ to PATH, so look there too.
+_WINDOWS_TOOL_DIRS = (
+    r'C:\Program Files\PostgreSQL\*\bin',
+    r'C:\Program Files (x86)\PostgreSQL\*\bin',
+)
+
+
+def resolve_tool(name, env_var):
+    """Locate a postgres client tool (pg_dump/psql).
+
+    Checks the env override first, then PATH, then well-known Windows
+    install locations. Raises RuntimeError with setup guidance when missing
+    (instead of leaking a bare "[WinError 2]" to the UI).
+    """
+    override = os.getenv(env_var)
+    if override:
+        if os.path.isfile(override) or shutil.which(override):
+            return override
+        raise RuntimeError(
+            f'{name} not found at {env_var}={override!r}. '
+            f'Install the PostgreSQL client tools or fix the {env_var} path.'
+        )
+    on_path = shutil.which(name)
+    if on_path:
+        return on_path
+    if os.name == 'nt':
+        candidates = []
+        for pattern in _WINDOWS_TOOL_DIRS:
+            candidates.extend(glob.glob(os.path.join(pattern, name + '.exe')))
+        if candidates:
+            # Newest server version first (e.g. .../18/bin before .../16/bin).
+            return sorted(candidates, reverse=True)[0]
+    raise RuntimeError(
+        f'{name} was not found. Install the PostgreSQL client tools and add '
+        f'them to PATH, or point {env_var} at the executable '
+        f'(e.g. C:\\Program Files\\PostgreSQL\\18\\bin\\{name}.exe).'
+    )
 
 
 def get_backup_dir():
@@ -45,7 +85,7 @@ def create_backup():
     filepath = os.path.join(backup_dir, filename)
 
     db_url = current_app.config['DATABASE_URL']
-    pg_dump = os.getenv('PG_DUMP', 'pg_dump')
+    pg_dump = resolve_tool('pg_dump', 'PG_DUMP')
     try:
         subprocess.run(
             [pg_dump, '--dbname=' + db_url, '--file=' + filepath],
@@ -61,6 +101,11 @@ def create_backup():
         except OSError:
             pass
         raise RuntimeError(err)
+    except (FileNotFoundError, OSError) as e:
+        raise RuntimeError(
+            f'Could not start pg_dump ({pg_dump}): {e}. '
+            'Install the PostgreSQL client tools or set PG_DUMP to its path.'
+        )
     size_bytes = os.path.getsize(filepath)
     return filename, size_bytes
 
@@ -76,7 +121,7 @@ def restore_backup(filename):
         raise FileNotFoundError(f'Backup file not found: {filename}')
 
     db_url = current_app.config['DATABASE_URL']
-    psql = os.getenv('PSQL', 'psql')
+    psql = resolve_tool('psql', 'PSQL')
     try:
         subprocess.run(
             [psql, '--dbname=' + db_url, '--file=' + filepath],
@@ -87,3 +132,8 @@ def restore_backup(filename):
     except subprocess.CalledProcessError as e:
         err = (e.stderr or '').strip() or f'psql exited with status {e.returncode}'
         raise RuntimeError(err)
+    except (FileNotFoundError, OSError) as e:
+        raise RuntimeError(
+            f'Could not start psql ({psql}): {e}. '
+            'Install the PostgreSQL client tools or set PSQL to its path.'
+        )

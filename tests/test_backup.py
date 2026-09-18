@@ -28,7 +28,8 @@ class TestCreateBackup:
             return subprocess.CompletedProcess(cmd, 0, '', '')
 
         with app.app_context():
-            with patch.object(backup_utils.subprocess, 'run', side_effect=fake_run) as mock_run:
+            with patch('app.backup.utils.resolve_tool', return_value='pg_dump'), \
+                 patch.object(backup_utils.subprocess, 'run', side_effect=fake_run) as mock_run:
                 filename, size = backup_utils.create_backup()
                 assert filename.startswith('library_backup_')
                 assert size == len('dump-bytes')
@@ -50,7 +51,8 @@ class TestCreateBackup:
             return subprocess.CompletedProcess(cmd, 0, '', '')
 
         with app.app_context():
-            with patch.object(backup_utils.subprocess, 'run', side_effect=fake_run) as mock_run:
+            with patch('app.backup.utils.resolve_tool', return_value='pg_dump'), \
+                 patch.object(backup_utils.subprocess, 'run', side_effect=fake_run) as mock_run:
                 backup_utils.create_backup()
                 cmd = mock_run.call_args[0][0]
                 assert isinstance(cmd, list)
@@ -65,8 +67,19 @@ class TestCreateBackup:
             raise subprocess.CalledProcessError(1, cmd, stderr='disk full')
 
         with app.app_context():
-            with patch.object(backup_utils.subprocess, 'run', side_effect=fake_run):
+            with patch('app.backup.utils.resolve_tool', return_value='pg_dump'), \
+                 patch.object(backup_utils.subprocess, 'run', side_effect=fake_run):
                 with pytest.raises(RuntimeError, match='disk full'):
+                    backup_utils.create_backup()
+
+    def test_missing_tool_raises_friendly_error(self, app, tmp_path, monkeypatch):
+        from app.backup import utils as backup_utils
+        monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))
+        monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
+        with app.app_context():
+            with patch('app.backup.utils.resolve_tool',
+                       side_effect=RuntimeError('pg_dump was not found')):
+                with pytest.raises(RuntimeError, match='pg_dump was not found'):
                     backup_utils.create_backup()
 
     def test_resolve_blocks_traversal(self, app, tmp_path, monkeypatch):
@@ -75,6 +88,67 @@ class TestCreateBackup:
         with app.app_context():
             with pytest.raises(ValueError):
                 backup_utils.resolve_backup_path('../../etc/passwd')
+
+
+class TestResolveTool:
+    def test_env_override_wins(self, tmp_path, monkeypatch):
+        from app.backup.utils import resolve_tool
+        exe = tmp_path / 'pg_dump.exe'
+        exe.write_text('x')
+        monkeypatch.setenv('PG_DUMP', str(exe))
+        assert resolve_tool('pg_dump', 'PG_DUMP') == str(exe)
+
+    def test_bad_env_override_explains(self, tmp_path, monkeypatch):
+        from app.backup.utils import resolve_tool
+        monkeypatch.setenv('PG_DUMP', str(tmp_path / 'missing.exe'))
+        with pytest.raises(RuntimeError, match='PG_DUMP'):
+            resolve_tool('pg_dump', 'PG_DUMP')
+
+    def test_path_hit(self, monkeypatch):
+        from app.backup import utils as backup_utils
+        monkeypatch.delenv('PG_DUMP', raising=False)
+        with patch.object(backup_utils.shutil, 'which', return_value='/usr/bin/pg_dump'):
+            assert backup_utils.resolve_tool('pg_dump', 'PG_DUMP') == '/usr/bin/pg_dump'
+
+    def test_windows_fallback_prefers_newest(self, monkeypatch):
+        from app.backup import utils as backup_utils
+        monkeypatch.delenv('PG_DUMP', raising=False)
+        monkeypatch.setattr(backup_utils.os, 'name', 'nt')
+        found = [
+            r'C:\Program Files\PostgreSQL\16\bin\pg_dump.exe',
+            r'C:\Program Files\PostgreSQL\18\bin\pg_dump.exe',
+        ]
+        with patch.object(backup_utils.shutil, 'which', return_value=None), \
+             patch.object(backup_utils.glob, 'glob', return_value=found):
+            assert backup_utils.resolve_tool('pg_dump', 'PG_DUMP').endswith('18\\bin\\pg_dump.exe')
+
+    def test_missing_tool_guidance(self, monkeypatch):
+        from app.backup import utils as backup_utils
+        monkeypatch.delenv('PG_DUMP', raising=False)
+        with patch.object(backup_utils.shutil, 'which', return_value=None), \
+             patch.object(backup_utils.glob, 'glob', return_value=[]):
+            with pytest.raises(RuntimeError, match='was not found'):
+                backup_utils.resolve_tool('pg_dump', 'PG_DUMP')
+
+
+class TestBackupStats:
+    def test_failed_latest_is_not_healthy(self):
+        from app.backup.routes import _backup_stats
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        failed = _row(2, 'manual_backup_failed.sql', None, 'failed', 'manual', now)
+        old_ok = _row(1, 'library_backup_old.sql', 100, 'completed', 'manual',
+                      datetime(2025, 1, 1))
+        stats = _backup_stats([failed, old_ok])
+        assert stats['healthy'] is False
+        assert stats['count'] == 1  # failed runs are not counted as stored
+        assert stats['total_size'] == 100
+
+    def test_recent_completed_is_healthy(self):
+        from app.backup.routes import _backup_stats
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        stats = _backup_stats([_row(1, 'f.sql', 50, 'completed', 'manual', now)])
+        assert stats['healthy'] is True
+        assert stats['count'] == 1
 
 
 class TestBackupModels:
@@ -145,6 +219,19 @@ class TestBackupRoutes:
         resp = admin_client.get('/admin/backup')
         assert resp.status_code == 200
         assert b'No backups yet' in resp.data
+
+    def test_page_warns_when_latest_failed(self, admin_client, mock_db):
+        now = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=123456)
+        mock_db['fetch_all'].return_value = [
+            _row(2, 'manual_backup_failed.sql', None, 'failed', 'manual', now),
+        ]
+        resp = admin_client.get('/admin/backup')
+        assert resp.status_code == 200
+        assert b'Warning' in resp.data
+        assert b'Healthy' not in resp.data
+        # Timestamps render without microseconds.
+        assert b'.123456' not in resp.data
+        assert now.strftime('%Y-%m-%d %H:%M').encode() in resp.data
 
     def test_create_route_logs_row(self, admin_client, mock_db):
         mock_db['fetch_one'].return_value = (3,)
