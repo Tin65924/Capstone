@@ -440,3 +440,20 @@ class TestChartFilterControls:
         assert b'id="dept-checks"' in resp.data
         assert b'id="role-checks"' in resp.data
         assert b'/librarian/analytics/chart' in resp.data
+
+    def test_collection_table_controls_work(self, librarian_client, mock_db):
+        """Search + status filter are real inputs; View All links go somewhere."""
+        mock_db['fetch_one'].return_value = (5,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics')
+        assert resp.status_code == 200
+        assert b'id="collection-search"' in resp.data
+        assert b'id="collection-status-filter"' in resp.data
+        assert b'filterCollectionTable' in resp.data
+        # dead spans are gone: no placeholder-only controls remain
+        assert b'Search by title, author, or ID\xe2\x80\xa6</span>' not in resp.data
+        assert b'rounded-lg px-3 py-1.5">Filters</span>' not in resp.data
+        assert b'rounded-lg px-3 py-1.5">View All</span>' not in resp.data
+        # View All destinations resolve to real pages
+        assert b'/librarian/cataloging' in resp.data
+        assert b'/librarian/circulation' in resp.data

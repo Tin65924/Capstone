@@ -408,9 +408,15 @@
                         <div class="xl:col-span-2 bg-white rounded-xl border border-slate-200 p-4 overflow-hidden">
                             <div class="flex items-center gap-2 mb-3 flex-wrap">
                                 <h3 class="text-sm font-extrabold mr-auto">Recent Collection Status</h3>
-                                <span class="text-[11px] border rounded-lg px-3 py-1.5 text-slate-500">Search by title, author, or ID…</span>
-                                <span class="text-[11px] font-bold border rounded-lg px-3 py-1.5">Filters</span>
-                                <span class="text-[11px] font-bold border rounded-lg px-3 py-1.5">View All</span>
+                                <input id="collection-search" oninput="filterCollectionTable()" placeholder="Search by title, author, or ID…" class="text-[11px] border rounded-lg px-3 py-1.5 text-slate-600 outline-none focus:border-primary w-52">
+                                <select id="collection-status-filter" onchange="filterCollectionTable()" class="text-[11px] font-bold border rounded-lg px-2 py-1.5 outline-none focus:border-primary bg-white">
+                                    <option value="">All statuses</option>
+                                    <option value="available">Available</option>
+                                    <option value="borrowed">Borrowed</option>
+                                    <option value="overdue">Overdue</option>
+                                    <option value="lost">Lost / Damaged</option>
+                                </select>
+                                <a href="{{ url_for('cataloging.cataloging_page') }}" class="text-[11px] font-bold border rounded-lg px-3 py-1.5 hover:bg-gray-50">View All</a>
                             </div>
                             <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[760px]">
                                 <thead><tr class="text-left text-slate-500 border-b">
@@ -512,7 +518,7 @@
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">6. Forecast Summary / Insights</h3><div id="insights-list" class="space-y-2.5 text-[11px] text-slate-600"></div></div>
                     </div>
                     <div class="bg-white rounded-xl border border-slate-200 p-4 overflow-hidden">
-                        <div class="flex items-center mb-2"><h3 class="text-sm font-extrabold mr-auto">7. Recent Circulation Activity</h3><span class="text-[11px] font-bold border rounded-lg px-3 py-1.5">View All Activity</span></div>
+                        <div class="flex items-center mb-2"><h3 class="text-sm font-extrabold mr-auto">7. Recent Circulation Activity</h3><a href="{{ url_for('circulation.circulation_page') }}" class="text-[11px] font-bold border rounded-lg px-3 py-1.5 hover:bg-gray-50">View All Activity</a></div>
                         <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[820px]">
                             <thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-2">Date/Time</th><th class="py-2 pr-2">TXN</th><th class="py-2 pr-2">User</th><th class="py-2 pr-2">Title</th><th class="py-2 pr-2">Action</th><th class="py-2 pr-2">Due Date</th><th class="py-2">Status</th></tr></thead>
                             <tbody id="recent-circ-body"></tbody>
@@ -603,7 +609,7 @@
                         <div id="tod-bars" class="space-y-1.5"></div><p class="text-[10px] text-slate-400 mt-1">Bucketed by borrow day (no time-of-day column).</p></div>
                     </div>
                     <div class="bg-white rounded-xl border border-slate-200 p-4 overflow-hidden">
-                        <div class="flex items-center mb-2"><h3 class="text-sm font-extrabold mr-auto">7. Recent Borrowing Activity</h3><span class="text-[11px] font-bold border rounded-lg px-3 py-1.5">View All Activity</span></div>
+                        <div class="flex items-center mb-2"><h3 class="text-sm font-extrabold mr-auto">7. Recent Borrowing Activity</h3><a href="{{ url_for('circulation.circulation_page') }}" class="text-[11px] font-bold border rounded-lg px-3 py-1.5 hover:bg-gray-50">View All Activity</a></div>
                         <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[820px]">
                             <thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-2">Date &amp; Time</th><th class="py-2 pr-2">Borrower</th><th class="py-2 pr-2">Book Title</th><th class="py-2 pr-2">Action</th><th class="py-2 pr-2">Due Date</th><th class="py-2">Status</th></tr></thead>
                             <tbody id="recent-usage-body"></tbody>
@@ -1541,7 +1547,8 @@ function syncGlobalFilterCustomDates() {
             if (rcb) rcb.innerHTML = (C.recent || []).slice(0, 10).map(function (r) {
                 var avail = /avail/i.test(r[3] || '') ? pill('Available', 'green') : /borrow/i.test(r[3] || '') ? pill('Borrowed', 'blue') : /lost|damag/i.test(r[3] || '') ? pill('Lost / Damaged', 'red') : pill(r[3] || '-', 'gray');
                 return '<tr class="border-b last:border-0"><td class="py-2 pr-2 font-semibold">' + escapeHtml(r[0]) + '</td><td class="py-2 pr-2">' + escapeHtml(r[1]) + '</td><td class="py-2 pr-2 text-slate-500">' + escapeHtml(r[2]) + '</td><td class="py-2 pr-2">' + avail + '</td><td class="py-2 pr-2 text-slate-500">' + escapeHtml(r[5] || '-') + '</td><td class="py-2 text-slate-500">' + escapeHtml(r[6] || '-') + '</td></tr>';
-            }).join('') || '<tr><td colspan="6" class="py-6 text-center text-slate-400">No copies found.</td></tr>';
+            }).join('') || '<tr class="rcb-empty"><td colspan="6" class="py-6 text-center text-slate-400">No copies found.</td></tr>';
+            filterCollectionTable();
             var att = document.getElementById('attention-list');
             if (att) att.innerHTML =
                 '<a href="{{ url_for('cataloging.cataloging_page', copy_status='overdue') }}" class="flex items-center gap-2 border rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors"><span class="material-symbols-outlined text-red-500">schedule</span><span class="flex-1"><b>Overdue Copies</b><br><span class="text-slate-500">Require immediate follow-up</span></span><b class="text-red-600">' + rNum(C.overdue) + '</b></a>'
@@ -1672,6 +1679,37 @@ function syncGlobalFilterCustomDates() {
                 else { i.value = ''; }
             });
             refreshChart(filterEl, true);
+        }
+
+        /* Search + availability filter for the Recent Collection Status table.
+           Client-side over the rendered rows (accession, title, category,
+           availability pill, borrower). */
+        function filterCollectionTable() {
+            var body = document.getElementById('recent-collection-body');
+            if (!body) return;
+            var searchEl = document.getElementById('collection-search');
+            var statusEl = document.getElementById('collection-status-filter');
+            var q = (searchEl && searchEl.value || '').toLowerCase();
+            var status = (statusEl && statusEl.value || '').toLowerCase();
+            var visible = 0;
+            body.querySelectorAll('tr').forEach(function (tr) {
+                if (tr.classList.contains('rcb-empty') || tr.classList.contains('rcb-nomatch')) return;
+                var text = tr.textContent.toLowerCase();
+                var cells = tr.querySelectorAll('td');
+                var avail = cells.length > 3 ? cells[3].textContent.toLowerCase() : '';
+                var ok = (!q || text.indexOf(q) !== -1) && (!status || avail.indexOf(status) !== -1);
+                tr.style.display = ok ? '' : 'none';
+                if (ok) visible++;
+            });
+            var noMatch = body.querySelector('.rcb-nomatch');
+            if (!visible) {
+                if (!noMatch) {
+                    noMatch = document.createElement('tr');
+                    noMatch.className = 'rcb-nomatch';
+                    noMatch.innerHTML = '<td colspan="6" class="py-6 text-center text-slate-400">No copies match the current search / filter.</td>';
+                    body.appendChild(noMatch);
+                } else { noMatch.style.display = ''; }
+            } else if (noMatch) { noMatch.style.display = 'none'; }
         }
 
         function initChartFilters() {
