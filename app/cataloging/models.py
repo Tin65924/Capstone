@@ -120,6 +120,39 @@ def get_all_books():
         f'SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog ORDER BY {DISTINCT_ORDER}')
 
 
+COPY_STATUS_FILTERS = ('overdue', 'lost_damaged', 'maintenance')
+
+
+def get_books_by_copy_status(copy_status):
+    """Books with at least one copy in a problem state (analytics deep-links).
+
+    Same row shape as get_all_books (book_catalog.* + accession_numbers).
+    """
+    if copy_status == 'overdue':
+        condition = (
+            "EXISTS (SELECT 1 FROM accession_log al "
+            "JOIN circulation_records c ON c.accession_id = al.accession_id "
+            "WHERE al.book_id = book_catalog.book_id AND c.transaction_status = 'overdue')"
+        )
+    elif copy_status == 'lost_damaged':
+        condition = (
+            "EXISTS (SELECT 1 FROM accession_log al "
+            "JOIN inventory_status i ON i.accession_id = al.accession_id "
+            "WHERE al.book_id = book_catalog.book_id AND i.inventory_state IN ('lost', 'damaged'))"
+        )
+    elif copy_status == 'maintenance':
+        condition = (
+            "EXISTS (SELECT 1 FROM accession_log al "
+            "JOIN inventory_status i ON i.accession_id = al.accession_id "
+            "WHERE al.book_id = book_catalog.book_id AND i.inventory_state = 'missing')"
+        )
+    else:
+        return []
+    return db.fetch_all(
+        f'SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers '
+        f'FROM book_catalog WHERE {condition} ORDER BY {DISTINCT_ORDER}')
+
+
 def get_distinct_categories():
     return db.fetch_all(
         'SELECT DISTINCT subject_classification FROM book_catalog WHERE subject_classification IS NOT NULL AND subject_classification != \'\' ORDER BY subject_classification'

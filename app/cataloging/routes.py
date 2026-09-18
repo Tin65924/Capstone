@@ -79,10 +79,18 @@ def cataloging_page():
     query = request.args.get('q', '').strip()
     field = request.args.get('field', '')
     status_filter = request.args.get('status', '')
+    copy_status = request.args.get('copy_status', '')
     page = request.args.get('page', 1, type=int)
     per_page = 20
 
-    if status_filter:
+    from app.cataloging.models import COPY_STATUS_FILTERS
+    if copy_status not in COPY_STATUS_FILTERS:
+        copy_status = ''
+    if copy_status:
+        from app.cataloging.models import get_books_by_copy_status
+        books = get_books_by_copy_status(copy_status)
+        total = len(books)
+    elif status_filter:
         from app.cataloging.models import get_books_by_status
         books = get_books_by_status(status_filter)
         total = len(books)
@@ -100,6 +108,7 @@ def cataloging_page():
     return render_template('cataloging/cataloging.html', books=books,
                            total=total, search_query=query,
                            search_field=field, status_filter=status_filter,
+                           copy_status=copy_status,
                            page=page, per_page=per_page,
                            accessions_by_book=accessions_by_book)
 

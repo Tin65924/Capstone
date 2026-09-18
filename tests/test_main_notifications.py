@@ -123,13 +123,23 @@ class TestHistoryNewSections:
 class TestFineGraceDays:
     def test_grace_days_reduce_fine(self, mock_db):
         from app.circulation.models import calculate_fine
-        mock_db['fetch_one'].return_value = (date(2026, 7, 1), date(2026, 7, 6))
+        mock_db['fetch_one'].return_value = (date(2026, 7, 1), date(2026, 7, 6), 'overnight')
         assert calculate_fine(55, 10.0, 2) == 30.0
 
     def test_grace_days_floor_at_zero(self, mock_db):
         from app.circulation.models import calculate_fine
-        mock_db['fetch_one'].return_value = (date(2026, 7, 1), date(2026, 7, 2))
+        mock_db['fetch_one'].return_value = (date(2026, 7, 1), date(2026, 7, 2), 'overnight')
         assert calculate_fine(55, 10.0, 5) == 0
+
+    def test_default_rate_is_five_pesos(self, mock_db):
+        from app.circulation.models import calculate_fine
+        mock_db['fetch_one'].return_value = (date(2026, 7, 1), date(2026, 7, 3), 'overnight')
+        assert calculate_fine(55) == 10.0
+
+    def test_daily_loans_never_accrue_fines(self, mock_db):
+        from app.circulation.models import calculate_fine
+        mock_db['fetch_one'].return_value = (date(2026, 7, 1), date(2026, 7, 20), 'daily_circulation')
+        assert calculate_fine(55, 5.0, 0) == 0
 
 
 class TestCatalogViews:

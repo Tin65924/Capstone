@@ -359,7 +359,6 @@
                     <button data-rtab="collection" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-primary text-white">Collection Tracking</button>
                     <button data-rtab="library" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Library Analytics</button>
                     <button data-rtab="usage" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Usage Analytics</button>
-                    <span class="ml-auto text-[11px] text-gray-400 font-semibold hidden sm:inline">Inspired by Riverside reference dashboards • live MCST data</span>
                 </div>
 
                 <!-- ============ TAB: Collection Tracking ============ -->
@@ -1359,9 +1358,9 @@ function syncGlobalFilterCustomDates() {
             }).join('') || '<tr><td colspan="6" class="py-6 text-center text-slate-400">No copies found.</td></tr>';
             var att = document.getElementById('attention-list');
             if (att) att.innerHTML =
-                '<div class="flex items-center gap-2 border rounded-lg px-3 py-2"><span class="material-symbols-outlined text-red-500">schedule</span><span class="flex-1"><b>Overdue Copies</b><br><span class="text-slate-500">Require immediate follow-up</span></span><b class="text-red-600">' + rNum(C.overdue) + '</b></div>'
-                + '<div class="flex items-center gap-2 border rounded-lg px-3 py-2"><span class="material-symbols-outlined text-red-500">warning</span><span class="flex-1"><b>Lost / Damaged Copies</b><br><span class="text-slate-500">Require replacement or review</span></span><b class="text-red-600">' + rNum(C.lost_damaged) + '</b></div>'
-                + '<div class="flex items-center gap-2 border rounded-lg px-3 py-2"><span class="material-symbols-outlined text-blue-600">build</span><span class="flex-1"><b>Due for Maintenance</b><br><span class="text-slate-500">Inventory flagged missing</span></span><b class="text-blue-600">' + rNum(C.maintenance) + '</b></div>';
+                '<a href="{{ url_for('cataloging.cataloging_page', copy_status='overdue') }}" class="flex items-center gap-2 border rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors"><span class="material-symbols-outlined text-red-500">schedule</span><span class="flex-1"><b>Overdue Copies</b><br><span class="text-slate-500">Require immediate follow-up</span></span><b class="text-red-600">' + rNum(C.overdue) + '</b></a>'
+                + '<a href="{{ url_for('cataloging.cataloging_page', copy_status='lost_damaged') }}" class="flex items-center gap-2 border rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors"><span class="material-symbols-outlined text-red-500">warning</span><span class="flex-1"><b>Lost / Damaged Copies</b><br><span class="text-slate-500">Require replacement or review</span></span><b class="text-red-600">' + rNum(C.lost_damaged) + '</b></a>'
+                + '<a href="{{ url_for('cataloging.cataloging_page', copy_status='maintenance') }}" class="flex items-center gap-2 border rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors"><span class="material-symbols-outlined text-blue-600">build</span><span class="flex-1"><b>Due for Maintenance</b><br><span class="text-slate-500">Inventory flagged missing</span></span><b class="text-blue-600">' + rNum(C.maintenance) + '</b></a>';
 
             var lk = document.getElementById('library-kpis');
             if (lk) lk.innerHTML =

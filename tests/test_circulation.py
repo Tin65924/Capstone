@@ -132,7 +132,7 @@ class TestDeskReturn:
         mock_db['fetch_one'].side_effect = [
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),       # accession
             (55, 10, 1, 1, 5, 'overnight', 'borrow', '2026-08-01', '2026-08-02', None, 0, None, False, 'active'),  # active loan
-            (date(2026, 8, 1), date(2026, 8, 5)),                     # calculate_fine due/returned
+            (date(2026, 8, 1), date(2026, 8, 5), 'overnight'),     # calculate_fine due/returned/type
             None,                                                      # no waiting reservation
         ]
         resp = librarian_client.post('/librarian/circulation/return', data={
@@ -142,6 +142,8 @@ class TestDeskReturn:
         call_args = mock_db['execute'].call_args_list[0]
         assert 'UPDATE circulation_records' in call_args[0][0]
         assert 'returned' in call_args[0][1]
+        # 4 days overdue x P5/day (overnight rate).
+        assert call_args[0][1][2] == 20.0
 
     def test_return_not_borrowed_rejected(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [
@@ -153,6 +155,22 @@ class TestDeskReturn:
         })
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
+
+    def test_return_daily_loan_accrues_no_fine(self, librarian_client, mock_db):
+        """Daily/in-library loans never accrue fines, however overdue."""
+        mock_db['fetch_one'].side_effect = [
+            (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),       # accession
+            (55, 10, 1, 1, 5, 'daily_circulation', 'borrow', '2026-08-01', '2026-08-02', None, 0, None, False, 'active'),  # active loan
+            (date(2026, 8, 1), date(2026, 9, 1), 'daily_circulation'),  # calculate_fine: month late
+            None,                                                      # no waiting reservation
+        ]
+        resp = librarian_client.post('/librarian/circulation/return', data={
+            'accession_number': '2024-00123',
+        })
+        assert resp.status_code == 302
+        call_args = mock_db['execute'].call_args_list[0]
+        assert 'UPDATE circulation_records' in call_args[0][0]
+        assert call_args[0][1][2] == 0
 
 
 class TestReservationLifecycle:
@@ -700,7 +718,7 @@ class TestUserReturn:
     def test_returns_own_active_loan(self, student_client, mock_db):
         mock_db['fetch_one'].side_effect = [
             (55, 10, 1, '2026-08-02', 'active', 'daily_circulation'),  # get_active_loan_by_id_and_user
-            (date(2026, 8, 1), date(2026, 8, 2)),                       # calculate_fine due/returned
+            (date(2026, 8, 1), date(2026, 8, 2), 'daily_circulation'),   # calculate_fine due/returned/type
             None,                                                        # no waiting reservation
         ]
         resp = student_client.post('/user/return', data={'circulation_id': 55})
@@ -728,16 +746,18 @@ class TestUserReturn:
         assert mock_db['execute'].call_count == 0
 
     def test_return_computes_fine(self, student_client, mock_db):
+        # Self-returns are daily loans only (overnight must go to the desk),
+        # and daily loans never accrue fines — even when overdue.
         mock_db['fetch_one'].side_effect = [
-            (55, 10, 1, '2026-07-01', 'overdue', 'daily_circulation'),  # overdue loan
-            (date(2026, 7, 1), date(2026, 7, 6)),                       # 5 days late
+            (55, 10, 1, '2026-07-01', 'overdue', 'daily_circulation'),  # overdue daily loan
+            (date(2026, 7, 1), date(2026, 7, 6), 'daily_circulation'),  # 5 days late
             None,                                                        # no waiting reservation
         ]
         resp = student_client.post('/user/return', data={'circulation_id': 55})
         assert resp.status_code == 302
         call_args = mock_db['execute'].call_args_list[0]
         assert 'UPDATE circulation_records' in call_args[0][0]
-        assert call_args[0][1][2] == 50.0
+        assert call_args[0][1][2] == 0
 
 
 class TestUserOverview:
@@ -856,3 +876,76 @@ class TestBookInfoLabels:
         resp = student_client.get('/book/1')
         assert resp.status_code == 200
         assert b'openBorrowModalBtn' not in resp.data
+
+class TestPayFine:
+    FINE = (55, 5, 25.0, False)  # (circulation_id, borrower_id, amount, fine_paid)
+
+    def test_mark_fine_paid_sql(self, mock_db):
+        from app.circulation.models import mark_fine_paid
+        mark_fine_paid(55)
+        query, params = mock_db['execute'].call_args[0]
+        assert 'UPDATE circulation_records' in query
+        assert 'fine_paid = TRUE' in query
+        assert params == (55,)
+
+    def test_unpaid_filter_in_fine_queries(self, mock_db):
+        from app.circulation.models import get_fines_by_borrower, get_total_fines
+        mock_db['fetch_all'].return_value = []
+        mock_db['fetch_one'].return_value = (0,)
+        get_fines_by_borrower(5)
+        assert 'fine_paid = FALSE' in mock_db['fetch_all'].call_args[0][0]
+        get_total_fines(5)
+        assert 'fine_paid = FALSE' in mock_db['fetch_one'].call_args[0][0]
+
+    def test_pay_fine_success(self, librarian_client, mock_db):
+        from unittest.mock import patch
+        with patch('app.auth.models.get_user_by_id', return_value=(4, 'a@mcst.edu.ph', 'Admin', 'A')), \
+             patch('app.circulation.routes.get_borrower_by_user', return_value=(5, 4, 'ID-1', None, None, None)), \
+             patch('app.circulation.routes.get_fine_record', return_value=self.FINE), \
+             patch('app.circulation.routes.log_activity') as log_act:
+            resp = librarian_client.post('/librarian/users/4/fines/55/pay')
+        assert resp.status_code == 302
+        assert '/librarian/users/4/history' in resp.location
+        update = mock_db['execute'].call_args[0]
+        assert 'fine_paid = TRUE' in update[0]
+        assert 'circulation:fine_paid:55' in log_act.call_args[0][1]
+
+    def test_pay_fine_already_paid(self, librarian_client, mock_db):
+        from unittest.mock import patch
+        with patch('app.auth.models.get_user_by_id', return_value=(4, 'a@mcst.edu.ph', 'Admin', 'A')), \
+             patch('app.circulation.routes.get_borrower_by_user', return_value=(5, 4, 'ID-1', None, None, None)), \
+             patch('app.circulation.routes.get_fine_record', return_value=(55, 5, 25.0, True)), \
+             patch('app.circulation.routes.mark_fine_paid') as mark:
+            resp = librarian_client.post('/librarian/users/4/fines/55/pay', follow_redirects=True)
+        assert resp.status_code == 200
+        mark.assert_not_called()
+        assert b'already paid' in resp.data
+
+    def test_pay_fine_wrong_borrower(self, librarian_client, mock_db):
+        from unittest.mock import patch
+        with patch('app.auth.models.get_user_by_id', return_value=(4, 'a@mcst.edu.ph', 'Admin', 'A')), \
+             patch('app.circulation.routes.get_borrower_by_user', return_value=(5, 4, 'ID-1', None, None, None)), \
+             patch('app.circulation.routes.get_fine_record', return_value=(55, 9, 25.0, False)), \
+             patch('app.circulation.routes.mark_fine_paid') as mark:
+            resp = librarian_client.post('/librarian/users/4/fines/55/pay')
+        assert resp.status_code == 302
+        mark.assert_not_called()
+
+    def test_pay_fine_student_forbidden(self, student_client, mock_db):
+        resp = student_client.post('/librarian/users/4/fines/55/pay')
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
+        assert mock_db['execute'].call_count == 0
+
+    def test_history_detail_shows_mark_paid(self, librarian_client, mock_db):
+        fine_row = (55, '2026-08-01', '2026-08-05', '2026-08-10', 25.0, 'Book A', 'ACC-1')
+        mock_db['fetch_one'].side_effect = [
+            (4, 'a@mcst.edu.ph', 'Admin', 'Test Admin'),
+            (5, 4, 'ID-1', 'CS', None, 'active'),
+            (25.0,),
+        ]
+        mock_db['fetch_all'].side_effect = [[], [], [], [fine_row]]
+        resp = librarian_client.get('/librarian/users/4/history')
+        assert resp.status_code == 200
+        assert b'Mark paid' in resp.data
+        assert b'/librarian/users/4/fines/55/pay' in resp.data

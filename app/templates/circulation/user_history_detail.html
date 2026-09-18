@@ -150,7 +150,7 @@
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-[720px]">
-                    <thead><tr><th>Title</th><th>Copy</th><th>Due</th><th>Returned</th><th class="text-right">Amount</th></tr></thead>
+                    <thead><tr><th>Title</th><th>Copy</th><th>Due</th><th>Returned</th><th class="text-right">Amount</th><th class="text-right">Action</th></tr></thead>
                     <tbody>
                         {% for f in fines %}
                         <tr>
@@ -159,9 +159,14 @@
                             <td class="text-gray-500">{{ f[2] }}</td>
                             <td class="text-gray-500">{{ f[3] or '—' }}</td>
                             <td class="text-right font-bold text-red-600">₱{{ '%.2f'|format(f[4]|float) }}</td>
+                            <td class="text-right">
+                                <form method="POST" action="{{ url_for('circulation.pay_fine', user_id=user_data[0], circulation_id=f[0]) }}" onsubmit="return confirm('Mark this ₱{{ '%.2f'|format(f[4]|float) }} fine as paid?');">
+                                    <button type="submit" class="text-xs font-bold text-emerald-700 hover:underline">Mark paid</button>
+                                </form>
+                            </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="5" class="text-center text-gray-400 py-6">No fines.</td></tr>
+                        <tr><td colspan="6" class="text-center text-gray-400 py-6">No fines.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>

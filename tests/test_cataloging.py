@@ -361,6 +361,50 @@ class TestCatalogingSearch:
         assert b'Showing' in resp.data
 
 
+class TestCopyStatusFilter:
+    def test_overdue_builds_exists_query(self, mock_db):
+        from app.cataloging.models import get_books_by_copy_status
+        mock_db['fetch_all'].return_value = []
+        get_books_by_copy_status('overdue')
+        query = mock_db['fetch_all'].call_args[0][0]
+        assert 'circulation_records' in query
+        assert "transaction_status = 'overdue'" in query
+        assert 'accession_numbers' in query
+
+    def test_lost_damaged_and_maintenance_queries(self, mock_db):
+        from app.cataloging.models import get_books_by_copy_status
+        mock_db['fetch_all'].return_value = []
+        get_books_by_copy_status('lost_damaged')
+        assert "'lost', 'damaged'" in mock_db['fetch_all'].call_args[0][0]
+        get_books_by_copy_status('maintenance')
+        assert "'missing'" in mock_db['fetch_all'].call_args[0][0]
+
+    def test_invalid_copy_status_returns_empty(self, mock_db):
+        from app.cataloging.models import get_books_by_copy_status
+        assert get_books_by_copy_status('bogus') == []
+        assert mock_db['fetch_all'].call_count == 0
+
+    def test_route_filters_overdue(self, librarian_client, mock_db):
+        mock_db['fetch_all'].side_effect = [SAMPLE_BOOKS, []]
+        resp = librarian_client.get('/librarian/cataloging?copy_status=overdue')
+        assert resp.status_code == 200
+        assert b'Overdue' in resp.data
+        queries = [c[0][0] for c in mock_db['fetch_all'].call_args_list]
+        assert any('EXISTS' in q for q in queries)
+
+    def test_route_invalid_copy_status_falls_back(self, librarian_client, mock_db):
+        mock_db['fetch_all'].side_effect = [SAMPLE_BOOKS, []]
+        resp = librarian_client.get('/librarian/cataloging?copy_status=bogus')
+        assert resp.status_code == 200
+        queries = [c[0][0] for c in mock_db['fetch_all'].call_args_list]
+        assert all('EXISTS' not in q for q in queries)
+
+    def test_route_student_forbidden(self, student_client, mock_db):
+        resp = student_client.get('/librarian/cataloging?copy_status=overdue')
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
+
+
 class TestPublicCatalog:
     def test_public_catalog_all(self, client, mock_db):
         # Bare /catalog is empty by default: only categories queried, no book search.

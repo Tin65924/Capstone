@@ -4,14 +4,28 @@
         <div class="space-y-2">
             {% for category, message in messages %}
                 {% set color = {'error': 'bg-red-50 text-red-800 border-red-200', 'info': 'bg-blue-50 text-blue-800 border-blue-200', 'success': 'bg-green-50 text-green-800 border-green-200', 'warning': 'bg-yellow-50 text-yellow-800 border-yellow-200'} %}
-                <div class="px-4 py-3 border rounded {{ color.get(category, color['info']) }} text-sm font-medium flex items-center gap-2">
+                <div data-flash class="px-4 py-3 border rounded {{ color.get(category, color['info']) }} text-sm font-medium flex items-center gap-2 transition-opacity duration-500">
                     <span class="material-symbols-outlined text-base">
                         {{ 'error' if category == 'error' else 'info' if category == 'info' else 'check_circle' if category == 'success' else 'warning' }}
                     </span>
-                    {{ message }}
+                    <span class="flex-1">{{ message }}</span>
+                    <button type="button" data-flash-close aria-label="Dismiss" class="shrink-0 opacity-60 hover:opacity-100 font-bold leading-none">&times;</button>
                 </div>
             {% endfor %}
         </div>
     </div>
+    <script>
+    (function () {
+        function dismiss(el) {
+            el.classList.add('opacity-0');
+            setTimeout(function () { el.remove(); }, 500);
+        }
+        document.querySelectorAll('[data-flash]').forEach(function (el) {
+            var btn = el.querySelector('[data-flash-close]');
+            if (btn) btn.addEventListener('click', function () { dismiss(el); });
+            setTimeout(function () { if (el.isConnected) dismiss(el); }, 6000);
+        });
+    })();
+    </script>
     {% endif %}
 {% endwith %}

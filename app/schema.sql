@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS borrowers (
 
 ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS phone_number VARCHAR(30);
 
+ALTER TABLE circulation_records ADD COLUMN IF NOT EXISTS fine_paid BOOLEAN NOT NULL DEFAULT FALSE;
+
 CREATE TABLE IF NOT EXISTS book_catalog (
     book_id               SERIAL PRIMARY KEY,
     title                 VARCHAR(255) NOT NULL,
@@ -108,6 +110,7 @@ CREATE TABLE IF NOT EXISTS circulation_records (
     due_date           DATE,
     return_date        DATE,
     fine_amount        DECIMAL(8,2) NOT NULL DEFAULT 0.00,
+    fine_paid          BOOLEAN NOT NULL DEFAULT FALSE,
     damage_notes       TEXT,
     lost_flag          BOOLEAN NOT NULL DEFAULT FALSE,
     transaction_status VARCHAR(20) NOT NULL
@@ -220,7 +223,7 @@ INSERT INTO library_settings (setting_key, setting_value, description) VALUES
     ('OVERNIGHT_DUE_DAYS_STUDENT', '2', 'Overnight loan due days for students'),
     ('OVERNIGHT_DUE_DAYS_FACULTY', '30', 'Overnight loan due days for faculty'),
     ('DAILY_CIRCULATION_DUE_DAYS', '0', 'Daily circulation due days (0 = same day)'),
-    ('OVERDUE_FINE_PER_DAY', '10.0', 'Overdue fine in pesos per day'),
+    ('OVERDUE_FINE_PER_DAY', '5.0', 'Overdue fine in pesos per day'),
     ('OVERDUE_GRACE_DAYS', '0', 'Grace days before fines accrue'),
     ('RESERVATION_CLAIM_DAYS', '2', 'Days to claim an allocated reservation'),
     ('DUE_SOON_NOTIFY_DAYS', '2', 'Days before due date to send due-soon reminders')
