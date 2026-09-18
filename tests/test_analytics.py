@@ -87,14 +87,18 @@ class TestAnalyticsModels:
 
 
 class TestAnalyticsPage:
-    def test_page_embeds_kpi_payload(self, librarian_client, mock_db):
+    def test_page_embeds_dashboard_payload(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = (5,)
         mock_db['fetch_all'].return_value = [('BSIT', 12)]
         resp = librarian_client.get('/librarian/analytics')
         assert resp.status_code == 200
-        assert b'id="kpi-data"' in resp.data
-        assert b'Add KPI' in resp.data
+        assert b'id="dashboard-data"' in resp.data
         assert b'Export All' in resp.data
+        # custom KPI board is removed: no board markup, payload, or modals
+        assert b'Custom KPI Board' not in resp.data
+        assert b'id="kpi-data"' not in resp.data
+        assert b'id="board"' not in resp.data
+        assert b'exportDashboard' in resp.data
 
     def test_no_riverside_credit_line(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = (5,)
@@ -293,6 +297,71 @@ class TestDashboardNormalization:
         mock_db['fetch_one'].side_effect = [
             (10,), (4,), (2,), (timedelta(days=3, hours=12),), (6,), (7,)]
         assert circulation_overview() == (10, 4, 2, 3.5, 60.0, 7)
+
+class TestDashboardExport:
+    def test_single_dashboard_section(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [('Science', 30)]
+        resp = librarian_client.post('/librarian/analytics/export',
+                                     data={'kpi_type': 'top_categories', 'format': 'pdf'})
+        assert resp.status_code == 200
+        assert resp.data[:4] == b'%PDF'
+        query = mock_db['execute'].call_args[0][0]
+        assert 'INSERT INTO analytics_cache' in query
+
+    def test_quick_report_department_usage(self, librarian_client, mock_db):
+        """Quick Reports must export their own section, not the old board."""
+        mock_db['fetch_all'].return_value = [('BSIT', 12)]
+        resp = librarian_client.post(
+            '/librarian/analytics/export',
+            data={'kpi_type': 'all', 'format': 'pdf',
+                  'kpi_types': 'books_borrowed_per_program'})
+        assert resp.status_code == 200
+        assert resp.data[:4] == b'%PDF'
+        snapshots = [c[0][1][0] for c in mock_db['execute'].call_args_list
+                     if 'INSERT INTO analytics_cache' in c[0][0]]
+        assert snapshots == ['books_borrowed_per_program']
+
+    def test_tab_style_export_list(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (10,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.post(
+            '/librarian/analytics/export',
+            data={'kpi_type': 'all', 'format': 'pdf',
+                  'kpi_types': 'circulation_summary,trend_borrowings,top_books'})
+        assert resp.status_code == 200
+        assert resp.data[:4] == b'%PDF'
+        snapshots = [c[0][1][0] for c in mock_db['execute'].call_args_list
+                     if 'INSERT INTO analytics_cache' in c[0][0]]
+        assert sorted(snapshots) == ['circulation_summary', 'top_books', 'trend_borrowings']
+
+    def test_wide_table_section_renders(self, librarian_client, mock_db):
+        """9-column recent_circulation must not break the PDF table builder."""
+        from datetime import date
+        mock_db['fetch_all'].return_value = [
+            (date(2026, 5, 1), 7, 'A U', 'Student', 'T', 'A', 'borrow',
+             date(2026, 5, 15), 'active'),
+        ]
+        resp = librarian_client.post('/librarian/analytics/export',
+                                     data={'kpi_type': 'recent_circulation', 'format': 'pdf'})
+        assert resp.status_code == 200
+        assert resp.data[:4] == b'%PDF'
+
+    def test_empty_selection_still_returns_pdf(self, librarian_client, mock_db):
+        resp = librarian_client.post('/librarian/analytics/export',
+                                     data={'kpi_type': 'all', 'format': 'pdf',
+                                           'kpi_types': 'not_a_real_kpi'})
+        assert resp.status_code == 200
+        assert resp.data[:4] == b'%PDF'
+
+    def test_export_rejects_get(self, librarian_client, mock_db):
+        assert librarian_client.get('/librarian/analytics/export').status_code == 405
+
+    def test_jsonable_handles_dates_and_decimals(self):
+        import decimal
+        from datetime import date
+        from app.analytics.routes import _jsonable
+        assert _jsonable([(date(2026, 5, 1), decimal.Decimal('4.5'))]) == [['2026-05-01', 4.5]]
+        assert _jsonable(20.0) == 20.0
 
 class TestChartFilterModels:
     def test_borrowed_per_program_department_filter(self, mock_db):

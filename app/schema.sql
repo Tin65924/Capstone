@@ -182,7 +182,12 @@ CREATE TABLE IF NOT EXISTS analytics_cache (
                    CHECK (report_type IN (
                        'books_borrowed_per_program', 'utilization_rate',
                        'most_borrowed_titles', 'underutilized_titles',
-                       'online_resource_usage'
+                       'online_resource_usage',
+                       'trend_borrowings', 'trend_overdue', 'top_categories',
+                       'top_books', 'high_demand', 'by_user_type',
+                       'collection_by_category', 'copies_by_status',
+                       'recent_circulation', 'recent_collection',
+                       'circulation_summary'
                    )),
     filter_params  JSONB,
     kpi_data       JSONB NOT NULL,

@@ -201,6 +201,38 @@ def copies_by_status_summary(start_date=None, end_date=None):
             ('Under Maintenance', maintenance)]
 
 
+def copies_by_status_summary(start_date=None, end_date=None):
+    """Return [(status, copies)] for the Copies-by-Status chart/export.
+
+    Available = active-catalog copies minus borrowed, overdue, reserved,
+    lost/damaged and missing (maintenance) copies, floored at zero.
+    """
+    total = count_total_copies()
+    status_rows = count_circulation_status(start_date, end_date) or []
+    status = {}
+    for r in status_rows:
+        try:
+            status[str(r[0])] = int(r[1] or 0)
+        except (IndexError, TypeError, ValueError):
+            continue
+    borrowed = status.get('active', 0)
+    overdue = status.get('overdue', 0)
+    reserved = count_reservations()
+    inv_rows = inventory_state_counts() or []
+    inv = {}
+    for r in inv_rows:
+        try:
+            inv[str(r[0])] = int(r[1] or 0)
+        except (IndexError, TypeError, ValueError):
+            continue
+    lost_damaged = inv.get('lost', 0) + inv.get('damaged', 0)
+    maintenance = inv.get('missing', 0)
+    available = max(total - borrowed - overdue - reserved - lost_damaged - maintenance, 0)
+    return [('Available', available), ('Borrowed', borrowed), ('Reserved', reserved),
+            ('Overdue', overdue), ('Lost / Damaged', lost_damaged),
+            ('Under Maintenance', maintenance)]
+
+
 def collection_by_category(start_date=None, end_date=None, q=None):
     """Return [(category, titles)] grouped by subject_classification.
 

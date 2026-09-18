@@ -42,6 +42,39 @@ KPI_DESCRIPTIONS = {
     'underutilized_titles': 'Titles with zero borrows in the selected period.',
 }
 
+# Dashboard export sections (Statistics tabs + Quick Reports). The custom KPI
+# board is removed, so these are the only exportable contents; kpi_json stays
+# limited to the board-era VALID_KPIS for backwards compatibility.
+DASHBOARD_LABELS = {
+    'trend_borrowings': 'Borrowings Trend',
+    'trend_overdue': 'Overdue Trend',
+    'top_categories': 'Top Borrowed Categories',
+    'top_books': 'Top Borrowed Books',
+    'high_demand': 'Likely High-Demand Titles',
+    'by_user_type': 'Borrowings by User Type',
+    'collection_by_category': 'Collection by Category',
+    'copies_by_status': 'Copies by Status',
+    'recent_circulation': 'Recent Circulation Activity',
+    'recent_collection': 'Recent Collection Status',
+    'circulation_summary': 'Circulation Summary',
+}
+
+DASHBOARD_DESCRIPTIONS = {
+    'trend_borrowings': 'Daily borrow counts in the selected period.',
+    'trend_overdue': 'Daily overdue counts in the selected period.',
+    'top_categories': 'Borrows grouped by subject classification.',
+    'top_books': 'Most borrowed books with authors.',
+    'high_demand': 'Active loans ranked by current demand.',
+    'by_user_type': 'Borrows grouped by account role.',
+    'collection_by_category': 'Active titles grouped by subject classification.',
+    'copies_by_status': 'Physical copies grouped by availability status.',
+    'recent_circulation': 'Latest circulation transactions.',
+    'recent_collection': 'Latest accessioned copies with status.',
+    'circulation_summary': 'Headline circulation totals for the period.',
+}
+
+EXPORTABLE_KPIS = set(VALID_KPIS) | set(DASHBOARD_LABELS)
+
 
 def resolve_dates(preset, from_str, to_str):
     """Resolve a date range into (start_date, end_date).
@@ -72,15 +105,6 @@ def resolve_dates(preset, from_str, to_str):
         return start_date, end_date
 
     return None, None
-
-
-def compute_all_kpis(start_date, end_date):
-    return {
-        'books_borrowed_per_program': models.books_borrowed_per_program(start_date, end_date),
-        'utilization_rate': models.utilization_rate(start_date, end_date),
-        'most_borrowed_titles': models.most_borrowed_titles(start_date, end_date),
-        'underutilized_titles': models.underutilized_titles(start_date, end_date),
-    }
 
 
 def _normalize_range(preset, from_str, to_str):
@@ -262,19 +286,16 @@ def analytics_page():
     # invalid presets fall back to no bounds (same as kpi_json/export_report).
     preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
     start_date, end_date = resolve_dates(preset, from_str, to_str)
-    kpi_data = compute_all_kpis(start_date, end_date)
     dashboard = compute_dashboard(start_date, end_date)
     period_label = _format_period(start_date, end_date, preset, from_str, to_str)
     return render_template(
         'analytics/analytics.html',
-        kpi_data=kpi_data,
-        kpi_labels=KPI_LABELS,
-        kpi_descriptions=KPI_DESCRIPTIONS,
         preset=preset,
         from_date=from_str,
         to_date=to_str,
         period_label=period_label,
         dashboard=dashboard,
+        period_label=_format_period(start_date, end_date, preset, from_str, to_str),
     )
 
 
@@ -408,6 +429,30 @@ def _as_2d_rows(kpi_type, kpi_data):
         return [('Title', 'Borrow Count')] + [(r[0], r[1]) for r in kpi_data]
     if kpi_type == 'underutilized_titles':
         return [('Title',)] + [(r[0],) for r in kpi_data]
+    if kpi_type == 'trend_borrowings':
+        return [('Date', 'Borrowings')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'trend_overdue':
+        return [('Date', 'Overdue Items')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'top_categories':
+        return [('Category', 'Borrowings')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'top_books':
+        return [('Title', 'Author', 'Borrowings')] + [(r[0], r[1], r[2]) for r in (kpi_data or [])]
+    if kpi_type == 'high_demand':
+        return [('Title', 'Author', 'Active Loans')] + [(r[0], r[1], r[2]) for r in (kpi_data or [])]
+    if kpi_type == 'by_user_type':
+        return [('User Type', 'Borrowings')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'collection_by_category':
+        return [('Category', 'Titles')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'copies_by_status':
+        return [('Status', 'Copies')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'recent_circulation':
+        return [('Date', 'TXN', 'User', 'Role', 'Title', 'Author', 'Action', 'Due', 'Status')] + \
+            [tuple(r) for r in (kpi_data or [])]
+    if kpi_type == 'recent_collection':
+        return [('Accession', 'Title', 'Category', 'Inventory State', 'Loan', 'Borrower', 'Due')] + \
+            [tuple(r) for r in (kpi_data or [])]
+    if kpi_type == 'circulation_summary':
+        return [('Metric', 'Value')] + [(r[0], r[1]) for r in (kpi_data or [])]
     raise ValueError('Unknown KPI type: %s' % kpi_type)
 
 
@@ -420,7 +465,63 @@ def _run_kpi(kpi_type, start_date, end_date):
         return models.most_borrowed_titles(start_date, end_date)
     if kpi_type == 'underutilized_titles':
         return models.underutilized_titles(start_date, end_date)
+    if kpi_type == 'trend_borrowings':
+        return models.borrowings_trend(start_date, end_date)
+    if kpi_type == 'trend_overdue':
+        return models.overdue_trend(start_date, end_date)
+    if kpi_type == 'top_categories':
+        return models.top_borrowed_categories(start_date, end_date)
+    if kpi_type == 'top_books':
+        return models.top_borrowed_books_detailed(start_date, end_date)
+    if kpi_type == 'high_demand':
+        return models.high_demand_titles(start_date, end_date)
+    if kpi_type == 'by_user_type':
+        return models.borrowings_by_user_type(start_date, end_date)
+    if kpi_type == 'collection_by_category':
+        return models.collection_by_category(start_date, end_date)
+    if kpi_type == 'copies_by_status':
+        return models.copies_by_status_summary(start_date, end_date)
+    if kpi_type == 'recent_circulation':
+        return models.recent_circulation()
+    if kpi_type == 'recent_collection':
+        return models.recent_collection_status()
+    if kpi_type == 'circulation_summary':
+        t, b, o, avg, rate, new = models.circulation_overview(start_date, end_date)
+        return [['Total borrowings', t], ['Active borrowers', b], ['Overdue items', o],
+                ['Avg. loan duration (days)', avg], ['On-time return rate (%)', rate],
+                ['New additions', new]]
     raise ValueError('Unknown KPI type: %s' % kpi_type)
+
+
+def _all_labels():
+    labels = dict(KPI_LABELS)
+    labels.update(DASHBOARD_LABELS)
+    return labels
+
+
+def _all_descriptions():
+    descriptions = dict(KPI_DESCRIPTIONS)
+    descriptions.update(DASHBOARD_DESCRIPTIONS)
+    return descriptions
+
+
+def _jsonable_cell(value):
+    if hasattr(value, 'isoformat'):
+        return value.isoformat()
+    try:
+        import decimal
+        if isinstance(value, decimal.Decimal):
+            return float(value)
+    except ImportError:
+        pass
+    return value
+
+
+def _jsonable(kpi_data):
+    if isinstance(kpi_data, list):
+        return [[_jsonable_cell(c) for c in r] if isinstance(r, (list, tuple))
+                else _jsonable_cell(r) for r in kpi_data]
+    return _jsonable_cell(kpi_data)
 
 
 def _format_period(start_date, end_date, preset, from_str, to_str):
@@ -584,10 +685,12 @@ def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
     story.append(Spacer(1, 14))
 
     # Summary badges: sections in this report
+    labels = _all_labels()
+    descriptions = _all_descriptions()
     badge_cells = []
     for kt, _ in sections:
         badge_cells.append(Paragraph(
-            f'<font color="#1e3a8a"><b>{KPI_LABELS.get(kt, kt)}</b></font>',
+            f'<font color="#1e3a8a"><b>{labels.get(kt, kt)}</b></font>',
             ParagraphStyle('RBadgeTx', parent=s_cell, fontSize=7, leading=9,
                            textColor=NAVY, alignment=TA_CENTER)))
     if badge_cells:
@@ -641,7 +744,7 @@ def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
             ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
         ]))
         title_row = Table(
-            [[pill, Paragraph(KPI_LABELS.get(kt, kt), s_section_title)]],
+            [[pill, Paragraph(labels.get(kt, kt), s_section_title)]],
             colWidths=[26, doc.width - 26], hAlign='LEFT')
         title_row.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -651,7 +754,7 @@ def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
             ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
         ]))
         story.append(title_row)
-        story.append(Paragraph(KPI_DESCRIPTIONS.get(kt, ''), s_section_desc))
+        story.append(Paragraph(descriptions.get(kt, ''), s_section_desc))
 
         # Period chip row for this card
         story.append(Table(
@@ -731,16 +834,18 @@ def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
             story.append(empty_box)
         else:
             # Styled data table
-            # choose column widths by KPI
-            if kt == 'books_borrowed_per_program':
-                cw = [doc.width * 0.68, doc.width * 0.32]
-                aligns = [s_cell, s_cell_right]
-            elif kt == 'most_borrowed_titles':
-                cw = [doc.width * 0.68, doc.width * 0.32]
-                aligns = [s_cell, s_cell_right]
-            else:  # underutilized_titles
+            # choose column widths by shape: 2-col label/value tables get a
+            # wide label column; wider tables split the width evenly.
+            ncols = len(rows[0])
+            if ncols == 1:
                 cw = [doc.width]
                 aligns = [s_cell]
+            elif ncols == 2:
+                cw = [doc.width * 0.68, doc.width * 0.32]
+                aligns = [s_cell, s_cell_right]
+            else:
+                cw = [doc.width / ncols] * ncols
+                aligns = [s_cell] * ncols
 
             header_cells = []
             for j, c in enumerate(rows[0]):
@@ -768,11 +873,12 @@ def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
                 body = body[:max_rows]
 
             t = Table([header_cells] + body, colWidths=cw, hAlign='LEFT', repeatRows=1)
+            wide_font = 7 if ncols > 4 else 8
             style_cmds = [
                 ('BACKGROUND', (0, 0), (-1, 0), NAVY),
                 ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 8),
+                ('FONTSIZE', (0, 0), (-1, -1), wide_font),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 7),
                 ('TOPPADDING', (0, 0), (-1, 0), 7),
                 ('TOPPADDING', (0, 1), (-1, -1), 5),
@@ -841,7 +947,7 @@ def export_report():
         fmt = 'pdf'
 
     export_all = kpi_type == 'all'
-    if not export_all and kpi_type not in VALID_KPIS:
+    if not export_all and kpi_type not in EXPORTABLE_KPIS:
         flash('Invalid report type.', 'error')
         return redirect(url_for('analytics.analytics_page'))
 
@@ -863,12 +969,12 @@ def export_report():
         else:
             candidates = []
         if has_key:
-            # Respect the board's explicit selection — even if empty (board has no KPIs, export nothing).
-            # Filter to valid KPIs only; if board sent only invalid names, result is empty.
-            kpi_types = [k for k in candidates if k in VALID_KPIS and k in KPI_LABELS]
+            # Respect the caller's explicit selection — even if empty (export nothing).
+            # Filter to valid KPIs only; if only invalid names were sent, result is empty.
+            kpi_types = [k for k in candidates if k in EXPORTABLE_KPIS]
         else:
-            # Legacy calls without kpi_types export all KPIs (keeps tests green).
-            kpi_types = [k for k in candidates if k in VALID_KPIS and k in KPI_LABELS] or list(KPI_LABELS.keys())
+            # Legacy calls without kpi_types export the board KPIs (keeps tests green).
+            kpi_types = [k for k in candidates if k in EXPORTABLE_KPIS] or list(KPI_LABELS.keys())
     else:
         kpi_types = [kpi_type]
 
@@ -878,7 +984,7 @@ def export_report():
         models.save_report_snapshot(
             kt,
             {'preset': preset, 'from': from_str, 'to': to_str},
-            [list(r) for r in kpi_data] if isinstance(kpi_data, list) else kpi_data,
+            _jsonable(kpi_data),
             current_user.id,
         )
         sections.append((kt, kpi_data))

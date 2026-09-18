@@ -129,135 +129,6 @@
         @media (min-width: 1024px) {
             .board { padding: 2rem; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
         }
-        @media (max-width: 640px) {
-            .kpi-card-header { padding: 0.75rem 1rem; }
-            .kpi-card-body { padding: 1rem; }
-            .add-kpi-card { min-height: 160px; }
-        }
-
-        .kpi-card {
-            background: white;
-            border-radius: var(--radius);
-            border: 1px solid var(--border-color);
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            animation: fadeIn 0.3s ease-out;
-            position: relative;
-        }
-
-        .kpi-card-header {
-            padding: 1rem 1.25rem;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: default;
-        }
-
-        .kpi-card-body {
-            padding: 1.5rem;
-            flex: 1;
-        }
-
-        .add-kpi-card {
-            background: white;
-            border: 2px dashed #cbd5e1;
-            border-radius: var(--radius);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 200px;
-            cursor: pointer;
-            color: var(--text-muted);
-            transition: all 0.2s;
-        }
-
-        .add-kpi-card:hover {
-            border-color: var(--primary);
-            color: var(--primary);
-            background: white;
-        }
-
-        .progress-bar-stack {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-
-        .bar-row {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-
-        .bar-label {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: var(--text-muted);
-        }
-
-        .bar-container {
-            height: 10px;
-            background: #f1f5f9;
-            border-radius: 5px;
-            overflow: hidden;
-        }
-
-        .bar-fill {
-            height: 100%;
-            background: var(--primary);
-            border-radius: 5px;
-        }
-
-        .utilization-ring {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            background: conic-gradient(var(--primary) 68%, #f1f5f9 0);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto;
-            position: relative;
-        }
-
-        .utilization-ring::after {
-            content: '';
-            width: 90px;
-            height: 90px;
-            background: white;
-            border-radius: 50%;
-            position: absolute;
-        }
-
-        .utilization-value {
-            position: relative;
-            z-index: 1;
-            font-size: 1.5rem;
-            font-weight: 800;
-            color: var(--text-main);
-        }
-
-        .preset-btn.active {
-            background: var(--primary) !important;
-            color: white !important;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: scale(0.98);
-            }
-
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
     </style>
 </head>
 
@@ -337,13 +208,13 @@
                     {% endif %}
                 </button>
                 <div class="w-[1px] h-5 sm:h-6 bg-gray-200 mx-0.5 sm:mx-1 hidden sm:block"></div>
-                <button id="exportAllBtn" onclick="openExportAllModal()"
+                <button id="exportAllBtn" onclick="exportDashboard(ALL_DASHBOARD_SECTIONS)"
                     class="flex items-center gap-1 sm:gap-2 text-[11px] sm:text-xs font-bold px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all whitespace-nowrap">
                     <span class="material-symbols-outlined text-base sm:text-lg">download</span>
                     <span class="hidden sm:inline">Export All</span>
                     <span class="sm:hidden">Export</span>
                 </button>
-                <button onclick="openExportAllModal()"
+                <button onclick="exportDashboard(ALL_DASHBOARD_SECTIONS)"
                     class="hidden md:flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg bg-primary text-white hover:bg-blue-800 transition-all whitespace-nowrap">
                     <span class="material-symbols-outlined text-lg">lab_profile</span>
                     Export Report
@@ -370,7 +241,7 @@
                             <p class="text-xs text-slate-500">What is the current status of books and copies?</p>
                         </div>
                         <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">{{ period_label }}</span>
-                        <button onclick="openExportAllModal()" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
+                        <button onclick="exportDashboard(['collection_by_category', 'copies_by_status', 'recent_collection'])" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
                     </div>
                     <div id="collection-kpis" class="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3"></div>
                     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -454,7 +325,7 @@
                             <p class="text-xs text-slate-500">What patterns are happening and what may happen next?</p>
                         </div>
                         <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">{{ period_label }}</span>
-                        <button onclick="openExportAllModal()" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
+                        <button onclick="exportDashboard(['circulation_summary', 'trend_borrowings', 'top_categories', 'trend_overdue', 'high_demand', 'recent_circulation'])" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
                     </div>
                     <div id="library-kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3"></div>
                     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -534,8 +405,8 @@
                             <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Usage Analytics Dashboard</h2>
                             <p class="text-xs text-slate-500">Who is using the library, what are they borrowing, and how often?</p>
                         </div>
-                        <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">All Departments / Programs</span>
-                        <button onclick="openExportAllModal()" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
+                        <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">All Departments / Programs · {{ period_label }}</span>
+                        <button onclick="exportDashboard(['circulation_summary', 'books_borrowed_per_program', 'by_user_type', 'top_books', 'recent_circulation'])" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
                     </div>
                     <div id="usage-kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3"></div>
                     <div class="grid grid-cols-1 xl:grid-cols-4 gap-4">
@@ -575,10 +446,10 @@
                         <div id="top-books-list" class="space-y-2"></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">Quick Reports</h3>
                             <div class="space-y-2 text-[11px]">
-                                <button onclick="doExportAll('pdf')" class="w-full text-left border rounded-lg px-3 py-2.5 hover:bg-gray-50"><b>Department Usage Report</b><br><span class="text-slate-500">Detailed borrowing activity by program.</span></button>
-                                <button onclick="doExportAll('pdf')" class="w-full text-left border rounded-lg px-3 py-2.5 hover:bg-gray-50"><b>Overdue Items Report</b><br><span class="text-slate-500">Overdue items with borrower and due dates.</span></button>
-                                <button onclick="doExportAll('pdf')" class="w-full text-left border rounded-lg px-3 py-2.5 hover:bg-gray-50"><b>Top Borrowed Books Report</b><br><span class="text-slate-500">Most borrowed books in the period.</span></button>
-                                <button onclick="doExportAll('pdf')" class="w-full text-left border rounded-lg px-3 py-2.5 hover:bg-gray-50"><b>Monthly Circulation Summary</b><br><span class="text-slate-500">Borrowing and return statistics.</span></button>
+                                <button onclick="exportDashboard(['books_borrowed_per_program'])" class="w-full text-left border rounded-lg px-3 py-2.5 hover:bg-gray-50"><b>Department Usage Report</b><br><span class="text-slate-500">Detailed borrowing activity by program.</span></button>
+                                <button onclick="exportDashboard(['trend_overdue', 'recent_circulation'])" class="w-full text-left border rounded-lg px-3 py-2.5 hover:bg-gray-50"><b>Overdue Items Report</b><br><span class="text-slate-500">Overdue items with borrower and due dates.</span></button>
+                                <button onclick="exportDashboard(['top_books'])" class="w-full text-left border rounded-lg px-3 py-2.5 hover:bg-gray-50"><b>Top Borrowed Books Report</b><br><span class="text-slate-500">Most borrowed books in the period.</span></button>
+                                <button onclick="exportDashboard(['circulation_summary', 'trend_borrowings'])" class="w-full text-left border rounded-lg px-3 py-2.5 hover:bg-gray-50"><b>Monthly Circulation Summary</b><br><span class="text-slate-500">Borrowing and return statistics.</span></button>
                             </div>
                         </div>
                     </div>
@@ -617,152 +488,9 @@
                     </div>
                 </section>
 
-                <!-- ============ Existing custom KPI board (kept for compatibility) ============ -->
-                <details class="bg-white rounded-xl border border-slate-200">
-                    <summary class="cursor-pointer px-4 py-3 text-sm font-extrabold list-none flex items-center gap-2"><span class="material-symbols-outlined text-primary">add_chart</span> Custom KPI Board <span class="text-[11px] font-semibold text-slate-400">(Add KPI • Export All • per-card filters — unchanged)</span></summary>
-                    <div class="board !p-4" id="board"></div>
-                </details>
             </div>
         </div>
     </main>
-
-    <!-- Add KPI Modal -->
-    <div id="addKpiModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-900/60" onclick="closeAddKpiModal()"></div>
-        <div class="relative bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 max-w-[95vw] sm:max-w-lg w-full max-h-[90vh] overflow-y-auto">
-            <div class="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-800">
-                <h3 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white">Add a KPI</h3>
-                <button onclick="closeAddKpiModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
-                    <span class="material-icons">close</span>
-                </button>
-            </div>
-            <div class="p-4 sm:p-6 space-y-3">
-                {% for kpi_key, label in kpi_labels.items() %}
-                <button onclick="addKpi('{{ kpi_key }}')"
-                    class="w-full text-left p-4 border border-slate-200 dark:border-slate-700 rounded hover:border-primary hover:ring-1 hover:ring-primary transition-all">
-                    <span class="text-sm font-bold text-slate-900 dark:text-white">{{ label }}</span>
-                    <span class="block text-xs text-slate-500 dark:text-slate-400 mt-1">{{ kpi_descriptions[kpi_key] }}</span>
-                </button>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
-
-    <!-- Export Modal -->
-    <div id="exportModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-900/60" onclick="closeExportModal()"></div>
-        <div class="relative bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 max-w-[95vw] sm:max-w-sm w-full">
-            <div class="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-800">
-                <h3 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white">Export <span id="exportKpiTitle" class="text-primary"></span></h3>
-                <button onclick="closeExportModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
-                    <span class="material-icons">close</span>
-                </button>
-            </div>
-            <div class="p-4 sm:p-6 space-y-4">
-                <p class="text-sm text-slate-500 dark:text-slate-400">This report is generated as a polished, print-ready PDF with styled tables, period context, and page numbers — ideal for accreditation and budget review.</p>
-                <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-4 flex items-center gap-3">
-                    <span class="material-symbols-outlined text-3xl text-rose-500">picture_as_pdf</span>
-                    <div class="flex-1">
-                        <div class="text-sm font-bold text-slate-900 dark:text-white">PDF Report</div>
-                        <div class="text-xs text-slate-500 dark:text-slate-400">Styled tables • header / footer • period &amp; generated-by metadata</div>
-                    </div>
-                </div>
-                <button onclick="doExport('pdf')"
-                    class="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg font-bold text-sm transition-all">
-                    <span class="material-symbols-outlined text-lg">download</span>
-                    Download PDF
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Export All Modal -->
-    <div id="exportAllModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-900/60" onclick="closeExportAllModal()"></div>
-        <div class="relative bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 max-w-[95vw] sm:max-w-sm w-full">
-            <div class="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-800">
-                <h3 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white">Export All Reports</h3>
-                <button onclick="closeExportAllModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
-                    <span class="material-icons">close</span>
-                </button>
-            </div>
-            <div class="p-4 sm:p-6 space-y-4">
-                <p class="text-sm text-slate-500 dark:text-slate-400">Combine every KPI into a single polished PDF document for printing or submission.</p>
-                <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-4 flex items-center gap-3">
-                    <span class="material-symbols-outlined text-3xl text-rose-500">picture_as_pdf</span>
-                    <div class="flex-1">
-                        <div class="text-sm font-bold text-slate-900 dark:text-white">All KPIs — One PDF</div>
-                        <div class="text-xs text-slate-500 dark:text-slate-400">Per-KPI sections • styled tables • cover metadata &amp; pagination</div>
-                    </div>
-                </div>
-                <button onclick="doExportAll('pdf')"
-                    class="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg font-bold text-sm transition-all">
-                    <span class="material-symbols-outlined text-lg">download</span>
-                    Download PDF
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Filter Modal -->
-    <div id="filterModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-900/60" onclick="closeFilterModal()"></div>
-        <div class="relative bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 max-w-[95vw] sm:max-w-md w-full max-h-[90vh] overflow-visible">
-            <div class="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-800">
-                <h3 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white">Filter <span id="filterKpiTitle" class="text-primary"></span></h3>
-                <button onclick="closeFilterModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
-                    <span class="material-icons">close</span>
-                </button>
-            </div>
-            <div class="p-4 sm:p-6 space-y-4 sm:space-y-5">
-                <div>
-                    <label class="text-xs font-bold text-slate-500 uppercase tracking-widest">Time Range</label>
-                    <select id="filterPreset" class="sr-only" tabindex="-1" aria-hidden="true">
-                        <option value="all">All time</option>
-                        <option value="semester">This semester</option>
-                        <option value="year">This year</option>
-                        <option value="custom">Custom dates</option>
-                    </select>
-                    <div class="relative mt-2" id="filterPreset-wrapper">
-                        <button type="button" id="filterPreset-btn" aria-haspopup="listbox" aria-expanded="false"
-                            class="w-full flex items-center justify-between gap-2 bg-gray-100 border border-transparent text-sm font-bold rounded-lg px-3 py-2.5 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
-                            <span id="filterPreset-label">All time</span>
-                            <span class="material-symbols-outlined text-slate-400 text-[20px] shrink-0 transition-transform duration-200" id="filterPreset-arrow">expand_more</span>
-                        </button>
-                        <ul id="filterPreset-dropdown" role="listbox"
-                            class="hidden absolute z-50 top-full left-0 mt-2 w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl overflow-hidden py-1.5 text-sm">
-                            <li role="option" data-value="all" tabindex="0" aria-selected="true" class="filter-preset-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-700/50 bg-primary/10 text-primary font-semibold"><span>All time</span><span class="material-symbols-outlined text-[18px] text-primary">check</span></li>
-                            <li role="option" data-value="semester" tabindex="0" aria-selected="false" class="filter-preset-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-200"><span>This semester</span></li>
-                            <li role="option" data-value="year" tabindex="0" aria-selected="false" class="filter-preset-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-200"><span>This year</span></li>
-                            <li role="option" data-value="custom" tabindex="0" aria-selected="false" class="filter-preset-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-200"><span>Custom dates</span></li>
-                        </ul>
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="filterCustomDates">
-                    <div>
-                        <label class="text-xs font-bold text-slate-500 uppercase tracking-widest">From</label>
-                        <input type="date" id="filterFrom"
-                            class="mt-2 w-full bg-gray-100 border-none text-sm rounded-lg px-3 py-2 outline-none focus:ring-0">
-                    </div>
-                    <div>
-                        <label class="text-xs font-bold text-slate-500 uppercase tracking-widest">To</label>
-                        <input type="date" id="filterTo"
-                            class="mt-2 w-full bg-gray-100 border-none text-sm rounded-lg px-3 py-2 outline-none focus:ring-0">
-                    </div>
-                </div>
-                <div class="flex gap-3">
-                    <button onclick="applyFilter()"
-                        class="flex-1 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 rounded font-bold text-sm transition-all">
-                        Apply Filter
-                    </button>
-                    <button onclick="resetFilter()"
-                        class="px-4 py-2.5 rounded font-bold text-sm border border-gray-200 hover:bg-gray-50 transition-all">
-                        Reset
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Global Filter Modal -->
     <div id="globalFilterModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -824,295 +552,20 @@
         </div>
     </div>
 
-    <!-- Server-side KPI payload -->
-    <script type="application/json" id="kpi-data">{{ kpi_data | tojson }}</script>
-    <script type="application/json" id="kpi-labels">{{ kpi_labels | tojson }}</script>
+    <!-- Server-side dashboard payload -->
     <script type="application/json" id="dashboard-data">{{ dashboard | tojson }}</script>
 
     <script>
-        const KPI_DATA = JSON.parse(document.getElementById('kpi-data').textContent);
-        const KPI_LABELS = JSON.parse(document.getElementById('kpi-labels').textContent);
-        const BOARD_KEY = 'mcst_kpi_board';
-        const KPI_JSON_URL = '{{ url_for("analytics.kpi_json") }}';
         const EXPORT_URL = '{{ url_for("analytics.export_report") }}';
+        const ALL_DASHBOARD_SECTIONS = ['circulation_summary', 'collection_by_category', 'copies_by_status', 'recent_collection', 'trend_borrowings', 'top_categories', 'trend_overdue', 'high_demand', 'recent_circulation', 'books_borrowed_per_program', 'by_user_type', 'top_books'];
         const CHART_URL = '{{ url_for("analytics.chart_json") }}';
         const GLOBAL = { preset: '{{ preset }}', from: '{{ from_date }}', to: '{{ to_date }}' };
-
-        function getBoard() {
-            const raw = localStorage.getItem(BOARD_KEY);
-            if (raw) {
-                try {
-                    const parsed = JSON.parse(raw);
-                    if (parsed && Array.isArray(parsed.kpis)) return parsed;
-                } catch (e) { /* fall through */ }
-            }
-            return { kpis: ['books_borrowed_per_program', 'utilization_rate'], filters: {} };
-        }
-
-        function setBoard(board) {
-            localStorage.setItem(BOARD_KEY, JSON.stringify(board));
-        }
-
-        function renderBoard() {
-            const board = getBoard();
-            const container = document.getElementById('board');
-            container.innerHTML = '';
-
-            board.kpis.forEach(function (type) {
-                if (type in KPI_LABELS) {
-                    container.appendChild(cardEl(type));
-                }
-            });
-
-            container.appendChild(addCardEl());
-
-            board.kpis.forEach(function (type) {
-                const f = cardFilter(type);
-                if (f) loadKpiBody(type);
-            });
-        }
-
-        function cardFilter(type) {
-            const board = getBoard();
-            return (board.filters && board.filters[type]) || null;
-        }
-
-        function cardEl(type) {
-            const card = document.createElement('div');
-            card.className = 'kpi-card';
-            card.dataset.kpi = type;
-            card.draggable = true;
-            card.innerHTML = `
-                <div class="kpi-card-header">
-                    <div class="flex items-center gap-2">
-                        <span class="material-symbols-outlined text-indigo-500 text-lg cursor-grab">drag_indicator</span>
-                        <span class="text-sm font-bold">${KPI_LABELS[type]}</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button class="export-kpi text-gray-400 hover:text-primary transition-colors" title="Export">
-                            <span class="material-symbols-outlined text-lg">download</span>
-                        </button>
-                        <button class="filter-kpi text-gray-400 hover:text-primary transition-colors" title="Filter">
-                            <span class="material-symbols-outlined text-lg">tune</span>
-                        </button>
-                        <button class="remove-kpi text-gray-400 hover:text-red-500 transition-colors" title="Remove KPI">
-                            <span class="material-symbols-outlined text-lg">close</span>
-                        </button>
-                    </div>
-                </div>
-            `;
-            const body = document.createElement('div');
-            body.className = 'kpi-card-body';
-            body.dataset.bodyFor = type;
-            body.appendChild(bodyEl(type, KPI_DATA[type]));
-            card.appendChild(body);
-            attachCardDrag(card);
-            return card;
-        }
-
-        function bodyEl(type, data) {
-            if (type === 'books_borrowed_per_program') return programBars(data || []);
-            if (type === 'utilization_rate') return utilizationRing(data);
-            if (type === 'most_borrowed_titles') return titleList(data || [], true);
-            if (type === 'underutilized_titles') return titleList(data || [], false);
-            const empty = document.createElement('div');
-            empty.className = 'text-center text-gray-400 py-8 text-sm';
-            empty.textContent = 'No data for this KPI.';
-            return empty;
-        }
-
-        function loadKpiBody(type) {
-            const f = cardFilter(type);
-            if (!f) return;
-            const preset = f.preset || 'all';
-            const isCustom = preset === 'custom';
-            const params = new URLSearchParams();
-            params.set('kpi_type', type);
-            params.set('preset', preset);
-            params.set('from', isCustom ? (f.from || '') : '');
-            params.set('to', isCustom ? (f.to || '') : '');
-            fetch(KPI_JSON_URL + '?' + params.toString())
-                .then(function (r) { return r.json(); })
-                .then(function (json) {
-                    const body = document.querySelector('[data-body-for="' + type + '"]');
-                    if (body && body.isConnected) {
-                        body.innerHTML = '';
-                        body.appendChild(bodyEl(type, json.data));
-                    }
-                })
-                .catch(function () { /* keep server-side data on error */ });
-        }
-
-        function programBars(rows) {
-            const wrap = document.createElement('div');
-            wrap.className = 'progress-bar-stack';
-            if (!rows.length) {
-                wrap.innerHTML = '<div class="text-center text-gray-400 py-8 text-sm">No borrow data.</div>';
-                return wrap;
-            }
-            const max = Math.max.apply(null, rows.map(function (r) { return r[1]; }));
-            rows.forEach(function (r) {
-                const pct = max > 0 ? Math.round((r[1] / max) * 100) : 0;
-                const row = document.createElement('div');
-                row.className = 'bar-row';
-                row.innerHTML = `
-                    <div class="bar-label">
-                        <span class="truncate flex-1 min-w-0">${escapeHtml(r[0])}</span>
-                        <span>${r[1]}</span>
-                    </div>
-                    <div class="bar-container">
-                        <div class="bar-fill" style="width: ${pct}%"></div>
-                    </div>
-                `;
-                wrap.appendChild(row);
-            });
-            return wrap;
-        }
-
-        function utilizationRing(value) {
-            const wrap = document.createElement('div');
-            const v = value === null || value === undefined ? 0 : value;
-            const clamped = Math.max(0, Math.min(100, v));
-            wrap.innerHTML = `
-                <div class="utilization-ring" style="background: conic-gradient(var(--primary) ${clamped}%, #f1f5f9 0);">
-                    <div class="utilization-value">${clamped}%</div>
-                </div>
-                <div class="flex justify-center gap-6 mt-4">
-                    <div class="flex justify-between text-[10px] font-bold mb-1">
-                        <span class="text-gray-400 uppercase">Utilization Rate</span>
-                    </div>
-                </div>
-            `;
-            return wrap;
-        }
-
-        function titleList(rows, numbered) {
-            const wrap = document.createElement('div');
-            wrap.className = 'space-y-3';
-            if (!rows.length) {
-                wrap.innerHTML = '<div class="text-center text-gray-400 py-8 text-sm">No titles.</div>';
-                return wrap;
-            }
-            rows.forEach(function (r, i) {
-                const rank = numbered ? i + 1 : null;
-                const colors = ['bg-indigo-50 text-indigo-400', 'bg-emerald-50 text-emerald-400'];
-                const badgeClass = rank !== null ? colors[i % 2] : 'bg-gray-50 text-gray-400';
-                const row = document.createElement('div');
-                row.className = 'flex items-center gap-3';
-                row.innerHTML = `
-                    ${rank !== null ? `<div class="w-8 h-10 ${badgeClass} rounded flex items-center justify-center text-xs font-bold flex-shrink-0">${rank}</div>` : ''}
-                    <div class="flex-1 min-w-0">
-                        <div class="text-xs font-bold truncate">${escapeHtml(r[0])}</div>
-                    </div>
-                    ${rank !== null ? `<div class="text-xs font-black text-gray-600">${r[1]}</div>` : ''}
-                `;
-                wrap.appendChild(row);
-            });
-            if (!numbered) {
-                wrap.classList.add('max-h-56', 'overflow-y-auto', 'pr-1', 'custom-scrollbar');
-            }
-            return wrap;
-        }
-
-        function addCardEl() {
-            const el = document.createElement('div');
-            el.className = 'add-kpi-card';
-            el.innerHTML = `
-                <div class="text-center">
-                    <span class="material-symbols-outlined text-4xl">add_chart</span>
-                    <p class="text-sm font-bold mt-2">Add KPI</p>
-                </div>
-            `;
-            el.addEventListener('click', openAddKpiModal);
-            return el;
-        }
-
-        function openAddKpiModal() {
-            document.getElementById('addKpiModal').classList.remove('hidden');
-        }
-
-        function closeAddKpiModal() {
-            document.getElementById('addKpiModal').classList.add('hidden');
-        }
-
-        function addKpi(type) {
-            const board = getBoard();
-            if (board.kpis.indexOf(type) === -1) {
-                board.kpis.push(type);
-                setBoard(board);
-            }
-            closeAddKpiModal();
-            renderBoard();
-        }
 
         function escapeHtml(str) {
             const div = document.createElement('div');
             div.textContent = str === null || str === undefined ? '' : String(str);
             return div.innerHTML;
         }
-
-        let dragType = null;
-
-        function attachCardDrag(card) {
-            card.addEventListener('dragstart', function (e) {
-                dragType = card.dataset.kpi;
-                card.classList.add('opacity-40');
-                e.dataTransfer.effectAllowed = 'move';
-            });
-            card.addEventListener('dragend', function () {
-                dragType = null;
-                card.classList.remove('opacity-40');
-            });
-            card.addEventListener('dragover', function (e) {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-            });
-            card.addEventListener('drop', function (e) {
-                e.preventDefault();
-                if (!dragType || dragType === card.dataset.kpi) return;
-                const board = getBoard();
-                const from = board.kpis.indexOf(dragType);
-                const to = board.kpis.indexOf(card.dataset.kpi);
-                if (from < 0 || to < 0) return;
-                board.kpis.splice(from, 1);
-                board.kpis.splice(to, 0, dragType);
-                setBoard(board);
-                renderBoard();
-            });
-        }
-
-        document.getElementById('board').addEventListener('click', function (e) {
-            const btn = e.target.closest('.export-kpi, .filter-kpi, .remove-kpi');
-            if (!btn) return;
-            const card = e.target.closest('.kpi-card');
-            if (!card) return;
-            const type = card.dataset.kpi;
-
-            if (btn.classList.contains('remove-kpi')) {
-                const board = getBoard();
-                board.kpis = board.kpis.filter(function (k) { return k !== type; });
-                if (board.filters) delete board.filters[type];
-                setBoard(board);
-                renderBoard();
-            } else if (btn.classList.contains('export-kpi')) {
-                openExportModal(type);
-            } else if (btn.classList.contains('filter-kpi')) {
-                openFilterModal(type);
-            }
-        });
-
-        let exportType = null;
-
-        function openExportModal(type) {
-            exportType = type;
-            document.getElementById('exportKpiTitle').textContent = KPI_LABELS[type];
-            document.getElementById('exportModal').classList.remove('hidden');
-        }
-
-        function closeExportModal() {
-            document.getElementById('exportModal').classList.add('hidden');
-        }
-
         function submitExport(kpi_type, format, preset, from, to, extraFields) {
             const form = document.createElement('form');
             form.method = 'POST';
@@ -1144,87 +597,11 @@
             form.remove();
         }
 
-        function doExport(format) {
-            const f = cardFilter(exportType);
-            const preset = f ? (f.preset || GLOBAL.preset) : GLOBAL.preset;
-            const from = f ? (f.from || '') : GLOBAL.from;
-            const to = f ? (f.to || '') : GLOBAL.to;
-            submitExport(exportType, format, preset, from, to);
-            closeExportModal();
-        }
-
-        function openExportAllModal() {
-            document.getElementById('exportAllModal').classList.remove('hidden');
-        }
-
-        function closeExportAllModal() {
-            document.getElementById('exportAllModal').classList.add('hidden');
-        }
-
-        function doExportAll(format) {
-            const board = getBoard();
-            const added = (board.kpis || []).filter(function (k) { return k in KPI_LABELS; });
-            // GLOBAL dates: only keep them when preset is 'custom'.
-            const preset = GLOBAL.preset || 'all';
-            const from = GLOBAL.from || '';
-            const to = GLOBAL.to || '';
-            const extra = {};
-            // Tell backend which KPIs are actually on the board — 'all' now means "all added".
-            // Always send the key so backend can distinguish "no board param" (legacy) from "empty board".
-            extra['kpi_types'] = added.join(',');
-            submitExport('all', format, preset, from, to, extra);
-            closeExportAllModal();
-        }
-
-        let filterType = null;
-
-        function syncFilterCustomDates() {
-            const preset = document.getElementById('filterPreset').value;
-            document.getElementById('filterCustomDates').classList.toggle('hidden', preset !== 'custom');
-        }
-
-        function openFilterModal(type) {
-            filterType = type;
-            const f = cardFilter(type);
-            document.getElementById('filterKpiTitle').textContent = KPI_LABELS[type];
-            document.getElementById('filterPreset').value = f ? (f.preset || 'all') : 'all';
-            document.getElementById('filterFrom').value = f ? (f.from || '') : '';
-            document.getElementById('filterTo').value = f ? (f.to || '') : '';
-            document.getElementById('filterModal').classList.remove('hidden');
-            syncFilterCustomDates();
-        }
-
-        function closeFilterModal() {
-            document.getElementById('filterModal').classList.add('hidden');
-        }
-
-        function applyFilter() {
-            const preset = document.getElementById('filterPreset').value;
-            let from = document.getElementById('filterFrom').value;
-            let to = document.getElementById('filterTo').value;
-            // Prevent stale custom dates from overriding semester/year presets.
-            if (preset !== 'custom') {
-                from = '';
-                to = '';
-            }
-            const board = getBoard();
-            board.filters = board.filters || {};
-            if (preset === 'all' || (preset === 'custom' && !from && !to)) {
-                delete board.filters[filterType];
-            } else {
-                board.filters[filterType] = { preset: preset, from: from, to: to };
-            }
-            setBoard(board);
-            closeFilterModal();
-            renderBoard();
-        }
-
-        function resetFilter() {
-            const board = getBoard();
-            if (board.filters) delete board.filters[filterType];
-            setBoard(board);
-            closeFilterModal();
-            renderBoard();
+        function exportDashboard(items) {
+            // Dashboard-tab exports: address dashboard sections by name so each
+            // tab Export Report / Quick Reports button downloads matching content.
+            var extra = { kpi_types: (items || []).join(',') };
+            submitExport('all', 'pdf', GLOBAL.preset, GLOBAL.from, GLOBAL.to, extra);
         }
 
 function syncGlobalFilterCustomDates() {
@@ -1271,8 +648,6 @@ function syncGlobalFilterCustomDates() {
         }
 
         document.getElementById('globalFilterPreset').addEventListener('change', syncGlobalFilterCustomDates);
-
-        document.getElementById('filterPreset').addEventListener('change', syncFilterCustomDates);
 
         // Mobile sidebar
         (function() {
@@ -1352,15 +727,8 @@ function syncGlobalFilterCustomDates() {
                 document.addEventListener('click', function(e) { if (isOpen() && wrapper && !wrapper.contains(e.target)) setExpanded(false); });
                 native._updateCustomLabel = updateLabel;
             }
-            setupCustomSelect('filterPreset', 'filterPreset-btn', 'filterPreset-label', 'filterPreset-arrow', 'filterPreset-dropdown');
             setupCustomSelect('globalFilterPreset', 'globalFilterPreset-btn', 'globalFilterPreset-label', 'globalFilterPreset-arrow', 'globalFilterPreset-dropdown');
-            var origOpenFilterModal = window.openFilterModal;
             var origOpenGlobalFilterModal = window.openGlobalFilterModal;
-            window.openFilterModal = function(type) {
-                origOpenFilterModal(type);
-                var n = document.getElementById('filterPreset');
-                if (n && n._updateCustomLabel) n._updateCustomLabel(n.value);
-            };
             window.openGlobalFilterModal = function() {
                 origOpenGlobalFilterModal();
                 var n = document.getElementById('globalFilterPreset');
@@ -1752,7 +1120,6 @@ function syncGlobalFilterCustomDates() {
 
         renderRiverside();
         initChartFilters();
-        renderBoard();
     </script>
 </body>
 
