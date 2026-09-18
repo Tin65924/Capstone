@@ -231,7 +231,7 @@
                     <button data-rtab="collection" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-primary text-white">Collection Tracking</button>
                     <button data-rtab="library" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Library Analytics</button>
                     <button data-rtab="usage" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Usage Analytics</button>
-                    <button data-rtab="forecast" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Forecasting</button>
+                    <button data-rtab="forecast" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Insights</button>
                 </div>
 
                 <!-- ============ TAB: Collection Tracking ============ -->
@@ -383,12 +383,12 @@
                     </div>
                 </section>
 
-                <!-- ============ TAB: Forecasting ============ -->
+                <!-- ============ TAB: Insights ============ -->
                 <section data-rtab-panel="forecast" class="space-y-4 hidden">
                     <div class="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 flex flex-wrap items-center gap-3">
                         <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-white">trending_up</span></div>
                         <div class="min-w-0 flex-1">
-                            <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Forecasting Dashboard</h2>
+                            <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Insights Dashboard</h2>
                             <p class="text-xs text-slate-500">What is likely next, and what should we do about it?</p>
                         </div>
                         <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">{{ period_label }} · next 30 days</span>
@@ -1249,7 +1249,7 @@ function syncGlobalFilterCustomDates() {
             });
         }
 
-        /* ============ Forecasting tab (lazy-loaded) ============ */
+        /* ============ Insights tab (lazy-loaded) ============ */
         var forecastLoaded = false;
         var forecastLoading = false;
 

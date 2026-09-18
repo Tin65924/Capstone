@@ -672,6 +672,9 @@ class TestForecastTab:
         assert b'forecast-insights' in resp.data
         assert b'Projected Borrowing Demand' in resp.data
         assert b'Expected Borrowing Activity by Weekday' in resp.data
+        assert b'>Insights</button>' in resp.data
+        assert b'Insights Dashboard' in resp.data
+        assert b'Forecasting Dashboard' not in resp.data
         assert b'forecast-demand-line' in resp.data
         assert b'id="forecast-basis"' in resp.data
 
