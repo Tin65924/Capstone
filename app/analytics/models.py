@@ -14,8 +14,12 @@ def _date_filter(clause_prefix, column):
     return parts, params
 
 
-def books_borrowed_per_program(start_date=None, end_date=None):
+def books_borrowed_per_program(start_date=None, end_date=None, departments=None):
     parts, params = _date_filter({'start': start_date, 'end': end_date}, 'c.borrow_date')
+    departments = [d.strip() for d in (departments or []) if d and d.strip()]
+    if departments:
+        parts.append('b.department IN ({})'.format(', '.join(['%s'] * len(departments))))
+        params.extend(departments)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
         '''SELECT COALESCE(NULLIF(b.department, ''),
@@ -165,9 +169,47 @@ def inventory_state_counts():
     )
 
 
-def collection_by_category(start_date=None, end_date=None):
-    """Return [(category, titles)] grouped by subject_classification."""
+def copies_by_status_summary(start_date=None, end_date=None):
+    """Return [(status, copies)] for the Copies-by-Status chart/export.
+
+    Available = active-catalog copies minus borrowed, overdue, reserved,
+    lost/damaged and missing (maintenance) copies, floored at zero.
+    """
+    total = count_total_copies()
+    status_rows = count_circulation_status(start_date, end_date) or []
+    status = {}
+    for r in status_rows:
+        try:
+            status[str(r[0])] = int(r[1] or 0)
+        except (IndexError, TypeError, ValueError):
+            continue
+    borrowed = status.get('active', 0)
+    overdue = status.get('overdue', 0)
+    reserved = count_reservations()
+    inv_rows = inventory_state_counts() or []
+    inv = {}
+    for r in inv_rows:
+        try:
+            inv[str(r[0])] = int(r[1] or 0)
+        except (IndexError, TypeError, ValueError):
+            continue
+    lost_damaged = inv.get('lost', 0) + inv.get('damaged', 0)
+    maintenance = inv.get('missing', 0)
+    available = max(total - borrowed - overdue - reserved - lost_damaged - maintenance, 0)
+    return [('Available', available), ('Borrowed', borrowed), ('Reserved', reserved),
+            ('Overdue', overdue), ('Lost / Damaged', lost_damaged),
+            ('Under Maintenance', maintenance)]
+
+
+def collection_by_category(start_date=None, end_date=None, q=None):
+    """Return [(category, titles)] grouped by subject_classification.
+
+    q optionally restricts the counted titles (case-insensitive match).
+    """
     parts, params = _range_clause('b.date_added', start_date, end_date)
+    if q:
+        parts.append('b.title ILIKE %s')
+        params.append('%{}%'.format(q))
     where = 'WHERE b.catalog_status = \'active\'' + (
         ' AND ' + ' AND '.join(parts) if parts else '')
     return db.fetch_all(
@@ -212,8 +254,12 @@ def top_borrowed_categories(start_date=None, end_date=None, limit=6):
     )
 
 
-def borrowings_by_user_type(start_date=None, end_date=None):
+def borrowings_by_user_type(start_date=None, end_date=None, roles=None):
     parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    roles = [r.strip() for r in (roles or []) if r and r.strip()]
+    if roles:
+        parts.append('r.role_name IN ({})'.format(', '.join(['%s'] * len(roles))))
+        params.extend(roles)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
         '''SELECT r.role_name, COUNT(c.circulation_id)
@@ -238,19 +284,21 @@ def circulation_overview(start_date=None, end_date=None):
         'SELECT COUNT(*) FROM circulation_records {}'.format(where), p)
     borrowers = db.fetch_one(
         'SELECT COUNT(DISTINCT borrower_id) FROM circulation_records {}'.format(where), p)
+
+    def _and(cond):
+        return (where + ' AND ' + cond) if where else ('WHERE ' + cond)
+
     overdue = db.fetch_one(
         'SELECT COUNT(*) FROM circulation_records {}'.format(
-            where + (' AND ' if where else 'WHERE ') + "transaction_status = 'overdue'"),
+            _and("transaction_status = 'overdue'")),
         p)
     avg_loan = db.fetch_one(
         '''SELECT AVG(return_date - borrow_date) FROM circulation_records
-           {} return_date IS NOT NULL'''.format(
-            (where + ' AND ' if where else 'WHERE ') if parts else 'WHERE ',
-        ),
+           {}'''.format(_and('return_date IS NOT NULL')),
         p)
     returned = db.fetch_one(
         'SELECT COUNT(*) FROM circulation_records {}'.format(
-            where + (' AND ' if where else 'WHERE ') + "transaction_status = 'returned'"),
+            _and("transaction_status = 'returned'")),
         p)
     # New additions filter on book_catalog.date_added with the same range.
     bparts, bparams = _range_clause('date_added', start_date, end_date)

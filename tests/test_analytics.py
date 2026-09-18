@@ -293,3 +293,150 @@ class TestDashboardNormalization:
         mock_db['fetch_one'].side_effect = [
             (10,), (4,), (2,), (timedelta(days=3, hours=12),), (6,), (7,)]
         assert circulation_overview() == (10, 4, 2, 3.5, 60.0, 7)
+
+class TestChartFilterModels:
+    def test_borrowed_per_program_department_filter(self, mock_db):
+        from app.analytics.models import books_borrowed_per_program
+        mock_db['fetch_all'].return_value = [('BSIT', 12)]
+        assert books_borrowed_per_program('2026-01-01', '2026-12-31', ['BSIT', 'BSBA']) == [('BSIT', 12)]
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'b.department IN (%s, %s)' in query
+        assert params == ('2026-01-01', '2026-12-31', 'BSIT', 'BSBA')
+
+    def test_borrowed_per_program_blank_departments_ignored(self, mock_db):
+        from app.analytics.models import books_borrowed_per_program
+        mock_db['fetch_all'].return_value = []
+        books_borrowed_per_program(None, None, ['', '  '])
+        assert 'b.department IN' not in mock_db['fetch_all'].call_args[0][0]
+
+    def test_user_type_role_filter(self, mock_db):
+        from app.analytics.models import borrowings_by_user_type
+        mock_db['fetch_all'].return_value = [('Student', 40)]
+        assert borrowings_by_user_type(None, None, ['Student']) == [('Student', 40)]
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'r.role_name IN (%s)' in query
+        assert params == ('Student',)
+
+    def test_collection_category_title_search(self, mock_db):
+        from app.analytics.models import collection_by_category
+        mock_db['fetch_all'].return_value = [('Science', 3)]
+        assert collection_by_category(None, None, 'chem') == [('Science', 3)]
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'b.title ILIKE %s' in query
+        assert params == ('%chem%',)
+
+    def test_collection_category_no_search_unchanged(self, mock_db):
+        from app.analytics.models import collection_by_category
+        mock_db['fetch_all'].return_value = []
+        collection_by_category()
+        assert mock_db['fetch_all'].call_args[0][1] is None
+
+    def test_copies_by_status_summary(self, mock_db):
+        from app.analytics.models import copies_by_status_summary
+        mock_db['fetch_one'].side_effect = [(100,), (5,)]
+        mock_db['fetch_all'].side_effect = [
+            [('active', 20), ('overdue', 3)],
+            [('available', 60), ('borrowed', 20), ('lost', 1)],
+        ]
+        rows = dict(copies_by_status_summary())
+        assert rows['Available'] == 100 - 20 - 3 - 5 - 1
+        assert rows['Borrowed'] == 20
+        assert rows['Reserved'] == 5
+
+    def test_circulation_overview_no_crash(self, mock_db):
+        """Regression: the overview query builder must not raise IndexError."""
+        from app.analytics.models import circulation_overview
+        mock_db['fetch_one'].side_effect = [
+            (100,), (40,), (5,), (4.5,), (90,), (12,),
+        ]
+        assert circulation_overview('2026-05-01', '2026-05-31') == (100, 40, 5, 4.5, 90.0, 12)
+
+
+class TestChartJson:
+    def test_chart_requires_login(self, client, mock_db):
+        assert client.get('/librarian/analytics/chart?name=top_books').status_code == 302
+
+    def test_chart_student_forbidden(self, student_client, mock_db):
+        assert student_client.get('/librarian/analytics/chart?name=top_books').status_code == 302
+
+    def test_chart_rejects_unknown_name(self, librarian_client, mock_db):
+        assert librarian_client.get('/librarian/analytics/chart?name=bogus').status_code == 400
+        assert librarian_client.get('/librarian/analytics/chart').status_code == 400
+
+    def test_chart_top_books(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [('Clean Code', 'Robert Martin', 9)]
+        resp = librarian_client.get('/librarian/analytics/chart?name=top_books')
+        assert resp.status_code == 200
+        assert resp.get_json() == {'chart': 'top_books',
+                                   'data': [['Clean Code', 'Robert Martin', 9]],
+                                   'filters': {}}
+
+    def test_chart_trend_dates_serialize_iso(self, librarian_client, mock_db):
+        from datetime import date
+        mock_db['fetch_all'].return_value = [(date(2026, 5, 1), 3)]
+        resp = librarian_client.get('/librarian/analytics/chart?name=borrowings_trend')
+        assert resp.get_json()['data'] == [['2026-05-01', 3]]
+
+    def test_chart_department_filter(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [('BSIT', 12)]
+        resp = librarian_client.get(
+            '/librarian/analytics/chart?name=borrowings_by_department&department=BSIT&department=BSBA')
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body['filters'] == {'departments': ['BSIT', 'BSBA']}
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'b.department IN (%s, %s)' in query
+        assert params[-2:] == ('BSIT', 'BSBA')
+
+    def test_chart_role_and_search_filters(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [('Student', 40)]
+        resp = librarian_client.get(
+            '/librarian/analytics/chart?name=borrowings_by_user_type&role=Student&role=')
+        assert resp.get_json()['filters'] == {'roles': ['Student']}
+        mock_db['fetch_all'].return_value = [('Science', 2)]
+        resp = librarian_client.get(
+            '/librarian/analytics/chart?name=collection_by_category&q=chem')
+        assert resp.get_json()['filters'] == {'q': 'chem'}
+
+    def test_chart_custom_dates(self, librarian_client, mock_db):
+        from datetime import date
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get(
+            '/librarian/analytics/chart?name=overdue_trend&preset=custom&from=2026-05-01&to=2026-05-31')
+        assert resp.status_code == 200
+        assert mock_db['fetch_all'].call_args[0][1] == (date(2026, 5, 1), date(2026, 5, 31))
+
+    def test_chart_invalid_dates_fall_back(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics/chart?name=top_categories&from=nope')
+        assert resp.status_code == 200
+
+    def test_chart_copies_by_status(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [(50,), (2,)]
+        mock_db['fetch_all'].side_effect = [[('active', 10)], [('available', 30)]]
+        resp = librarian_client.get('/librarian/analytics/chart?name=copies_by_status')
+        assert resp.status_code == 200
+        data = dict(resp.get_json()['data'])
+        assert data['Borrowed'] == 10
+        assert data['Available'] == 50 - 10 - 0 - 2 - 0 - 0
+
+
+class TestChartFilterControls:
+    def test_page_embeds_chart_filters(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (5,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics')
+        assert resp.status_code == 200
+        for name in (b'data-chart="collection_by_category"',
+                     b'data-chart="copies_by_status"',
+                     b'data-chart="borrowings_trend"',
+                     b'data-chart="overdue_trend"',
+                     b'data-chart="top_categories"',
+                     b'data-chart="top_books"',
+                     b'data-chart="high_demand"',
+                     b'data-chart="borrowings_by_department"',
+                     b'data-chart="borrowings_by_user_type"'):
+            assert name in resp.data
+        assert b'id="dept-checks"' in resp.data
+        assert b'id="role-checks"' in resp.data
+        assert b'/librarian/analytics/chart' in resp.data

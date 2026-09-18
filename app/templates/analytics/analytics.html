@@ -376,10 +376,26 @@
                     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
                         <div class="bg-white rounded-xl border border-slate-200 p-4">
                             <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-extrabold">Collection by Category</h3><span class="text-[11px] text-slate-400 border rounded px-2 py-0.5">By Titles</span></div>
+                            <div class="chart-filter flex flex-wrap items-center gap-2 mb-2" data-chart="collection_by_category">
+                                <input type="text" data-f="q" placeholder="Only titles matching…" class="text-[11px] border rounded-lg px-2.5 py-1.5 outline-none focus:border-primary flex-1 min-w-[130px]">
+                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
+                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
+                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
+                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
+                            </div>
                             <div class="flex items-center gap-4"><div id="donut-category" class="shrink-0"></div><div id="legend-category" class="flex-1 space-y-1 text-xs min-w-0"></div></div>
                         </div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4">
                             <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-extrabold">Copies by Status</h3><span class="text-[11px] text-slate-400 border rounded px-2 py-0.5">By Copies</span></div>
+                            <div class="chart-filter flex flex-wrap items-center gap-2 mb-2" data-chart="copies_by_status">
+                                <input type="date" data-f="from" value="{{ from_date }}" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
+                                <span class="text-[11px] text-slate-400">–</span>
+                                <input type="date" data-f="to" value="{{ to_date }}" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
+                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
+                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
+                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
+                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
+                            </div>
                             <div class="flex items-center gap-4"><div id="donut-status" class="shrink-0"></div><div id="legend-status" class="flex-1 space-y-1 text-xs min-w-0"></div></div>
                         </div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4">
@@ -436,13 +452,63 @@
                     </div>
                     <div id="library-kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3"></div>
                     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-1">1. Borrowings Trend</h3><div id="trend-line" class="w-full overflow-hidden"></div><p class="text-[10px] text-slate-400 mt-1">Solid = actual borrowings • dashed = 30-day moving-average forecast.</p></div>
-                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">2. Top Borrowed Categories</h3><div class="flex items-center gap-4"><div id="donut-topcats" class="shrink-0"></div><div id="legend-topcats" class="flex-1 space-y-1 text-xs min-w-0"></div></div></div>
-                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">3. Peak Borrowing Periods</h3><div id="peak-bars" class="space-y-1.5"></div><p class="text-[10px] text-slate-400 mt-1">Grouped by day (borrow_date has no time-of-day).</p></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-1">1. Borrowings Trend</h3>
+                            <div class="chart-filter flex flex-wrap items-center gap-2 my-2" data-chart="borrowings_trend">
+                                <input type="date" data-f="from" value="{{ from_date }}" aria-label="Trend start date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
+                                <span class="text-[11px] text-slate-400">–</span>
+                                <input type="date" data-f="to" value="{{ to_date }}" aria-label="Trend end date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
+                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
+                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
+                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
+                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
+                            </div>
+                        <div id="trend-line" class="w-full overflow-hidden"></div><p class="text-[10px] text-slate-400 mt-1">Solid = actual borrowings • dashed = 30-day moving-average forecast.</p></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">2. Top Borrowed Categories</h3>
+                            <div class="chart-filter flex flex-wrap items-center gap-2 mb-2" data-chart="top_categories">
+                                <input type="date" data-f="from" value="{{ from_date }}" aria-label="Categories start date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
+                                <span class="text-[11px] text-slate-400">–</span>
+                                <input type="date" data-f="to" value="{{ to_date }}" aria-label="Categories end date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
+                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
+                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
+                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
+                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
+                            </div>
+                        <div class="flex items-center gap-4"><div id="donut-topcats" class="shrink-0"></div><div id="legend-topcats" class="flex-1 space-y-1 text-xs min-w-0"></div></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">3. Peak Borrowing Periods</h3>
+                            <div class="chart-filter flex flex-wrap items-center gap-2 mb-2" data-chart="borrowings_trend">
+                                <input type="date" data-f="from" value="{{ from_date }}" aria-label="Peak periods start date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
+                                <span class="text-[11px] text-slate-400">–</span>
+                                <input type="date" data-f="to" value="{{ to_date }}" aria-label="Peak periods end date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
+                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
+                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
+                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
+                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
+                            </div>
+                        <div id="peak-bars" class="space-y-1.5"></div><p class="text-[10px] text-slate-400 mt-1">Grouped by day (borrow_date has no time-of-day).</p></div>
                     </div>
                     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">4. Likely High-Demand Titles (Next 30 Days)</h3><div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[480px]"><thead><tr class="text-left text-slate-500 border-b"><th class="py-2">#</th><th class="py-2">Title</th><th class="py-2">Author</th><th class="py-2 text-right">Active</th></tr></thead><tbody id="high-demand-body"></tbody></table></div></div>
-                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-1">5. Overdue Trend</h3><div id="overdue-line" class="w-full overflow-hidden"></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">4. Likely High-Demand Titles (Next 30 Days)</h3>
+                            <div class="chart-filter flex flex-wrap items-center gap-2 mb-2" data-chart="high_demand">
+                                <input type="date" data-f="from" value="{{ from_date }}" aria-label="High-demand start date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
+                                <span class="text-[11px] text-slate-400">–</span>
+                                <input type="date" data-f="to" value="{{ to_date }}" aria-label="High-demand end date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
+                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
+                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
+                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
+                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
+                            </div>
+                        <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[480px]"><thead><tr class="text-left text-slate-500 border-b"><th class="py-2">#</th><th class="py-2">Title</th><th class="py-2">Author</th><th class="py-2 text-right">Active</th></tr></thead><tbody id="high-demand-body"></tbody></table></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-1">5. Overdue Trend</h3>
+                            <div class="chart-filter flex flex-wrap items-center gap-2 my-2" data-chart="overdue_trend">
+                                <input type="date" data-f="from" value="{{ from_date }}" aria-label="Overdue trend start date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
+                                <span class="text-[11px] text-slate-400">–</span>
+                                <input type="date" data-f="to" value="{{ to_date }}" aria-label="Overdue trend end date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
+                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
+                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
+                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
+                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
+                            </div>
+                        <div id="overdue-line" class="w-full overflow-hidden"></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">6. Forecast Summary / Insights</h3><div id="insights-list" class="space-y-2.5 text-[11px] text-slate-600"></div></div>
                     </div>
                     <div class="bg-white rounded-xl border border-slate-200 p-4 overflow-hidden">
@@ -467,9 +533,40 @@
                     </div>
                     <div id="usage-kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3"></div>
                     <div class="grid grid-cols-1 xl:grid-cols-4 gap-4">
-                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">1. Borrowings by Department / Program</h3><div id="dept-bars" class="space-y-1.5"></div></div>
-                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-1">2. Borrowings Trend</h3><div id="usage-trend-line" class="w-full overflow-hidden"></div></div>
-                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">3. Top Borrowed Books</h3><div id="top-books-list" class="space-y-2"></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">1. Borrowings by Department / Program</h3>
+                            <div class="chart-filter flex flex-wrap items-center gap-2 mb-2" data-chart="borrowings_by_department" data-param="department">
+                                <div class="relative">
+                                    <button type="button" data-dropbtn class="text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Departments ▾</button>
+                                    <div data-drop class="hidden absolute z-20 mt-1 w-52 max-h-48 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-xl py-1" id="dept-checks"></div>
+                                </div>
+                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
+                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
+                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
+                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
+                            </div>
+                        <div id="dept-bars" class="space-y-1.5"></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-1">2. Borrowings Trend</h3>
+                            <div class="chart-filter flex flex-wrap items-center gap-2 my-2" data-chart="borrowings_trend">
+                                <input type="date" data-f="from" value="{{ from_date }}" aria-label="Usage trend start date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
+                                <span class="text-[11px] text-slate-400">–</span>
+                                <input type="date" data-f="to" value="{{ to_date }}" aria-label="Usage trend end date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
+                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
+                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
+                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
+                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
+                            </div>
+                        <div id="usage-trend-line" class="w-full overflow-hidden"></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">3. Top Borrowed Books</h3>
+                            <div class="chart-filter flex flex-wrap items-center gap-2 mb-2" data-chart="top_books">
+                                <input type="date" data-f="from" value="{{ from_date }}" aria-label="Top books start date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
+                                <span class="text-[11px] text-slate-400">–</span>
+                                <input type="date" data-f="to" value="{{ to_date }}" aria-label="Top books end date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
+                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
+                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
+                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
+                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
+                            </div>
+                        <div id="top-books-list" class="space-y-2"></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">Quick Reports</h3>
                             <div class="space-y-2 text-[11px]">
                                 <button onclick="doExportAll('pdf')" class="w-full text-left border rounded-lg px-3 py-2.5 hover:bg-gray-50"><b>Department Usage Report</b><br><span class="text-slate-500">Detailed borrowing activity by program.</span></button>
@@ -480,9 +577,30 @@
                         </div>
                     </div>
                     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">4. Borrowings by User Type</h3><div class="flex items-center gap-4"><div id="donut-usertype" class="shrink-0"></div><div id="legend-usertype" class="flex-1 space-y-1 text-xs min-w-0"></div></div></div>
-                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">5. Overdue Items by Department</h3><div id="overdue-dept-note" class="text-[11px] text-slate-500">Overdue counts are tracked per loan; department split reuses the borrowings mix.</div><div id="overdue-dept-bars" class="space-y-1.5 mt-2"></div></div>
-                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">6. Borrowings by Time of Day</h3><div id="tod-bars" class="space-y-1.5"></div><p class="text-[10px] text-slate-400 mt-1">Bucketed by borrow day (no time-of-day column).</p></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">4. Borrowings by User Type</h3>
+                            <div class="chart-filter flex flex-wrap items-center gap-2 mb-2" data-chart="borrowings_by_user_type" data-param="role">
+                                <div class="relative">
+                                    <button type="button" data-dropbtn class="text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">User types ▾</button>
+                                    <div data-drop class="hidden absolute z-20 mt-1 w-52 max-h-48 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-xl py-1" id="role-checks"></div>
+                                </div>
+                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
+                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
+                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
+                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
+                            </div>
+                        <div class="flex items-center gap-4"><div id="donut-usertype" class="shrink-0"></div><div id="legend-usertype" class="flex-1 space-y-1 text-xs min-w-0"></div></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">5. Overdue Items by Department</h3><div id="overdue-dept-note" class="text-[11px] text-slate-500">Overdue counts are tracked per loan; department split reuses the borrowings mix and follows the department filter in card 1.</div><div id="overdue-dept-bars" class="space-y-1.5 mt-2"></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">6. Borrowings by Time of Day</h3>
+                            <div class="chart-filter flex flex-wrap items-center gap-2 mb-2" data-chart="borrowings_trend">
+                                <input type="date" data-f="from" value="{{ from_date }}" aria-label="Time-of-day start date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
+                                <span class="text-[11px] text-slate-400">–</span>
+                                <input type="date" data-f="to" value="{{ to_date }}" aria-label="Time-of-day end date" class="text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary">
+                                <button type="button" data-apply class="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white">Apply</button>
+                                <button type="button" data-reset class="hidden text-[11px] font-bold px-3 py-1.5 rounded-lg border hover:bg-gray-50">Reset</button>
+                                <span data-badge class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Filtered</span>
+                                <span data-error class="hidden text-[11px] text-red-600">Couldn't load data. Try again.</span>
+                            </div>
+                        <div id="tod-bars" class="space-y-1.5"></div><p class="text-[10px] text-slate-400 mt-1">Bucketed by borrow day (no time-of-day column).</p></div>
                     </div>
                     <div class="bg-white rounded-xl border border-slate-200 p-4 overflow-hidden">
                         <div class="flex items-center mb-2"><h3 class="text-sm font-extrabold mr-auto">7. Recent Borrowing Activity</h3><span class="text-[11px] font-bold border rounded-lg px-3 py-1.5">View All Activity</span></div>
@@ -711,6 +829,7 @@
         const BOARD_KEY = 'mcst_kpi_board';
         const KPI_JSON_URL = '{{ url_for("analytics.kpi_json") }}';
         const EXPORT_URL = '{{ url_for("analytics.export_report") }}';
+        const CHART_URL = '{{ url_for("analytics.chart_json") }}';
         const GLOBAL = { preset: '{{ preset }}', from: '{{ from_date }}', to: '{{ to_date }}' };
 
         function getBoard() {
@@ -1320,6 +1439,76 @@ function syncGlobalFilterCustomDates() {
             return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + (map[kind] || map.gray) + '">' + text + '</span>';
         }
 
+        function chartRowSum(rows) {
+            return (rows || []).reduce(function (a, r) { return a + (r[1] || 0); }, 0);
+        }
+
+        function paintCategoryChart(rows, centerTotal) {
+            var total = chartRowSum(rows);
+            donutSVG(document.getElementById('donut-category'), rows, total || 1, rNum(centerTotal), 'Total Titles');
+            legendList(document.getElementById('legend-category'), rows, total);
+        }
+
+        function paintStatusChart(rows, donutTotal, legendTotal) {
+            donutSVG(document.getElementById('donut-status'), rows, donutTotal, rNum(donutTotal), 'Total Copies');
+            legendList(document.getElementById('legend-status'), rows, legendTotal);
+        }
+
+        function paintTrendCharts(rows) {
+            lineChart(document.getElementById('trend-line'), rows, '#2563eb');
+            lineChart(document.getElementById('usage-trend-line'), rows, '#2563eb');
+            hbars(document.getElementById('peak-bars'), rows.slice(-7).map(function (r) { return [String(r[0]).slice(5), r[1]]; }), 'bg-blue-600');
+            hbars(document.getElementById('tod-bars'), rows.slice(-6).map(function (r) { return [String(r[0]).slice(5), r[1]]; }), 'bg-blue-600');
+        }
+
+        function paintOverdueTrend(rows) {
+            lineChart(document.getElementById('overdue-line'), rows, '#dc2626');
+        }
+
+        function paintTopCats(rows, centerTotal) {
+            var total = chartRowSum(rows);
+            donutSVG(document.getElementById('donut-topcats'), rows, total, rNum(centerTotal), 'Total');
+            legendList(document.getElementById('legend-topcats'), rows, total);
+        }
+
+        function paintHighDemand(rows) {
+            var hd = document.getElementById('high-demand-body');
+            if (hd) hd.innerHTML = (rows || []).map(function (r, i) {
+                return '<tr class="border-b last:border-0"><td class="py-2">' + (i + 1) + '</td><td class="py-2 font-semibold">' + escapeHtml(r[0]) + '</td><td class="py-2 text-slate-500">' + escapeHtml(r[1]) + '</td><td class="py-2 text-right font-bold">' + rNum(r[2]) + '</td></tr>';
+            }).join('') || '<tr><td colspan="4" class="py-6 text-center text-slate-400">No active demand.</td></tr>';
+        }
+
+        function paintDeptCharts(rows) {
+            hbars(document.getElementById('dept-bars'), rows || [], 'bg-blue-600');
+            hbars(document.getElementById('overdue-dept-bars'), (rows || []).slice(0, 6), 'bg-red-500');
+        }
+
+        function paintTopBooks(rows) {
+            var tb = document.getElementById('top-books-list');
+            if (tb) tb.innerHTML = (rows || []).map(function (r, i) {
+                return '<div class="flex items-center gap-2 border rounded-lg px-2.5 py-2"><span class="w-6 h-6 rounded-full bg-blue-50 text-blue-700 text-[11px] font-extrabold flex items-center justify-center shrink-0">' + (i + 1) + '</span><span class="flex-1 min-w-0"><b class="block truncate text-[11px]">' + escapeHtml(r[0]) + '</b><span class="text-[10px] text-slate-500">' + escapeHtml(r[1] || '') + '</span></span><b class="text-[11px]">' + rNum(r[2]) + '</b></div>';
+            }).join('') || '<div class="text-xs text-slate-400">No borrows yet.</div>';
+        }
+
+        function paintUserType(rows, centerTotal) {
+            var total = chartRowSum(rows);
+            donutSVG(document.getElementById('donut-usertype'), rows, total, rNum(centerTotal), 'Total');
+            legendList(document.getElementById('legend-usertype'), rows, total);
+        }
+
+        function paintChart(name, rows, centerTotal) {
+            if (centerTotal === undefined) centerTotal = chartRowSum(rows);
+            if (name === 'collection_by_category') paintCategoryChart(rows, centerTotal);
+            else if (name === 'copies_by_status') paintStatusChart(rows, centerTotal || 1, centerTotal);
+            else if (name === 'borrowings_by_department') paintDeptCharts(rows);
+            else if (name === 'borrowings_by_user_type') paintUserType(rows, centerTotal);
+            else if (name === 'borrowings_trend') paintTrendCharts(rows);
+            else if (name === 'overdue_trend') paintOverdueTrend(rows);
+            else if (name === 'top_categories') paintTopCats(rows, centerTotal);
+            else if (name === 'top_books') paintTopBooks(rows);
+            else if (name === 'high_demand') paintHighDemand(rows);
+        }
+
         function renderRiverside() {
             var C = (DASHBOARD && DASHBOARD.collection) || {};
             var L = (DASHBOARD && DASHBOARD.circulation) || {};
@@ -1336,12 +1525,9 @@ function syncGlobalFilterCustomDates() {
                 + kpiCard('warning', 'Lost / Damaged', rNum(C.lost_damaged), 'inventory + flags', 'bg-red-50')
                 + kpiCard('build', 'Under Maintenance', rNum(C.maintenance), 'inventory missing', 'bg-blue-50');
 
-            var catTotal = (C.by_category || []).reduce(function (a, r) { return a + r[1]; }, 0);
-            donutSVG(document.getElementById('donut-category'), C.by_category || [], catTotal, rNum(C.total_titles), 'Total Titles');
-            legendList(document.getElementById('legend-category'), C.by_category || [], catTotal);
+            paintCategoryChart(C.by_category || [], C.total_titles);
             var statusRows = [['Available', C.available || 0], ['Borrowed', C.borrowed || 0], ['Reserved', C.reserved || 0], ['Overdue', C.overdue || 0], ['Lost / Damaged', C.lost_damaged || 0], ['Under Maintenance', C.maintenance || 0]];
-            donutSVG(document.getElementById('donut-status'), statusRows, C.total_copies || 1, rNum(C.total_copies), 'Total Copies');
-            legendList(document.getElementById('legend-status'), statusRows, C.total_copies || 0);
+            paintStatusChart(statusRows, C.total_copies || 1, C.total_copies || 0);
             var cb = document.getElementById('condition-bars');
             if (cb) {
                 var greens = ['bg-green-500', 'bg-green-300', 'bg-amber-400', 'bg-orange-500', 'bg-red-500'];
@@ -1370,16 +1556,10 @@ function syncGlobalFilterCustomDates() {
                 + kpiCard('schedule', 'Avg. Loan Duration', (L.avg_loan_days || 0) + ' days', '', 'bg-violet-50')
                 + kpiCard('check_circle', 'Return Rate (On-time)', (L.return_rate || 0) + '%', '', 'bg-blue-50')
                 + kpiCard('auto_stories', 'New Additions', rNum(L.new_additions), 'titles added', 'bg-amber-50');
-            lineChart(document.getElementById('trend-line'), L.trend || [], '#2563eb');
-            var tcTotal = (L.top_categories || []).reduce(function (a, r) { return a + r[1]; }, 0);
-            donutSVG(document.getElementById('donut-topcats'), L.top_categories || [], tcTotal, rNum(L.total), 'Total');
-            legendList(document.getElementById('legend-topcats'), L.top_categories || [], tcTotal);
-            hbars(document.getElementById('peak-bars'), (L.trend || []).slice(-7).map(function (r) { return [String(r[0]).slice(5), r[1]]; }), 'bg-blue-600');
-            var hd = document.getElementById('high-demand-body');
-            if (hd) hd.innerHTML = (L.high_demand || []).map(function (r, i) {
-                return '<tr class="border-b last:border-0"><td class="py-2">' + (i + 1) + '</td><td class="py-2 font-semibold">' + escapeHtml(r[0]) + '</td><td class="py-2 text-slate-500">' + escapeHtml(r[1]) + '</td><td class="py-2 text-right font-bold">' + rNum(r[2]) + '</td></tr>';
-            }).join('') || '<tr><td colspan="4" class="py-6 text-center text-slate-400">No active demand.</td></tr>';
-            lineChart(document.getElementById('overdue-line'), L.overdue_trend || [], '#dc2626');
+            paintTrendCharts(L.trend || []);
+            paintTopCats(L.top_categories || [], L.total);
+            paintHighDemand(L.high_demand || []);
+            paintOverdueTrend(L.overdue_trend || []);
             var ins = document.getElementById('insights-list');
             if (ins) ins.innerHTML =
                 '<div class="flex gap-2"><span class="material-symbols-outlined text-blue-600">trending_up</span><span><b>' + rNum(L.total) + ' borrowings</b> in the selected period with a <b>' + (L.return_rate || 0) + '% return rate</b>.</span></div>'
@@ -1400,21 +1580,123 @@ function syncGlobalFilterCustomDates() {
                 + kpiCard('schedule', 'Overdue Rate', rNum(U.overdue), 'items', 'bg-red-50')
                 + kpiCard('check_circle', 'Return Rate (On-time)', (U.return_rate || 0) + '%', '', 'bg-blue-50')
                 + kpiCard('account_balance', 'Active Departments', rNum(U.active_departments), '', 'bg-amber-50');
-            hbars(document.getElementById('dept-bars'), U.by_department || [], 'bg-blue-600');
-            lineChart(document.getElementById('usage-trend-line'), U.trend || [], '#2563eb');
-            var tb = document.getElementById('top-books-list');
-            if (tb) tb.innerHTML = (U.top_books || []).map(function (r, i) {
-                return '<div class="flex items-center gap-2 border rounded-lg px-2.5 py-2"><span class="w-6 h-6 rounded-full bg-blue-50 text-blue-700 text-[11px] font-extrabold flex items-center justify-center shrink-0">' + (i + 1) + '</span><span class="flex-1 min-w-0"><b class="block truncate text-[11px]">' + escapeHtml(r[0]) + '</b><span class="text-[10px] text-slate-500">' + escapeHtml(r[1] || '') + '</span></span><b class="text-[11px]">' + rNum(r[2]) + '</b></div>';
-            }).join('') || '<div class="text-xs text-slate-400">No borrows yet.</div>';
-            var utTotal = (U.by_user_type || []).reduce(function (a, r) { return a + r[1]; }, 0);
-            donutSVG(document.getElementById('donut-usertype'), U.by_user_type || [], utTotal, rNum(U.total), 'Total');
-            legendList(document.getElementById('legend-usertype'), U.by_user_type || [], utTotal);
-            hbars(document.getElementById('overdue-dept-bars'), (U.by_department || []).slice(0, 6), 'bg-red-500');
-            hbars(document.getElementById('tod-bars'), (U.trend || []).slice(-6).map(function (r) { return [String(r[0]).slice(5), r[1]]; }), 'bg-blue-600');
+            paintDeptCharts(U.by_department || []);
+            paintTrendCharts(U.trend || []);
+            paintTopBooks(U.top_books || []);
+            paintUserType(U.by_user_type || [], U.total);
             var rub = document.getElementById('recent-usage-body');
             if (rub) rub.innerHTML = (U.recent || []).slice(0, 8).map(function (r) {
                 return '<tr class="border-b last:border-0"><td class="py-2 pr-2">' + escapeHtml(r[0]) + '</td><td class="py-2 pr-2">' + escapeHtml(r[2]) + ' <span class="text-slate-400">(' + escapeHtml(r[3] || '') + ')</span></td><td class="py-2 pr-2">' + escapeHtml(r[4]) + '</td><td class="py-2 pr-2">' + pill(escapeHtml(r[6] || ''), 'blue') + '</td><td class="py-2 pr-2 text-slate-500">' + escapeHtml(r[7] || '-') + '</td><td class="py-2">' + pill(escapeHtml(r[8] || ''), 'green') + '</td></tr>';
             }).join('') || '<tr><td colspan="6" class="py-6 text-center text-slate-400">No activity yet.</td></tr>';
+        }
+
+        /* ============ Per-chart filters ============
+           Each .chart-filter row fetches fresh rows for its own data-chart
+           from chart_json and repaints via the painters above. Empty date
+           inputs inherit the page-level (GLOBAL) range; empty checkbox sets
+           and blank search mean "no restriction". */
+        function escAttr(s) {
+            return escapeHtml(s).replace(/"/g, '&quot;');
+        }
+
+        function buildCheckboxes(containerId, values) {
+            var el = document.getElementById(containerId);
+            if (!el) return;
+            el.innerHTML = (values || []).map(function (v) {
+                return '<label class="flex items-center gap-2 px-3 py-1.5 text-[11px] text-slate-700 hover:bg-gray-50 cursor-pointer"><input type="checkbox" value="' + escAttr(v) + '" class="rounded border-gray-300"> <span class="truncate">' + escapeHtml(v) + '</span></label>';
+            }).join('') || '<div class="px-3 py-2 text-[11px] text-slate-400">No values.</div>';
+        }
+
+        function setChartLoading(filterEl, loading) {
+            var applyBtn = filterEl.querySelector('[data-apply]');
+            if (applyBtn) {
+                applyBtn.disabled = loading;
+                applyBtn.textContent = loading ? '…' : 'Apply';
+            }
+        }
+
+        function refreshChart(filterEl, isReset) {
+            var name = filterEl.getAttribute('data-chart');
+            var resetBtn = filterEl.querySelector('[data-reset]');
+            var badge = filterEl.querySelector('[data-badge]');
+            var errBox = filterEl.querySelector('[data-error]');
+            var params = new URLSearchParams({ name: name });
+            var fromInput = filterEl.querySelector('[data-f="from"]');
+            var toInput = filterEl.querySelector('[data-f="to"]');
+            var qInput = filterEl.querySelector('[data-f="q"]');
+            var from = (!isReset && fromInput && fromInput.value) ? fromInput.value : '';
+            var to = (!isReset && toInput && toInput.value) ? toInput.value : '';
+            if (from || to) {
+                params.set('preset', 'custom');
+                if (from) params.set('from', from);
+                if (to) params.set('to', to);
+            } else {
+                params.set('preset', GLOBAL.preset || 'all');
+                if (GLOBAL.from) params.set('from', GLOBAL.from);
+                if (GLOBAL.to) params.set('to', GLOBAL.to);
+            }
+            var param = filterEl.getAttribute('data-param');
+            var checked = [];
+            if (!isReset && param) {
+                filterEl.querySelectorAll('input[type="checkbox"]:checked').forEach(function (c) {
+                    checked.push(c.value);
+                    params.append(param, c.value);
+                });
+            }
+            var q = (!isReset && qInput) ? qInput.value.trim() : '';
+            if (q) params.set('q', q);
+            var filtered = !!(from || to || q || checked.length);
+            if (errBox) errBox.classList.add('hidden');
+            setChartLoading(filterEl, true);
+            fetch(CHART_URL + '?' + params.toString())
+                .then(function (r) {
+                    if (!r.ok) throw new Error('status ' + r.status);
+                    return r.json();
+                })
+                .then(function (json) {
+                    paintChart(name, json.data || []);
+                    if (badge) badge.classList.toggle('hidden', !filtered);
+                    if (resetBtn) resetBtn.classList.toggle('hidden', !filtered);
+                    setChartLoading(filterEl, false);
+                })
+                .catch(function () {
+                    if (errBox) errBox.classList.remove('hidden');
+                    setChartLoading(filterEl, false);
+                });
+        }
+
+        function resetChartFilter(filterEl) {
+            filterEl.querySelectorAll('input').forEach(function (i) {
+                if (i.type === 'checkbox') { i.checked = false; }
+                else if (i.type === 'date') { i.value = ''; }
+                else { i.value = ''; }
+            });
+            refreshChart(filterEl, true);
+        }
+
+        function initChartFilters() {
+            var U = (DASHBOARD && DASHBOARD.usage) || {};
+            buildCheckboxes('dept-checks', (U.by_department || []).map(function (r) { return r[0]; }));
+            buildCheckboxes('role-checks', (U.by_user_type || []).map(function (r) { return r[0]; }));
+            document.querySelectorAll('.chart-filter').forEach(function (filterEl) {
+                var applyBtn = filterEl.querySelector('[data-apply]');
+                var resetBtn = filterEl.querySelector('[data-reset]');
+                if (applyBtn) applyBtn.addEventListener('click', function () { refreshChart(filterEl, false); });
+                if (resetBtn) resetBtn.addEventListener('click', function () { resetChartFilter(filterEl); });
+                var dropBtn = filterEl.querySelector('[data-dropbtn]');
+                if (dropBtn) dropBtn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var drop = filterEl.querySelector('[data-drop]');
+                    var willOpen = drop.classList.contains('hidden');
+                    document.querySelectorAll('.chart-filter [data-drop]').forEach(function (d) { d.classList.add('hidden'); });
+                    if (willOpen) drop.classList.remove('hidden');
+                });
+            });
+            document.addEventListener('click', function (e) {
+                if (!e.target.closest || !e.target.closest('.chart-filter')) {
+                    document.querySelectorAll('.chart-filter [data-drop]').forEach(function (d) { d.classList.add('hidden'); });
+                }
+            });
         }
 
         document.querySelectorAll('.rtab-btn').forEach(function (btn) {
@@ -1431,6 +1713,7 @@ function syncGlobalFilterCustomDates() {
         });
 
         renderRiverside();
+        initChartFilters();
         renderBoard();
     </script>
 </body>

@@ -291,6 +291,94 @@ def dashboard_json():
     return jsonify(compute_dashboard(start_date, end_date))
 
 
+CHART_NAMES = frozenset({
+    'collection_by_category',
+    'copies_by_status',
+    'borrowings_by_department',
+    'borrowings_by_user_type',
+    'borrowings_trend',
+    'overdue_trend',
+    'top_categories',
+    'top_books',
+    'high_demand',
+})
+
+
+def _clean_list(values, limit=50):
+    """Strip blanks from a repeated query param, capped against abuse."""
+    return [v.strip() for v in (values or []) if v and v.strip()][:limit]
+
+
+def _chart_rows(rows):
+    """Make chart rows JSON-safe (dates/Decimals -> plain values)."""
+    out = []
+    for r in rows or []:
+        try:
+            out.append([c.isoformat() if hasattr(c, 'isoformat') else c for c in r])
+        except TypeError:
+            continue
+    return out
+
+
+def _run_chart(name, start_date, end_date, args):
+    if name == 'collection_by_category':
+        q = args.get('q', '').strip()[:100]
+        return models.collection_by_category(start_date, end_date, q or None)
+    if name == 'copies_by_status':
+        return models.copies_by_status_summary(start_date, end_date)
+    if name == 'borrowings_by_department':
+        return models.books_borrowed_per_program(
+            start_date, end_date, _clean_list(args.getlist('department')))
+    if name == 'borrowings_by_user_type':
+        return models.borrowings_by_user_type(
+            start_date, end_date, _clean_list(args.getlist('role')))
+    if name == 'borrowings_trend':
+        return models.borrowings_trend(start_date, end_date)
+    if name == 'overdue_trend':
+        return models.overdue_trend(start_date, end_date)
+    if name == 'top_categories':
+        return models.top_borrowed_categories(start_date, end_date)
+    if name == 'top_books':
+        return models.top_borrowed_books_detailed(start_date, end_date)
+    if name == 'high_demand':
+        return models.high_demand_titles(start_date, end_date)
+    raise ValueError('Unknown chart: %s' % name)
+
+
+def _echo_chart_filters(args):
+    echoed = {}
+    departments = _clean_list(args.getlist('department'))
+    roles = _clean_list(args.getlist('role'))
+    q = args.get('q', '').strip()[:100]
+    if departments:
+        echoed['departments'] = departments
+    if roles:
+        echoed['roles'] = roles
+    if q:
+        echoed['q'] = q
+    return echoed
+
+
+@analytics_bp.route('/librarian/analytics/chart')
+@login_required
+@librarian_required
+def chart_json():
+    """Return one dashboard chart's data for its own filter set as JSON."""
+    name = request.args.get('name', '')
+    if name not in CHART_NAMES:
+        return jsonify({'error': 'invalid chart name'}), 400
+    preset = request.args.get('preset', 'all')
+    from_str = request.args.get('from', '').strip()
+    to_str = request.args.get('to', '').strip()
+    preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
+    start_date, end_date = resolve_dates(preset, from_str, to_str)
+    return jsonify({
+        'chart': name,
+        'data': _chart_rows(_run_chart(name, start_date, end_date, request.args)),
+        'filters': _echo_chart_filters(request.args),
+    })
+
+
 @analytics_bp.route('/librarian/analytics/kpi')
 @login_required
 @librarian_required
