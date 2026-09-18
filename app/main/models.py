@@ -6,7 +6,7 @@ def get_dashboard_stats():
         "SELECT COUNT(*) FROM book_catalog WHERE catalog_status = 'active'"
     )
     active_loans = db.fetch_one(
-        "SELECT COUNT(*) FROM circulation_records WHERE transaction_status IN ('active', 'overdue')"
+        "SELECT COUNT(*) FROM circulation_records WHERE transaction_type = 'borrow' AND transaction_status IN ('active', 'overdue')"
     )
     open_requests = db.fetch_one(
         "SELECT COUNT(*) FROM request_records WHERE request_status IN ('pending_review', 'approved')"
