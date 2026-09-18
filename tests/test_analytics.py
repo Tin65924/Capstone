@@ -460,15 +460,24 @@ class TestChartFilterModels:
         assert 'r.role_name IN (%s)' in query
         assert params == ('Student',)
 
-    def test_collection_category_title_search(self, mock_db):
+    def test_collection_category_multi_select(self, mock_db):
         from app.analytics.models import collection_by_category
         mock_db['fetch_all'].return_value = [('Science', 3)]
-        assert collection_by_category(None, None, 'chem') == [('Science', 3)]
+        assert collection_by_category(None, None, ['Science', 'Arts']) == [('Science', 3)]
         query, params = mock_db['fetch_all'].call_args[0]
-        assert 'b.title ILIKE %s' in query
-        assert params == ('%chem%',)
+        assert 'LOWER(b.subject_classification) IN (%s, %s)' in query
+        assert params == ('science', 'arts')
 
-    def test_collection_category_no_search_unchanged(self, mock_db):
+    def test_collection_category_case_insensitive_and_others(self, mock_db):
+        from app.analytics.models import collection_by_category
+        mock_db['fetch_all'].return_value = []
+        collection_by_category(None, None, ['PHYSICS', 'Others', '  '])
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'LOWER(b.subject_classification) IN (%s)' in query
+        assert "b.subject_classification = ''" in query
+        assert params == ('physics',)
+
+    def test_collection_category_no_filter_unchanged(self, mock_db):
         from app.analytics.models import collection_by_category
         mock_db['fetch_all'].return_value = []
         collection_by_category()
@@ -703,15 +712,18 @@ class TestChartJson:
         assert 'b.department IN (%s, %s)' in query
         assert params[-2:] == ('BSIT', 'BSBA')
 
-    def test_chart_role_and_search_filters(self, librarian_client, mock_db):
+    def test_chart_role_and_category_filters(self, librarian_client, mock_db):
         mock_db['fetch_all'].return_value = [('Student', 40)]
         resp = librarian_client.get(
             '/librarian/analytics/chart?name=borrowings_by_user_type&role=Student&role=')
         assert resp.get_json()['filters'] == {'roles': ['Student']}
         mock_db['fetch_all'].return_value = [('Science', 2)]
         resp = librarian_client.get(
-            '/librarian/analytics/chart?name=collection_by_category&q=chem')
-        assert resp.get_json()['filters'] == {'q': 'chem'}
+            '/librarian/analytics/chart?name=collection_by_category&category=Science&category= ')
+        assert resp.get_json()['filters'] == {'categories': ['Science']}
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'LOWER(b.subject_classification) IN (%s)' in query
+        assert params == ('science',)
 
     def test_chart_custom_dates(self, librarian_client, mock_db):
         from datetime import date
@@ -791,6 +803,15 @@ class TestChartFilterControls:
         assert b'value="overnight"' in resp.data
         assert b'value="daily_circulation"' in resp.data
         assert b'/librarian/analytics/chart' in resp.data
+        # category multi-select with autosuggest-backed input
+        assert b'Category name' in resp.data
+        assert b'Title contains' not in resp.data
+        assert b'data-suggest="book_subject"' in resp.data
+        assert b'js/autosuggest.js' in resp.data
+        assert b'data-mf="catadd"' in resp.data
+        assert b'MCSTAutosuggest' in resp.data
+        # copies-by-status is a snapshot: no borrow-type option
+        assert b"copies_by_status: { title: 'Copies by Status', controls: ['dates'] }" in resp.data
         # inline filter rows are gone: cards stay compact
         assert b'class="chart-filter ' not in resp.data
         assert b'id="dept-checks"' not in resp.data

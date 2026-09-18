@@ -534,10 +534,10 @@ def _chart_rows(rows):
 def _run_chart(name, start_date, end_date, args):
     borrow_type = _clean_borrow_type(args.get('borrow_type', ''))
     if name == 'collection_by_category':
-        q = args.get('q', '').strip()[:100]
-        return models.collection_by_category(start_date, end_date, q or None)
+        return models.collection_by_category(
+            start_date, end_date, _clean_list(args.getlist('category')))
     if name == 'copies_by_status':
-        return models.copies_by_status_summary(start_date, end_date, borrow_type)
+        return models.copies_by_status_summary(start_date, end_date)
     if name == 'borrowings_by_department':
         return models.books_borrowed_per_program(
             start_date, end_date, _clean_list(args.getlist('department')),
@@ -564,14 +564,14 @@ def _echo_chart_filters(args):
     echoed = {}
     departments = _clean_list(args.getlist('department'))
     roles = _clean_list(args.getlist('role'))
-    q = args.get('q', '').strip()[:100]
+    categories = _clean_list(args.getlist('category'))
     borrow_type = _clean_borrow_type(args.get('borrow_type', ''))
     if departments:
         echoed['departments'] = departments
     if roles:
         echoed['roles'] = roles
-    if q:
-        echoed['q'] = q
+    if categories:
+        echoed['categories'] = categories
     if borrow_type:
         echoed['borrow_type'] = borrow_type
     return echoed

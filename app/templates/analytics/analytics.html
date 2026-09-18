@@ -11,6 +11,7 @@
     <link rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,1" />
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="{{ url_for('static', filename='js/autosuggest.js') }}" defer></script>
     <script id="tailwind-config">
         tailwind.config = {
             darkMode: "class",
@@ -926,8 +927,8 @@ function syncGlobalFilterCustomDates() {
            persist per chart in chartFilterState; empty means "inherit the
            page-level range / no restriction". */
         var CHART_FILTER_DEFS = {
-            collection_by_category: { title: 'Collection by Category', controls: ['q'], qLabel: 'Only titles matching…' },
-            copies_by_status: { title: 'Copies by Status', controls: ['dates', 'borrow_type'] },
+            collection_by_category: { title: 'Collection by Category', param: 'category', controls: ['categories'] },
+            copies_by_status: { title: 'Copies by Status', controls: ['dates'] },
             borrowings_trend: { title: 'Borrowings Trend', controls: ['dates', 'borrow_type'] },
             top_categories: { title: 'Top Borrowed Categories', controls: ['dates', 'borrow_type'] },
             overdue_trend: { title: 'Overdue Trend', controls: ['dates', 'borrow_type'] },
@@ -958,7 +959,7 @@ function syncGlobalFilterCustomDates() {
         }
 
         function defaultChartState() {
-            return { from: '', to: '', q: '', values: [], borrowType: '' };
+            return { from: '', to: '', values: [], borrowType: '' };
         }
 
         function getChartState(name) {
@@ -995,6 +996,38 @@ function syncGlobalFilterCustomDates() {
             return rows.map(function (r) { return r[0]; });
         }
 
+        function getCatChips() {
+            var wrap = document.querySelector('#chartFilterBody [data-mf="catchips"]');
+            if (!wrap) return [];
+            return Array.prototype.map.call(
+                wrap.querySelectorAll('[data-cat]'),
+                function (el) { return el.getAttribute('data-cat'); });
+        }
+
+        function setCatChips(vals) {
+            var wrap = document.querySelector('#chartFilterBody [data-mf="catchips"]');
+            if (!wrap) return;
+            wrap.innerHTML = vals.map(function (v) {
+                return '<span data-cat="' + escAttr(v) + '" class="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-blue-100 text-blue-700">'
+                    + '<span>' + escapeHtml(v) + '</span>'
+                    + '<button type="button" data-catrm class="hover:text-blue-900 font-bold" aria-label="Remove">×</button></span>';
+            }).join('') || '<span class="text-[11px] text-slate-400">No categories selected — all will be shown.</span>';
+        }
+
+        function addCatChip() {
+            var body = document.getElementById('chartFilterBody');
+            var input = body.querySelector('[data-mf="catinput"]');
+            if (!input) return;
+            var v = input.value.trim();
+            if (!v) return;
+            var existing = getCatChips().map(function (c) { return c.toLowerCase(); });
+            if (existing.indexOf(v.toLowerCase()) === -1) {
+                setCatChips(getCatChips().concat([v]));
+            }
+            input.value = '';
+            input.focus();
+        }
+
         function openChartFilter(name) {
             var def = CHART_FILTER_DEFS[name];
             if (!def) return;
@@ -1008,9 +1041,14 @@ function syncGlobalFilterCustomDates() {
                         + '<div class="grid grid-cols-2 gap-2 mt-2">'
                         + '<input type="date" data-mf="from" value="' + escAttr(st.from || GLOBAL.from || '') + '" class="bg-gray-100 border-none text-sm rounded-lg px-3 py-2 outline-none">'
                         + '<input type="date" data-mf="to" value="' + escAttr(st.to || GLOBAL.to || '') + '" class="bg-gray-100 border-none text-sm rounded-lg px-3 py-2 outline-none"></div></div>';
-                } else if (c === 'q') {
-                    html += '<div><span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Title contains</span>'
-                        + '<input type="text" data-mf="q" value="' + escAttr(st.q) + '" placeholder="' + escAttr(def.qLabel || 'Search…') + '" class="mt-2 w-full bg-gray-100 border-none text-sm rounded-lg px-3 py-2 outline-none"></div>';
+                } else if (c === 'categories') {
+                    html += '<div><span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Category name</span>'
+                        + '<div class="flex gap-2 mt-2">'
+                        + '<input type="text" data-mf="catinput" data-suggest="book_subject" placeholder="Type a category…" autocomplete="off" class="flex-1 min-w-0 bg-gray-100 border-none text-sm rounded-lg px-3 py-2 outline-none">'
+                        + '<button type="button" data-mf="catadd" class="shrink-0 text-sm font-bold px-4 py-2 rounded-lg bg-primary text-white">Add</button>'
+                        + '</div>'
+                        + '<div data-mf="catchips" class="flex flex-wrap gap-1.5 mt-2"></div>'
+                        + '<p class="text-[11px] text-slate-400 mt-1">No categories selected means all.</p></div>';
                 } else if (c === 'borrow_type') {
                     html += '<div><span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Borrow type</span>'
                         + '<select data-mf="borrow_type" class="mt-2 w-full bg-gray-100 border-none text-sm rounded-lg px-3 py-2 outline-none">'
@@ -1032,6 +1070,26 @@ function syncGlobalFilterCustomDates() {
             document.getElementById('chartFilterBody').innerHTML = html;
             document.getElementById('chartFilterError').classList.add('hidden');
             document.getElementById('chartFilterModal').classList.remove('hidden');
+            if (def.controls.indexOf('categories') !== -1) {
+                setCatChips(st.values);
+                var catInput = document.querySelector('#chartFilterBody [data-mf="catinput"]');
+                var catAdd = document.querySelector('#chartFilterBody [data-mf="catadd"]');
+                var chips = document.querySelector('#chartFilterBody [data-mf="catchips"]');
+                if (catAdd) catAdd.addEventListener('click', addCatChip);
+                if (catInput) catInput.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') { e.preventDefault(); addCatChip(); }
+                });
+                if (chips) chips.addEventListener('click', function (e) {
+                    var rm = e.target.closest ? e.target.closest('[data-catrm]') : null;
+                    if (!rm) return;
+                    var chip = rm.closest('[data-cat]');
+                    if (chip) chip.remove();
+                    if (!getCatChips().length) setCatChips([]);
+                });
+                if (window.MCSTAutosuggest && window.MCSTAutosuggest.rescan) {
+                    window.MCSTAutosuggest.rescan();
+                }
+            }
         }
 
         function closeChartFilterModal() {
@@ -1052,7 +1110,6 @@ function syncGlobalFilterCustomDates() {
                 if (GLOBAL.to) params.set('to', GLOBAL.to);
             }
             if (def && def.param) st.values.forEach(function (v) { params.append(def.param, v); });
-            if (st.q) params.set('q', st.q);
             if (st.borrowType) params.set('borrow_type', st.borrowType);
             return params;
         }
@@ -1074,10 +1131,13 @@ function syncGlobalFilterCustomDates() {
             var st = defaultChartState();
             st.from = val('[data-mf="from"]');
             st.to = val('[data-mf="to"]');
-            st.q = val('[data-mf="q"]').trim();
             st.borrowType = val('[data-mf="borrow_type"]');
             if (def && def.param) {
-                body.querySelectorAll('[data-mf="opt"]:checked').forEach(function (c) { st.values.push(c.value); });
+                if (body.querySelector('[data-mf="opt"]')) {
+                    body.querySelectorAll('[data-mf="opt"]:checked').forEach(function (c) { st.values.push(c.value); });
+                } else {
+                    st.values = getCatChips();
+                }
             }
             var applyBtn = document.getElementById('chartFilterApply');
             var errBox = document.getElementById('chartFilterError');
@@ -1091,7 +1151,7 @@ function syncGlobalFilterCustomDates() {
                 .then(function (json) {
                     chartFilterState[chartFilterName] = st;
                     paintChart(chartFilterName, json.data || []);
-                    markChartFiltered(chartFilterName, !!(st.from || st.to || st.q || st.values.length || st.borrowType));
+                    markChartFiltered(chartFilterName, !!(st.from || st.to || st.values.length || st.borrowType));
                     closeChartFilterModal();
                     if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = 'Apply'; }
                 })

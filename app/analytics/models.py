@@ -208,15 +208,24 @@ def copies_by_status_summary(start_date=None, end_date=None, borrow_type=None):
             ('Under Maintenance', maintenance)]
 
 
-def collection_by_category(start_date=None, end_date=None, q=None):
+def collection_by_category(start_date=None, end_date=None, categories=None):
     """Return [(category, titles)] grouped by subject_classification.
 
-    q optionally restricts the counted titles (case-insensitive match).
+    categories optionally restricts to the named categories
+    (case-insensitive; 'Others' matches blank classifications).
     """
     parts, params = _range_clause('b.date_added', start_date, end_date)
-    if q:
-        parts.append('b.title ILIKE %s')
-        params.append('%{}%'.format(q))
+    categories = [c.strip() for c in (categories or []) if c and c.strip()]
+    if categories:
+        conds = []
+        exact = [c for c in categories if c.lower() != 'others']
+        if exact:
+            conds.append('LOWER(b.subject_classification) IN ({})'.format(
+                ', '.join(['%s'] * len(exact))))
+            params.extend([c.lower() for c in exact])
+        if len(exact) != len(categories):
+            conds.append("(b.subject_classification IS NULL OR b.subject_classification = '')")
+        parts.append('(' + ' OR '.join(conds) + ')')
     where = 'WHERE b.catalog_status = \'active\'' + (
         ' AND ' + ' AND '.join(parts) if parts else '')
     return db.fetch_all(

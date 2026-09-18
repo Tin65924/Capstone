@@ -240,6 +240,7 @@
     }
 
     function attachSuggest(input) {
+        if (input._as) return;
         input._as = { open: false, suggestions: [], highlight: -1, skipNextSuggest: false };
         input.addEventListener('input', debounce(function () {
             if (input._as.skipNextSuggest) {
@@ -352,6 +353,10 @@
             box.classList.add('hidden');
         });
     }, true);
+
+    // Exposed so pages that inject [data-suggest] inputs dynamically
+    // (e.g. modals) can wire them after insertion.
+    window.MCSTAutosuggest = { rescan: init };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
