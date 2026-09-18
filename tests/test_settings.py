@@ -86,3 +86,14 @@ class TestUpdateSettings:
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
         assert mock_db['execute'].call_count == 0
+
+
+class TestFlashDismiss:
+    def test_flash_renders_dismiss_markup(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.post('/librarian/settings/update', data={
+            'MAX_BORROW_LIMIT_STUDENT': '4',
+        }, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b'data-flash' in resp.data
+        assert b'data-flash-close' in resp.data

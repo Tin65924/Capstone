@@ -91,14 +91,18 @@ def count_active_loans(borrower_id):
     return row[0] if row else 0
 
 
-def calculate_fine(circulation_id, overdue_rate=10.0, grace_days=0):
+def calculate_fine(circulation_id, overdue_rate=5.0, grace_days=0):
+    """Overdue fine for a loan. Only overnight borrows accrue fines
+    (₱5/day by default); daily/in-library loans never do."""
     record = db.fetch_one(
-        'SELECT due_date, return_date FROM circulation_records WHERE circulation_id = %s',
+        'SELECT due_date, return_date, borrow_type FROM circulation_records WHERE circulation_id = %s',
         (circulation_id,)
     )
     if not record:
         return 0
-    due_date, return_date = record
+    due_date, return_date, borrow_type = record
+    if borrow_type != 'overnight':
+        return 0
     returned = return_date if return_date else date.today()
     overdue_days = (returned - due_date).days - (grace_days or 0)
     return max(0, overdue_days * overdue_rate)
@@ -374,13 +378,14 @@ def get_borrowers_for_history(search=None, limit=100):
 
 
 def get_fines_by_borrower(borrower_id):
+    """Unpaid fines only (fine_paid rows stay in history, not in totals)."""
     return db.fetch_all(
         '''SELECT c.circulation_id, c.borrow_date, c.due_date, c.return_date, c.fine_amount,
                   b.title, a.accession_number
            FROM circulation_records c
            JOIN book_catalog b ON c.book_id = b.book_id
            JOIN accession_log a ON c.accession_id = a.accession_id
-           WHERE c.borrower_id = %s AND c.fine_amount > 0
+           WHERE c.borrower_id = %s AND c.fine_amount > 0 AND c.fine_paid = FALSE
            ORDER BY COALESCE(c.return_date, c.borrow_date) DESC''',
         (borrower_id,)
     )
@@ -388,10 +393,26 @@ def get_fines_by_borrower(borrower_id):
 
 def get_total_fines(borrower_id):
     row = db.fetch_one(
-        'SELECT COALESCE(SUM(fine_amount), 0) FROM circulation_records WHERE borrower_id = %s',
+        'SELECT COALESCE(SUM(fine_amount), 0) FROM circulation_records WHERE borrower_id = %s AND fine_paid = FALSE',
         (borrower_id,)
     )
     return row[0] if row else 0
+
+
+def get_fine_record(circulation_id):
+    """(circulation_id, borrower_id, fine_amount, fine_paid) or None."""
+    return db.fetch_one(
+        '''SELECT circulation_id, borrower_id, fine_amount, fine_paid
+           FROM circulation_records WHERE circulation_id = %s''',
+        (circulation_id,)
+    )
+
+
+def mark_fine_paid(circulation_id):
+    db.execute(
+        'UPDATE circulation_records SET fine_paid = TRUE WHERE circulation_id = %s',
+        (circulation_id,)
+    )
 
 
 def get_borrower_by_user(user_id):

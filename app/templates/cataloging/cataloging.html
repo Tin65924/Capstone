@@ -297,7 +297,7 @@
         <div class="card animate-in overflow-hidden" style="animation-delay: 0.2s;">
             <div class="p-3 sm:p-4 border-b border-gray-100 flex items-center gap-1.5 sm:gap-2 bg-gray-50/50 overflow-x-auto scrollbar-thin">
                 <a href="{{ url_for('cataloging.cataloging_page', q=search_query, field=search_field) }}"
-                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if not status_filter %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
+                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if not status_filter and not copy_status %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     All ({{ total }})
                 </a>
                 <a href="{{ url_for('cataloging.cataloging_page', status='active', q=search_query, field=search_field) }}"
@@ -307,6 +307,18 @@
                 <a href="{{ url_for('cataloging.cataloging_page', status='archived', q=search_query, field=search_field) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if status_filter == 'archived' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Archived
+                </a>
+                <a href="{{ url_for('cataloging.cataloging_page', copy_status='overdue') }}"
+                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if copy_status == 'overdue' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
+                    Overdue
+                </a>
+                <a href="{{ url_for('cataloging.cataloging_page', copy_status='lost_damaged') }}"
+                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if copy_status == 'lost_damaged' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
+                    Lost/Damaged
+                </a>
+                <a href="{{ url_for('cataloging.cataloging_page', copy_status='maintenance') }}"
+                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if copy_status == 'maintenance' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
+                    Maintenance
                 </a>
             </div>
 

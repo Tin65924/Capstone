@@ -83,6 +83,22 @@ class TestAnalyticsPage:
         assert b'Add KPI' in resp.data
         assert b'Export All' in resp.data
 
+    def test_no_riverside_credit_line(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (5,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics')
+        assert resp.status_code == 200
+        assert b'Inspired by Riverside' not in resp.data
+
+    def test_attention_cards_link_to_filtered_catalog(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (5,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics')
+        assert resp.status_code == 200
+        for param in (b'copy_status=overdue', b'copy_status=lost_damaged',
+                      b'copy_status=maintenance'):
+            assert param in resp.data
+
     def test_page_skips_query_when_collection_nonzero(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = (10,)
         mock_db['fetch_all'].return_value = []

@@ -21,7 +21,7 @@ from .models import (
     get_user_active_loans, get_active_loan_by_id_and_user,
     expire_overdue_reservations, get_borrowers_for_history,
     get_full_reservation_history_by_borrower, get_user_loan_history,
-    get_fines_by_borrower, get_total_fines,
+    get_fines_by_borrower, get_total_fines, get_fine_record, mark_fine_paid,
 )
 
 VALID_BORROW_TYPES = ('overnight', 'daily_circulation')
@@ -155,7 +155,7 @@ def desk_return():
         flash(f'Accession {accession_number} is not currently borrowed.', 'error')
         return redirect(url_for('circulation.circulation_page'))
 
-    fine = calculate_fine(loan[0], current_app.config.get('OVERDUE_FINE_PER_DAY', 10.0),
+    fine = calculate_fine(loan[0], current_app.config.get('OVERDUE_FINE_PER_DAY', 5.0),
                           current_app.config.get('OVERDUE_GRACE_DAYS', 0))
     return_book(loan[0], fine, damage_notes, lost_flag)
     borrower_id_for_loan = loan[3] if len(loan) > 3 else None
@@ -471,7 +471,7 @@ def user_return():
         flash('Overnight books must be returned at the circulation desk for inspection.', 'error')
         return redirect(url_for('main.user_profile'))
 
-    fine = calculate_fine(loan[0], current_app.config.get('OVERDUE_FINE_PER_DAY', 10.0),
+    fine = calculate_fine(loan[0], current_app.config.get('OVERDUE_FINE_PER_DAY', 5.0),
                           current_app.config.get('OVERDUE_GRACE_DAYS', 0))
     return_book(loan[0], fine)
     create_notification(
@@ -554,3 +554,29 @@ def user_history_detail(user_id):
         fines=fines,
         total_fines=total_fines,
     )
+
+
+@circulation_bp.route('/librarian/users/<int:user_id>/fines/<int:circulation_id>/pay', methods=['POST'])
+@login_required
+@librarian_required
+def pay_fine(user_id, circulation_id):
+    from app.auth.models import get_user_by_id
+    back = url_for('circulation.user_history_detail', user_id=user_id)
+    if not get_user_by_id(user_id):
+        flash('User not found.', 'error')
+        return redirect(url_for('circulation.user_history_list'))
+    borrower = get_borrower_by_user(user_id)
+    if not borrower:
+        flash('No borrower record found for this user.', 'error')
+        return redirect(url_for('circulation.user_history_list'))
+    fine = get_fine_record(circulation_id)
+    if not fine or fine[1] != borrower[0] or not fine[2] or float(fine[2]) <= 0:
+        flash('Fine not found.', 'error')
+        return redirect(back)
+    if fine[3]:
+        flash('This fine is already paid.', 'info')
+        return redirect(back)
+    mark_fine_paid(circulation_id)
+    log_activity(current_user.id, f'circulation:fine_paid:{circulation_id}')
+    flash(f'Fine of ₱{float(fine[2]):.2f} marked as paid.', 'success')
+    return redirect(back)
