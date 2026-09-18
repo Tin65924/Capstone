@@ -492,10 +492,11 @@
                     <div id="forecast-error" class="hidden bg-white rounded-xl border border-red-200 p-8 text-center text-xs text-red-600">Couldn't load the forecast. <button type="button" onclick="loadForecast(true)" class="font-bold underline">Try again</button>.</div>
                     <div id="forecast-body" class="hidden space-y-4">
                         <div id="forecast-kpis" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
-                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                            <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">Projected Demand by Category (next 30 days)</h3><div id="forecast-cat-bars" class="space-y-1.5"></div></div>
-                            <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">Busiest Weekdays</h3><div id="forecast-weekday-bars" class="space-y-1.5"></div></div>
+                        <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                            <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-2"><h3 class="text-sm font-extrabold mb-1">Projected Borrowing Demand — Next 30 Days</h3><div id="forecast-demand-line" class="w-full overflow-hidden"></div><p class="text-[10px] text-slate-400 mt-1">Solid = recent actual • dashed = projected. Weekday peaks and quiet days come from borrowing patterns.</p></div>
+                            <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">Expected Borrowing Activity by Weekday</h3><div id="forecast-weekday-bars" class="space-y-1.5"></div></div>
                         </div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">Projected Demand by Category (next 30 days)</h3><div id="forecast-cat-bars" class="space-y-1.5"></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4 overflow-hidden">
                             <h3 class="text-sm font-extrabold mb-2">Titles Needing More Copies</h3>
                             <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[640px]">
@@ -507,6 +508,7 @@
                             <h3 class="text-sm font-extrabold mb-2">Recommended Actions</h3>
                             <div id="forecast-insights" class="space-y-2.5"></div>
                         </div>
+                        <p id="forecast-basis" class="text-[10px] text-slate-500 font-semibold"></p>
                         <p class="text-[10px] text-slate-400">Projections are 30-day run-rate extrapolations of the current graphs — planning aids, not predictions.</p>
                     </div>
                 </section>
@@ -1190,6 +1192,50 @@ function syncGlobalFilterCustomDates() {
                 });
         }
 
+        function forecastLineChart(el, actual, projected) {
+            if (!el) return;
+            actual = actual || [];
+            projected = projected || [];
+            if (!actual.length && !projected.length) {
+                el.innerHTML = '<div class="text-xs text-slate-400 py-8 text-center">Not enough history to project.</div>';
+                return;
+            }
+            var W = 560, H = 190, P = 30;
+            var pts = [];
+            actual.forEach(function (r) { pts.push({ v: r[1], kind: 'a' }); });
+            projected.forEach(function (r) { pts.push({ v: r[1], kind: 'f' }); });
+            var max = Math.max.apply(null, pts.map(function (p) { return p.v; }).concat([1]));
+            var stepX = pts.length > 1 ? (W - P * 2) / (pts.length - 1) : 0;
+            var xy = pts.map(function (p, i) { return [P + stepX * i, H - P - (p.v / max) * (H - P * 2)]; });
+            function path(idxs) {
+                return idxs.map(function (k, j) { return (j ? 'L' : 'M') + xy[k][0].toFixed(1) + ' ' + xy[k][1].toFixed(1); }).join(' ');
+            }
+            var aIdx = [], fIdx = [];
+            pts.forEach(function (p, i) { (p.kind === 'a' ? aIdx : fIdx).push(i); });
+            if (aIdx.length && fIdx.length) fIdx.unshift(aIdx[aIdx.length - 1]);
+            var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" class="w-full h-48">'
+                + '<line x1="' + P + '" y1="' + (H - P) + '" x2="' + (W - 8) + '" y2="' + (H - P) + '" stroke="#e2e8f0"/>';
+            if (aIdx.length > 1) {
+                svg += '<path d="' + path(aIdx) + '" fill="none" stroke="#2563eb" stroke-width="2.5"/>';
+            } else if (aIdx.length === 1) {
+                svg += '<circle cx="' + xy[aIdx[0]][0].toFixed(1) + '" cy="' + xy[aIdx[0]][1].toFixed(1) + '" r="3" fill="#2563eb"/>';
+            }
+            if (fIdx.length > 1) {
+                svg += '<path d="' + path(fIdx) + '" fill="none" stroke="#93c5fd" stroke-width="2.5" stroke-dasharray="6 4"/>';
+            }
+            if (aIdx.length && projected.length) {
+                var divX = xy[aIdx[aIdx.length - 1]][0];
+                svg += '<line x1="' + divX + '" y1="' + P + '" x2="' + divX + '" y2="' + (H - P) + '" stroke="#94a3b8" stroke-dasharray="4 4"/>'
+                    + '<text x="' + (divX + 4) + '" y="' + (P + 2) + '" font-size="10" fill="#64748b">Today</text>';
+            }
+            svg += '<circle cx="' + P + '" cy="12" r="3" fill="#2563eb"/><text x="' + (P + 8) + '" y="15" font-size="10" fill="#64748b">Actual</text>'
+                + '<line x1="' + (P + 70) + '" y1="12" x2="' + (P + 90) + '" y2="12" stroke="#93c5fd" stroke-width="2.5" stroke-dasharray="6 4"/><text x="' + (P + 96) + '" y="15" font-size="10" fill="#64748b">Forecast</text>';
+            svg += '</svg>';
+            var first = actual.length ? actual[0][0] : (projected.length ? projected[0][0] : '');
+            var last = projected.length ? projected[projected.length - 1][0] : (actual.length ? actual[actual.length - 1][0] : '');
+            el.innerHTML = svg + '<div class="flex justify-between text-[10px] text-slate-400"><span>' + escapeHtml(first) + '</span><span>' + escapeHtml(last) + '</span></div>';
+        }
+
         function paintForecast(f) {
             var kpis = document.getElementById('forecast-kpis');
             if (kpis) kpis.innerHTML =
@@ -1197,9 +1243,21 @@ function syncGlobalFilterCustomDates() {
                 + kpiCard('speed', 'Daily Pace', (f.daily_avg || 0) + ' / day', 'current run-rate', 'bg-green-50')
                 + kpiCard('schedule', 'Overdue Inflow', (f.overdue_inflow_per_day || 0) + ' / day', 'trend: ' + (f.overdue_direction || 'flat'), 'bg-red-50')
                 + kpiCard('library_add', 'New Additions', rNum(f.additions_next_30), 'next 30 days', 'bg-amber-50');
-            hbars(document.getElementById('forecast-cat-bars'),
-                (f.by_category || []).map(function (r) { return [r[0], r[2]]; }), 'bg-blue-600');
+            forecastLineChart(document.getElementById('forecast-demand-line'), f.trend_tail || [], f.projected_trend || []);
+            var catEl = document.getElementById('forecast-cat-bars');
+            if (catEl) {
+                var cats = f.by_category || [];
+                if (cats.length < 2) {
+                    catEl.innerHTML = '<div class="text-xs text-slate-500 py-6 text-center">Not enough category data available for comparison yet — borrowings span fewer than two categories in this period.</div>';
+                } else {
+                    hbars(catEl, cats.map(function (r) { return [r[0], r[2]]; }), 'bg-blue-600');
+                }
+            }
             hbars(document.getElementById('forecast-weekday-bars'), f.weekday_mix || [], 'bg-green-600');
+            var basis = document.getElementById('forecast-basis');
+            if (basis) basis.textContent = 'Forecast basis: ' + (f.basis || 'All Time')
+                + '  ·  Forecast period: next 30 days'
+                + (f.generated_at ? '  ·  Generated: ' + f.generated_at : '');
             var gaps = document.getElementById('forecast-gaps-body');
             if (gaps) gaps.innerHTML = (f.demand_gaps || []).map(function (r, i) {
                 return '<tr class="border-b last:border-0"><td class="py-2">' + (i + 1) + '</td>'

@@ -615,6 +615,39 @@ class TestForecastJson:
         resp = librarian_client.get('/librarian/analytics/forecast?preset=bogus&from=x')
         assert resp.status_code == 200
 
+    def test_projected_trend_weekday_shaped(self, librarian_client, mock_db):
+        from datetime import date, timedelta
+        trend = [(date(2026, 5, 1 + i), 10) for i in range(14)]
+        weekday = [(1, 10), (2, 10), (3, 10), (4, 10), (5, 10), (6, 50), (0, 0)]
+        self._payload_calls(mock_db, trend, [], [], 0, weekday, [])
+        body = librarian_client.get('/librarian/analytics/forecast').get_json()
+        proj = body['projected_trend']
+        assert len(proj) == 30
+        days = [date.fromisoformat(p[0]) for p in proj]
+        assert days[0] == date.today() + timedelta(days=1)
+        assert all((b - a).days == 1 for a, b in zip(days, days[1:]))
+        by_dow = {}
+        for iso, val in proj:
+            by_dow.setdefault(date.fromisoformat(iso).weekday(), []).append(val)
+        assert min(by_dow[5]) > max(by_dow[0])  # Saturdays beat Mondays
+        assert body['trend_tail'][-1][0] == '2026-05-14'
+
+    def test_projected_trend_flat_without_mix(self, librarian_client, mock_db):
+        from datetime import date
+        trend = [(date(2026, 5, 1), 4)]
+        self._payload_calls(mock_db, trend, [], [], 0, [], [])
+        body = librarian_client.get('/librarian/analytics/forecast').get_json()
+        assert [p[1] for p in body['projected_trend']] == [4.0] * 30
+
+    def test_basis_and_generated_at(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = []
+        mock_db['fetch_one'].return_value = None
+        body = librarian_client.get(
+            '/librarian/analytics/forecast?preset=custom&from=2026-05-01&to=2026-05-31'
+        ).get_json()
+        assert body['basis'] == 'May 01, 2026 – May 31, 2026'
+        assert body['generated_at']
+
 
 class TestForecastTab:
     def test_page_embeds_forecast_tab(self, librarian_client, mock_db):
@@ -628,6 +661,10 @@ class TestForecastTab:
         assert b'loadForecast' in resp.data
         assert b'forecast-gaps-body' in resp.data
         assert b'forecast-insights' in resp.data
+        assert b'Projected Borrowing Demand' in resp.data
+        assert b'Expected Borrowing Activity by Weekday' in resp.data
+        assert b'forecast-demand-line' in resp.data
+        assert b'id="forecast-basis"' in resp.data
 
 
 class TestChartJson:

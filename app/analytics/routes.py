@@ -1,5 +1,5 @@
 import io
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from flask import render_template, request, Response, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
@@ -320,7 +320,7 @@ def _trend_direction(counts):
     return 'flat'
 
 
-def _forecast_payload(start_date, end_date):
+def _forecast_payload(start_date, end_date, preset='all', from_str='', to_str=''):
     """Projections from current graphs + actionable insights.
 
     All projections are simple run-rate extrapolations, labeled as such —
@@ -367,6 +367,26 @@ def _forecast_payload(start_date, end_date):
     weekday_mix = models.borrowings_by_weekday(start_date, end_date) or []
     weekday_total = sum(w[1] for w in weekday_mix)
     busiest = max(weekday_mix, key=lambda w: w[1])[0] if weekday_total else '-'
+
+    # 30-day demand projection: daily pace shaped by historical weekday
+    # shares, so peaks and quiet days show instead of a flat line.
+    shares = [(w[1] / weekday_total) if weekday_total else 1 / 7 for w in weekday_mix]
+    today = date.today()
+    projected_trend = []
+    for i in range(1, 31):
+        day = today + timedelta(days=i)
+        if weekday_mix:
+            value = round(daily_avg * 7 * shares[day.weekday() % 7], 1)
+        else:
+            value = round(daily_avg, 1)
+        projected_trend.append([day.isoformat(), value])
+    trend_tail = []
+    for r in trend[-30:]:
+        try:
+            label = r[0].isoformat() if hasattr(r[0], 'isoformat') else r[0]
+            trend_tail.append([label, int(r[1] or 0)])
+        except (IndexError, TypeError, ValueError):
+            continue
 
     gaps = []
     for r in models.title_demand_gaps() or []:
@@ -440,6 +460,10 @@ def _forecast_payload(start_date, end_date):
         'busiest_weekday': busiest,
         'demand_gaps': gaps,
         'insights': insights,
+        'trend_tail': trend_tail,
+        'projected_trend': projected_trend,
+        'basis': _format_period(start_date, end_date, preset, from_str, to_str),
+        'generated_at': datetime.now().strftime('%b %d, %Y %I:%M %p'),
     }
 
 
@@ -453,7 +477,7 @@ def forecast_json():
     to_str = request.args.get('to', '').strip()
     preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
     start_date, end_date = resolve_dates(preset, from_str, to_str)
-    return jsonify(_forecast_payload(start_date, end_date))
+    return jsonify(_forecast_payload(start_date, end_date, preset, from_str, to_str))
 
 
 @analytics_bp.route('/librarian/analytics/dashboard')
