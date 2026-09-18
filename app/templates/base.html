@@ -34,7 +34,7 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-background-light dark:bg-background-dark text-[#0f172a] dark:text-gray-100 font-display min-h-screen flex flex-col">
-    {% include 'components/navbar.html' %}
+    {% block navbar %}{% include 'components/navbar.html' %}{% endblock %}
 
     <main class="flex-grow">
         {% block flash_messages %}{% include 'components/flash_messages.html' %}{% endblock %}

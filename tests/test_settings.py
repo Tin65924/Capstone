@@ -56,6 +56,18 @@ class TestSettingsCategories:
         assert resp.status_code == 200
         assert b'Changes apply immediately to new loans' not in resp.data
 
+    def test_top_navbar_removed_on_settings(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/settings')
+        assert resp.status_code == 200
+        assert b'mobile-menu-btn' not in resp.data
+
+    def test_top_navbar_kept_elsewhere(self, client, mock_db):
+        """The base navbar block override must not leak to other pages."""
+        resp = client.get('/login')
+        assert resp.status_code == 200
+        assert b'mobile-menu-btn' in resp.data
+
     def test_every_setting_appears_exactly_once(self, librarian_client, mock_db):
         mock_db['fetch_all'].return_value = []
         resp = librarian_client.get('/librarian/settings')
