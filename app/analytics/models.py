@@ -14,12 +14,16 @@ def _date_filter(clause_prefix, column):
     return parts, params
 
 
-def books_borrowed_per_program(start_date=None, end_date=None, departments=None):
+def books_borrowed_per_program(start_date=None, end_date=None, departments=None,
+                                borrow_type=None):
     parts, params = _date_filter({'start': start_date, 'end': end_date}, 'c.borrow_date')
     departments = [d.strip() for d in (departments or []) if d and d.strip()]
     if departments:
         parts.append('b.department IN ({})'.format(', '.join(['%s'] * len(departments))))
         params.extend(departments)
+    if borrow_type:
+        parts.append('c.borrow_type = %s')
+        params.append(borrow_type)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
         '''SELECT COALESCE(NULLIF(b.department, ''),
@@ -135,9 +139,12 @@ def count_total_copies():
     return row[0] if row else 0
 
 
-def count_circulation_status(start_date=None, end_date=None):
+def count_circulation_status(start_date=None, end_date=None, borrow_type=None):
     """Return [(transaction_status, count)] for active/returned/overdue."""
     parts, params = _range_clause('borrow_date', start_date, end_date)
+    if borrow_type:
+        parts.append('borrow_type = %s')
+        params.append(borrow_type)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
         '''SELECT transaction_status, COUNT(*)
@@ -169,46 +176,14 @@ def inventory_state_counts():
     )
 
 
-def copies_by_status_summary(start_date=None, end_date=None):
+def copies_by_status_summary(start_date=None, end_date=None, borrow_type=None):
     """Return [(status, copies)] for the Copies-by-Status chart/export.
 
     Available = active-catalog copies minus borrowed, overdue, reserved,
     lost/damaged and missing (maintenance) copies, floored at zero.
     """
     total = count_total_copies()
-    status_rows = count_circulation_status(start_date, end_date) or []
-    status = {}
-    for r in status_rows:
-        try:
-            status[str(r[0])] = int(r[1] or 0)
-        except (IndexError, TypeError, ValueError):
-            continue
-    borrowed = status.get('active', 0)
-    overdue = status.get('overdue', 0)
-    reserved = count_reservations()
-    inv_rows = inventory_state_counts() or []
-    inv = {}
-    for r in inv_rows:
-        try:
-            inv[str(r[0])] = int(r[1] or 0)
-        except (IndexError, TypeError, ValueError):
-            continue
-    lost_damaged = inv.get('lost', 0) + inv.get('damaged', 0)
-    maintenance = inv.get('missing', 0)
-    available = max(total - borrowed - overdue - reserved - lost_damaged - maintenance, 0)
-    return [('Available', available), ('Borrowed', borrowed), ('Reserved', reserved),
-            ('Overdue', overdue), ('Lost / Damaged', lost_damaged),
-            ('Under Maintenance', maintenance)]
-
-
-def copies_by_status_summary(start_date=None, end_date=None):
-    """Return [(status, copies)] for the Copies-by-Status chart/export.
-
-    Available = active-catalog copies minus borrowed, overdue, reserved,
-    lost/damaged and missing (maintenance) copies, floored at zero.
-    """
-    total = count_total_copies()
-    status_rows = count_circulation_status(start_date, end_date) or []
+    status_rows = count_circulation_status(start_date, end_date, borrow_type) or []
     status = {}
     for r in status_rows:
         try:
@@ -252,8 +227,11 @@ def collection_by_category(start_date=None, end_date=None, q=None):
     )
 
 
-def borrowings_trend(start_date=None, end_date=None):
+def borrowings_trend(start_date=None, end_date=None, borrow_type=None):
     parts, params = _range_clause('borrow_date', start_date, end_date)
+    if borrow_type:
+        parts.append('borrow_type = %s')
+        params.append(borrow_type)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
         '''SELECT borrow_date, COUNT(*)
@@ -262,8 +240,11 @@ def borrowings_trend(start_date=None, end_date=None):
     )
 
 
-def overdue_trend(start_date=None, end_date=None):
+def overdue_trend(start_date=None, end_date=None, borrow_type=None):
     parts, params = _range_clause('borrow_date', start_date, end_date)
+    if borrow_type:
+        parts.append('borrow_type = %s')
+        params.append(borrow_type)
     parts.append("transaction_status = 'overdue'")
     return db.fetch_all(
         '''SELECT borrow_date, COUNT(*) FROM circulation_records
@@ -272,8 +253,11 @@ def overdue_trend(start_date=None, end_date=None):
     )
 
 
-def top_borrowed_categories(start_date=None, end_date=None, limit=6):
+def top_borrowed_categories(start_date=None, end_date=None, limit=6, borrow_type=None):
     parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    if borrow_type:
+        parts.append('c.borrow_type = %s')
+        params.append(borrow_type)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     params.append(limit)
     return db.fetch_all(
@@ -286,12 +270,16 @@ def top_borrowed_categories(start_date=None, end_date=None, limit=6):
     )
 
 
-def borrowings_by_user_type(start_date=None, end_date=None, roles=None):
+def borrowings_by_user_type(start_date=None, end_date=None, roles=None,
+                              borrow_type=None):
     parts, params = _range_clause('c.borrow_date', start_date, end_date)
     roles = [r.strip() for r in (roles or []) if r and r.strip()]
     if roles:
         parts.append('r.role_name IN ({})'.format(', '.join(['%s'] * len(roles))))
         params.extend(roles)
+    if borrow_type:
+        parts.append('c.borrow_type = %s')
+        params.append(borrow_type)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
         '''SELECT r.role_name, COUNT(c.circulation_id)
@@ -361,8 +349,12 @@ def circulation_overview(start_date=None, end_date=None):
     )
 
 
-def top_borrowed_books_detailed(start_date=None, end_date=None, limit=5):
+def top_borrowed_books_detailed(start_date=None, end_date=None, limit=5,
+                                  borrow_type=None):
     parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    if borrow_type:
+        parts.append('c.borrow_type = %s')
+        params.append(borrow_type)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     params.append(limit)
     return db.fetch_all(
@@ -375,9 +367,12 @@ def top_borrowed_books_detailed(start_date=None, end_date=None, limit=5):
     )
 
 
-def high_demand_titles(start_date=None, end_date=None, limit=5):
+def high_demand_titles(start_date=None, end_date=None, limit=5, borrow_type=None):
     """Return [(title, author, current_borrows)] for active loans ranked by demand."""
     parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    if borrow_type:
+        parts.append('c.borrow_type = %s')
+        params.append(borrow_type)
     parts.append("c.transaction_status IN ('active', 'overdue')")
     params.append(limit)
     return db.fetch_all(

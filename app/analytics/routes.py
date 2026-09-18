@@ -329,9 +329,18 @@ CHART_NAMES = frozenset({
 })
 
 
+VALID_BORROW_TYPES = frozenset({'overnight', 'daily_circulation'})
+
+
 def _clean_list(values, limit=50):
     """Strip blanks from a repeated query param, capped against abuse."""
     return [v.strip() for v in (values or []) if v and v.strip()][:limit]
+
+
+def _clean_borrow_type(value):
+    """Allowlist the borrow_type filter; anything else means unfiltered."""
+    value = (value or '').strip()
+    return value if value in VALID_BORROW_TYPES else None
 
 
 def _chart_rows(rows):
@@ -346,27 +355,31 @@ def _chart_rows(rows):
 
 
 def _run_chart(name, start_date, end_date, args):
+    borrow_type = _clean_borrow_type(args.get('borrow_type', ''))
     if name == 'collection_by_category':
         q = args.get('q', '').strip()[:100]
         return models.collection_by_category(start_date, end_date, q or None)
     if name == 'copies_by_status':
-        return models.copies_by_status_summary(start_date, end_date)
+        return models.copies_by_status_summary(start_date, end_date, borrow_type)
     if name == 'borrowings_by_department':
         return models.books_borrowed_per_program(
-            start_date, end_date, _clean_list(args.getlist('department')))
+            start_date, end_date, _clean_list(args.getlist('department')),
+            borrow_type)
     if name == 'borrowings_by_user_type':
         return models.borrowings_by_user_type(
-            start_date, end_date, _clean_list(args.getlist('role')))
+            start_date, end_date, _clean_list(args.getlist('role')), borrow_type)
     if name == 'borrowings_trend':
-        return models.borrowings_trend(start_date, end_date)
+        return models.borrowings_trend(start_date, end_date, borrow_type)
     if name == 'overdue_trend':
-        return models.overdue_trend(start_date, end_date)
+        return models.overdue_trend(start_date, end_date, borrow_type)
     if name == 'top_categories':
-        return models.top_borrowed_categories(start_date, end_date)
+        return models.top_borrowed_categories(start_date, end_date,
+                                              borrow_type=borrow_type)
     if name == 'top_books':
-        return models.top_borrowed_books_detailed(start_date, end_date)
+        return models.top_borrowed_books_detailed(start_date, end_date,
+                                                  borrow_type=borrow_type)
     if name == 'high_demand':
-        return models.high_demand_titles(start_date, end_date)
+        return models.high_demand_titles(start_date, end_date, borrow_type=borrow_type)
     raise ValueError('Unknown chart: %s' % name)
 
 
@@ -375,12 +388,15 @@ def _echo_chart_filters(args):
     departments = _clean_list(args.getlist('department'))
     roles = _clean_list(args.getlist('role'))
     q = args.get('q', '').strip()[:100]
+    borrow_type = _clean_borrow_type(args.get('borrow_type', ''))
     if departments:
         echoed['departments'] = departments
     if roles:
         echoed['roles'] = roles
     if q:
         echoed['q'] = q
+    if borrow_type:
+        echoed['borrow_type'] = borrow_type
     return echoed
 
 

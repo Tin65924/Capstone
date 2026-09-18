@@ -1009,7 +1009,10 @@ function syncGlobalFilterCustomDates() {
             }
             var q = (!isReset && qInput) ? qInput.value.trim() : '';
             if (q) params.set('q', q);
-            var filtered = !!(from || to || q || checked.length);
+            var typeSel = filterEl.querySelector('[data-f="borrow_type"]');
+            var borrowType = (!isReset && typeSel) ? typeSel.value : '';
+            if (borrowType) params.set('borrow_type', borrowType);
+            var filtered = !!(from || to || q || checked.length || borrowType);
             if (errBox) errBox.classList.add('hidden');
             setChartLoading(filterEl, true);
             fetch(CHART_URL + '?' + params.toString())
@@ -1035,6 +1038,7 @@ function syncGlobalFilterCustomDates() {
                 else if (i.type === 'date') { i.value = ''; }
                 else { i.value = ''; }
             });
+            filterEl.querySelectorAll('select').forEach(function (s) { s.value = ''; });
             refreshChart(filterEl, true);
         }
 
@@ -1069,11 +1073,33 @@ function syncGlobalFilterCustomDates() {
             } else if (noMatch) { noMatch.style.display = 'none'; }
         }
 
+        /* Charts backed by circulation_records get an Overnight / Daily
+           Circulation selector alongside their other controls. */
+        var BORROW_TYPE_CHARTS = ['copies_by_status', 'borrowings_trend', 'overdue_trend',
+            'top_categories', 'high_demand', 'borrowings_by_department',
+            'top_books', 'borrowings_by_user_type'];
+
+        function addBorrowTypeSelect(filterEl) {
+            if (BORROW_TYPE_CHARTS.indexOf(filterEl.getAttribute('data-chart')) === -1) return;
+            if (filterEl.querySelector('[data-f="borrow_type"]')) return;
+            var applyBtn = filterEl.querySelector('[data-apply]');
+            if (!applyBtn) return;
+            var sel = document.createElement('select');
+            sel.setAttribute('data-f', 'borrow_type');
+            sel.setAttribute('aria-label', 'Borrow type');
+            sel.className = 'text-[11px] border rounded-lg px-2 py-1.5 outline-none focus:border-primary bg-white';
+            sel.innerHTML = '<option value="">All types</option>'
+                + '<option value="overnight">Overnight</option>'
+                + '<option value="daily_circulation">Daily Circ.</option>';
+            filterEl.insertBefore(sel, applyBtn);
+        }
+
         function initChartFilters() {
             var U = (DASHBOARD && DASHBOARD.usage) || {};
             buildCheckboxes('dept-checks', (U.by_department || []).map(function (r) { return r[0]; }));
             buildCheckboxes('role-checks', (U.by_user_type || []).map(function (r) { return r[0]; }));
             document.querySelectorAll('.chart-filter').forEach(function (filterEl) {
+                addBorrowTypeSelect(filterEl);
                 var applyBtn = filterEl.querySelector('[data-apply]');
                 var resetBtn = filterEl.querySelector('[data-reset]');
                 if (applyBtn) applyBtn.addEventListener('click', function () { refreshChart(filterEl, false); });

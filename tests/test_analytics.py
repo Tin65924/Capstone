@@ -494,6 +494,33 @@ class TestChartFilterModels:
         ]
         assert circulation_overview('2026-05-01', '2026-05-31') == (100, 40, 5, 4.5, 90.0, 12)
 
+    def test_borrow_type_filter_applies(self, mock_db):
+        from app.analytics import models
+        cases = [
+            (models.borrowings_trend, 'borrow_type = %s'),
+            (models.overdue_trend, 'borrow_type = %s'),
+            (models.top_borrowed_categories, 'c.borrow_type = %s'),
+            (models.top_borrowed_books_detailed, 'c.borrow_type = %s'),
+            (models.high_demand_titles, 'c.borrow_type = %s'),
+            (models.borrowings_by_user_type, 'c.borrow_type = %s'),
+            (models.books_borrowed_per_program, 'c.borrow_type = %s'),
+            (models.count_circulation_status, 'borrow_type = %s'),
+        ]
+        for fn, clause in cases:
+            mock_db['fetch_all'].return_value = []
+            fn(None, None, borrow_type='overnight')
+            query, params = mock_db['fetch_all'].call_args[0]
+            assert clause in query, fn.__name__
+            assert 'overnight' in params, fn.__name__
+
+    def test_borrow_type_absent_without_filter(self, mock_db):
+        from app.analytics.models import borrowings_trend
+        mock_db['fetch_all'].return_value = []
+        borrowings_trend()
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'borrow_type' not in query
+        assert params is None
+
 
 class TestChartJson:
     def test_chart_requires_login(self, client, mock_db):
@@ -563,6 +590,38 @@ class TestChartJson:
         assert data['Borrowed'] == 10
         assert data['Available'] == 50 - 10 - 0 - 2 - 0 - 0
 
+    def test_chart_borrow_type_filter(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [(1, 2)]
+        resp = librarian_client.get(
+            '/librarian/analytics/chart?name=borrowings_trend&borrow_type=overnight')
+        assert resp.status_code == 200
+        assert resp.get_json()['filters'] == {'borrow_type': 'overnight'}
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'borrow_type = %s' in query
+        assert params[-1] == 'overnight'
+
+    def test_chart_borrow_type_combines_with_department(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [('BSIT', 12)]
+        resp = librarian_client.get(
+            '/librarian/analytics/chart?name=borrowings_by_department'
+            '&department=BSIT&borrow_type=daily_circulation')
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body['filters'] == {'departments': ['BSIT'],
+                                   'borrow_type': 'daily_circulation'}
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'b.department IN (%s)' in query
+        assert 'c.borrow_type = %s' in query
+        assert params[-2:] == ('BSIT', 'daily_circulation')
+
+    def test_chart_invalid_borrow_type_ignored(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get(
+            '/librarian/analytics/chart?name=top_books&borrow_type=weekly')
+        assert resp.status_code == 200
+        assert resp.get_json()['filters'] == {}
+        assert 'borrow_type' not in mock_db['fetch_all'].call_args[0][0]
+
 
 class TestChartFilterControls:
     def test_page_embeds_chart_filters(self, librarian_client, mock_db):
@@ -583,6 +642,11 @@ class TestChartFilterControls:
         assert b'id="dept-checks"' in resp.data
         assert b'id="role-checks"' in resp.data
         assert b'/librarian/analytics/chart' in resp.data
+        # borrow-type selector is injected for circulation-backed charts
+        assert b'BORROW_TYPE_CHARTS' in resp.data
+        assert b'data-f="borrow_type"' in resp.data
+        assert b'value="overnight"' in resp.data
+        assert b'value="daily_circulation"' in resp.data
 
     def test_collection_table_controls_work(self, librarian_client, mock_db):
         """Search + status filter are real inputs; View All links go somewhere."""
