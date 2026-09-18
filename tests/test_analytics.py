@@ -363,6 +363,80 @@ class TestDashboardExport:
         assert _jsonable([(date(2026, 5, 1), decimal.Decimal('4.5'))]) == [['2026-05-01', 4.5]]
         assert _jsonable(20.0) == 20.0
 
+
+class TestReportCharts:
+    def _export(self, librarian_client, kpi_type, **overrides):
+        data = {'kpi_type': kpi_type, 'format': 'pdf'}
+        data.update(overrides)
+        resp = librarian_client.post('/librarian/analytics/export', data=data)
+        assert resp.status_code == 200
+        assert resp.content_type == 'application/pdf'
+        assert resp.data[:4] == b'%PDF'
+        return resp.data
+
+    def test_pie_sections(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [('A', 10), ('B', 5), ('C', 0)]
+        mock_db['fetch_one'].return_value = (20,)
+        for kpi in ('copies_by_status', 'top_categories', 'by_user_type',
+                    'collection_by_category'):
+            self._export(librarian_client, kpi)
+
+    def test_pie_all_zero_skipped(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [('A', 0)]
+        mock_db['fetch_one'].return_value = (0,)
+        self._export(librarian_client, 'copies_by_status')
+
+    def test_pie_many_slices_capped(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [(f'Cat {i}', i + 1) for i in range(15)]
+        self._export(librarian_client, 'top_categories')
+
+    def test_line_sections(self, librarian_client, mock_db):
+        from datetime import date, timedelta
+        base = date(2026, 5, 1)
+        mock_db['fetch_all'].return_value = [
+            (base + timedelta(days=i), (i * 7) % 13) for i in range(10)]
+        self._export(librarian_client, 'trend_borrowings')
+        self._export(librarian_client, 'trend_overdue')
+
+    def test_line_long_trend_strided(self, librarian_client, mock_db):
+        from datetime import date, timedelta
+        base = date(2026, 1, 1)
+        mock_db['fetch_all'].return_value = [
+            (base + timedelta(days=i), i % 7 + 1) for i in range(200)]
+        self._export(librarian_client, 'trend_borrowings')
+
+    def test_bar_sections(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [
+            ('Some Very Long Book Title That Overflows', 'Author Name Here', 42),
+            ('B', 'C', 7),
+        ]
+        for kpi in ('top_books', 'high_demand'):
+            self._export(librarian_client, kpi)
+        mock_db['fetch_all'].return_value = [(f'Program {i}', i + 1) for i in range(12)]
+        self._export(librarian_client, 'books_borrowed_per_program')
+        mock_db['fetch_all'].return_value = [('Clean Code', 50)]
+        self._export(librarian_client, 'most_borrowed_titles')
+
+    def test_non_numeric_values_do_not_crash(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [('A', 'oops'), (None, None)]
+        self._export(librarian_client, 'top_categories')
+        self._export(librarian_client, 'trend_borrowings')
+
+    def test_empty_section_no_chart(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = []
+        mock_db['fetch_one'].return_value = (0,)
+        self._export(librarian_client, 'top_books')
+
+    def test_charts_embedded_in_pdf(self, librarian_client, mock_db):
+        """A charted section must produce vector drawing ops in the PDF."""
+        mock_db['fetch_all'].return_value = [('Science', 30), ('Arts', 10)]
+        with_charts = self._export(librarian_client, 'top_categories')
+        mock_db['fetch_all'].return_value = []
+        mock_db['fetch_one'].return_value = (0,)
+        without_charts = self._export(librarian_client, 'underutilized_titles')
+        assert len(with_charts) > len(without_charts)
+
+
 class TestChartFilterModels:
     def test_borrowed_per_program_department_filter(self, mock_db):
         from app.analytics.models import books_borrowed_per_program

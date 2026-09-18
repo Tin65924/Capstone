@@ -16,6 +16,10 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+from reportlab.graphics.shapes import Drawing, Rect, String
+from reportlab.graphics.charts.piecharts import Pie
+from reportlab.graphics.charts.barcharts import HorizontalBarChart
+from reportlab.graphics.charts.lineplots import LinePlot
 
 from . import analytics_bp
 from app.auth.decorators import librarian_required
@@ -541,6 +545,154 @@ def _format_period(start_date, end_date, preset, from_str, to_str):
     return 'All Time'
 
 
+_CHART_COLORS = [
+    colors.HexColor(c) for c in (
+        '#1e3a8a', '#1d4ed8', '#0ea5e9', '#10b981',
+        '#f59e0b', '#8b5cf6', '#ef4444', '#64748b',
+    )
+]
+_CHART_SLATE_700 = colors.HexColor('#334155')
+_CHART_SLATE_300 = colors.HexColor('#cbd5e1')
+
+_PIE_SECTIONS = frozenset({
+    'top_categories', 'collection_by_category', 'by_user_type', 'copies_by_status',
+})
+_LINE_SECTIONS = frozenset({'trend_borrowings', 'trend_overdue'})
+_BAR_SECTIONS = frozenset({
+    'books_borrowed_per_program', 'most_borrowed_titles', 'top_books', 'high_demand',
+})
+
+
+def _chart_num(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _chart_short(label, limit=20):
+    text = str(label)
+    return text if len(text) <= limit else text[:limit - 1] + '…'
+
+
+def _pie_drawing(pairs, width):
+    """Pie + hand-drawn legend. Returns None when there is nothing to plot."""
+    vals = [max(_chart_num(v), 0) for _, v in pairs]
+    if sum(vals) <= 0:
+        return None
+    slices = list(zip([p[0] for p in pairs], vals))
+    if len(slices) > 8:
+        head, tail = slices[:7], slices[7:]
+        slices = head + [('Other', sum(v for _, v in tail))]
+        vals = [v for _, v in slices]
+    legend_w = 190
+    pie_d = 140
+    d = Drawing(width, 170)
+    pc = Pie()
+    pc.x = 10
+    pc.y = 10
+    pc.width = pie_d
+    pc.height = pie_d
+    pc.data = [v for _, v in slices]
+    pc.slices.strokeWidth = 0.5
+    pc.slices.strokeColor = colors.white
+    for i in range(len(slices)):
+        pc.slices[i].fillColor = _CHART_COLORS[i % len(_CHART_COLORS)]
+    d.add(pc)
+    lx = pie_d + 30
+    for i, (label, val) in enumerate(slices):
+        y = 150 - i * 17
+        d.add(Rect(lx, y - 9, 10, 10, strokeColor=None,
+                   fillColor=_CHART_COLORS[i % len(_CHART_COLORS)]))
+        d.add(String(lx + 15, y - 7, '%s (%g)' % (_chart_short(label), val),
+                     fontName='Helvetica', fontSize=7, fillColor=_CHART_SLATE_700))
+    return d
+
+
+def _bar_drawing(pairs, width):
+    """Horizontal bars for top-N label/value rows."""
+    pairs = pairs[:10]
+    vals = [_chart_num(v) for _, v in pairs]
+    if not pairs or max(vals) <= 0:
+        return None
+    n = len(pairs)
+    height = max(80, min(24 * n + 30, 260))
+    d = Drawing(width, height)
+    bc = HorizontalBarChart()
+    bc.x = 130
+    bc.y = 10
+    bc.width = width - 140
+    bc.height = height - 20
+    bc.data = [vals]
+    bc.strokeColor = None
+    bc.bars[0].fillColor = _CHART_COLORS[1]
+    bc.categoryAxis.labels.boxAnchor = 'ne'
+    bc.categoryAxis.labels.dx = -6
+    bc.categoryAxis.labels.fontSize = 7
+    bc.categoryAxis.labels.fontName = 'Helvetica'
+    bc.categoryAxis.categoryNames = [_chart_short(p[0], 16) for p in pairs]
+    bc.valueAxis.valueMin = 0
+    bc.valueAxis.valueMax = max(vals) * 1.15
+    bc.valueAxis.labels.fontSize = 6
+    bc.valueAxis.labels.fontName = 'Helvetica'
+    bc.valueAxis.visibleGrid = 1
+    bc.valueAxis.gridStrokeColor = _CHART_SLATE_300
+    d.add(bc)
+    return d
+
+
+def _line_drawing(pairs, width, color):
+    """Line chart for daily (date, count) rows, strided to at most 40 points."""
+    if len(pairs) > 40:
+        stride = -(-len(pairs) // 40)
+        pairs = pairs[::stride]
+    ys = [_chart_num(v) for _, v in pairs]
+    if not pairs or max(ys) <= 0:
+        return None
+    n = len(pairs)
+    d = Drawing(width, 175)
+    lp = LinePlot()
+    lp.x = 35
+    lp.y = 25
+    lp.width = width - 45
+    lp.height = 125
+    lp.data = [[(x, y) for x, y in enumerate(ys)]]
+    lp.lines[0].strokeColor = color
+    lp.lines[0].strokeWidth = 2
+    lp.xValueAxis.valueMin = 0
+    lp.xValueAxis.valueMax = max(n - 1, 1)
+    lp.xValueAxis.visibleLabels = 0
+    lp.xValueAxis.visibleTicks = 0
+    lp.yValueAxis.valueMin = 0
+    lp.yValueAxis.valueMax = max(ys) * 1.15
+    lp.yValueAxis.labels.fontSize = 6
+    lp.yValueAxis.labels.fontName = 'Helvetica'
+    lp.yValueAxis.visibleGrid = 1
+    lp.yValueAxis.gridStrokeColor = _CHART_SLATE_300
+    d.add(lp)
+    d.add(String(35, 8, _chart_short(pairs[0][0], 16),
+                 fontName='Helvetica', fontSize=7, fillColor=_CHART_SLATE_700))
+    tail = _chart_short(pairs[-1][0], 16)
+    d.add(String(width - 8 - len(tail) * 4.2, 8, tail,
+                 fontName='Helvetica', fontSize=7, fillColor=_CHART_SLATE_700))
+    return d
+
+
+def _section_chart(kt, rows, width):
+    """Build a chart Drawing for a report section, or None for table-only."""
+    data = [r for r in (rows[1:] if len(rows) > 1 else [])]
+    if not data:
+        return None
+    if kt in _PIE_SECTIONS:
+        return _pie_drawing([(r[0], r[1]) for r in data if len(r) > 1], width)
+    if kt in _LINE_SECTIONS:
+        color = _CHART_COLORS[6] if kt == 'trend_overdue' else _CHART_COLORS[0]
+        return _line_drawing([(r[0], r[1]) for r in data if len(r) > 1], width, color)
+    if kt in _BAR_SECTIONS:
+        return _bar_drawing([(r[0], r[1]) for r in data if len(r) > 1], width)
+    return None
+
+
 def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
                from_str='', to_str=''):
     """Build a polished PDF report from (kpi_type, kpi_data) sections."""
@@ -768,6 +920,11 @@ def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
 
         # Render table / metric
         rows = _as_2d_rows(kt, kpi_data)
+
+        chart = _section_chart(kt, rows, doc.width)
+        if chart is not None:
+            story.append(chart)
+            story.append(Spacer(1, 6))
 
         if kt == 'utilization_rate':
             # Metric hero card
