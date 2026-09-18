@@ -147,3 +147,66 @@ class TestRoleDashboards:
         resp = client.get('/admin')
         assert resp.status_code == 302
         assert '/login' in resp.location
+
+
+class TestDashboardAttention:
+    PENDING = [(1, 'a@mcst.edu.ph', 'Pending User', 'Student', '2026-01-01', '1', 'CS')]
+    GROUPS = [(1, 'T', 'A', 10, 3, 2, 0, 0)]
+
+    def test_attention_counts(self, mock_db):
+        from app.main.models import get_attention_summary
+        mock_db['fetch_one'].side_effect = [(10,), (3,), (1,)]
+        mock_db['fetch_all'].side_effect = [self.PENDING, self.GROUPS]
+        assert get_attention_summary() == {
+            'overdue_items': 3, 'due_soon': 1,
+            'pending_users': 1, 'waiting_reservations': 5,
+        }
+
+    def test_dashboard_stats_extended(self, mock_db):
+        from app.main.models import get_dashboard_stats
+        mock_db['fetch_one'].side_effect = [(100,), (10,), (4,), (3,)]
+        mock_db['fetch_all'].side_effect = [self.GROUPS, [], [(7,)]]
+        stats = get_dashboard_stats()
+        assert stats['reservations_waiting'] == 5
+        assert stats['procurement_open'] == 1
+
+    def test_waiting_reservations_skips_bad_rows(self, mock_db):
+        from app.main.models import count_waiting_reservations
+        mock_db['fetch_all'].return_value = [
+            (1, 'T', 'A', 10, 3, 2, 0, 0), ('short',), (1, 'T', 'A', 1, 'x', 0, 0, 0),
+        ]
+        assert count_waiting_reservations() == 5
+
+    def test_librarian_dashboard_shows_panel(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (100,), (10,), (4,), (3,), (10,), (3,), (1,),
+        ]
+        mock_db['fetch_all'].side_effect = [
+            self.GROUPS, [], [(7,)], [], [], self.PENDING, self.GROUPS,
+        ]
+        resp = librarian_client.get('/librarian')
+        assert resp.status_code == 200
+        assert b'Needs Attention' in resp.data
+        assert b'Overdue loans' in resp.data
+        assert b'Due soon' in resp.data
+        assert b'Pending approvals' in resp.data
+        assert b'Waiting reservations' in resp.data
+        assert b'Reservations' in resp.data
+        assert b'To Order' in resp.data
+        assert b'/librarian/reservations' in resp.data
+        assert b'/librarian/procurement' in resp.data
+        assert b'/librarian/users' in resp.data
+
+    def test_dashboard_all_clear_state(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian')
+        assert resp.status_code == 200
+        assert b'All clear' in resp.data
+
+    def test_admin_dashboard_shows_panel(self, admin_client, mock_db):
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        resp = admin_client.get('/admin')
+        assert resp.status_code == 200
+        assert b'Needs Attention' in resp.data
