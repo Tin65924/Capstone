@@ -2,7 +2,7 @@ from flask import render_template, redirect, url_for, jsonify, request, flash, c
 from datetime import date, datetime
 from flask_login import login_required, current_user
 from . import main_bp
-from .models import get_dashboard_stats, get_recent_activity, get_daily_borrows
+from .models import get_dashboard_stats, get_recent_activity, get_daily_borrows, get_attention_summary
 from app.cataloging.models import get_recent_books, suggest_book_values, get_book_by_title_author_isbn
 from app.auth.decorators import librarian_required, admin_required
 
@@ -357,8 +357,10 @@ def librarian_dashboard():
     stats = get_dashboard_stats()
     activity = get_recent_activity(5)
     daily = get_daily_borrows(6)
+    attention = get_attention_summary()
     return render_template('dashboard/dashboard.html', stats=stats,
                            activity=activity, daily=daily,
+                           attention=attention,
                            sidebar='components/librarian_sidebar_nav.html')
 
 
@@ -369,6 +371,8 @@ def admin_dashboard():
     stats = get_dashboard_stats()
     activity = get_recent_activity(5)
     daily = get_daily_borrows(6)
+    attention = get_attention_summary()
     return render_template('dashboard/dashboard.html', stats=stats,
                            activity=activity, daily=daily,
+                           attention=attention,
                            sidebar='components/admin_sidebar_nav.html')

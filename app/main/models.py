@@ -1,4 +1,10 @@
 from app.database import db
+from app.auth.models import get_pending_users
+from app.circulation.models import (
+    get_circulation_stats,
+    get_reservations_grouped,
+)
+from app.procurement.models import get_procurement_items
 
 
 def get_dashboard_stats():
@@ -19,6 +25,36 @@ def get_dashboard_stats():
         'active_loans': active_loans[0] if active_loans else 0,
         'open_requests': open_requests[0] if open_requests else 0,
         'overdue_items': overdue[0] if overdue else 0,
+        'reservations_waiting': count_waiting_reservations(),
+        'procurement_open': count_open_procurement(),
+    }
+
+
+def count_waiting_reservations():
+    """Reservations still needing librarian action (waiting + allocated)."""
+    total = 0
+    for row in get_reservations_grouped() or []:
+        try:
+            total += int(row[4] or 0) + int(row[5] or 0)
+        except (IndexError, TypeError, ValueError):
+            continue
+    return total
+
+
+def count_open_procurement():
+    """Procurement items not yet delivered (for ordering + ordered)."""
+    return len(get_procurement_items('for_ordering') or []) + \
+        len(get_procurement_items('ordered') or [])
+
+
+def get_attention_summary():
+    """Action-needed counts for the dashboard attention panel."""
+    circ = get_circulation_stats()
+    return {
+        'overdue_items': circ.get('overdue_items', 0),
+        'due_soon': circ.get('due_in_days', 0),
+        'pending_users': len(get_pending_users() or []),
+        'waiting_reservations': count_waiting_reservations(),
     }
 
 
