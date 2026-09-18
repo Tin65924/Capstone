@@ -301,7 +301,6 @@ def analytics_page():
         to_date=to_str,
         period_label=period_label,
         dashboard=dashboard,
-        period_label=_format_period(start_date, end_date, preset, from_str, to_str),
     )
 
 
