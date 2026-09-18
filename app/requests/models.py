@@ -17,14 +17,11 @@ def normalize_title(title):
     return ' '.join(words)
 
 def create_request(requester_id, book_title, author=None):
-    matched_book_id = check_existing_in_collection(book_title)
-    status = 'existing_in_collection' if matched_book_id else 'pending_review'
-
     rows = db.execute(
         '''INSERT INTO request_records (requester_id, book_title, author, request_status, matched_book_id)
            VALUES (%s, %s, %s, %s, %s)
            RETURNING request_id''',
-        (requester_id, book_title, author, status, matched_book_id)
+        (requester_id, book_title, author, 'pending_review', None)
     )
     return rows[0][0]
 
@@ -41,7 +38,25 @@ def get_requests(status=None):
             'SELECT * FROM request_records WHERE request_status = %s ORDER BY request_date DESC',
             (status,)
         )
-    return db.fetch_all('SELECT * FROM request_records ORDER BY request_date DESC')
+    return db.fetch_all(
+        'SELECT * FROM request_records '
+        "ORDER BY CASE request_status "
+        "WHEN 'pending_review' THEN 0 "
+        "WHEN 'approved' THEN 1 "
+        "WHEN 'rejected' THEN 2 "
+        "WHEN 'procured' THEN 3 "
+        "ELSE 4 END, request_date DESC"
+    )
+
+# "All" view prioritizes actionable statuses first.
+STATUS_PRIORITY_ORDER = (
+    "ORDER BY CASE r.request_status "
+    "WHEN 'pending_review' THEN 0 "
+    "WHEN 'approved' THEN 1 "
+    "WHEN 'rejected' THEN 2 "
+    "WHEN 'procured' THEN 3 "
+    "ELSE 4 END, r.request_date DESC"
+)
 
 PER_PAGE = 50
 
@@ -70,7 +85,11 @@ def get_requests_with_details(status=None, search=None, page=1):
     if conditions:
         base_query += ' WHERE ' + ' AND '.join(conditions)
 
-    base_query += ' ORDER BY r.request_date DESC LIMIT %s OFFSET %s'
+    if status:
+        base_query += ' ORDER BY r.request_date DESC LIMIT %s OFFSET %s'
+    else:
+        # "All" view: Pending first, then Approved, Rejected, Procured.
+        base_query += ' ' + STATUS_PRIORITY_ORDER + ' LIMIT %s OFFSET %s'
     params.append(PER_PAGE)
     params.append((page - 1) * PER_PAGE)
 
@@ -153,25 +172,3 @@ def check_duplicate_request(requester_id, book_title):
             return True
 
     return False
-
-
-def check_existing_in_collection(book_title):
-    normalized = normalize_title(book_title)
-
-    exact = db.fetch_one(
-        'SELECT book_id FROM book_catalog WHERE LOWER(title) = LOWER(%s)',
-        (book_title,)
-    )
-    if exact:
-        return exact[0]
-
-    first_word = normalized.split(' ')[0] if normalized else ''
-    candidates = db.fetch_all(
-        "SELECT book_id, title FROM book_catalog WHERE LOWER(title) LIKE LOWER(%s)",
-        (first_word + '%',)
-    )
-    for book_id, title in candidates:
-        if SequenceMatcher(None, normalize_title(title), normalized).ratio() >= 0.85:
-            return book_id
-
-    return None
