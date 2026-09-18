@@ -116,8 +116,9 @@ def suggest_book_values(field, prefix, limit=8):
 
 
 def get_all_books():
+    """Active books only — archived books surface solely via get_books_by_status('archived')."""
     return db.fetch_all(
-        f'SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog ORDER BY {DISTINCT_ORDER}')
+        f"SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog WHERE catalog_status = 'active' ORDER BY {DISTINCT_ORDER}")
 
 
 COPY_STATUS_FILTERS = ('overdue', 'lost_damaged', 'maintenance')
@@ -127,6 +128,7 @@ def get_books_by_copy_status(copy_status):
     """Books with at least one copy in a problem state (analytics deep-links).
 
     Same row shape as get_all_books (book_catalog.* + accession_numbers).
+    Archived books are excluded — they only appear under ?status=archived.
     """
     if copy_status == 'overdue':
         condition = (
@@ -150,7 +152,7 @@ def get_books_by_copy_status(copy_status):
         return []
     return db.fetch_all(
         f'SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers '
-        f'FROM book_catalog WHERE {condition} ORDER BY {DISTINCT_ORDER}')
+        f"FROM book_catalog WHERE book_catalog.catalog_status = 'active' AND ({condition}) ORDER BY {DISTINCT_ORDER}")
 
 
 def get_distinct_categories():
@@ -381,6 +383,12 @@ def search_books_paginated(query, field, page, per_page):
     else:
         where = ''
         args = ()
+
+    # Archived books never appear in search — only under ?status=archived.
+    if where:
+        where += " AND catalog_status = 'active'"
+    else:
+        where = "WHERE catalog_status = 'active'"
 
     count_row = db.fetch_one(
         f'SELECT COUNT(*) FROM (SELECT DISTINCT ON ({DISTINCT_ORDER}) 1 FROM book_catalog {where}) sub', args
