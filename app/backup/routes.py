@@ -68,7 +68,7 @@ def create_backup_route():
         flash(f'Backup failed: {e}', 'error')
         return redirect(url_for('backup.backup_page'))
     log_backup(filename, size_bytes, backup_type='manual', status='completed')
-    apply_retention(current_app._get_current_object(), keep_n)
+    apply_retention(current_app, keep_n)
     log_activity(current_user.id, f'backup:created:{filename}')
     flash(f'Backup created: {filename}', 'success')
     return redirect(url_for('backup.backup_page'))
@@ -127,5 +127,6 @@ def restore_backup_route(backup_id):
         return redirect(url_for('backup.backup_page'))
 
     log_activity(current_user.id, f'backup:restored:{row[1]}')
-    flash(f'Restore complete from {row[1]}. Data added after that backup was lost.', 'success')
+    flash(f'Restore complete: the database was replaced from {row[1]}. '
+          'Anything added after that backup was lost.', 'success')
     return redirect(url_for('backup.backup_page'))

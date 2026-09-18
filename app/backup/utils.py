@@ -76,6 +76,9 @@ def resolve_backup_path(filename):
 def create_backup():
     """Run pg_dump (argv list — no shell) and return (filename, size_bytes).
 
+    Dumps with --clean --if-exists so a restore is a true replace of the
+    database (DROP + recreate + reload), not an append onto live tables.
+
     Raises RuntimeError with the captured pg_dump stderr on failure.
     """
     backup_dir = get_backup_dir()
@@ -88,7 +91,8 @@ def create_backup():
     pg_dump = resolve_tool('pg_dump', 'PG_DUMP')
     try:
         subprocess.run(
-            [pg_dump, '--dbname=' + db_url, '--file=' + filepath],
+            [pg_dump, '--clean', '--if-exists',
+             '--dbname=' + db_url, '--file=' + filepath],
             check=True,
             capture_output=True,
             text=True,
@@ -111,7 +115,12 @@ def create_backup():
 
 
 def restore_backup(filename):
-    """Run psql against a stored backup file (argv list — no shell).
+    """Replace the database from a stored backup file (argv list — no shell).
+
+    Runs inside a single transaction with ON_ERROR_STOP so any failure
+    aborts the whole restore (atomic) and surfaces as an error instead of
+    a false success. The dump's --clean --if-exists DROPs make this a true
+    replace: rows added after the backup was taken are deleted.
 
     Raises FileNotFoundError if the file is missing, ValueError on
     traversal, RuntimeError with captured psql stderr on failure.
@@ -124,7 +133,8 @@ def restore_backup(filename):
     psql = resolve_tool('psql', 'PSQL')
     try:
         subprocess.run(
-            [psql, '--dbname=' + db_url, '--file=' + filepath],
+            [psql, '--dbname=' + db_url, '-v', 'ON_ERROR_STOP=1',
+             '--single-transaction', '--file=' + filepath],
             check=True,
             capture_output=True,
             text=True,

@@ -54,8 +54,27 @@ def apply_retention(app, keep_n):
     _apply_retention(app, keep_n)
 
 
+def _clamp_int(app, name, value, lo, hi, default):
+    """Coerce a schedule value to int and clamp into range (warn on fix-up)."""
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        app.logger.warning(
+            'Invalid %s=%r — falling back to %s.', name, value, default)
+        return default
+    if number < lo or number > hi:
+        app.logger.warning(
+            'Out-of-range %s=%r — clamping to %d..%d.', name, value, lo, hi)
+        return max(lo, min(hi, number))
+    return number
+
+
 def start_scheduler(app):
-    """Start the monthly APScheduler cron job. No-op in tests / if running."""
+    """Start the monthly APScheduler cron job. No-op in tests / if running.
+
+    Note: the scheduler is in-process, so it assumes a single worker. Under
+    multiple workers each process would run its own monthly backup.
+    """
     global _scheduler
     if app.config.get('TESTING'):
         return None
@@ -68,14 +87,16 @@ def start_scheduler(app):
 
     from apscheduler.schedulers.background import BackgroundScheduler
 
-    day = app.config.get('BACKUP_DAY', 1)
-    hour = app.config.get('BACKUP_HOUR', 2)
+    # Day clamped to 1..28 so the job fires every month (29-31 skip months);
+    # a typo'd env var must never silently disable backups.
+    day = _clamp_int(app, 'BACKUP_DAY', app.config.get('BACKUP_DAY', 1), 1, 28, 1)
+    hour = _clamp_int(app, 'BACKUP_HOUR', app.config.get('BACKUP_HOUR', 2), 0, 23, 2)
     _scheduler = BackgroundScheduler()
     _scheduler.add_job(
         lambda: run_scheduled_backup(app),
         'cron',
-        day=int(day),
-        hour=int(hour),
+        day=day,
+        hour=hour,
         minute=0,
         id='monthly_backup',
         replace_existing=True,

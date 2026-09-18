@@ -58,6 +58,46 @@ class TestCreateBackup:
                 assert isinstance(cmd, list)
                 assert cmd[0] == 'pg_dump'
 
+    def test_dump_uses_clean_replace_flags(self, app, tmp_path, monkeypatch):
+        """Dumps must DROP existing objects so a restore truly replaces data."""
+        from app.backup import utils as backup_utils
+        monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))
+        monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
+
+        def fake_run(cmd, **kwargs):
+            for part in cmd:
+                if part.startswith('--file='):
+                    with open(part[len('--file='):], 'w') as f:
+                        f.write('x')
+            return subprocess.CompletedProcess(cmd, 0, '', '')
+
+        with app.app_context():
+            with patch('app.backup.utils.resolve_tool', return_value='pg_dump'), \
+                 patch.object(backup_utils.subprocess, 'run', side_effect=fake_run) as mock_run:
+                backup_utils.create_backup()
+                cmd = mock_run.call_args[0][0]
+                assert '--clean' in cmd
+                assert '--if-exists' in cmd
+
+    def test_restore_uses_atomic_flags(self, app, tmp_path, monkeypatch):
+        """Restore must be single-transaction + ON_ERROR_STOP (no false success)."""
+        from app.backup import utils as backup_utils
+        monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))
+        monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
+        target = tmp_path / 'library_backup_20260101_020000.sql'
+        target.write_text('dump')
+
+        with app.app_context():
+            with patch('app.backup.utils.resolve_tool', return_value='psql'), \
+                 patch.object(backup_utils.subprocess, 'run') as mock_run:
+                mock_run.return_value = subprocess.CompletedProcess([], 0, '', '')
+                backup_utils.restore_backup('library_backup_20260101_020000.sql')
+                cmd = mock_run.call_args[0][0]
+                assert cmd[0] == 'psql'
+                assert '--single-transaction' in cmd
+                assert '-v' in cmd
+                assert 'ON_ERROR_STOP=1' in cmd
+
     def test_raises_with_stderr_on_failure(self, app, tmp_path, monkeypatch):
         from app.backup import utils as backup_utils
         monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))
@@ -299,6 +339,21 @@ class TestBackupRoutes:
         assert resp.status_code == 302
         rs.assert_not_called()
 
+    def test_restore_psql_failure_flashes_error_not_success(self, admin_client, mock_db):
+        """A mid-restore psql error must surface — never a false success."""
+        import subprocess as sp
+        mock_db['fetch_one'].return_value = _row()
+        mock_db['fetch_all'].return_value = []
+        with patch('app.backup.routes.create_backup', return_value=('safety.sql', 9)), \
+             patch('app.backup.routes.restore_backup',
+                   side_effect=RuntimeError('psql exited with status 3')), \
+             patch('app.backup.routes.apply_retention'), \
+             patch('app.backup.routes.log_activity'):
+            resp = admin_client.post('/admin/backup/1/restore', follow_redirects=True)
+        assert resp.status_code == 200
+        assert b'Restore failed' in resp.data
+        assert b'Restore complete' not in resp.data
+
 
 class TestScheduler:
     def test_job_registered_on_start(self, app):
@@ -317,6 +372,33 @@ class TestScheduler:
         from app.backup import scheduler as sched
         app.config['TESTING'] = True
         assert sched.start_scheduler(app) is None
+
+    def test_schedule_values_clamped(self, app):
+        """Typo'd BACKUP_DAY/HOUR must not silently disable backups."""
+        from app.backup import scheduler as sched
+        with patch('apscheduler.schedulers.background.BackgroundScheduler') as cls:
+            inst = cls.return_value
+            inst.running = False
+            app.config['TESTING'] = False
+            app.config['BACKUP_DAY'] = 99
+            app.config['BACKUP_HOUR'] = 99
+            sched.start_scheduler(app)
+            kwargs = inst.add_job.call_args[1]
+            assert kwargs['day'] == 28
+            assert kwargs['hour'] == 23
+
+    def test_schedule_garbage_falls_back(self, app):
+        from app.backup import scheduler as sched
+        with patch('apscheduler.schedulers.background.BackgroundScheduler') as cls:
+            inst = cls.return_value
+            inst.running = False
+            app.config['TESTING'] = False
+            app.config['BACKUP_DAY'] = 'bogus'
+            app.config['BACKUP_HOUR'] = None
+            sched.start_scheduler(app)
+            kwargs = inst.add_job.call_args[1]
+            assert kwargs['day'] == 1
+            assert kwargs['hour'] == 2
 
     def test_scheduled_run_logs_scheduled_type(self, app, mock_db):
         from app.backup import scheduler as sched

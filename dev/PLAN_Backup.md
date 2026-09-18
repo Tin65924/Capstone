@@ -77,14 +77,14 @@ Data read: `backup_log`, `backups/` directory.
 
 Data read: file. Data written: none.
 
-### Flow E — Restore from a backup
+### Flow E — Restore from a backup (atomic replace)
 
 1. Admin clicks restore icon on a history row → confirm modal (destructive warning + data-loss window note) → `POST /admin/backup/<id>/restore`.
 2. Route (`@admin_required`, CSRF-checked):
    a. **Safety step**: `create_backup()` first → auto-backup of the current state, logged (`type='manual'`, remark "pre-restore").
    b. Load the selected `.sql` file.
-   c. Run `psql` against `DATABASE_URL` (parameterized argv, no shell).
-   d. Success → `log_activity` (who/what file/when) → flash "Restore complete".
+   c. Run `psql --dbname=... -v ON_ERROR_STOP=1 --single-transaction --file=...` (parameterized argv, no shell). The single transaction makes the restore atomic: any error aborts everything and surfaces as an error flash — never a false success.
+   d. Success → `log_activity` (who/what file/when) → flash "Restore complete" (replace semantics: the DB was replaced, post-backup rows are gone).
    e. Failure → flash error; the auto-backup from (a) is the recovery point.
 3. Note: everything created after the backup's timestamp is lost on restore (data-loss window) — shown in the modal.
 
@@ -95,7 +95,8 @@ Data written: auto-backup file + `backup_log` row (safety), then the entire DB (
 ### Phase 1 — Fix utils + new models
 
 - Rewrite `create_backup()`:
-  - `subprocess.run([pg_dump, '--dbname=' + url, '--file=' + path])` — no `shell=True`.
+  - `subprocess.run([pg_dump, '--clean', '--if-exists', '--dbname=' + url, '--file=' + path])` — no `shell=True`.
+  - `--clean --if-exists` makes a restore a true replace (DROP + recreate + reload), so rows added after the backup are deleted on restore.
   - Return `(filename, size_bytes)` or raise with the captured stderr.
 - New `backup_log` table in `schema.sql`:
   ```sql
@@ -123,6 +124,8 @@ Data written: auto-backup file + `backup_log` row (safety), then the entire DB (
 ### Phase 3 — Scheduler
 
 - New `app/backup/scheduler.py`: `start_scheduler(app)` creates a `BackgroundScheduler`, adds a monthly cron job (configurable), calls `create_backup` + `log_backup`.
+- The scheduler is in-process and assumes a single worker (`run.py` is single-process). Under multiple workers each process would run its own monthly backup — needs a DB-backed lock if the deploy ever scales out.
+- `BACKUP_DAY` is clamped to 1–28 (29–31 would skip months) and `BACKUP_HOUR` to 0–23, with a warning log on fix-up; scheduler-start failures are logged loudly in `create_app` so a typo'd env var can't silently disable backups.
 - Call `start_scheduler(app)` in `create_app` (guard: don't start in tests or when `WERKZEUG_RUN_MAIN` is the reloader child only).
 - Config: `BACKUP_SCHEDULE` (cron fields) + `BACKUP_KEEP` (retention count) in `config.py` from env. Schedule env-configurable: `BACKUP_DAY` (default 1), `BACKUP_HOUR` (default 2). Retention default 12.
 
@@ -160,3 +163,7 @@ Data written: auto-backup file + `backup_log` row (safety), then the entire DB (
 ## Open questions
 
 1. **Post-restore session**: after a successful restore, should the admin be logged out / prompted to re-login (schema may differ), or stay logged in? (Deferred — recommend re-login prompt.)
+
+## Known limitations
+
+- **`reset_db` orphans dump files**: `auth/routes.py:reset_db` drops the schema (wiping `backup_log`, recreated by `run_schema`) but leaves `backups/*.sql` files on disk unreferenced. Retention only cleans files recorded in `backup_log`, so orphans persist until deleted manually. Next backup/retention cycle self-heals the log itself.
