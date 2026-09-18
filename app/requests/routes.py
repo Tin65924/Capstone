@@ -12,7 +12,9 @@ from .models import (
 from app.auth.decorators import librarian_required
 
 
-VALID_STATUSES = ['pending_review', 'approved', 'rejected', 'existing_in_collection', 'procured']
+# Legacy 'existing_in_collection' rows still sort last under "All" and render
+# with the generic badge; the status can no longer be created or filtered.
+VALID_STATUSES = ['pending_review', 'approved', 'rejected', 'procured']
 
 @requests_bp.route('/librarian/requests')
 @login_required
