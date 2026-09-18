@@ -355,8 +355,22 @@
     }, true);
 
     // Exposed so pages that inject [data-suggest] inputs dynamically
-    // (e.g. modals) can wire them after insertion.
-    window.MCSTAutosuggest = { rescan: init };
+    // (e.g. modals) can wire them after insertion, and so category
+    // pickers can check values against the category_record filter.
+    // recordFilters fills in asynchronously; likelyContains reads it live.
+    var bloomPromise = null;
+
+    function ensureBloom() {
+        if (!bloomPromise) bloomPromise = loadBloomFilters();
+        return bloomPromise;
+    }
+
+    window.MCSTAutosuggest = {
+        rescan: init,
+        filters: recordFilters,
+        likelyContains: likelyContains,
+        ensureBloom: ensureBloom
+    };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);

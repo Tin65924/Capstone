@@ -810,6 +810,10 @@ class TestChartFilterControls:
         assert b'js/autosuggest.js' in resp.data
         assert b'data-mf="catadd"' in resp.data
         assert b'MCSTAutosuggest' in resp.data
+        # category bloom check: unknown values get a warning, not a block
+        assert b'category_record' in resp.data
+        assert b'ensureBloom' in resp.data
+        assert b'data-mf="catwarn"' in resp.data
         # copies-by-status is a snapshot: no borrow-type option
         assert b"copies_by_status: { title: 'Copies by Status', controls: ['dates'] }" in resp.data
         # inline filter rows are gone: cards stay compact

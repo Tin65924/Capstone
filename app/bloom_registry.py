@@ -5,6 +5,8 @@ The filters hold composite "record keys":
   dedup rule in :func:`app.cataloging.models.get_book_by_title_author_isbn`
   (blank ISBN matches books with no ISBN).
 - ``student_record``: each borrower ``id_number``.
+- ``category_record``: each distinct ``subject_classification`` (powers the
+  analytics category filter's known-value check).
 
 They are built lazily from the database and rebuilt the next time a relevant
 write calls :func:`BloomRegistry.mark_dirty`. A ``False`` result from a filter
@@ -24,6 +26,11 @@ SEP = '\x1f'
 def record_key(title, author, isbn=''):
     """Composite key for a book record; must match the client (autosuggest.js)."""
     return f'{title.strip().lower()}{SEP}{author.strip().lower()}{SEP}{(isbn or "").strip().lower()}'
+
+
+def category_key(name):
+    """Normalized key for a collection category; must match the client."""
+    return (name or '').strip().lower()
 
 
 class BloomRegistry:
@@ -57,6 +64,15 @@ class BloomRegistry:
         for (id_number,) in id_rows:
             student_bf.add(id_number.strip().lower())
         filters['student_record'] = student_bf
+
+        cat_rows = db.fetch_all(
+            "SELECT DISTINCT subject_classification FROM book_catalog "
+            "WHERE subject_classification IS NOT NULL AND subject_classification != ''"
+        )
+        cat_bf = BloomFilter(len(cat_rows) or 1)
+        for (name,) in cat_rows:
+            cat_bf.add(category_key(name))
+        filters['category_record'] = cat_bf
 
         return filters
 

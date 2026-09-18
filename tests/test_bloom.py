@@ -1,7 +1,7 @@
 import pytest
 
 from app.bloom import BloomFilter, optimal_params
-from app.bloom_registry import bloom_registry, record_key
+from app.bloom_registry import bloom_registry, record_key, category_key
 
 BOOK_ROWS = [
     ('The Great Gatsby', 'F. Scott Fitzgerald', '9780743273565'),
@@ -9,6 +9,7 @@ BOOK_ROWS = [
     ('A Book Without Isbn', 'Anonymous', ''),
 ]
 ID_ROWS = [('2024-8192',), ('2024-0001',)]
+CAT_ROWS = [('Physics',), ('Computer Science',)]
 
 
 def _mock_fetch_all_by_query(mock_db):
@@ -17,6 +18,8 @@ def _mock_fetch_all_by_query(mock_db):
             return BOOK_ROWS
         if 'FROM borrowers WHERE id_number IS NOT NULL' in query:
             return ID_ROWS
+        if 'subject_classification IS NOT NULL' in query:
+            return CAT_ROWS
         return []
     mock_db['fetch_all'].side_effect = side_effect
 
@@ -66,13 +69,19 @@ class TestRecordKey:
         assert record_key('Title', 'Author', '') == record_key('title', 'author', None)
 
 
+class TestCategoryKey:
+    def test_key_normalizes(self):
+        assert category_key('  Physics ') == 'physics'
+        assert category_key(None) == ''
+
+
 class TestBloomApi:
     def test_endpoint_returns_record_filters(self, client, mock_db):
         _mock_fetch_all_by_query(mock_db)
         resp = client.get('/api/bloom')
         assert resp.status_code == 200
         data = resp.get_json()
-        for key in ('book_record', 'student_record'):
+        for key in ('book_record', 'student_record', 'category_record'):
             assert key in data
             assert 'm' in data[key] and 'k' in data[key] and 'bits' in data[key]
 
@@ -91,6 +100,15 @@ class TestBloomApi:
         assert '2024-8192' in student_bf
         assert '2024-0001' in student_bf
         assert '9999-9999' not in student_bf
+
+    def test_category_record_reflects_db(self, client, mock_db):
+        _mock_fetch_all_by_query(mock_db)
+        data = client.get('/api/bloom').get_json()
+        cat_bf = BloomFilter.from_payload(**data['category_record'])
+        assert 'physics' in cat_bf
+        assert 'Physics' in cat_bf  # case normalization
+        assert 'computer science' in cat_bf
+        assert 'Never Taught 12345' not in cat_bf
 
     def test_rebuild_after_mark_dirty(self, client, mock_db):
         _mock_fetch_all_by_query(mock_db)

@@ -1014,6 +1014,25 @@ function syncGlobalFilterCustomDates() {
             }).join('') || '<span class="text-[11px] text-slate-400">No categories selected — all will be shown.</span>';
         }
 
+        function catKnownInCatalog(v) {
+            var A = window.MCSTAutosuggest;
+            if (!A || !A.filters || !A.filters.category_record || !A.likelyContains) return null;
+            try {
+                return !!A.likelyContains(A.filters.category_record, v);
+            } catch (e) { return null; }
+        }
+
+        function showCatWarn(message) {
+            var warn = document.querySelector('#chartFilterBody [data-mf="catwarn"]');
+            if (!warn) return;
+            if (message) {
+                warn.textContent = message;
+                warn.classList.remove('hidden');
+            } else {
+                warn.classList.add('hidden');
+            }
+        }
+
         function addCatChip() {
             var body = document.getElementById('chartFilterBody');
             var input = body.querySelector('[data-mf="catinput"]');
@@ -1023,6 +1042,11 @@ function syncGlobalFilterCustomDates() {
             var existing = getCatChips().map(function (c) { return c.toLowerCase(); });
             if (existing.indexOf(v.toLowerCase()) === -1) {
                 setCatChips(getCatChips().concat([v]));
+            }
+            if (catKnownInCatalog(v) === false) {
+                showCatWarn('"' + v + '" is not in the catalog — the chart will be empty.');
+            } else {
+                showCatWarn(null);
             }
             input.value = '';
             input.focus();
@@ -1048,6 +1072,7 @@ function syncGlobalFilterCustomDates() {
                         + '<button type="button" data-mf="catadd" class="shrink-0 text-sm font-bold px-4 py-2 rounded-lg bg-primary text-white">Add</button>'
                         + '</div>'
                         + '<div data-mf="catchips" class="flex flex-wrap gap-1.5 mt-2"></div>'
+                        + '<p data-mf="catwarn" class="hidden text-[11px] text-amber-600 mt-1"></p>'
                         + '<p class="text-[11px] text-slate-400 mt-1">No categories selected means all.</p></div>';
                 } else if (c === 'borrow_type') {
                     html += '<div><span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Borrow type</span>'
@@ -1088,6 +1113,9 @@ function syncGlobalFilterCustomDates() {
                 });
                 if (window.MCSTAutosuggest && window.MCSTAutosuggest.rescan) {
                     window.MCSTAutosuggest.rescan();
+                }
+                if (window.MCSTAutosuggest && window.MCSTAutosuggest.ensureBloom) {
+                    window.MCSTAutosuggest.ensureBloom();
                 }
             }
         }
