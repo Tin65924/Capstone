@@ -14,8 +14,16 @@ def _date_filter(clause_prefix, column):
     return parts, params
 
 
-def books_borrowed_per_program(start_date=None, end_date=None):
+def books_borrowed_per_program(start_date=None, end_date=None, departments=None,
+                                borrow_type=None):
     parts, params = _date_filter({'start': start_date, 'end': end_date}, 'c.borrow_date')
+    departments = [d.strip() for d in (departments or []) if d and d.strip()]
+    if departments:
+        parts.append('b.department IN ({})'.format(', '.join(['%s'] * len(departments))))
+        params.extend(departments)
+    if borrow_type:
+        parts.append('c.borrow_type = %s')
+        params.append(borrow_type)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
         '''SELECT COALESCE(NULLIF(b.department, ''),
@@ -131,9 +139,12 @@ def count_total_copies():
     return row[0] if row else 0
 
 
-def count_circulation_status(start_date=None, end_date=None):
+def count_circulation_status(start_date=None, end_date=None, borrow_type=None):
     """Return [(transaction_status, count)] for active/returned/overdue."""
     parts, params = _range_clause('borrow_date', start_date, end_date)
+    if borrow_type:
+        parts.append('borrow_type = %s')
+        params.append(borrow_type)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
         '''SELECT transaction_status, COUNT(*)
@@ -165,9 +176,63 @@ def inventory_state_counts():
     )
 
 
-def collection_by_category(start_date=None, end_date=None):
-    """Return [(category, titles)] grouped by subject_classification."""
+def copies_by_status_summary(start_date=None, end_date=None, borrow_type=None):
+    """Return [(status, copies)] for the Copies-by-Status chart/export.
+
+    Available = active-catalog copies minus borrowed, overdue, reserved,
+    lost/damaged (including lost-flagged loans) and missing (maintenance)
+    copies, floored at zero. This matches ``compute_dashboard`` in
+    ``app/analytics/routes.py`` so the KPI card and chart agree.
+    """
+    total = count_total_copies()
+    status_rows = count_circulation_status(start_date, end_date, borrow_type) or []
+    status = {}
+    for r in status_rows:
+        try:
+            status[str(r[0])] = int(r[1] or 0)
+        except (IndexError, TypeError, ValueError):
+            continue
+    borrowed = status.get('active', 0)
+    overdue = status.get('overdue', 0)
+    reserved = count_reservations()
+    inv_rows = inventory_state_counts() or []
+    inv = {}
+    for r in inv_rows:
+        try:
+            inv[str(r[0])] = int(r[1] or 0)
+        except (IndexError, TypeError, ValueError):
+            continue
+    lost_flagged_row = count_lost_flagged(start_date, end_date)
+    try:
+        lost_flagged = int(lost_flagged_row[0]) if lost_flagged_row else 0
+    except (IndexError, TypeError, ValueError):
+        lost_flagged = 0
+    lost_damaged = inv.get('lost', 0) + inv.get('damaged', 0) + lost_flagged
+    maintenance = inv.get('missing', 0)
+    available = max(total - borrowed - overdue - reserved - lost_damaged - maintenance, 0)
+    return [('Available', available), ('Borrowed', borrowed), ('Reserved', reserved),
+            ('Overdue', overdue), ('Lost / Damaged', lost_damaged),
+            ('Under Maintenance', maintenance)]
+
+
+def collection_by_category(start_date=None, end_date=None, categories=None):
+    """Return [(category, titles)] grouped by subject_classification.
+
+    categories optionally restricts to the named categories
+    (case-insensitive; 'Others' matches blank classifications).
+    """
     parts, params = _range_clause('b.date_added', start_date, end_date)
+    categories = [c.strip() for c in (categories or []) if c and c.strip()]
+    if categories:
+        conds = []
+        exact = [c for c in categories if c.lower() != 'others']
+        if exact:
+            conds.append('LOWER(b.subject_classification) IN ({})'.format(
+                ', '.join(['%s'] * len(exact))))
+            params.extend([c.lower() for c in exact])
+        if len(exact) != len(categories):
+            conds.append("(b.subject_classification IS NULL OR b.subject_classification = '')")
+        parts.append('(' + ' OR '.join(conds) + ')')
     where = 'WHERE b.catalog_status = \'active\'' + (
         ' AND ' + ' AND '.join(parts) if parts else '')
     return db.fetch_all(
@@ -178,8 +243,11 @@ def collection_by_category(start_date=None, end_date=None):
     )
 
 
-def borrowings_trend(start_date=None, end_date=None):
+def borrowings_trend(start_date=None, end_date=None, borrow_type=None):
     parts, params = _range_clause('borrow_date', start_date, end_date)
+    if borrow_type:
+        parts.append('borrow_type = %s')
+        params.append(borrow_type)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
         '''SELECT borrow_date, COUNT(*)
@@ -188,8 +256,11 @@ def borrowings_trend(start_date=None, end_date=None):
     )
 
 
-def overdue_trend(start_date=None, end_date=None):
+def overdue_trend(start_date=None, end_date=None, borrow_type=None):
     parts, params = _range_clause('borrow_date', start_date, end_date)
+    if borrow_type:
+        parts.append('borrow_type = %s')
+        params.append(borrow_type)
     parts.append("transaction_status = 'overdue'")
     return db.fetch_all(
         '''SELECT borrow_date, COUNT(*) FROM circulation_records
@@ -198,8 +269,11 @@ def overdue_trend(start_date=None, end_date=None):
     )
 
 
-def top_borrowed_categories(start_date=None, end_date=None, limit=6):
+def top_borrowed_categories(start_date=None, end_date=None, limit=6, borrow_type=None):
     parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    if borrow_type:
+        parts.append('c.borrow_type = %s')
+        params.append(borrow_type)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     params.append(limit)
     return db.fetch_all(
@@ -212,8 +286,16 @@ def top_borrowed_categories(start_date=None, end_date=None, limit=6):
     )
 
 
-def borrowings_by_user_type(start_date=None, end_date=None):
+def borrowings_by_user_type(start_date=None, end_date=None, roles=None,
+                              borrow_type=None):
     parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    roles = [r.strip() for r in (roles or []) if r and r.strip()]
+    if roles:
+        parts.append('r.role_name IN ({})'.format(', '.join(['%s'] * len(roles))))
+        params.extend(roles)
+    if borrow_type:
+        parts.append('c.borrow_type = %s')
+        params.append(borrow_type)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
         '''SELECT r.role_name, COUNT(c.circulation_id)
@@ -238,19 +320,21 @@ def circulation_overview(start_date=None, end_date=None):
         'SELECT COUNT(*) FROM circulation_records {}'.format(where), p)
     borrowers = db.fetch_one(
         'SELECT COUNT(DISTINCT borrower_id) FROM circulation_records {}'.format(where), p)
+
+    def _and(cond):
+        return (where + ' AND ' + cond) if where else ('WHERE ' + cond)
+
     overdue = db.fetch_one(
         'SELECT COUNT(*) FROM circulation_records {}'.format(
-            where + (' AND ' if where else 'WHERE ') + "transaction_status = 'overdue'"),
+            _and("transaction_status = 'overdue'")),
         p)
     avg_loan = db.fetch_one(
         '''SELECT AVG(return_date - borrow_date) FROM circulation_records
-           {} return_date IS NOT NULL'''.format(
-            (where + ' AND ' if where else 'WHERE ') if parts else 'WHERE ',
-        ),
+           {}'''.format(_and('return_date IS NOT NULL')),
         p)
     returned = db.fetch_one(
         'SELECT COUNT(*) FROM circulation_records {}'.format(
-            where + (' AND ' if where else 'WHERE ') + "transaction_status = 'returned'"),
+            _and("transaction_status = 'returned'")),
         p)
     # New additions filter on book_catalog.date_added with the same range.
     bparts, bparams = _range_clause('date_added', start_date, end_date)
@@ -281,8 +365,12 @@ def circulation_overview(start_date=None, end_date=None):
     )
 
 
-def top_borrowed_books_detailed(start_date=None, end_date=None, limit=5):
+def top_borrowed_books_detailed(start_date=None, end_date=None, limit=5,
+                                  borrow_type=None):
     parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    if borrow_type:
+        parts.append('c.borrow_type = %s')
+        params.append(borrow_type)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     params.append(limit)
     return db.fetch_all(
@@ -295,9 +383,12 @@ def top_borrowed_books_detailed(start_date=None, end_date=None, limit=5):
     )
 
 
-def high_demand_titles(start_date=None, end_date=None, limit=5):
+def high_demand_titles(start_date=None, end_date=None, limit=5, borrow_type=None):
     """Return [(title, author, current_borrows)] for active loans ranked by demand."""
     parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    if borrow_type:
+        parts.append('c.borrow_type = %s')
+        params.append(borrow_type)
     parts.append("c.transaction_status IN ('active', 'overdue')")
     params.append(limit)
     return db.fetch_all(
@@ -308,6 +399,64 @@ def high_demand_titles(start_date=None, end_date=None, limit=5):
            ORDER BY 3 DESC LIMIT %s'''.format(' AND '.join(parts)),
         tuple(params)
     )
+
+
+def borrowings_by_weekday(start_date=None, end_date=None):
+    """Return [(weekday_name, count)] Monday-first for staffing forecasts."""
+    parts, params = _range_clause('borrow_date', start_date, end_date)
+    where = 'WHERE ' + ' AND '.join(parts) if parts else ''
+    rows = db.fetch_all(
+        '''SELECT EXTRACT(DOW FROM borrow_date)::int AS dow, COUNT(*)
+           FROM circulation_records {} GROUP BY dow'''.format(where),
+        tuple(params) if params else None,
+    )
+    names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
+             'Saturday', 'Sunday']
+    by_dow = {}
+    for r in rows or []:
+        try:
+            by_dow[int(r[0])] = int(r[1] or 0)
+        except (IndexError, TypeError, ValueError):
+            continue
+    # EXTRACT(DOW) is 0=Sunday; rotate Monday-first.
+    return [(names[(d + 6) % 7], by_dow.get(d, 0)) for d in (1, 2, 3, 4, 5, 6, 0)]
+
+
+def title_demand_gaps(limit=8):
+    """Return [(title, author, waiting, available)] for pressured titles.
+
+    waiting = reservations waiting/allocated; available = copies with no
+    active loan. Ordered by waiters descending.
+    """
+    return db.fetch_all(
+        '''SELECT b.title, b.author,
+                  COUNT(DISTINCT CASE WHEN r.reservation_status IN ('waiting', 'allocated')
+                                      THEN r.reservation_id END) AS waiting,
+                  COUNT(DISTINCT a.accession_id)
+                  - COUNT(DISTINCT CASE WHEN c.transaction_status IN ('active', 'overdue')
+                                        THEN c.accession_id END) AS available
+           FROM book_catalog b
+           LEFT JOIN accession_log a ON a.book_id = b.book_id
+           LEFT JOIN circulation_records c ON c.accession_id = a.accession_id
+                AND c.transaction_status IN ('active', 'overdue')
+           LEFT JOIN reservation_queue r ON r.book_id = b.book_id
+           WHERE b.catalog_status = 'active'
+           GROUP BY b.book_id, b.title, b.author
+           HAVING COUNT(DISTINCT CASE WHEN r.reservation_status IN ('waiting', 'allocated')
+                                      THEN r.reservation_id END) > 0
+           ORDER BY waiting DESC LIMIT %s''',
+        (limit,),
+    )
+
+
+def count_accessions(start_date=None, end_date=None):
+    parts, params = _range_clause('date_accessioned', start_date, end_date)
+    where = 'WHERE ' + ' AND '.join(parts) if parts else ''
+    row = db.fetch_one(
+        'SELECT COUNT(*) FROM accession_log {}'.format(where),
+        tuple(params) if params else None,
+    )
+    return row[0] if row else 0
 
 
 def recent_circulation(limit=10):

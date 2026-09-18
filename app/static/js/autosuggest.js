@@ -91,6 +91,7 @@
             .then(function (data) {
                 if (data.book_record) recordFilters.book_record = decodePayload(data.book_record);
                 if (data.student_record) recordFilters.student_record = decodePayload(data.student_record);
+                if (data.category_record) recordFilters.category_record = decodePayload(data.category_record);
             })
             .catch(function () { /* bloom unavailable — DB check still runs */ });
     }
@@ -240,6 +241,7 @@
     }
 
     function attachSuggest(input) {
+        if (input._as) return;
         input._as = { open: false, suggestions: [], highlight: -1, skipNextSuggest: false };
         input.addEventListener('input', debounce(function () {
             if (input._as.skipNextSuggest) {
@@ -352,6 +354,24 @@
             box.classList.add('hidden');
         });
     }, true);
+
+    // Exposed so pages that inject [data-suggest] inputs dynamically
+    // (e.g. modals) can wire them after insertion, and so category
+    // pickers can check values against the category_record filter.
+    // recordFilters fills in asynchronously; likelyContains reads it live.
+    var bloomPromise = null;
+
+    function ensureBloom() {
+        if (!bloomPromise) bloomPromise = loadBloomFilters();
+        return bloomPromise;
+    }
+
+    window.MCSTAutosuggest = {
+        rescan: init,
+        filters: recordFilters,
+        likelyContains: likelyContains,
+        ensureBloom: ensureBloom
+    };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);

@@ -1,5 +1,5 @@
 import io
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from flask import render_template, request, Response, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
@@ -16,6 +16,10 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+from reportlab.graphics.shapes import Drawing, Rect, String
+from reportlab.graphics.charts.piecharts import Pie
+from reportlab.graphics.charts.barcharts import HorizontalBarChart
+from reportlab.graphics.charts.lineplots import LinePlot
 
 from . import analytics_bp
 from app.auth.decorators import librarian_required
@@ -41,6 +45,39 @@ KPI_DESCRIPTIONS = {
     'most_borrowed_titles': 'Top titles by quantity of borrows in the selected period.',
     'underutilized_titles': 'Titles with zero borrows in the selected period.',
 }
+
+# Dashboard export sections (Statistics tabs + Quick Reports). The custom KPI
+# board is removed, so these are the only exportable contents; kpi_json stays
+# limited to the board-era VALID_KPIS for backwards compatibility.
+DASHBOARD_LABELS = {
+    'trend_borrowings': 'Borrowings Trend',
+    'trend_overdue': 'Overdue Trend',
+    'top_categories': 'Top Borrowed Categories',
+    'top_books': 'Top Borrowed Books',
+    'high_demand': 'Likely High-Demand Titles',
+    'by_user_type': 'Borrowings by User Type',
+    'collection_by_category': 'Collection by Category',
+    'copies_by_status': 'Copies by Status',
+    'recent_circulation': 'Recent Circulation Activity',
+    'recent_collection': 'Recent Collection Status',
+    'circulation_summary': 'Circulation Summary',
+}
+
+DASHBOARD_DESCRIPTIONS = {
+    'trend_borrowings': 'Daily borrow counts in the selected period.',
+    'trend_overdue': 'Daily overdue counts in the selected period.',
+    'top_categories': 'Borrows grouped by subject classification.',
+    'top_books': 'Most borrowed books with authors.',
+    'high_demand': 'Active loans ranked by current demand.',
+    'by_user_type': 'Borrows grouped by account role.',
+    'collection_by_category': 'Active titles grouped by subject classification.',
+    'copies_by_status': 'Physical copies grouped by availability status.',
+    'recent_circulation': 'Latest circulation transactions.',
+    'recent_collection': 'Latest accessioned copies with status.',
+    'circulation_summary': 'Headline circulation totals for the period.',
+}
+
+EXPORTABLE_KPIS = set(VALID_KPIS) | set(DASHBOARD_LABELS)
 
 
 def resolve_dates(preset, from_str, to_str):
@@ -72,15 +109,6 @@ def resolve_dates(preset, from_str, to_str):
         return start_date, end_date
 
     return None, None
-
-
-def compute_all_kpis(start_date, end_date):
-    return {
-        'books_borrowed_per_program': models.books_borrowed_per_program(start_date, end_date),
-        'utilization_rate': models.utilization_rate(start_date, end_date),
-        'most_borrowed_titles': models.most_borrowed_titles(start_date, end_date),
-        'underutilized_titles': models.underutilized_titles(start_date, end_date),
-    }
 
 
 def _normalize_range(preset, from_str, to_str):
@@ -155,7 +183,9 @@ def compute_dashboard(start_date, end_date):
     overdue = status.get('overdue', 0)
     lost_damaged = inv_lost + inv_damaged + lost_flagged
     maintenance = inv_missing
-    available = max(total_copies - borrowed - overdue - lost_damaged - maintenance, 0)
+    # Unified with models.copies_by_status_summary: reserved copies are not
+    # available, and lost-flagged loans count as lost/damaged.
+    available = max(total_copies - borrowed - overdue - reserved - lost_damaged - maintenance, 0)
 
     by_category = _pair(_safe(models.collection_by_category, start_date, end_date))
     by_user_type = _pair(_safe(models.borrowings_by_user_type, start_date, end_date))
@@ -262,20 +292,193 @@ def analytics_page():
     # invalid presets fall back to no bounds (same as kpi_json/export_report).
     preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
     start_date, end_date = resolve_dates(preset, from_str, to_str)
-    kpi_data = compute_all_kpis(start_date, end_date)
     dashboard = compute_dashboard(start_date, end_date)
     period_label = _format_period(start_date, end_date, preset, from_str, to_str)
     return render_template(
         'analytics/analytics.html',
-        kpi_data=kpi_data,
-        kpi_labels=KPI_LABELS,
-        kpi_descriptions=KPI_DESCRIPTIONS,
         preset=preset,
         from_date=from_str,
         to_date=to_str,
         period_label=period_label,
         dashboard=dashboard,
     )
+
+
+def _trend_direction(counts):
+    """Rising/falling/flat from first-half vs second-half daily averages."""
+    if len(counts) < 4:
+        return 'flat'
+    mid = len(counts) // 2
+    first = sum(counts[:mid]) / max(mid, 1)
+    second = sum(counts[mid:]) / max(len(counts) - mid, 1)
+    if not first:
+        return 'up' if second > 0 else 'flat'
+    ratio = second / first
+    if ratio >= 1.1:
+        return 'up'
+    if ratio <= 0.9:
+        return 'down'
+    return 'flat'
+
+
+def _forecast_payload(start_date, end_date, preset='all', from_str='', to_str=''):
+    """Projections from current graphs + actionable insights.
+
+    All projections are simple run-rate extrapolations, labeled as such —
+    planning aids, not predictions. JSON-safe primitives only.
+    """
+    trend = models.borrowings_trend(start_date, end_date) or []
+    counts = []
+    for r in trend:
+        try:
+            counts.append(int(r[1] or 0))
+        except (IndexError, TypeError, ValueError):
+            continue
+    total = sum(counts)
+    if start_date is not None and end_date is not None:
+        span = max((end_date - start_date).days + 1, 1)
+    else:
+        span = max(len(counts), 1)
+    daily_avg = round(total / span, 2)
+    next_30 = int(round(daily_avg * 30))
+
+    top_cats = models.top_borrowed_categories(start_date, end_date) or []
+    cat_total = sum((c[1] or 0) for c in top_cats if len(c) > 1)
+    by_category = []
+    for c in top_cats:
+        try:
+            share = (c[1] or 0) / cat_total if cat_total else 0
+            by_category.append([c[0], int(c[1] or 0), int(round(share * next_30))])
+        except (IndexError, TypeError, ValueError):
+            continue
+
+    overdue_t = models.overdue_trend(start_date, end_date) or []
+    overdue_counts = []
+    for r in overdue_t:
+        try:
+            overdue_counts.append(int(r[1] or 0))
+        except (IndexError, TypeError, ValueError):
+            continue
+    overdue_inflow = round(sum(overdue_counts) / span, 2)
+    overdue_direction = _trend_direction(overdue_counts)
+
+    added = models.count_accessions(start_date, end_date)
+    additions_next_30 = int(round(added / span * 30))
+
+    weekday_mix = models.borrowings_by_weekday(start_date, end_date) or []
+    weekday_total = sum(w[1] for w in weekday_mix)
+    busiest = max(weekday_mix, key=lambda w: w[1])[0] if weekday_total else '-'
+
+    # 30-day demand projection: daily pace shaped by historical weekday
+    # shares, so peaks and quiet days show instead of a flat line.
+    shares = [(w[1] / weekday_total) if weekday_total else 1 / 7 for w in weekday_mix]
+    today = date.today()
+    projected_trend = []
+    for i in range(1, 31):
+        day = today + timedelta(days=i)
+        if weekday_mix:
+            value = round(daily_avg * 7 * shares[day.weekday() % 7], 1)
+        else:
+            value = round(daily_avg, 1)
+        projected_trend.append([day.isoformat(), value])
+    trend_tail = []
+    for r in trend[-30:]:
+        try:
+            label = r[0].isoformat() if hasattr(r[0], 'isoformat') else r[0]
+            trend_tail.append([label, int(r[1] or 0)])
+        except (IndexError, TypeError, ValueError):
+            continue
+
+    gaps = []
+    for r in models.title_demand_gaps() or []:
+        try:
+            waiting, available = int(r[2] or 0), int(r[3] or 0)
+        except (IndexError, TypeError, ValueError):
+            continue
+        if waiting > available:
+            gaps.append([r[0], r[1], waiting, available, waiting - available])
+
+    insights = []
+    if gaps:
+        insights.append({
+            'severity': 'warn',
+            'title': '%d title(s) have more waiters than copies' % len(gaps),
+            'detail': 'Top pressure: "%s" needs %d more cop%s.' % (
+                gaps[0][0], gaps[0][4], 'y' if gaps[0][4] == 1 else 'ies'),
+            'action_label': 'Order copies',
+            'action_url': url_for('procurement.procurement_dashboard'),
+        })
+    if overdue_direction == 'up':
+        insights.append({
+            'severity': 'warn',
+            'title': 'Overdue inflow is rising',
+            'detail': 'About %g new overdue items per day in this period.' % overdue_inflow,
+            'action_label': 'Follow up overdue',
+            'action_url': url_for('circulation.circulation_page'),
+        })
+    if by_category:
+        insights.append({
+            'severity': 'info',
+            'title': '%s leads projected demand' % by_category[0][0],
+            'detail': 'About %d of the projected %d borrows in the next 30 days.' % (
+                by_category[0][2], next_30),
+            'action_label': 'Boost acquisition',
+            'action_url': url_for('procurement.procurement_dashboard'),
+        })
+    if busiest != '-':
+        insights.append({
+            'severity': 'info',
+            'title': '%ss are the busiest day' % busiest,
+            'detail': 'Plan staffing and returns handling for peak weekday load.',
+            'action_label': 'View circulation',
+            'action_url': url_for('circulation.circulation_page'),
+        })
+    if additions_next_30:
+        insights.append({
+            'severity': 'ok',
+            'title': 'Collection growing at %d titles / 30 days' % additions_next_30,
+            'detail': 'Keep cataloging throughput to sustain the pace.',
+            'action_label': 'Add titles',
+            'action_url': url_for('cataloging.cataloging_page'),
+        })
+    if not insights:
+        insights.append({
+            'severity': 'info',
+            'title': 'Not enough activity to forecast',
+            'detail': 'Record more circulation in this period to unlock projections.',
+            'action_label': 'Open circulation',
+            'action_url': url_for('circulation.circulation_page'),
+        })
+
+    return {
+        'daily_avg': daily_avg,
+        'next_30': next_30,
+        'by_category': by_category,
+        'overdue_inflow_per_day': overdue_inflow,
+        'overdue_direction': overdue_direction,
+        'additions_next_30': additions_next_30,
+        'weekday_mix': [[w[0], int(w[1] or 0)] for w in weekday_mix],
+        'busiest_weekday': busiest,
+        'demand_gaps': gaps,
+        'insights': insights,
+        'trend_tail': trend_tail,
+        'projected_trend': projected_trend,
+        'basis': _format_period(start_date, end_date, preset, from_str, to_str),
+        'generated_at': datetime.now().strftime('%b %d, %Y %I:%M %p'),
+    }
+
+
+@analytics_bp.route('/librarian/analytics/forecast')
+@login_required
+@librarian_required
+def forecast_json():
+    """Return forecast projections for the requested range as JSON."""
+    preset = request.args.get('preset', 'all')
+    from_str = request.args.get('from', '').strip()
+    to_str = request.args.get('to', '').strip()
+    preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
+    start_date, end_date = resolve_dates(preset, from_str, to_str)
+    return jsonify(_forecast_payload(start_date, end_date, preset, from_str, to_str))
 
 
 @analytics_bp.route('/librarian/analytics/dashboard')
@@ -289,6 +492,110 @@ def dashboard_json():
     preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
     start_date, end_date = resolve_dates(preset, from_str, to_str)
     return jsonify(compute_dashboard(start_date, end_date))
+
+
+CHART_NAMES = frozenset({
+    'collection_by_category',
+    'copies_by_status',
+    'borrowings_by_department',
+    'borrowings_by_user_type',
+    'borrowings_trend',
+    'overdue_trend',
+    'top_categories',
+    'top_books',
+    'high_demand',
+})
+
+
+VALID_BORROW_TYPES = frozenset({'overnight', 'daily_circulation'})
+
+
+def _clean_list(values, limit=50):
+    """Strip blanks from a repeated query param, capped against abuse."""
+    return [v.strip() for v in (values or []) if v and v.strip()][:limit]
+
+
+def _clean_borrow_type(value):
+    """Allowlist the borrow_type filter; anything else means unfiltered."""
+    value = (value or '').strip()
+    return value if value in VALID_BORROW_TYPES else None
+
+
+def _chart_rows(rows):
+    """Make chart rows JSON-safe (dates/Decimals -> plain values)."""
+    out = []
+    for r in rows or []:
+        try:
+            out.append([c.isoformat() if hasattr(c, 'isoformat') else c for c in r])
+        except TypeError:
+            continue
+    return out
+
+
+def _run_chart(name, start_date, end_date, args):
+    borrow_type = _clean_borrow_type(args.get('borrow_type', ''))
+    if name == 'collection_by_category':
+        return models.collection_by_category(
+            start_date, end_date, _clean_list(args.getlist('category')))
+    if name == 'copies_by_status':
+        return models.copies_by_status_summary(start_date, end_date)
+    if name == 'borrowings_by_department':
+        return models.books_borrowed_per_program(
+            start_date, end_date, _clean_list(args.getlist('department')),
+            borrow_type)
+    if name == 'borrowings_by_user_type':
+        return models.borrowings_by_user_type(
+            start_date, end_date, _clean_list(args.getlist('role')), borrow_type)
+    if name == 'borrowings_trend':
+        return models.borrowings_trend(start_date, end_date, borrow_type)
+    if name == 'overdue_trend':
+        return models.overdue_trend(start_date, end_date, borrow_type)
+    if name == 'top_categories':
+        return models.top_borrowed_categories(start_date, end_date,
+                                              borrow_type=borrow_type)
+    if name == 'top_books':
+        return models.top_borrowed_books_detailed(start_date, end_date,
+                                                  borrow_type=borrow_type)
+    if name == 'high_demand':
+        return models.high_demand_titles(start_date, end_date, borrow_type=borrow_type)
+    raise ValueError('Unknown chart: %s' % name)
+
+
+def _echo_chart_filters(args):
+    echoed = {}
+    departments = _clean_list(args.getlist('department'))
+    roles = _clean_list(args.getlist('role'))
+    categories = _clean_list(args.getlist('category'))
+    borrow_type = _clean_borrow_type(args.get('borrow_type', ''))
+    if departments:
+        echoed['departments'] = departments
+    if roles:
+        echoed['roles'] = roles
+    if categories:
+        echoed['categories'] = categories
+    if borrow_type:
+        echoed['borrow_type'] = borrow_type
+    return echoed
+
+
+@analytics_bp.route('/librarian/analytics/chart')
+@login_required
+@librarian_required
+def chart_json():
+    """Return one dashboard chart's data for its own filter set as JSON."""
+    name = request.args.get('name', '')
+    if name not in CHART_NAMES:
+        return jsonify({'error': 'invalid chart name'}), 400
+    preset = request.args.get('preset', 'all')
+    from_str = request.args.get('from', '').strip()
+    to_str = request.args.get('to', '').strip()
+    preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
+    start_date, end_date = resolve_dates(preset, from_str, to_str)
+    return jsonify({
+        'chart': name,
+        'data': _chart_rows(_run_chart(name, start_date, end_date, request.args)),
+        'filters': _echo_chart_filters(request.args),
+    })
 
 
 @analytics_bp.route('/librarian/analytics/kpi')
@@ -320,6 +627,30 @@ def _as_2d_rows(kpi_type, kpi_data):
         return [('Title', 'Borrow Count')] + [(r[0], r[1]) for r in kpi_data]
     if kpi_type == 'underutilized_titles':
         return [('Title',)] + [(r[0],) for r in kpi_data]
+    if kpi_type == 'trend_borrowings':
+        return [('Date', 'Borrowings')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'trend_overdue':
+        return [('Date', 'Overdue Items')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'top_categories':
+        return [('Category', 'Borrowings')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'top_books':
+        return [('Title', 'Author', 'Borrowings')] + [(r[0], r[1], r[2]) for r in (kpi_data or [])]
+    if kpi_type == 'high_demand':
+        return [('Title', 'Author', 'Active Loans')] + [(r[0], r[1], r[2]) for r in (kpi_data or [])]
+    if kpi_type == 'by_user_type':
+        return [('User Type', 'Borrowings')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'collection_by_category':
+        return [('Category', 'Titles')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'copies_by_status':
+        return [('Status', 'Copies')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'recent_circulation':
+        return [('Date', 'TXN', 'User', 'Role', 'Title', 'Author', 'Action', 'Due', 'Status')] + \
+            [tuple(r) for r in (kpi_data or [])]
+    if kpi_type == 'recent_collection':
+        return [('Accession', 'Title', 'Category', 'Inventory State', 'Loan', 'Borrower', 'Due')] + \
+            [tuple(r) for r in (kpi_data or [])]
+    if kpi_type == 'circulation_summary':
+        return [('Metric', 'Value')] + [(r[0], r[1]) for r in (kpi_data or [])]
     raise ValueError('Unknown KPI type: %s' % kpi_type)
 
 
@@ -332,7 +663,63 @@ def _run_kpi(kpi_type, start_date, end_date):
         return models.most_borrowed_titles(start_date, end_date)
     if kpi_type == 'underutilized_titles':
         return models.underutilized_titles(start_date, end_date)
+    if kpi_type == 'trend_borrowings':
+        return models.borrowings_trend(start_date, end_date)
+    if kpi_type == 'trend_overdue':
+        return models.overdue_trend(start_date, end_date)
+    if kpi_type == 'top_categories':
+        return models.top_borrowed_categories(start_date, end_date)
+    if kpi_type == 'top_books':
+        return models.top_borrowed_books_detailed(start_date, end_date)
+    if kpi_type == 'high_demand':
+        return models.high_demand_titles(start_date, end_date)
+    if kpi_type == 'by_user_type':
+        return models.borrowings_by_user_type(start_date, end_date)
+    if kpi_type == 'collection_by_category':
+        return models.collection_by_category(start_date, end_date)
+    if kpi_type == 'copies_by_status':
+        return models.copies_by_status_summary(start_date, end_date)
+    if kpi_type == 'recent_circulation':
+        return models.recent_circulation()
+    if kpi_type == 'recent_collection':
+        return models.recent_collection_status()
+    if kpi_type == 'circulation_summary':
+        t, b, o, avg, rate, new = models.circulation_overview(start_date, end_date)
+        return [['Total borrowings', t], ['Active borrowers', b], ['Overdue items', o],
+                ['Avg. loan duration (days)', avg], ['On-time return rate (%)', rate],
+                ['New additions', new]]
     raise ValueError('Unknown KPI type: %s' % kpi_type)
+
+
+def _all_labels():
+    labels = dict(KPI_LABELS)
+    labels.update(DASHBOARD_LABELS)
+    return labels
+
+
+def _all_descriptions():
+    descriptions = dict(KPI_DESCRIPTIONS)
+    descriptions.update(DASHBOARD_DESCRIPTIONS)
+    return descriptions
+
+
+def _jsonable_cell(value):
+    if hasattr(value, 'isoformat'):
+        return value.isoformat()
+    try:
+        import decimal
+        if isinstance(value, decimal.Decimal):
+            return float(value)
+    except ImportError:
+        pass
+    return value
+
+
+def _jsonable(kpi_data):
+    if isinstance(kpi_data, list):
+        return [[_jsonable_cell(c) for c in r] if isinstance(r, (list, tuple))
+                else _jsonable_cell(r) for r in kpi_data]
+    return _jsonable_cell(kpi_data)
 
 
 def _format_period(start_date, end_date, preset, from_str, to_str):
@@ -350,6 +737,154 @@ def _format_period(start_date, end_date, preset, from_str, to_str):
             ' (Aug–Dec)' if date.today().month >= 8 else ' (Jan–May)'
         )
     return 'All Time'
+
+
+_CHART_COLORS = [
+    colors.HexColor(c) for c in (
+        '#1e3a8a', '#1d4ed8', '#0ea5e9', '#10b981',
+        '#f59e0b', '#8b5cf6', '#ef4444', '#64748b',
+    )
+]
+_CHART_SLATE_700 = colors.HexColor('#334155')
+_CHART_SLATE_300 = colors.HexColor('#cbd5e1')
+
+_PIE_SECTIONS = frozenset({
+    'top_categories', 'collection_by_category', 'by_user_type', 'copies_by_status',
+})
+_LINE_SECTIONS = frozenset({'trend_borrowings', 'trend_overdue'})
+_BAR_SECTIONS = frozenset({
+    'books_borrowed_per_program', 'most_borrowed_titles', 'top_books', 'high_demand',
+})
+
+
+def _chart_num(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _chart_short(label, limit=20):
+    text = str(label)
+    return text if len(text) <= limit else text[:limit - 1] + '…'
+
+
+def _pie_drawing(pairs, width):
+    """Pie + hand-drawn legend. Returns None when there is nothing to plot."""
+    vals = [max(_chart_num(v), 0) for _, v in pairs]
+    if sum(vals) <= 0:
+        return None
+    slices = list(zip([p[0] for p in pairs], vals))
+    if len(slices) > 8:
+        head, tail = slices[:7], slices[7:]
+        slices = head + [('Other', sum(v for _, v in tail))]
+        vals = [v for _, v in slices]
+    legend_w = 190
+    pie_d = 140
+    d = Drawing(width, 170)
+    pc = Pie()
+    pc.x = 10
+    pc.y = 10
+    pc.width = pie_d
+    pc.height = pie_d
+    pc.data = [v for _, v in slices]
+    pc.slices.strokeWidth = 0.5
+    pc.slices.strokeColor = colors.white
+    for i in range(len(slices)):
+        pc.slices[i].fillColor = _CHART_COLORS[i % len(_CHART_COLORS)]
+    d.add(pc)
+    lx = pie_d + 30
+    for i, (label, val) in enumerate(slices):
+        y = 150 - i * 17
+        d.add(Rect(lx, y - 9, 10, 10, strokeColor=None,
+                   fillColor=_CHART_COLORS[i % len(_CHART_COLORS)]))
+        d.add(String(lx + 15, y - 7, '%s (%g)' % (_chart_short(label), val),
+                     fontName='Helvetica', fontSize=7, fillColor=_CHART_SLATE_700))
+    return d
+
+
+def _bar_drawing(pairs, width):
+    """Horizontal bars for top-N label/value rows."""
+    pairs = pairs[:10]
+    vals = [_chart_num(v) for _, v in pairs]
+    if not pairs or max(vals) <= 0:
+        return None
+    n = len(pairs)
+    height = max(80, min(24 * n + 30, 260))
+    d = Drawing(width, height)
+    bc = HorizontalBarChart()
+    bc.x = 130
+    bc.y = 10
+    bc.width = width - 140
+    bc.height = height - 20
+    bc.data = [vals]
+    bc.strokeColor = None
+    bc.bars[0].fillColor = _CHART_COLORS[1]
+    bc.categoryAxis.labels.boxAnchor = 'ne'
+    bc.categoryAxis.labels.dx = -6
+    bc.categoryAxis.labels.fontSize = 7
+    bc.categoryAxis.labels.fontName = 'Helvetica'
+    bc.categoryAxis.categoryNames = [_chart_short(p[0], 16) for p in pairs]
+    bc.valueAxis.valueMin = 0
+    bc.valueAxis.valueMax = max(vals) * 1.15
+    bc.valueAxis.labels.fontSize = 6
+    bc.valueAxis.labels.fontName = 'Helvetica'
+    bc.valueAxis.visibleGrid = 1
+    bc.valueAxis.gridStrokeColor = _CHART_SLATE_300
+    d.add(bc)
+    return d
+
+
+def _line_drawing(pairs, width, color):
+    """Line chart for daily (date, count) rows, strided to at most 40 points."""
+    if len(pairs) > 40:
+        stride = -(-len(pairs) // 40)
+        pairs = pairs[::stride]
+    ys = [_chart_num(v) for _, v in pairs]
+    if not pairs or max(ys) <= 0:
+        return None
+    n = len(pairs)
+    d = Drawing(width, 175)
+    lp = LinePlot()
+    lp.x = 35
+    lp.y = 25
+    lp.width = width - 45
+    lp.height = 125
+    lp.data = [[(x, y) for x, y in enumerate(ys)]]
+    lp.lines[0].strokeColor = color
+    lp.lines[0].strokeWidth = 2
+    lp.xValueAxis.valueMin = 0
+    lp.xValueAxis.valueMax = max(n - 1, 1)
+    lp.xValueAxis.visibleLabels = 0
+    lp.xValueAxis.visibleTicks = 0
+    lp.yValueAxis.valueMin = 0
+    lp.yValueAxis.valueMax = max(ys) * 1.15
+    lp.yValueAxis.labels.fontSize = 6
+    lp.yValueAxis.labels.fontName = 'Helvetica'
+    lp.yValueAxis.visibleGrid = 1
+    lp.yValueAxis.gridStrokeColor = _CHART_SLATE_300
+    d.add(lp)
+    d.add(String(35, 8, _chart_short(pairs[0][0], 16),
+                 fontName='Helvetica', fontSize=7, fillColor=_CHART_SLATE_700))
+    tail = _chart_short(pairs[-1][0], 16)
+    d.add(String(width - 8 - len(tail) * 4.2, 8, tail,
+                 fontName='Helvetica', fontSize=7, fillColor=_CHART_SLATE_700))
+    return d
+
+
+def _section_chart(kt, rows, width):
+    """Build a chart Drawing for a report section, or None for table-only."""
+    data = [r for r in (rows[1:] if len(rows) > 1 else [])]
+    if not data:
+        return None
+    if kt in _PIE_SECTIONS:
+        return _pie_drawing([(r[0], r[1]) for r in data if len(r) > 1], width)
+    if kt in _LINE_SECTIONS:
+        color = _CHART_COLORS[6] if kt == 'trend_overdue' else _CHART_COLORS[0]
+        return _line_drawing([(r[0], r[1]) for r in data if len(r) > 1], width, color)
+    if kt in _BAR_SECTIONS:
+        return _bar_drawing([(r[0], r[1]) for r in data if len(r) > 1], width)
+    return None
 
 
 def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
@@ -496,10 +1031,12 @@ def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
     story.append(Spacer(1, 14))
 
     # Summary badges: sections in this report
+    labels = _all_labels()
+    descriptions = _all_descriptions()
     badge_cells = []
     for kt, _ in sections:
         badge_cells.append(Paragraph(
-            f'<font color="#1e3a8a"><b>{KPI_LABELS.get(kt, kt)}</b></font>',
+            f'<font color="#1e3a8a"><b>{labels.get(kt, kt)}</b></font>',
             ParagraphStyle('RBadgeTx', parent=s_cell, fontSize=7, leading=9,
                            textColor=NAVY, alignment=TA_CENTER)))
     if badge_cells:
@@ -553,7 +1090,7 @@ def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
             ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
         ]))
         title_row = Table(
-            [[pill, Paragraph(KPI_LABELS.get(kt, kt), s_section_title)]],
+            [[pill, Paragraph(labels.get(kt, kt), s_section_title)]],
             colWidths=[26, doc.width - 26], hAlign='LEFT')
         title_row.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -563,7 +1100,7 @@ def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
             ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
         ]))
         story.append(title_row)
-        story.append(Paragraph(KPI_DESCRIPTIONS.get(kt, ''), s_section_desc))
+        story.append(Paragraph(descriptions.get(kt, ''), s_section_desc))
 
         # Period chip row for this card
         story.append(Table(
@@ -577,6 +1114,11 @@ def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
 
         # Render table / metric
         rows = _as_2d_rows(kt, kpi_data)
+
+        chart = _section_chart(kt, rows, doc.width)
+        if chart is not None:
+            story.append(chart)
+            story.append(Spacer(1, 6))
 
         if kt == 'utilization_rate':
             # Metric hero card
@@ -643,16 +1185,18 @@ def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
             story.append(empty_box)
         else:
             # Styled data table
-            # choose column widths by KPI
-            if kt == 'books_borrowed_per_program':
-                cw = [doc.width * 0.68, doc.width * 0.32]
-                aligns = [s_cell, s_cell_right]
-            elif kt == 'most_borrowed_titles':
-                cw = [doc.width * 0.68, doc.width * 0.32]
-                aligns = [s_cell, s_cell_right]
-            else:  # underutilized_titles
+            # choose column widths by shape: 2-col label/value tables get a
+            # wide label column; wider tables split the width evenly.
+            ncols = len(rows[0])
+            if ncols == 1:
                 cw = [doc.width]
                 aligns = [s_cell]
+            elif ncols == 2:
+                cw = [doc.width * 0.68, doc.width * 0.32]
+                aligns = [s_cell, s_cell_right]
+            else:
+                cw = [doc.width / ncols] * ncols
+                aligns = [s_cell] * ncols
 
             header_cells = []
             for j, c in enumerate(rows[0]):
@@ -680,11 +1224,12 @@ def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
                 body = body[:max_rows]
 
             t = Table([header_cells] + body, colWidths=cw, hAlign='LEFT', repeatRows=1)
+            wide_font = 7 if ncols > 4 else 8
             style_cmds = [
                 ('BACKGROUND', (0, 0), (-1, 0), NAVY),
                 ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 8),
+                ('FONTSIZE', (0, 0), (-1, -1), wide_font),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 7),
                 ('TOPPADDING', (0, 0), (-1, 0), 7),
                 ('TOPPADDING', (0, 1), (-1, -1), 5),
@@ -753,7 +1298,7 @@ def export_report():
         fmt = 'pdf'
 
     export_all = kpi_type == 'all'
-    if not export_all and kpi_type not in VALID_KPIS:
+    if not export_all and kpi_type not in EXPORTABLE_KPIS:
         flash('Invalid report type.', 'error')
         return redirect(url_for('analytics.analytics_page'))
 
@@ -775,12 +1320,12 @@ def export_report():
         else:
             candidates = []
         if has_key:
-            # Respect the board's explicit selection — even if empty (board has no KPIs, export nothing).
-            # Filter to valid KPIs only; if board sent only invalid names, result is empty.
-            kpi_types = [k for k in candidates if k in VALID_KPIS and k in KPI_LABELS]
+            # Respect the caller's explicit selection — even if empty (export nothing).
+            # Filter to valid KPIs only; if only invalid names were sent, result is empty.
+            kpi_types = [k for k in candidates if k in EXPORTABLE_KPIS]
         else:
-            # Legacy calls without kpi_types export all KPIs (keeps tests green).
-            kpi_types = [k for k in candidates if k in VALID_KPIS and k in KPI_LABELS] or list(KPI_LABELS.keys())
+            # Legacy calls without kpi_types export the board KPIs (keeps tests green).
+            kpi_types = [k for k in candidates if k in EXPORTABLE_KPIS] or list(KPI_LABELS.keys())
     else:
         kpi_types = [kpi_type]
 
@@ -790,7 +1335,7 @@ def export_report():
         models.save_report_snapshot(
             kt,
             {'preset': preset, 'from': from_str, 'to': to_str},
-            [list(r) for r in kpi_data] if isinstance(kpi_data, list) else kpi_data,
+            _jsonable(kpi_data),
             current_user.id,
         )
         sections.append((kt, kpi_data))
