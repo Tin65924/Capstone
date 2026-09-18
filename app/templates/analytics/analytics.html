@@ -370,7 +370,7 @@
                             <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Collection Tracking Dashboard</h2>
                             <p class="text-xs text-slate-500">What is the current status of books and copies?</p>
                         </div>
-                        <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">{% if from_date or to_date %}{{ from_date or '…' }} – {{ to_date or '…' }}{% elif preset == 'year' %}This year{% elif preset == 'semester' %}This semester{% elif preset == 'custom' %}Custom range{% else %}All time{% endif %}</span>
+                        <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">{{ period_label }}</span>
                         <button onclick="openExportAllModal()" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
                     </div>
                     <div id="collection-kpis" class="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3"></div>
@@ -432,7 +432,7 @@
                             <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Library Analytics Dashboard</h2>
                             <p class="text-xs text-slate-500">What patterns are happening and what may happen next?</p>
                         </div>
-                        <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">{% if from_date or to_date %}{{ from_date or '…' }} – {{ to_date or '…' }}{% elif preset == 'year' %}This year{% elif preset == 'semester' %}This semester{% elif preset == 'custom' %}Custom range{% else %}All time{% endif %}</span>
+                        <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">{{ period_label }}</span>
                         <button onclick="openExportAllModal()" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
                     </div>
                     <div id="library-kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3"></div>

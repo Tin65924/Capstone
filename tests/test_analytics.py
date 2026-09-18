@@ -256,3 +256,24 @@ class TestExportXlsx:
         snapshots = [c[0][1][0] for c in mock_db['execute'].call_args_list
                      if 'INSERT INTO analytics_cache' in c[0][0]]
         assert sorted(snapshots) == ['most_borrowed_titles', 'utilization_rate']
+
+
+class TestDashboardNormalization:
+    def test_pair_normalizes_dates_to_iso(self, librarian_client, mock_db):
+        """Trend DATEs must render as ISO YYYY-MM-DD, not RFC-2822."""
+        from datetime import date
+        mock_db['fetch_one'].return_value = None
+        mock_db['fetch_all'].return_value = [(date(2026, 8, 15), 3)]
+        resp = librarian_client.get('/librarian/analytics/dashboard')
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body['circulation']['trend'] == [['2026-08-15', 3]]
+        assert 'Aug' not in str(body['circulation']['trend'])
+
+    def test_circulation_overview_timedelta_avg(self, mock_db):
+        """timedelta AVG (interval) converts to fractional days."""
+        from datetime import timedelta
+        from app.analytics.models import circulation_overview
+        mock_db['fetch_one'].side_effect = [
+            (10,), (4,), (2,), (timedelta(days=3, hours=12),), (6,), (7,)]
+        assert circulation_overview() == (10, 4, 2, 3.5, 60.0, 7)

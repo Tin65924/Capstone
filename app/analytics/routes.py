@@ -264,6 +264,7 @@ def analytics_page():
     start_date, end_date = resolve_dates(preset, from_str, to_str)
     kpi_data = compute_all_kpis(start_date, end_date)
     dashboard = compute_dashboard(start_date, end_date)
+    period_label = _format_period(start_date, end_date, preset, from_str, to_str)
     return render_template(
         'analytics/analytics.html',
         kpi_data=kpi_data,
@@ -272,6 +273,7 @@ def analytics_page():
         preset=preset,
         from_date=from_str,
         to_date=to_str,
+        period_label=period_label,
         dashboard=dashboard,
     )
 

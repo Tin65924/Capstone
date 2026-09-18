@@ -1,7 +1,7 @@
 """Seed 100 deterministic circulation records for the Report & Analytics dashboard.
 
 Usage:
-    venv\\Scripts\\python.exe dev/seed_analytics_100.py [--reset]
+    venv\\Scripts\\python.exe dev/seed_analytics_100.py [--reset | --no-reset]
 
 What it does:
     1. Creates 12 seed users (9 Student + 3 Faculty) + borrowers across
@@ -15,15 +15,18 @@ What it does:
        so the Condition Summary chart has data. Leaves ~10+ titles never
        borrowed so Underutilized Titles is non-empty.
 
-Rerunnable: with --reset (default behavior) it deletes prior SEED100 rows
-first (circulation -> inventory notes='SEED100' -> borrowers -> users).
+Rerunnable: with --reset (the default) it deletes prior SEED100 rows
+first (dependent tables -> circulation -> inventory notes='SEED100' ->
+borrowers -> users). Pass --no-reset to append without cleaning.
 """
+import argparse
 import os
 import random
 import sys
 from datetime import date, timedelta
 
 SEED_TAG = "SEED100"
+SEED_EMAIL_DOMAIN = "mcst.edu.ph"
 N_CIRCULATION = 100
 N_STUDENTS = 9
 N_FACULTY = 3
@@ -45,31 +48,61 @@ def get_conn():
 
 
 def reset_seed(cur):
+    id_pattern = SEED_TAG + '-%%'
+    # '_' is a LIKE wildcard: escape it so only seed emails match.
+    email_pattern = SEED_TAG.lower() + '!_%%@' + SEED_EMAIL_DOMAIN
     cur.execute(
-        "SELECT borrower_id FROM borrowers WHERE id_number LIKE 'SEED100-%%'"
+        "SELECT borrower_id FROM borrowers WHERE id_number LIKE %s", (id_pattern,)
     )
     bids = [r[0] for r in cur.fetchall()]
+    cur.execute(
+        "SELECT user_id FROM user_accounts WHERE email LIKE %s ESCAPE '!'",
+        (email_pattern,),
+    )
+    uids = [r[0] for r in cur.fetchall()]
     if bids:
+        cur.execute(
+            "DELETE FROM reservation_queue WHERE borrower_id = ANY(%s)", (bids,)
+        )
+        print(f"removed {cur.rowcount} prior SEED100 reservation rows")
+        cur.execute(
+            "DELETE FROM notification_log WHERE recipient_id = ANY(%s)", (bids,)
+        )
+        print(f"removed {cur.rowcount} prior SEED100 notification rows")
         cur.execute(
             "DELETE FROM circulation_records WHERE borrower_id = ANY(%s)", (bids,)
         )
         print(f"removed {cur.rowcount} prior SEED100 circulation rows")
-    cur.execute("DELETE FROM inventory_status WHERE notes = 'SEED100'")
+    if uids:
+        cur.execute(
+            "DELETE FROM user_favorites WHERE user_id = ANY(%s)", (uids,)
+        )
+        print(f"removed {cur.rowcount} prior SEED100 favorite rows")
+        cur.execute(
+            "DELETE FROM analytics_cache WHERE generated_by = ANY(%s)", (uids,)
+        )
+        print(f"removed {cur.rowcount} prior SEED100 analytics snapshots")
+        cur.execute("DELETE FROM audit_trail WHERE user_id = ANY(%s)", (uids,))
+        print(f"removed {cur.rowcount} prior SEED100 audit rows")
+    cur.execute("DELETE FROM inventory_status WHERE notes = %s", (SEED_TAG,))
     print(f"removed {cur.rowcount} prior SEED100 inventory rows")
-    cur.execute("DELETE FROM borrowers WHERE id_number LIKE 'SEED100-%%'")
+    cur.execute("DELETE FROM borrowers WHERE id_number LIKE %s", (id_pattern,))
     print(f"removed {cur.rowcount} prior SEED100 borrowers")
-    cur.execute("DELETE FROM user_accounts WHERE email LIKE 'seed100_%%@mcst.edu.ph'")
+    cur.execute(
+        "DELETE FROM user_accounts WHERE email LIKE %s ESCAPE '!'", (email_pattern,)
+    )
     print(f"removed {cur.rowcount} prior SEED100 users")
 
 
-def main():
+def main(reset=True):
     rng = random.Random(100)
     today = date.today()
     conn = get_conn()
     conn.autocommit = False
     cur = conn.cursor()
     try:
-        reset_seed(cur)
+        if reset:
+            reset_seed(cur)
 
         cur.execute("SELECT role_id, role_name FROM roles")
         roles = {name: rid for rid, name in cur.fetchall()}
@@ -125,8 +158,12 @@ def main():
         all_books = [r[0] for r in cur.fetchall()]
         spare = set(all_books[-10:])
         pool = [c for c in copies if c[1] not in spare]
+        if not pool:
+            sys.exit("seed pool is empty — need active accessions outside the spare tail")
         # Weight a top-5 for "most borrowed / high demand" shape.
         top = pool[:5]
+        if not top:
+            sys.exit("seed pool too small to weight top titles")
 
         # --- 3. 100 circulation rows ----------------------------------------
         inserted = 0
@@ -210,4 +247,19 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Seed 100 analytics circulation rows.")
+    parser.add_argument(
+        "--reset",
+        dest="reset",
+        action="store_true",
+        default=True,
+        help="Delete prior SEED100 rows before seeding (default).",
+    )
+    parser.add_argument(
+        "--no-reset",
+        dest="reset",
+        action="store_false",
+        help="Append seed rows without cleaning prior SEED100 rows.",
+    )
+    args = parser.parse_args()
+    main(reset=args.reset)
