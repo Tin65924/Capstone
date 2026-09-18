@@ -54,6 +54,15 @@ def create_app(test_config=None):
 
     register_error_handlers(app)
 
+    try:
+        if not app.config.get('TESTING'):
+            from .backup.scheduler import start_scheduler
+            start_scheduler(app)
+    except Exception:
+        # Never fail app startup over the scheduler — but log loudly so a
+        # typo'd BACKUP_DAY/BACKUP_HOUR can't silently disable backups.
+        app.logger.exception('Backup scheduler failed to start')
+
     return app
 
 
