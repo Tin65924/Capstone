@@ -522,6 +522,114 @@ class TestChartFilterModels:
         assert params is None
 
 
+class TestForecastModels:
+    def test_borrowings_by_weekday_monday_first(self, mock_db):
+        from app.analytics.models import borrowings_by_weekday
+        mock_db['fetch_all'].return_value = [(0, 4), (6, 9)]
+        rows = borrowings_by_weekday('2026-05-01', '2026-05-31')
+        assert rows[0][0] == 'Monday'
+        assert rows[-1] == ('Sunday', 4)
+        assert rows[5] == ('Saturday', 9)
+        assert len(rows) == 7
+        assert mock_db['fetch_all'].call_args[0][1] == ('2026-05-01', '2026-05-31')
+
+    def test_title_demand_gaps_shape(self, mock_db):
+        from app.analytics.models import title_demand_gaps
+        mock_db['fetch_all'].return_value = [('T', 'A', 5, 2)]
+        assert title_demand_gaps() == [('T', 'A', 5, 2)]
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'reservation_queue' in query
+        assert params == (8,)
+
+    def test_count_accessions(self, mock_db):
+        from app.analytics.models import count_accessions
+        mock_db['fetch_one'].return_value = (15,)
+        assert count_accessions('2026-05-01', '2026-05-31') == 15
+        assert mock_db['fetch_one'].call_args[0][1] == ('2026-05-01', '2026-05-31')
+
+    def test_trend_direction(self):
+        from app.analytics.routes import _trend_direction
+        assert _trend_direction([1, 1, 5, 5]) == 'up'
+        assert _trend_direction([5, 5, 1, 1]) == 'down'
+        assert _trend_direction([3, 3, 3, 3]) == 'flat'
+        assert _trend_direction([1]) == 'flat'
+
+
+class TestForecastJson:
+    def _payload_calls(self, mock_db, trend, cats, overdue, accessions, weekday, gaps):
+        mock_db['fetch_all'].side_effect = [trend, cats, overdue, weekday, gaps]
+        mock_db['fetch_one'].return_value = (accessions,)
+
+    def test_requires_login(self, client, mock_db):
+        assert client.get('/librarian/analytics/forecast').status_code == 302
+
+    def test_student_forbidden(self, student_client, mock_db):
+        assert student_client.get('/librarian/analytics/forecast').status_code == 302
+
+    def test_projections_math(self, librarian_client, mock_db):
+        from datetime import date
+        trend = [(date(2026, 5, 1 + i), 2) for i in range(30)]
+        self._payload_calls(
+            mock_db, trend, [('Sci', 40), ('Arts', 20)],
+            [(date(2026, 5, 1), 0)], 15,
+            [(1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 12), (0, 2)],
+            [('Hot Title', 'Some Author', 5, 2)],
+        )
+        resp = librarian_client.get('/librarian/analytics/forecast')
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body['daily_avg'] == 2.0
+        assert body['next_30'] == 60
+        assert body['by_category'][0] == ['Sci', 40, 40]
+        assert body['overdue_direction'] == 'flat'
+        assert body['busiest_weekday'] == 'Saturday'
+        assert body['demand_gaps'] == [['Hot Title', 'Some Author', 5, 2, 3]]
+        assert body['additions_next_30'] == 15
+        warn = [i for i in body['insights'] if i['severity'] == 'warn']
+        assert warn and 'procurement' in warn[0]['action_url']
+        assert all(i['action_url'].startswith('/') for i in body['insights'])
+
+    def test_empty_data_fallback(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = []
+        mock_db['fetch_one'].return_value = None
+        resp = librarian_client.get('/librarian/analytics/forecast')
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body['next_30'] == 0
+        assert body['busiest_weekday'] == '-'
+        assert body['demand_gaps'] == []
+        assert len(body['insights']) == 1
+
+    def test_overdue_rising_flagged(self, librarian_client, mock_db):
+        from datetime import date
+        trend = [(date(2026, 5, 1), 1)]
+        overdue = [(date(2026, 5, 1 + i), v) for i, v in enumerate([0, 0, 4, 4])]
+        self._payload_calls(mock_db, trend, [], overdue, 0, [], [])
+        body = librarian_client.get('/librarian/analytics/forecast').get_json()
+        assert body['overdue_direction'] == 'up'
+        assert any('circulation' in i['action_url'] for i in body['insights'])
+
+    def test_invalid_preset_still_json(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = []
+        mock_db['fetch_one'].return_value = None
+        resp = librarian_client.get('/librarian/analytics/forecast?preset=bogus&from=x')
+        assert resp.status_code == 200
+
+
+class TestForecastTab:
+    def test_page_embeds_forecast_tab(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (5,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics')
+        assert resp.status_code == 200
+        assert b'data-rtab="forecast"' in resp.data
+        assert b'data-rtab-panel="forecast"' in resp.data
+        assert b'/librarian/analytics/forecast' in resp.data
+        assert b'loadForecast' in resp.data
+        assert b'forecast-gaps-body' in resp.data
+        assert b'forecast-insights' in resp.data
+
+
 class TestChartJson:
     def test_chart_requires_login(self, client, mock_db):
         assert client.get('/librarian/analytics/chart?name=top_books').status_code == 302

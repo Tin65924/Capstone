@@ -303,6 +303,159 @@ def analytics_page():
     )
 
 
+def _trend_direction(counts):
+    """Rising/falling/flat from first-half vs second-half daily averages."""
+    if len(counts) < 4:
+        return 'flat'
+    mid = len(counts) // 2
+    first = sum(counts[:mid]) / max(mid, 1)
+    second = sum(counts[mid:]) / max(len(counts) - mid, 1)
+    if not first:
+        return 'up' if second > 0 else 'flat'
+    ratio = second / first
+    if ratio >= 1.1:
+        return 'up'
+    if ratio <= 0.9:
+        return 'down'
+    return 'flat'
+
+
+def _forecast_payload(start_date, end_date):
+    """Projections from current graphs + actionable insights.
+
+    All projections are simple run-rate extrapolations, labeled as such —
+    planning aids, not predictions. JSON-safe primitives only.
+    """
+    trend = models.borrowings_trend(start_date, end_date) or []
+    counts = []
+    for r in trend:
+        try:
+            counts.append(int(r[1] or 0))
+        except (IndexError, TypeError, ValueError):
+            continue
+    total = sum(counts)
+    if start_date is not None and end_date is not None:
+        span = max((end_date - start_date).days + 1, 1)
+    else:
+        span = max(len(counts), 1)
+    daily_avg = round(total / span, 2)
+    next_30 = int(round(daily_avg * 30))
+
+    top_cats = models.top_borrowed_categories(start_date, end_date) or []
+    cat_total = sum((c[1] or 0) for c in top_cats if len(c) > 1)
+    by_category = []
+    for c in top_cats:
+        try:
+            share = (c[1] or 0) / cat_total if cat_total else 0
+            by_category.append([c[0], int(c[1] or 0), int(round(share * next_30))])
+        except (IndexError, TypeError, ValueError):
+            continue
+
+    overdue_t = models.overdue_trend(start_date, end_date) or []
+    overdue_counts = []
+    for r in overdue_t:
+        try:
+            overdue_counts.append(int(r[1] or 0))
+        except (IndexError, TypeError, ValueError):
+            continue
+    overdue_inflow = round(sum(overdue_counts) / span, 2)
+    overdue_direction = _trend_direction(overdue_counts)
+
+    added = models.count_accessions(start_date, end_date)
+    additions_next_30 = int(round(added / span * 30))
+
+    weekday_mix = models.borrowings_by_weekday(start_date, end_date) or []
+    weekday_total = sum(w[1] for w in weekday_mix)
+    busiest = max(weekday_mix, key=lambda w: w[1])[0] if weekday_total else '-'
+
+    gaps = []
+    for r in models.title_demand_gaps() or []:
+        try:
+            waiting, available = int(r[2] or 0), int(r[3] or 0)
+        except (IndexError, TypeError, ValueError):
+            continue
+        if waiting > available:
+            gaps.append([r[0], r[1], waiting, available, waiting - available])
+
+    insights = []
+    if gaps:
+        insights.append({
+            'severity': 'warn',
+            'title': '%d title(s) have more waiters than copies' % len(gaps),
+            'detail': 'Top pressure: "%s" needs %d more cop%s.' % (
+                gaps[0][0], gaps[0][4], 'y' if gaps[0][4] == 1 else 'ies'),
+            'action_label': 'Order copies',
+            'action_url': url_for('procurement.procurement_dashboard'),
+        })
+    if overdue_direction == 'up':
+        insights.append({
+            'severity': 'warn',
+            'title': 'Overdue inflow is rising',
+            'detail': 'About %g new overdue items per day in this period.' % overdue_inflow,
+            'action_label': 'Follow up overdue',
+            'action_url': url_for('circulation.circulation_page'),
+        })
+    if by_category:
+        insights.append({
+            'severity': 'info',
+            'title': '%s leads projected demand' % by_category[0][0],
+            'detail': 'About %d of the projected %d borrows in the next 30 days.' % (
+                by_category[0][2], next_30),
+            'action_label': 'Boost acquisition',
+            'action_url': url_for('procurement.procurement_dashboard'),
+        })
+    if busiest != '-':
+        insights.append({
+            'severity': 'info',
+            'title': '%ss are the busiest day' % busiest,
+            'detail': 'Plan staffing and returns handling for peak weekday load.',
+            'action_label': 'View circulation',
+            'action_url': url_for('circulation.circulation_page'),
+        })
+    if additions_next_30:
+        insights.append({
+            'severity': 'ok',
+            'title': 'Collection growing at %d titles / 30 days' % additions_next_30,
+            'detail': 'Keep cataloging throughput to sustain the pace.',
+            'action_label': 'Add titles',
+            'action_url': url_for('cataloging.cataloging_page'),
+        })
+    if not insights:
+        insights.append({
+            'severity': 'info',
+            'title': 'Not enough activity to forecast',
+            'detail': 'Record more circulation in this period to unlock projections.',
+            'action_label': 'Open circulation',
+            'action_url': url_for('circulation.circulation_page'),
+        })
+
+    return {
+        'daily_avg': daily_avg,
+        'next_30': next_30,
+        'by_category': by_category,
+        'overdue_inflow_per_day': overdue_inflow,
+        'overdue_direction': overdue_direction,
+        'additions_next_30': additions_next_30,
+        'weekday_mix': [[w[0], int(w[1] or 0)] for w in weekday_mix],
+        'busiest_weekday': busiest,
+        'demand_gaps': gaps,
+        'insights': insights,
+    }
+
+
+@analytics_bp.route('/librarian/analytics/forecast')
+@login_required
+@librarian_required
+def forecast_json():
+    """Return forecast projections for the requested range as JSON."""
+    preset = request.args.get('preset', 'all')
+    from_str = request.args.get('from', '').strip()
+    to_str = request.args.get('to', '').strip()
+    preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
+    start_date, end_date = resolve_dates(preset, from_str, to_str)
+    return jsonify(_forecast_payload(start_date, end_date))
+
+
 @analytics_bp.route('/librarian/analytics/dashboard')
 @login_required
 @librarian_required

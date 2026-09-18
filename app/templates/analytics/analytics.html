@@ -230,6 +230,7 @@
                     <button data-rtab="collection" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-primary text-white">Collection Tracking</button>
                     <button data-rtab="library" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Library Analytics</button>
                     <button data-rtab="usage" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Usage Analytics</button>
+                    <button data-rtab="forecast" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Forecasting</button>
                 </div>
 
                 <!-- ============ TAB: Collection Tracking ============ -->
@@ -477,6 +478,39 @@
                     </div>
                 </section>
 
+                <!-- ============ TAB: Forecasting ============ -->
+                <section data-rtab-panel="forecast" class="space-y-4 hidden">
+                    <div class="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 flex flex-wrap items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-white">trending_up</span></div>
+                        <div class="min-w-0 flex-1">
+                            <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Forecasting Dashboard</h2>
+                            <p class="text-xs text-slate-500">What is likely next, and what should we do about it?</p>
+                        </div>
+                        <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">{{ period_label }} · next 30 days</span>
+                    </div>
+                    <div id="forecast-loading" class="bg-white rounded-xl border border-slate-200 p-8 text-center text-xs text-slate-500">Loading forecast…</div>
+                    <div id="forecast-error" class="hidden bg-white rounded-xl border border-red-200 p-8 text-center text-xs text-red-600">Couldn't load the forecast. <button type="button" onclick="loadForecast(true)" class="font-bold underline">Try again</button>.</div>
+                    <div id="forecast-body" class="hidden space-y-4">
+                        <div id="forecast-kpis" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                            <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">Projected Demand by Category (next 30 days)</h3><div id="forecast-cat-bars" class="space-y-1.5"></div></div>
+                            <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">Busiest Weekdays</h3><div id="forecast-weekday-bars" class="space-y-1.5"></div></div>
+                        </div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 overflow-hidden">
+                            <h3 class="text-sm font-extrabold mb-2">Titles Needing More Copies</h3>
+                            <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[640px]">
+                                <thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-2">#</th><th class="py-2 pr-2">Title</th><th class="py-2 pr-2">Author</th><th class="py-2 pr-2 text-right">Waiting</th><th class="py-2 pr-2 text-right">Available</th><th class="py-2 text-right">Shortfall</th></tr></thead>
+                                <tbody id="forecast-gaps-body"></tbody>
+                            </table></div>
+                        </div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4">
+                            <h3 class="text-sm font-extrabold mb-2">Recommended Actions</h3>
+                            <div id="forecast-insights" class="space-y-2.5"></div>
+                        </div>
+                        <p class="text-[10px] text-slate-400">Projections are 30-day run-rate extrapolations of the current graphs — planning aids, not predictions.</p>
+                    </div>
+                </section>
+
             </div>
         </div>
     </main>
@@ -548,6 +582,7 @@
         const EXPORT_URL = '{{ url_for("analytics.export_report") }}';
         const ALL_DASHBOARD_SECTIONS = ['circulation_summary', 'collection_by_category', 'copies_by_status', 'recent_collection', 'trend_borrowings', 'top_categories', 'trend_overdue', 'high_demand', 'recent_circulation', 'books_borrowed_per_program', 'by_user_type', 'top_books'];
         const CHART_URL = '{{ url_for("analytics.chart_json") }}';
+        const FORECAST_URL = '{{ url_for("analytics.forecast_json") }}';
         const GLOBAL = { preset: '{{ preset }}', from: '{{ from_date }}', to: '{{ to_date }}' };
 
         function escapeHtml(str) {
@@ -1120,6 +1155,75 @@ function syncGlobalFilterCustomDates() {
             });
         }
 
+        /* ============ Forecasting tab (lazy-loaded) ============ */
+        var forecastLoaded = false;
+        var forecastLoading = false;
+
+        function loadForecast(force) {
+            if ((forecastLoaded && !force) || forecastLoading) return;
+            forecastLoading = true;
+            var loading = document.getElementById('forecast-loading');
+            var errBox = document.getElementById('forecast-error');
+            var body = document.getElementById('forecast-body');
+            if (loading) loading.classList.remove('hidden');
+            if (errBox) errBox.classList.add('hidden');
+            if (body) body.classList.add('hidden');
+            var params = new URLSearchParams({ preset: GLOBAL.preset || 'all' });
+            if (GLOBAL.from) params.set('from', GLOBAL.from);
+            if (GLOBAL.to) params.set('to', GLOBAL.to);
+            fetch(FORECAST_URL + '?' + params.toString())
+                .then(function (r) {
+                    if (!r.ok) throw new Error('status ' + r.status);
+                    return r.json();
+                })
+                .then(function (json) {
+                    paintForecast(json || {});
+                    forecastLoaded = true;
+                    forecastLoading = false;
+                    if (loading) loading.classList.add('hidden');
+                    if (body) body.classList.remove('hidden');
+                })
+                .catch(function () {
+                    forecastLoading = false;
+                    if (loading) loading.classList.add('hidden');
+                    if (errBox) errBox.classList.remove('hidden');
+                });
+        }
+
+        function paintForecast(f) {
+            var kpis = document.getElementById('forecast-kpis');
+            if (kpis) kpis.innerHTML =
+                kpiCard('auto_graph', 'Projected Borrowings', rNum(f.next_30), 'next 30 days', 'bg-blue-50')
+                + kpiCard('speed', 'Daily Pace', (f.daily_avg || 0) + ' / day', 'current run-rate', 'bg-green-50')
+                + kpiCard('schedule', 'Overdue Inflow', (f.overdue_inflow_per_day || 0) + ' / day', 'trend: ' + (f.overdue_direction || 'flat'), 'bg-red-50')
+                + kpiCard('library_add', 'New Additions', rNum(f.additions_next_30), 'next 30 days', 'bg-amber-50');
+            hbars(document.getElementById('forecast-cat-bars'),
+                (f.by_category || []).map(function (r) { return [r[0], r[2]]; }), 'bg-blue-600');
+            hbars(document.getElementById('forecast-weekday-bars'), f.weekday_mix || [], 'bg-green-600');
+            var gaps = document.getElementById('forecast-gaps-body');
+            if (gaps) gaps.innerHTML = (f.demand_gaps || []).map(function (r, i) {
+                return '<tr class="border-b last:border-0"><td class="py-2">' + (i + 1) + '</td>'
+                    + '<td class="py-2 font-semibold">' + escapeHtml(r[0]) + '</td>'
+                    + '<td class="py-2 text-slate-500">' + escapeHtml(r[1] || '') + '</td>'
+                    + '<td class="py-2 text-right font-bold">' + rNum(r[2]) + '</td>'
+                    + '<td class="py-2 text-right">' + rNum(r[3]) + '</td>'
+                    + '<td class="py-2 text-right font-bold text-red-600">+' + rNum(r[4]) + '</td></tr>';
+            }).join('') || '<tr><td colspan="6" class="py-6 text-center text-slate-400">No pressured titles — waitlists fit available copies.</td></tr>';
+            var sev = {
+                warn: ['warning', 'text-red-500'],
+                info: ['info', 'text-blue-600'],
+                ok: ['check_circle', 'text-green-600']
+            };
+            var ins = document.getElementById('forecast-insights');
+            if (ins) ins.innerHTML = (f.insights || []).map(function (it) {
+                var s = sev[it.severity] || sev.info;
+                return '<div class="flex gap-2 items-start border rounded-lg px-3 py-2.5 text-[11px]">'
+                    + '<span class="material-symbols-outlined ' + s[1] + '">' + s[0] + '</span>'
+                    + '<span class="flex-1 min-w-0"><b>' + escapeHtml(it.title) + '</b><br><span class="text-slate-500">' + escapeHtml(it.detail) + '</span></span>'
+                    + '<a href="' + escapeHtml(it.action_url) + '" class="shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-primary text-white hover:bg-blue-800">' + escapeHtml(it.action_label) + '</a></div>';
+            }).join('');
+        }
+
         document.querySelectorAll('.rtab-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 var name = btn.getAttribute('data-rtab');
@@ -1130,6 +1234,7 @@ function syncGlobalFilterCustomDates() {
                 document.querySelectorAll('[data-rtab-panel]').forEach(function (p) {
                     p.classList.toggle('hidden', p.getAttribute('data-rtab-panel') !== name);
                 });
+                if (name === 'forecast') loadForecast(false);
             });
         });
 

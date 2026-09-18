@@ -385,6 +385,64 @@ def high_demand_titles(start_date=None, end_date=None, limit=5, borrow_type=None
     )
 
 
+def borrowings_by_weekday(start_date=None, end_date=None):
+    """Return [(weekday_name, count)] Monday-first for staffing forecasts."""
+    parts, params = _range_clause('borrow_date', start_date, end_date)
+    where = 'WHERE ' + ' AND '.join(parts) if parts else ''
+    rows = db.fetch_all(
+        '''SELECT EXTRACT(DOW FROM borrow_date)::int AS dow, COUNT(*)
+           FROM circulation_records {} GROUP BY dow'''.format(where),
+        tuple(params) if params else None,
+    )
+    names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
+             'Saturday', 'Sunday']
+    by_dow = {}
+    for r in rows or []:
+        try:
+            by_dow[int(r[0])] = int(r[1] or 0)
+        except (IndexError, TypeError, ValueError):
+            continue
+    # EXTRACT(DOW) is 0=Sunday; rotate Monday-first.
+    return [(names[(d + 6) % 7], by_dow.get(d, 0)) for d in (1, 2, 3, 4, 5, 6, 0)]
+
+
+def title_demand_gaps(limit=8):
+    """Return [(title, author, waiting, available)] for pressured titles.
+
+    waiting = reservations waiting/allocated; available = copies with no
+    active loan. Ordered by waiters descending.
+    """
+    return db.fetch_all(
+        '''SELECT b.title, b.author,
+                  COUNT(DISTINCT CASE WHEN r.reservation_status IN ('waiting', 'allocated')
+                                      THEN r.reservation_id END) AS waiting,
+                  COUNT(DISTINCT a.accession_id)
+                  - COUNT(DISTINCT CASE WHEN c.transaction_status IN ('active', 'overdue')
+                                        THEN c.accession_id END) AS available
+           FROM book_catalog b
+           LEFT JOIN accession_log a ON a.book_id = b.book_id
+           LEFT JOIN circulation_records c ON c.accession_id = a.accession_id
+                AND c.transaction_status IN ('active', 'overdue')
+           LEFT JOIN reservation_queue r ON r.book_id = b.book_id
+           WHERE b.catalog_status = 'active'
+           GROUP BY b.book_id, b.title, b.author
+           HAVING COUNT(DISTINCT CASE WHEN r.reservation_status IN ('waiting', 'allocated')
+                                      THEN r.reservation_id END) > 0
+           ORDER BY waiting DESC LIMIT %s''',
+        (limit,),
+    )
+
+
+def count_accessions(start_date=None, end_date=None):
+    parts, params = _range_clause('date_accessioned', start_date, end_date)
+    where = 'WHERE ' + ' AND '.join(parts) if parts else ''
+    row = db.fetch_one(
+        'SELECT COUNT(*) FROM accession_log {}'.format(where),
+        tuple(params) if params else None,
+    )
+    return row[0] if row else 0
+
+
 def recent_circulation(limit=10):
     return db.fetch_all(
         '''SELECT c.borrow_date, c.circulation_id, u.full_name, r.role_name,
