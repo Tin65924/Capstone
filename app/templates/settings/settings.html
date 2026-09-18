@@ -1,32 +1,85 @@
 {% extends "base.html" %}
 {% block title %}Library Settings{% endblock %}
 {% block content %}
-<main class="flex-grow mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 w-full max-w-[900px]">
+<main class="flex-grow mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 w-full max-w-[1100px]">
     {% include 'components/flash_messages.html' %}
-    <div class="mb-6">
-        <h1 class="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-            <span class="material-symbols-outlined">settings</span> Library Settings
-        </h1>
-        <p class="text-sm text-slate-500 mt-1">Configure borrow limits, due dates, and fines. Changes apply immediately to new loans and fine calculations.</p>
-    </div>
-    <form method="POST" action="{{ url_for('settings.update_settings') }}" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
-        <div class="divide-y divide-slate-100 dark:divide-slate-800">
-            {% for key, meta in defs.items() %}
-            <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-4 sm:px-6 py-4">
-                <div class="flex-1 min-w-0">
-                    <label for="setting-{{ key }}" class="block text-sm font-bold text-slate-800 dark:text-slate-100">{{ meta[0] }}</label>
-                    <p class="text-xs text-slate-500">{{ meta[2] }} <span class="font-mono text-slate-400">{{ key }}</span></p>
-                </div>
-                <input id="setting-{{ key }}" name="{{ key }}" type="number" {% if meta[1] == 'float' %}step="0.01"{% else %}step="1"{% endif %} min="0"
-                    value="{{ values.get(key, '') }}"
-                    class="w-full sm:w-40 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+    <form method="POST" action="{{ url_for('settings.update_settings') }}" class="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] gap-6 items-start">
+        <!-- Category sidebar -->
+        <aside class="lg:sticky lg:top-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
+            <p class="px-4 pt-4 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">Settings</p>
+            <nav class="px-2 pb-2 flex lg:flex-col gap-1 overflow-x-auto" aria-label="Setting categories">
+                {% for cat in categories %}
+                <a href="#setting-group-{{ cat.id }}" data-category-link="{{ cat.id }}"
+                   class="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 whitespace-nowrap">
+                    <span class="material-symbols-outlined text-[20px]"> {{ cat.icon }}</span>
+                    {{ cat.title }}
+                </a>
+                {% endfor %}
+            </nav>
+            <div class="hidden lg:block p-3 border-t border-slate-200 dark:border-slate-800">
+                <button type="submit" class="w-full px-4 py-2.5 text-sm font-bold text-white bg-primary rounded-lg hover:bg-primary/90">Save Settings</button>
             </div>
+        </aside>
+
+        <!-- Categorized setting groups -->
+        <div class="min-w-0 space-y-6">
+            {% for cat in categories %}
+            <section id="setting-group-{{ cat.id }}" class="scroll-mt-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
+                <div class="px-4 sm:px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                    <span class="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0"><span class="material-symbols-outlined"> {{ cat.icon }}</span></span>
+                    <div class="min-w-0">
+                        <h2 class="text-base font-bold text-slate-800 dark:text-slate-100">{{ cat.title }}</h2>
+                        <p class="text-xs text-slate-500">{{ cat.blurb }}</p>
+                    </div>
+                </div>
+                <div class="divide-y divide-slate-100 dark:divide-slate-800">
+                    {% for key, meta in cat.fields %}
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-4 sm:px-6 py-4">
+                        <div class="flex-1 min-w-0">
+                            <label for="setting-{{ key }}" class="block text-sm font-bold text-slate-800 dark:text-slate-100">{{ meta[0] }}</label>
+                            <p class="text-xs text-slate-500">{{ meta[2] }} <span class="font-mono text-slate-400">{{ key }}</span></p>
+                        </div>
+                        <input id="setting-{{ key }}" name="{{ key }}" type="number" {% if meta[1] == 'float' %}step="0.01"{% else %}step="1"{% endif %} min="0"
+                            value="{{ values.get(key, '') }}"
+                            class="w-full sm:w-40 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
             {% endfor %}
-        </div>
-        <div class="px-4 sm:px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2">
-            <a href="{{ url_for('main.librarian_dashboard') }}" class="px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg text-center hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</a>
-            <button type="submit" class="px-6 py-2.5 text-sm font-bold text-white bg-primary rounded-lg hover:bg-primary/90">Save Settings</button>
+            <div class="px-4 sm:px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2">
+                <a href="{{ url_for('main.librarian_dashboard') }}" class="px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg text-center hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</a>
+                <button type="submit" class="px-6 py-2.5 text-sm font-bold text-white bg-primary rounded-lg hover:bg-primary/90">Save Settings</button>
+            </div>
         </div>
     </form>
 </main>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+    var links = document.querySelectorAll('[data-category-link]');
+    if (!links.length || !('IntersectionObserver' in window)) return;
+    var active = null;
+    function setActive(id) {
+        if (active === id) return;
+        active = id;
+        links.forEach(function (link) {
+            var on = link.getAttribute('data-category-link') === id;
+            link.classList.toggle('bg-primary/10', on);
+            link.classList.toggle('text-primary', on);
+        });
+    }
+    var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+                setActive(entry.target.id.replace('setting-group-', ''));
+            }
+        });
+    }, { rootMargin: '-30% 0px -60% 0px' });
+    document.querySelectorAll('section[id^="setting-group-"]').forEach(function (sec) {
+        observer.observe(sec);
+    });
+})();
+</script>
 {% endblock %}

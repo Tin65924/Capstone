@@ -2,7 +2,7 @@ from flask import render_template, request, redirect, url_for, flash, current_ap
 from flask_login import login_required, current_user
 import re
 from . import settings_bp
-from .models import SETTING_DEFS, get_settings_dict, update_setting, sync_settings_to_config
+from .models import SETTING_CATEGORIES, SETTING_DEFS, get_settings_dict, update_setting, sync_settings_to_config
 from app.auth.decorators import librarian_required
 from app.auth.models import log_activity
 
@@ -16,7 +16,13 @@ def settings_page():
     except Exception:
         values = {}
         flash('Library settings table is not available yet.', 'error')
-    return render_template('settings/settings.html', defs=SETTING_DEFS, values=values)
+    categories = [
+        {'id': anchor, 'title': title, 'icon': icon, 'blurb': blurb,
+         'fields': [(key, SETTING_DEFS[key]) for key in keys]}
+        for anchor, title, icon, blurb, keys in SETTING_CATEGORIES
+    ]
+    return render_template('settings/settings.html', defs=SETTING_DEFS,
+                           values=values, categories=categories)
 
 
 @settings_bp.route('/librarian/settings/update', methods=['POST'])
