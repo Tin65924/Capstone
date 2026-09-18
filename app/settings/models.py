@@ -2,6 +2,25 @@ from flask import current_app
 from app.database import db
 
 
+# Sidebar categories: (anchor id, title, icon, blurb, setting keys).
+# Every key in SETTING_DEFS must appear in exactly one category.
+SETTING_CATEGORIES = [
+    ('book', 'Book Settings', 'menu_book',
+     'How many books each role may hold at once.',
+     ['MAX_BORROW_LIMIT_STUDENT', 'MAX_BORROW_LIMIT_FACULTY']),
+    ('due-dates', 'Due Date Settings', 'event',
+     'Loan periods for overnight and in-library use.',
+     ['OVERNIGHT_DUE_DAYS_STUDENT', 'OVERNIGHT_DUE_DAYS_FACULTY',
+      'DAILY_CIRCULATION_DUE_DAYS']),
+    ('fines', 'Fine Settings', 'payments',
+     'Overdue fines and grace periods.',
+     ['OVERDUE_FINE_PER_DAY', 'OVERDUE_GRACE_DAYS']),
+    ('reservations', 'Reservation Settings', 'bookmark',
+     'Pickup windows and due-date reminders.',
+     ['RESERVATION_CLAIM_DAYS', 'DUE_SOON_NOTIFY_DAYS']),
+]
+
+
 # key -> (label, kind, description). Kinds: int, float.
 SETTING_DEFS = {
     'MAX_BORROW_LIMIT_STUDENT': ('Max borrows (Student)', 'int', 'Max active loans for students'),
