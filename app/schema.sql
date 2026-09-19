@@ -233,3 +233,20 @@ INSERT INTO library_settings (setting_key, setting_value, description) VALUES
     ('RESERVATION_CLAIM_DAYS', '2', 'Days to claim an allocated reservation'),
     ('DUE_SOON_NOTIFY_DAYS', '2', 'Days before due date to send due-soon reminders')
 ON CONFLICT (setting_key) DO NOTHING;
+
+-- Controlled vocabulary for borrower programs (students) and departments
+-- (faculty). Registration, profile, and user-management forms only accept
+-- values from this table; borrowers.department stores the canonical name.
+CREATE TABLE IF NOT EXISTS departments (
+    department_id SERIAL PRIMARY KEY,
+    name          VARCHAR(100) NOT NULL,
+    dept_type     VARCHAR(20) NOT NULL
+                  CHECK (dept_type IN ('program', 'department')),
+    UNIQUE (dept_type, name)
+);
+
+INSERT INTO departments (name, dept_type) VALUES
+    ('BSIS', 'program'),
+    ('BSN', 'program'),
+    ('BACOMM', 'program')
+ON CONFLICT DO NOTHING;

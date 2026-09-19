@@ -472,11 +472,19 @@
                     <p class="text-[11px] text-gray-400 mt-1">Students are not allowed to change their student IDs.</p>
                 </div>
                 <div>
-                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1" for="profile-dept">Program / Department</label>
-                    <input id="profile-dept" name="department" type="text" data-suggest="student_program"
-                        value="{{ (profile[6] if profile and profile|length > 6 and profile[6] else '') }}"
-                        placeholder="e.g. BS Computer Science"
+                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1" for="profile-dept">{{ 'Program' if current_user.role == 'Student' else ('Department' if current_user.role == 'Faculty' else 'Program / Department') }}</label>
+                    {% set dept_list = programs if current_user.role == 'Student' else (departments if current_user.role == 'Faculty' else (programs + departments)) %}
+                    {% set current_dept = (profile[6] if profile and profile|length > 6 and profile[6] else '') %}
+                    <select id="profile-dept" name="department"
                         class="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+                        <option value="">— Select —</option>
+                        {% for d in dept_list %}
+                        <option value="{{ d[1] }}" {% if d[1] == current_dept %}selected{% endif %}>{{ d[1] }}</option>
+                        {% endfor %}
+                        {% if current_dept and current_dept not in dept_list|map(attribute=1)|list %}
+                        <option value="{{ current_dept }}" selected>{{ current_dept }} (legacy — pick a new value to update)</option>
+                        {% endif %}
+                    </select>
                 </div>
                 <div>
                     <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1" for="profile-phone">Phone Number</label>

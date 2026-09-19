@@ -78,13 +78,42 @@ class TestUpdateProfile:
         resp = student_client.post('/user/profile/update', data={
             'full_name': 'New Name',
             'phone_number': '+63 912 345 6789',
-            'department': 'BSIT',
+            'department': 'BSIS',
         })
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
         first = mock_db['execute'].call_args_list[0]
         assert 'UPDATE user_accounts' in first[0][0]
         assert first[0][1][0] == 'New Name'
+
+    def test_update_profile_rejects_unknown_department(self, student_client, mock_db):
+        mock_db['fetch_one'].side_effect = lambda q, p=None: self.PROFILE if 'FROM user_accounts' in q else None
+        resp = student_client.post('/user/profile/update', data={
+            'full_name': 'New Name',
+            'department': 'Made Up Program',
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_update_profile_allows_unchanged_legacy(self, student_client, mock_db):
+        mock_db['fetch_one'].return_value = self.PROFILE
+        resp = student_client.post('/user/profile/update', data={
+            'full_name': 'New Name',
+            'department': 'CS',  # unchanged legacy value skips validation
+        })
+        assert resp.status_code == 302
+        # update_user_accounts + update_borrowers + log_activity
+        assert mock_db['execute'].call_count == 3
+
+    def test_update_profile_staff_rejects_unknown(self, student_client, mock_db):
+        staff_profile = (2, 'b@mcst.edu.ph', 'Admin', 'Boss', 9, 'A-1', 'Old Dept', None, 'active')
+        mock_db['fetch_one'].side_effect = lambda q, p=None: staff_profile if 'FROM user_accounts' in q else None
+        resp = student_client.post('/user/profile/update', data={
+            'full_name': 'Boss',
+            'department': 'Junk Dept',
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
 
     def test_update_profile_rejects_id_change(self, student_client, mock_db):
         resp = student_client.post('/user/profile/update', data={

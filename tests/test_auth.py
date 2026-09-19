@@ -200,16 +200,37 @@ class TestRoleSelect:
 
         from unittest.mock import patch
         with patch('app.auth.routes.get_admin_count', return_value=1):
-            mock_db['fetch_one'].side_effect = lambda q, p=None: (1, 'Student') if p and p[0] == 'Student' else (1,) if 'INSERT' in q else None
+            mock_db['fetch_one'].side_effect = lambda q, p=None: (1, 'Student') if p and p[0] == 'Student' else (1,) if 'INSERT' in q or 'FROM departments' in q else None
             mock_db['execute'].return_value = 1
 
             resp = client.post('/login/role-select', data={
                 'role': 'Student',
                 'id_number': '2024-0001',
-                'department': 'BSIT',
+                'department': 'BSIS',
             })
             assert resp.status_code == 302
             assert '/user/profile' in resp.location
+
+    def test_role_select_rejects_unknown_program(self, client, mock_db):
+        with client.session_transaction() as sess:
+            sess['_google_oauth_data'] = {
+                'email': 'test@mcst.edu.ph',
+                'oauth_sub': 'sub-123',
+                'full_name': 'Test User',
+            }
+
+        from unittest.mock import patch
+        with patch('app.auth.routes.get_admin_count', return_value=1):
+            mock_db['fetch_one'].return_value = None
+
+            resp = client.post('/login/role-select', data={
+                'role': 'Student',
+                'id_number': '2024-0001',
+                'department': 'Made Up Program',
+            })
+            assert resp.status_code == 200
+            assert b'valid program' in resp.data.lower()
+            assert mock_db['execute'].call_count == 0
 
     def test_role_select_post_faculty_pending(self, client, mock_db):
         with client.session_transaction() as sess:
@@ -221,7 +242,7 @@ class TestRoleSelect:
 
         from unittest.mock import patch
         with patch('app.auth.routes.get_admin_count', return_value=1):
-            mock_db['fetch_one'].side_effect = lambda q, p=None: (2, 'Faculty') if p and p[0] == 'Faculty' else None
+            mock_db['fetch_one'].side_effect = lambda q, p=None: (2, 'Faculty') if p and p[0] == 'Faculty' else (1,) if 'FROM departments' in q else None
             mock_db['execute'].return_value = 1
 
             resp = client.post('/login/role-select', data={
@@ -246,6 +267,171 @@ class TestRoleSelect:
         })
         assert resp.status_code == 200
         assert b'valid' in resp.data.lower() or b'error' in resp.data.lower()
+
+
+class TestDepartmentsManager:
+    def test_librarian_adds_program(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = None  # not a duplicate
+        resp = librarian_client.post('/librarian/departments/add', data={
+            'name': 'BSCS',
+            'dept_type': 'program',
+        })
+        assert resp.status_code == 302
+        assert '/librarian/users' in resp.location
+        call_args = mock_db['execute'].call_args_list[0]
+        assert 'INSERT INTO departments' in call_args[0][0]
+        assert call_args[0][1] == ('BSCS', 'program')
+
+    def test_add_duplicate_rejected(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (1,)
+        resp = librarian_client.post('/librarian/departments/add', data={
+            'name': 'BSIS',
+            'dept_type': 'program',
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_add_invalid_type_rejected(self, librarian_client, mock_db):
+        resp = librarian_client.post('/librarian/departments/add', data={
+            'name': 'Whatever',
+            'dept_type': 'bogus',
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_admin_deletes_unused(self, admin_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (1, 'BSCS', 'program'),  # get_department_by_id
+            (0,),                     # count_borrowers_in_department
+        ]
+        resp = admin_client.post('/admin/departments/1/delete')
+        assert resp.status_code == 302
+        call_args = mock_db['execute'].call_args_list[0]
+        assert 'DELETE FROM departments' in call_args[0][0]
+
+    def test_admin_delete_blocked_when_in_use(self, admin_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (1, 'BSIS', 'program'),
+            (3,),
+        ]
+        resp = admin_client.post('/admin/departments/1/delete')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_admin_edit_user_rejects_bad_department(self, admin_client, mock_db):
+        # profile: Student with current dept BSIS; submitting unknown program
+        mock_db['fetch_one'].side_effect = [
+            (1, 'a@mcst.edu.ph', 'Student', 'Stu', 5, '2024-1', 'BSIS', None, 'active'),
+            None,  # is_valid_department -> invalid
+        ]
+        resp = admin_client.post('/admin/users/1/edit', data={
+            'full_name': 'Stu',
+            'id_number': '2024-1',
+            'department': 'Made Up',
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_admin_edit_user_allows_unchanged_legacy(self, admin_client, mock_db):
+        mock_db['fetch_one'].return_value = (
+            1, 'a@mcst.edu.ph', 'Student', 'Stu', 5, '2024-1', 'Old Variant', None, 'active')
+        resp = admin_client.post('/admin/users/1/edit', data={
+            'full_name': 'Stu',
+            'id_number': '2024-1',
+            'department': 'Old Variant',
+        })
+        assert resp.status_code == 302
+        # update_user_accounts + update_borrowers + log_activity
+        assert mock_db['execute'].call_count == 3
+
+    def test_admin_edit_staff_rejects_unknown_department(self, admin_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (2, 'b@mcst.edu.ph', 'Admin', 'Boss', 9, 'A-1', 'Old Dept', None, 'active'),
+            None,  # is_valid_any_department -> invalid
+        ]
+        resp = admin_client.post('/admin/users/2/edit', data={
+            'full_name': 'Boss',
+            'id_number': 'A-1',
+            'department': 'Junk Dept',
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_admin_edit_staff_accepts_combined_vocab(self, admin_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (2, 'b@mcst.edu.ph', 'Admin', 'Boss', 9, 'A-1', 'Old Dept', None, 'active'),
+            (1,),  # is_valid_any_department -> valid
+        ]
+        resp = admin_client.post('/admin/users/2/edit', data={
+            'full_name': 'Boss',
+            'id_number': 'A-1',
+            'department': 'BSIS',
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 3
+
+    def test_add_race_reports_exists(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = None  # pre-check passes
+        mock_db['execute'].return_value = 0  # ON CONFLICT swallowed a racing insert
+        resp = librarian_client.post('/librarian/departments/add', data={
+            'name': 'BSCS',
+            'dept_type': 'program',
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 1  # no log_activity write
+
+    def test_delete_confirm_uses_data_attribute(self, admin_client, mock_db):
+        mock_db['fetch_all'].side_effect = [
+            [],  # users
+            [],  # pending
+            [],  # roles
+            [(1, 'BSIS', 'program')],
+            [(2, 'HR', 'department')],
+        ]
+        resp = admin_client.get('/librarian/users')
+        assert resp.status_code == 200
+        assert b'confirmDeptDelete(this)' in resp.data
+        assert b"confirm('Delete &quot;" not in resp.data
+        assert b'data-dept-name="HR"' in resp.data
+
+
+class TestUserCardFilters:
+    USERS = [
+        (1, 's@mcst.edu.ph', 'Alpha Student', 'Student', 'active', '2026-01-01', '2024-1', 'BSIS'),
+        (2, 'f@mcst.edu.ph', 'Beta Faculty', 'Faculty', 'active', '2026-01-01', '2024-2', 'BSIS'),
+        (3, 'x@mcst.edu.ph', 'Gamma Ex', 'Student', 'disabled', '2026-01-01', '2024-3', 'BSN'),
+    ]
+
+    def _mock_lists(self, mock_db):
+        mock_db['fetch_all'].side_effect = [
+            list(self.USERS),  # get_all_users
+            [],                # get_pending_users
+            [],                # get_roles
+            [],                # programs
+            [],                # departments
+        ]
+
+    def test_role_filter_shows_only_students(self, librarian_client, mock_db):
+        self._mock_lists(mock_db)
+        resp = librarian_client.get('/librarian/users?role=Student')
+        assert resp.status_code == 200
+        assert b'Alpha Student' in resp.data
+        assert b'Beta Faculty' not in resp.data
+        assert b'ring-2 ring-primary' in resp.data
+
+    def test_status_filter_still_works(self, librarian_client, mock_db):
+        self._mock_lists(mock_db)
+        resp = librarian_client.get('/librarian/users?status=disabled')
+        assert resp.status_code == 200
+        assert b'Gamma Ex' in resp.data
+        assert b'Alpha Student' not in resp.data
+
+    def test_export_respects_role_filter(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = list(self.USERS)
+        resp = librarian_client.get('/librarian/users/export?role=Student&format=csv')
+        assert resp.status_code == 200
+        body = resp.data.decode('utf-8-sig')
+        assert 'Alpha Student' in body and 'Beta Faculty' not in body
 
 
 class TestLogout:
