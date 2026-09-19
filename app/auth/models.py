@@ -213,3 +213,54 @@ def update_own_profile(user_id, full_name, phone_number=None, department=None):
         'UPDATE borrowers SET phone_number = %s, department = %s WHERE user_id = %s',
         (phone_number, department, user_id)
     )
+
+
+DEPT_TYPES = ('program', 'department')
+
+
+def get_departments(dept_type=None):
+    """Active controlled-vocabulary entries as (department_id, name, dept_type)."""
+    if dept_type:
+        return db.fetch_all(
+            'SELECT department_id, name, dept_type FROM departments '
+            'WHERE dept_type = %s AND is_active ORDER BY name',
+            (dept_type,)
+        )
+    return db.fetch_all(
+        'SELECT department_id, name, dept_type FROM departments '
+        'WHERE is_active ORDER BY dept_type, name'
+    )
+
+
+def is_valid_department(name, dept_type):
+    row = db.fetch_one(
+        'SELECT 1 FROM departments WHERE name = %s AND dept_type = %s AND is_active',
+        (name, dept_type)
+    )
+    return row is not None
+
+
+def create_department(name, dept_type):
+    return db.execute(
+        'INSERT INTO departments (name, dept_type) VALUES (%s, %s) ON CONFLICT DO NOTHING',
+        (name, dept_type)
+    )
+
+
+def get_department_by_id(department_id):
+    return db.fetch_one(
+        'SELECT department_id, name, dept_type FROM departments WHERE department_id = %s',
+        (department_id,)
+    )
+
+
+def count_borrowers_in_department(name):
+    row = db.fetch_one(
+        'SELECT COUNT(*) FROM borrowers WHERE department = %s',
+        (name,)
+    )
+    return row[0] if row else 0
+
+
+def delete_department(department_id):
+    db.execute('DELETE FROM departments WHERE department_id = %s', (department_id,))

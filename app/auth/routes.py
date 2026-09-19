@@ -20,7 +20,10 @@ from .models import (
     create_pending_user, create_borrower, get_roles, get_role_by_name,
     log_activity, get_all_users, get_pending_users,
     approve_user, update_user_role, toggle_user_status,
-    update_user_details, archive_user, unarchive_user, delete_user, get_admin_count, get_user_by_id
+    update_user_details, archive_user, unarchive_user, delete_user, get_admin_count, get_user_by_id,
+    get_departments, is_valid_department, create_department,
+    get_department_by_id, delete_department, count_borrowers_in_department,
+    get_profile_by_user, DEPT_TYPES
 )
 from .user import User
 from .decorators import librarian_required, admin_required
@@ -178,19 +181,34 @@ def role_select():
     if not oauth_data:
         return redirect(url_for('auth.login'))
 
+    def _render_register(error=None):
+        if error:
+            flash(error, 'error')
+        return render_template('auth/role_select.html',
+                               programs=get_departments('program'),
+                               departments=get_departments('department'))
+
     if request.method == 'POST':
         role_name = request.form.get('role')
         id_number = request.form.get('id_number', '').strip()
         department = request.form.get('department', '').strip()
 
         if role_name not in ('Student', 'Faculty'):
-            flash('Please select a valid role.', 'error')
-            return render_template('auth/role_select.html')
+            return _render_register('Please select a valid role.')
+
+        # Students pick a Program, faculty pick a Department — strictly
+        # from the controlled vocabulary so variants can't creep in.
+        dept_type = 'program' if role_name == 'Student' else 'department'
+        if not department or not is_valid_department(department, dept_type):
+            label = 'program' if dept_type == 'program' else 'department'
+            return _render_register(
+                f'Please select a valid {label} from the list. '
+                f'If yours is missing, ask the librarian to add it first.'
+            )
 
         role = get_role_by_name(role_name)
         if not role:
-            flash('Invalid role selected.', 'error')
-            return render_template('auth/role_select.html')
+            return _render_register('Invalid role selected.')
 
         email = oauth_data['email']
         oauth_sub = oauth_data['oauth_sub']
@@ -217,13 +235,11 @@ def role_select():
                 session.pop(SESSION_OAUTH_KEY, None)
                 flash('Your account requires librarian approval before you can access the system.', 'info')
                 return render_template('auth/pending_approval.html', email=email)
-            flash('Failed to create account. Please try again.', 'error')
-            return render_template('auth/role_select.html')
+            return _render_register('Failed to create account. Please try again.')
 
         user_id = create_user(email, oauth_sub, full_name, role[0])
         if not user_id:
-            flash('Failed to create account. Please try again.', 'error')
-            return render_template('auth/role_select.html')
+            return _render_register('Failed to create account. Please try again.')
 
         create_borrower(user_id, id_number, department)
         bloom_registry.mark_dirty()
@@ -234,7 +250,9 @@ def role_select():
         next_page = session.pop('next', url_for('main.user_profile'))
         return redirect(next_page)
 
-    return render_template('auth/role_select.html')
+    return render_template('auth/role_select.html',
+                           programs=get_departments('program'),
+                           departments=get_departments('department'))
 
 
 @auth_bp.route('/librarian/users')
@@ -256,7 +274,9 @@ def admin_users():
                            pending=pending, total=total,
                            active=active, students=students,
                            inactive=inactive, archived=archived,
-                           status_filter=status_filter)
+                           status_filter=status_filter,
+                           programs=get_departments('program'),
+                           departments=get_departments('department'))
 
 
 _USER_EXPORT_HEADERS = [
@@ -480,11 +500,59 @@ def edit_user_route(user_id):
     id_number = request.form.get('id_number', '').strip()
     department = request.form.get('department', '').strip()
     if full_name:
+        profile = get_profile_by_user(user_id)
+        role_name = profile[2] if profile else None
+        current_dept = profile[6] if profile else None
+        if role_name in ('Student', 'Faculty') and department != (current_dept or ''):
+            dept_type = 'program' if role_name == 'Student' else 'department'
+            if not is_valid_department(department, dept_type):
+                flash('Please select a valid program/department from the list.', 'error')
+                return redirect(url_for('auth.admin_users', modal='editModal',
+                                        user_id=user_id, mstatus='error'))
         update_user_details(user_id, full_name, id_number or None, department or None)
         bloom_registry.mark_dirty()
         log_activity(current_user.id, f'edited_user:{user_id}')
         flash('User details updated.', 'success')
     return redirect(url_for('auth.admin_users', modal='editModal', user_id=user_id, mstatus='success'))
+
+
+@auth_bp.route('/librarian/departments/add', methods=['POST'])
+@login_required
+@librarian_required
+def add_department_route():
+    name = request.form.get('name', '').strip()
+    dept_type = request.form.get('dept_type', '').strip()
+    if not name:
+        flash('Program/department name is required.', 'error')
+        return redirect(url_for('auth.admin_users'))
+    if dept_type not in DEPT_TYPES:
+        flash('Invalid type. Choose Program or Department.', 'error')
+        return redirect(url_for('auth.admin_users'))
+    if is_valid_department(name, dept_type):
+        flash(f'"{name}" already exists.', 'error')
+        return redirect(url_for('auth.admin_users'))
+    create_department(name, dept_type)
+    log_activity(current_user.id, f'added_department:{dept_type}:{name}')
+    flash(f'"{name}" added.', 'success')
+    return redirect(url_for('auth.admin_users'))
+
+
+@auth_bp.route('/admin/departments/<int:department_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_department_route(department_id):
+    dept = get_department_by_id(department_id)
+    if not dept:
+        flash('Entry not found.', 'error')
+        return redirect(url_for('auth.admin_users'))
+    in_use = count_borrowers_in_department(dept[1])
+    if in_use:
+        flash(f'Cannot delete "{dept[1]}" — {in_use} borrower(s) still use it.', 'error')
+        return redirect(url_for('auth.admin_users'))
+    delete_department(department_id)
+    log_activity(current_user.id, f'deleted_department:{department_id}')
+    flash(f'"{dept[1]}" deleted.', 'success')
+    return redirect(url_for('auth.admin_users'))
 
 
 @auth_bp.route('/admin/reset-db', methods=['GET', 'POST'])

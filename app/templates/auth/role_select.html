@@ -58,11 +58,31 @@
                            placeholder="e.g. 2024-8192">
                     <p data-exists-msg class="hidden mt-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm font-medium text-red-700 dark:text-red-300"></p>
                 </div>
-                <div>
-                    <label for="department" class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Program / Department</label>
-                    <input type="text" id="department" name="department" data-suggest="student_program"
-                           class="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors text-sm"
-                           placeholder="e.g. BSIT, BSBA, BSHM">
+                <div id="program-wrap" class="hidden">
+                    <label for="program" class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Program</label>
+                    <select id="program" name="department"
+                            class="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors text-sm">
+                        <option value="">— Select your program —</option>
+                        {% for d in programs %}
+                        <option value="{{ d[1] }}">{{ d[1] }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if not programs %}
+                    <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">No programs listed yet — please ask the librarian to add yours first.</p>
+                    {% endif %}
+                </div>
+                <div id="department-wrap" class="hidden">
+                    <label for="department" class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Department</label>
+                    <select id="department" name="department" disabled
+                            class="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors text-sm">
+                        <option value="">— Select your department —</option>
+                        {% for d in departments %}
+                        <option value="{{ d[1] }}">{{ d[1] }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if not departments %}
+                    <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">No departments listed yet — please ask the librarian to add yours first.</p>
+                    {% endif %}
                 </div>
                 <button type="submit"
                         class="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:opacity-90 transition-opacity">
@@ -76,4 +96,27 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/autosuggest.js') }}"></script>
+<script>
+(function () {
+    var programWrap = document.getElementById('program-wrap');
+    var deptWrap = document.getElementById('department-wrap');
+    var programSel = document.getElementById('program');
+    var deptSel = document.getElementById('department');
+    function sync() {
+        var role = (document.querySelector('input[name="role"]:checked') || {}).value;
+        var showProgram = role === 'Student';
+        var showDept = role === 'Faculty';
+        programWrap.classList.toggle('hidden', !showProgram);
+        deptWrap.classList.toggle('hidden', !showDept);
+        programSel.disabled = !showProgram;
+        deptSel.disabled = !showDept;
+        programSel.required = showProgram;
+        deptSel.required = showDept;
+    }
+    document.querySelectorAll('input[name="role"]').forEach(function (r) {
+        r.addEventListener('change', sync);
+    });
+    sync();
+})();
+</script>
 {% endblock %}

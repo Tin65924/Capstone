@@ -36,6 +36,14 @@ def _safe_next(default_endpoint):
     return nxt
 
 
+def _safe_departments(dept_type):
+    try:
+        from app.auth.models import get_departments
+        return get_departments(dept_type) or []
+    except Exception:
+        return []
+
+
 @main_bp.route('/')
 def index():
     new_arrivals = get_recent_books(5)
@@ -170,14 +178,16 @@ def user_profile():
                            pickups=pickups, my_requests=my_requests,
                            borrowing_requests=borrowing_requests,
                            notifications=notifications, unread_count=unread_count,
-                           fines=fines, total_fines=total_fines)
+                           fines=fines, total_fines=total_fines,
+                           programs=_safe_departments('program'),
+                           departments=_safe_departments('department'))
 
 
 @main_bp.route('/user/profile/update', methods=['POST'])
 @login_required
 def update_profile():
     import re
-    from app.auth.models import get_profile_by_user, update_own_profile, log_activity
+    from app.auth.models import get_profile_by_user, update_own_profile, log_activity, is_valid_department
 
     full_name = request.form.get('full_name', '').strip()
     phone_number = request.form.get('phone_number', '').strip() or None
@@ -202,6 +212,14 @@ def update_profile():
     if profile is None:
         flash('Profile not found.', 'error')
         return redirect(url_for('main.user_profile'))
+
+    role_name = profile[2] if len(profile) > 2 else None
+    current_dept = profile[6] if len(profile) > 6 else None
+    if role_name in ('Student', 'Faculty') and department != current_dept:
+        dept_type = 'program' if role_name == 'Student' else 'department'
+        if not department or not is_valid_department(department, dept_type):
+            flash('Please select a valid program/department from the list.', 'error')
+            return redirect(url_for('main.user_profile'))
 
     update_own_profile(current_user.id, full_name, phone_number, department)
     log_activity(current_user.id, 'profile:update')
