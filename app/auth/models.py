@@ -219,23 +219,32 @@ DEPT_TYPES = ('program', 'department')
 
 
 def get_departments(dept_type=None):
-    """Active controlled-vocabulary entries as (department_id, name, dept_type)."""
+    """Controlled-vocabulary entries as (department_id, name, dept_type)."""
     if dept_type:
         return db.fetch_all(
             'SELECT department_id, name, dept_type FROM departments '
-            'WHERE dept_type = %s AND is_active ORDER BY name',
+            'WHERE dept_type = %s ORDER BY name',
             (dept_type,)
         )
     return db.fetch_all(
         'SELECT department_id, name, dept_type FROM departments '
-        'WHERE is_active ORDER BY dept_type, name'
+        'ORDER BY dept_type, name'
     )
 
 
 def is_valid_department(name, dept_type):
     row = db.fetch_one(
-        'SELECT 1 FROM departments WHERE name = %s AND dept_type = %s AND is_active',
+        'SELECT 1 FROM departments WHERE name = %s AND dept_type = %s',
         (name, dept_type)
+    )
+    return row is not None
+
+
+def is_valid_any_department(name):
+    """Staff (Admin/Librarian) may hold either a program or a department."""
+    row = db.fetch_one(
+        'SELECT 1 FROM departments WHERE name = %s',
+        (name,)
     )
     return row is not None
 

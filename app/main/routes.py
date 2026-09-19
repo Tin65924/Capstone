@@ -187,7 +187,7 @@ def user_profile():
 @login_required
 def update_profile():
     import re
-    from app.auth.models import get_profile_by_user, update_own_profile, log_activity, is_valid_department
+    from app.auth.models import get_profile_by_user, update_own_profile, log_activity, is_valid_department, is_valid_any_department
 
     full_name = request.form.get('full_name', '').strip()
     phone_number = request.form.get('phone_number', '').strip() or None
@@ -215,9 +215,15 @@ def update_profile():
 
     role_name = profile[2] if len(profile) > 2 else None
     current_dept = profile[6] if len(profile) > 6 else None
-    if role_name in ('Student', 'Faculty') and department != current_dept:
-        dept_type = 'program' if role_name == 'Student' else 'department'
-        if not department or not is_valid_department(department, dept_type):
+    has_borrower = len(profile) > 4 and profile[4] is not None
+    if has_borrower and department != current_dept:
+        if role_name in ('Student', 'Faculty'):
+            dept_type = 'program' if role_name == 'Student' else 'department'
+            valid = bool(department) and is_valid_department(department, dept_type)
+        else:
+            # Staff with a borrower record: accept any active vocab entry.
+            valid = bool(department) and is_valid_any_department(department)
+        if not valid:
             flash('Please select a valid program/department from the list.', 'error')
             return redirect(url_for('main.user_profile'))
 

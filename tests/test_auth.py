@@ -344,6 +344,56 @@ class TestDepartmentsManager:
         # update_user_accounts + update_borrowers + log_activity
         assert mock_db['execute'].call_count == 3
 
+    def test_admin_edit_staff_rejects_unknown_department(self, admin_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (2, 'b@mcst.edu.ph', 'Admin', 'Boss', 9, 'A-1', 'Old Dept', None, 'active'),
+            None,  # is_valid_any_department -> invalid
+        ]
+        resp = admin_client.post('/admin/users/2/edit', data={
+            'full_name': 'Boss',
+            'id_number': 'A-1',
+            'department': 'Junk Dept',
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_admin_edit_staff_accepts_combined_vocab(self, admin_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (2, 'b@mcst.edu.ph', 'Admin', 'Boss', 9, 'A-1', 'Old Dept', None, 'active'),
+            (1,),  # is_valid_any_department -> valid
+        ]
+        resp = admin_client.post('/admin/users/2/edit', data={
+            'full_name': 'Boss',
+            'id_number': 'A-1',
+            'department': 'BSIS',
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 3
+
+    def test_add_race_reports_exists(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = None  # pre-check passes
+        mock_db['execute'].return_value = 0  # ON CONFLICT swallowed a racing insert
+        resp = librarian_client.post('/librarian/departments/add', data={
+            'name': 'BSCS',
+            'dept_type': 'program',
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 1  # no log_activity write
+
+    def test_delete_confirm_uses_data_attribute(self, admin_client, mock_db):
+        mock_db['fetch_all'].side_effect = [
+            [],  # users
+            [],  # pending
+            [],  # roles
+            [(1, 'BSIS', 'program')],
+            [(2, 'HR', 'department')],
+        ]
+        resp = admin_client.get('/librarian/users')
+        assert resp.status_code == 200
+        assert b'confirmDeptDelete(this)' in resp.data
+        assert b"confirm('Delete &quot;" not in resp.data
+        assert b'data-dept-name="HR"' in resp.data
+
 
 class TestUserCardFilters:
     USERS = [

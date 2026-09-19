@@ -105,6 +105,16 @@ class TestUpdateProfile:
         # update_user_accounts + update_borrowers + log_activity
         assert mock_db['execute'].call_count == 3
 
+    def test_update_profile_staff_rejects_unknown(self, student_client, mock_db):
+        staff_profile = (2, 'b@mcst.edu.ph', 'Admin', 'Boss', 9, 'A-1', 'Old Dept', None, 'active')
+        mock_db['fetch_one'].side_effect = lambda q, p=None: staff_profile if 'FROM user_accounts' in q else None
+        resp = student_client.post('/user/profile/update', data={
+            'full_name': 'Boss',
+            'department': 'Junk Dept',
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
     def test_update_profile_rejects_id_change(self, student_client, mock_db):
         resp = student_client.post('/user/profile/update', data={
             'full_name': 'New Name',

@@ -242,7 +242,6 @@ CREATE TABLE IF NOT EXISTS departments (
     name          VARCHAR(100) NOT NULL,
     dept_type     VARCHAR(20) NOT NULL
                   CHECK (dept_type IN ('program', 'department')),
-    is_active     BOOLEAN NOT NULL DEFAULT TRUE,
     UNIQUE (dept_type, name)
 );
 

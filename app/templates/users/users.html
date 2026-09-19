@@ -308,7 +308,7 @@
                         <li class="flex items-center justify-between gap-2 py-1.5">
                             <span class="text-sm font-medium truncate">{{ d[1] }}</span>
                             {% if current_user.role == 'Admin' %}
-                            <form method="POST" action="{{ url_for('auth.delete_department_route', department_id=d[0]) }}" onsubmit="return confirm('Delete &quot;{{ d[1] }}&quot;?');">
+                            <form method="POST" action="{{ url_for('auth.delete_department_route', department_id=d[0]) }}" data-dept-name="{{ d[1] }}" onsubmit="return confirmDeptDelete(this);">
                                 <button type="submit" class="text-rose-500 hover:text-rose-700 p-1" title="Delete {{ d[1] }}">
                                     <span class="material-symbols-outlined text-[18px]">delete</span>
                                 </button>
@@ -713,6 +713,13 @@ function openEditModal(btn) {
 
 function closeEditModal() {
     document.getElementById('editModal').classList.add('hidden');
+}
+
+// Department names are librarian-supplied: read from a data attribute and
+// concatenate (never interpolate into inline JS) so quotes can't break out.
+function confirmDeptDelete(form) {
+    var name = form.getAttribute('data-dept-name') || '';
+    return confirm('Delete "' + name + '"?');
 }
 
 // Reopen the edit modal after a PRG redirect so flash feedback shows inside it

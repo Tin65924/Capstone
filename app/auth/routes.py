@@ -23,7 +23,7 @@ from .models import (
     update_user_details, archive_user, unarchive_user, delete_user, get_admin_count, get_user_by_id,
     get_departments, is_valid_department, create_department,
     get_department_by_id, delete_department, count_borrowers_in_department,
-    get_profile_by_user, DEPT_TYPES
+    get_profile_by_user, DEPT_TYPES, is_valid_any_department
 )
 from .user import User
 from .decorators import librarian_required, admin_required
@@ -512,9 +512,15 @@ def edit_user_route(user_id):
         profile = get_profile_by_user(user_id)
         role_name = profile[2] if profile else None
         current_dept = profile[6] if profile else None
-        if role_name in ('Student', 'Faculty') and department != (current_dept or ''):
-            dept_type = 'program' if role_name == 'Student' else 'department'
-            if not is_valid_department(department, dept_type):
+        has_borrower = bool(profile and len(profile) > 4 and profile[4] is not None)
+        if has_borrower and department != (current_dept or ''):
+            if role_name in ('Student', 'Faculty'):
+                dept_type = 'program' if role_name == 'Student' else 'department'
+                valid = bool(department) and is_valid_department(department, dept_type)
+            else:
+                # Staff with a borrower record: accept any active vocab entry.
+                valid = bool(department) and is_valid_any_department(department)
+            if not valid:
                 flash('Please select a valid program/department from the list.', 'error')
                 return redirect(url_for('auth.admin_users', modal='editModal',
                                         user_id=user_id, mstatus='error'))
@@ -540,7 +546,11 @@ def add_department_route():
     if is_valid_department(name, dept_type):
         flash(f'"{name}" already exists.', 'error')
         return redirect(url_for('auth.admin_users'))
-    create_department(name, dept_type)
+    rowcount = create_department(name, dept_type)
+    if not rowcount:
+        # Lost a race with another insert (ON CONFLICT DO NOTHING).
+        flash(f'"{name}" already exists.', 'error')
+        return redirect(url_for('auth.admin_users'))
     log_activity(current_user.id, f'added_department:{dept_type}:{name}')
     flash(f'"{name}" added.', 'success')
     return redirect(url_for('auth.admin_users'))
