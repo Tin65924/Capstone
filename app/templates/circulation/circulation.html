@@ -58,6 +58,8 @@
             font-family: 'Manrope', sans-serif;
         }
 
+        html { scroll-behavior: smooth; }
+
         body {
             background-color: var(--bg-body);
             color: var(--text-main);
@@ -187,6 +189,8 @@
             flex-direction: column;
             gap: 0.25rem;
         }
+        a.stat-card { cursor: pointer; text-decoration: none; color: inherit; transition: border-color 0.2s, transform 0.2s; }
+        a.stat-card:hover { border-color: var(--primary); transform: translateY(-1px); }
 
         .stat-value {
             font-size: 1.5rem;
@@ -352,27 +356,27 @@
 
         <!-- Quick Stats Row — stays in a row on mobile, scaled down -->
         <div class="grid grid-cols-3 gap-1.5 sm:gap-4 lg:gap-6 mb-6 sm:mb-10 animate-slide-up" style="animation-delay: 0.1s;">
-            <div class="stat-card">
+            <a href="#all-borrowings" class="stat-card" title="View all borrowings">
                 <div class="icon-box bg-blue-100 text-blue-600">
                     <span class="material-symbols-outlined text-[18px] sm:text-[24px]">import_export</span>
                 </div>
                 <div class="stat-value">{{ stats.active_loans }}</div>
                 <div class="stat-label leading-tight">Total Active Loans</div>
-            </div>
-            <div class="stat-card">
+            </a>
+            <a href="#overdue-books" class="stat-card" title="View overdue books">
                 <div class="icon-box bg-red-100 text-red-600">
                     <span class="material-symbols-outlined text-[18px] sm:text-[24px]">alarm_on</span>
                 </div>
                 <div class="stat-value">{{ stats.overdue_items }}</div>
                 <div class="stat-label leading-tight">Overdue Items</div>
-            </div>
-            <div class="stat-card">
+            </a>
+            <a href="#due-soon" class="stat-card" title="View loans due soon">
                 <div class="icon-box bg-amber-100 text-amber-600">
                     <span class="material-symbols-outlined text-[18px] sm:text-[24px]">event_note</span>
                 </div>
                 <div class="stat-value">{{ stats.due_in_days }}</div>
                 <div class="stat-label leading-tight">Due in 48 Hours</div>
-            </div>
+            </a>
         </div>
 
         <!-- Borrow & Return Desk -->
@@ -506,7 +510,7 @@
         </div>
 
         <!-- Active Loans -->
-        <div class="card animate-slide-up" style="animation-delay: 0.2s;">
+        <div id="all-borrowings" class="card animate-slide-up scroll-mt-20" style="animation-delay: 0.2s;">
             <div class="card-header">
                 <h3 class="card-title">
                     <span class="material-symbols-outlined text-primary">library_books</span>
@@ -599,7 +603,7 @@
 
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
             <!-- Overdue Books -->
-            <div id="overdue-books" class="card animate-slide-up scroll-mt-4" style="animation-delay: 0.3s;">
+            <div id="overdue-books" class="card animate-slide-up scroll-mt-20" style="animation-delay: 0.3s;">
                 <div class="card-header border-b border-red-100 bg-red-50/30">
                     <h3 class="card-title text-red-700">
                         <span class="material-symbols-outlined">warning</span>
@@ -634,7 +638,7 @@
             </div>
 
             <!-- Due Soon -->
-            <div class="card animate-slide-up" style="animation-delay: 0.4s;">
+            <div id="due-soon" class="card animate-slide-up scroll-mt-20" style="animation-delay: 0.4s;">
                 <div class="card-header border-b border-amber-100 bg-amber-50/30">
                     <h3 class="card-title text-amber-700">
                         <span class="material-symbols-outlined">notification_important</span>

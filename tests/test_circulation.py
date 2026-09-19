@@ -49,6 +49,22 @@ class TestCirculationPage:
         assert resp.status_code == 200
         assert b'No borrower found' in resp.data
 
+    def test_stat_cards_link_to_sections(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (2,),   # stats active loans
+            (1,),   # stats overdue
+            (0,),   # stats due soon
+        ]
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/circulation')
+        assert resp.status_code == 200
+        assert b'href="#all-borrowings"' in resp.data
+        assert b'href="#overdue-books"' in resp.data
+        assert b'href="#due-soon"' in resp.data
+        assert b'id="all-borrowings"' in resp.data
+        assert b'id="overdue-books"' in resp.data
+        assert b'id="due-soon"' in resp.data
+
 
 class TestDeskBorrow:
     def test_borrow_success(self, librarian_client, mock_db):
