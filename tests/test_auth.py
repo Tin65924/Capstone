@@ -345,6 +345,45 @@ class TestDepartmentsManager:
         assert mock_db['execute'].call_count == 3
 
 
+class TestUserCardFilters:
+    USERS = [
+        (1, 's@mcst.edu.ph', 'Alpha Student', 'Student', 'active', '2026-01-01', '2024-1', 'BSIS'),
+        (2, 'f@mcst.edu.ph', 'Beta Faculty', 'Faculty', 'active', '2026-01-01', '2024-2', 'BSIS'),
+        (3, 'x@mcst.edu.ph', 'Gamma Ex', 'Student', 'disabled', '2026-01-01', '2024-3', 'BSN'),
+    ]
+
+    def _mock_lists(self, mock_db):
+        mock_db['fetch_all'].side_effect = [
+            list(self.USERS),  # get_all_users
+            [],                # get_pending_users
+            [],                # get_roles
+            [],                # programs
+            [],                # departments
+        ]
+
+    def test_role_filter_shows_only_students(self, librarian_client, mock_db):
+        self._mock_lists(mock_db)
+        resp = librarian_client.get('/librarian/users?role=Student')
+        assert resp.status_code == 200
+        assert b'Alpha Student' in resp.data
+        assert b'Beta Faculty' not in resp.data
+        assert b'ring-2 ring-primary' in resp.data
+
+    def test_status_filter_still_works(self, librarian_client, mock_db):
+        self._mock_lists(mock_db)
+        resp = librarian_client.get('/librarian/users?status=disabled')
+        assert resp.status_code == 200
+        assert b'Gamma Ex' in resp.data
+        assert b'Alpha Student' not in resp.data
+
+    def test_export_respects_role_filter(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = list(self.USERS)
+        resp = librarian_client.get('/librarian/users/export?role=Student&format=csv')
+        assert resp.status_code == 200
+        body = resp.data.decode('utf-8-sig')
+        assert 'Alpha Student' in body and 'Beta Faculty' not in body
+
+
 class TestLogout:
     @patch('app.auth.routes.log_activity')
     def test_logout(self, mock_log_activity, student_client, client):

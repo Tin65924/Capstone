@@ -262,8 +262,11 @@ def admin_users():
     users = get_all_users()
     pending = get_pending_users()
     status_filter = request.args.get('status', '')
+    role_filter = request.args.get('role', '')
     if status_filter:
         users = [u for u in users if u[4] == status_filter]
+    if role_filter:
+        users = [u for u in users if u[3] == role_filter]
     total = len(users)
     active = sum(1 for u in users if u[4] == 'active')
     students = sum(1 for u in users if u[3] == 'Student')
@@ -275,6 +278,7 @@ def admin_users():
                            active=active, students=students,
                            inactive=inactive, archived=archived,
                            status_filter=status_filter,
+                           role_filter=role_filter,
                            programs=get_departments('program'),
                            departments=get_departments('department'))
 
@@ -369,12 +373,17 @@ def export_users():
     users = get_all_users()
     if status:
         users = [u for u in users if (u[_USER_COL['status']] or '').lower() == status]
+    role = request.args.get('role', '').strip()
+    if role:
+        users = [u for u in users if u[_USER_COL['role']] == role]
 
     rows = [_user_row_to_export(u) for u in users]
     stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     suffix = status or 'all'
     # filename uses UI term inactive for readability
     file_suffix = 'inactive' if suffix == 'disabled' else suffix
+    if role:
+        file_suffix = f'{file_suffix}_{role.lower()}'
     filename = f'users_{file_suffix}_{stamp}.{fmt}'
 
     if fmt == 'xlsx':
