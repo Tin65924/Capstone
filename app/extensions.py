@@ -21,5 +21,10 @@ def load_user(user_id):
 def unauthorized():
     from flask import flash, redirect, url_for, request
 
+    try:
+        from app.auth.models import log_system_event
+        log_system_event(f'system:auth_required:{request.path[:100]}')
+    except Exception:  # noqa: BLE001 — audit must never break the redirect
+        pass
     flash('Please sign in to access this page.', 'info')
     return redirect(url_for('auth.login', next=request.path))

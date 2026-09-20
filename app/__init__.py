@@ -90,6 +90,11 @@ def register_error_handlers(app):
 
     @app.errorhandler(500)
     def internal_error(e):
+        try:
+            from app.auth.models import log_system_event
+            log_system_event(f'system:error:500:{request.path[:100]}')
+        except Exception:  # noqa: BLE001 — the error page must always render
+            app.logger.exception('System audit row for 500 failed')
         return render_template('errors/error.html',
                                code=500, title='Something Went Wrong',
                                message='An unexpected error occurred. Please try again later.'), 500

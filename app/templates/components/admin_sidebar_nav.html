@@ -12,9 +12,9 @@
                 <span class="material-symbols-outlined">overview</span>
                 <span class="text-sm">Overview</span>
             </a>
-            <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'auth.admin_users' or request.endpoint == 'circulation.user_history_list' or request.endpoint == 'circulation.user_history_detail' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('auth.admin_users') }}">
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'auth.admin_users' or request.endpoint == 'circulation.user_history_list' or request.endpoint == 'circulation.user_history_detail' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('auth.admin_users', scope='staff') }}">
                 <span class="material-symbols-outlined">manage_accounts</span>
-                <span class="text-sm leading-tight">User Management & Access Control</span>
+                <span class="text-sm leading-tight">Staff Management</span>
             </a>
             <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint and 'settings' in request.endpoint %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('settings.settings_page') }}">
                 <span class="material-symbols-outlined">settings</span>
@@ -24,9 +24,9 @@
                 <span class="material-symbols-outlined">settings_backup_restore</span>
                 <span class="text-sm">Backup & Recovery</span>
             </a>
-            <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'auth.reset_db' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('auth.reset_db') }}">
-                <span class="material-symbols-outlined">database</span>
-                <span class="text-sm">Reset Database</span>
+            <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'main.admin_audits' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('main.admin_audits') }}">
+                <span class="material-symbols-outlined">fact_check</span>
+                <span class="text-sm">Audit Logs</span>
             </a>
             <hr class="border-gray-200 dark:border-gray-700 my-1">
             <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('main.librarian_dashboard') }}">

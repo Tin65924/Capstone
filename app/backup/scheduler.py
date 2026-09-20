@@ -8,6 +8,7 @@ def run_scheduled_backup(app):
     with app.app_context():
         from .models import log_backup, delete_backup_row, get_stale_backups
         from .utils import create_backup, resolve_backup_path
+        from app.auth.models import log_system_event
 
         keep_n = app.config.get('BACKUP_KEEP', 12)
         try:
@@ -20,8 +21,16 @@ def run_scheduled_backup(app):
                 status='failed',
                 error_msg=str(e)[:500],
             )
+            try:
+                log_system_event('system:scheduled_backup:failed')
+            except Exception:  # noqa: BLE001 — audit must never break the job
+                app.logger.exception('Scheduled backup audit row failed')
             return
         log_backup(filename, size_bytes, backup_type='scheduled', status='completed')
+        try:
+            log_system_event(f'system:scheduled_backup:completed:{filename}')
+        except Exception:  # noqa: BLE001 — audit must never break the job
+            app.logger.exception('Scheduled backup audit row failed')
         _apply_retention(app, keep_n)
 
 
@@ -67,6 +76,57 @@ def _clamp_int(app, name, value, lo, hi, default):
             'Out-of-range %s=%r — clamping to %d..%d.', name, value, lo, hi)
         return max(lo, min(hi, number))
     return number
+
+
+def reschedule(app):
+    """Apply the current BACKUP_DAY/HOUR to the running monthly job.
+
+    Called after admin settings updates so edits take effect without a
+    restart. No-op when the scheduler isn't running (tests, fresh boot
+    before start). Returns True when a job was rescheduled.
+    """
+    global _scheduler
+    sched = _scheduler
+    if sched is None or not getattr(sched, 'running', False):
+        return False
+    try:
+        job = sched.get_job('monthly_backup')
+    except Exception:  # noqa: BLE001 — never break a settings save
+        app.logger.exception('Backup reschedule lookup failed')
+        return False
+    if job is None:
+        return False
+    day = _clamp_int(app, 'BACKUP_DAY', app.config.get('BACKUP_DAY', 1), 1, 28, 1)
+    hour = _clamp_int(app, 'BACKUP_HOUR', app.config.get('BACKUP_HOUR', 2), 0, 23, 2)
+    job.reschedule(trigger='cron', day=day, hour=hour, minute=0)
+    app.logger.info('Backup schedule updated (monthly: day=%s hour=%s).', day, hour)
+    return True
+
+
+def next_scheduled_backup(day, hour, now=None):
+    """Next automatic-backup datetime after `now` for a monthly day/hour.
+
+    Day is clamped to 1..28 (same rule as the scheduler) so it is valid
+    in every month; a passed this-month slot rolls to next month.
+    """
+    from datetime import datetime
+    now = now or datetime.now()
+    try:
+        day = max(1, min(28, int(day)))
+    except (TypeError, ValueError):
+        day = 1
+    try:
+        hour = max(0, min(23, int(hour)))
+    except (TypeError, ValueError):
+        hour = 2
+    candidate = now.replace(day=day, hour=hour, minute=0, second=0,
+                            microsecond=0)
+    if candidate <= now:
+        if now.month == 12:
+            candidate = candidate.replace(year=now.year + 1, month=1)
+        else:
+            candidate = candidate.replace(month=now.month + 1)
+    return candidate
 
 
 def start_scheduler(app):

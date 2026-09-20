@@ -951,7 +951,12 @@ class TestPayFine:
         resp = student_client.post('/librarian/users/4/fines/55/pay')
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
-        assert mock_db['execute'].call_count == 0
+        # Only write is the denial audit row — the fine itself is untouched.
+        assert mock_db['execute'].call_count == 1
+        query, params = mock_db['execute'].call_args[0]
+        assert 'INSERT INTO audit_trail' in query
+        assert params[0] == '1'
+        assert params[1].startswith('security:denied:')
 
     def test_history_detail_shows_mark_paid(self, librarian_client, mock_db):
         fine_row = (55, '2026-08-01', '2026-08-05', '2026-08-10', 25.0, 'Book A', 'ACC-1')

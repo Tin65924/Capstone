@@ -12,6 +12,9 @@ DEFAULT_BACKUP_DIR = os.path.join(
     'backups',
 )
 
+# A hung pg_dump/psql must fail loudly instead of freezing the UI forever.
+_SUBPROCESS_TIMEOUT = 600  # seconds
+
 # Windows PostgreSQL installers do not add bin/ to PATH, so look there too.
 _WINDOWS_TOOL_DIRS = (
     r'C:\Program Files\PostgreSQL\*\bin',
@@ -96,7 +99,19 @@ def create_backup():
             check=True,
             capture_output=True,
             text=True,
+            # Never inherit the server's stdin: a password prompt would
+            # otherwise block forever waiting on a terminal that isn't there.
+            stdin=subprocess.DEVNULL,
+            timeout=_SUBPROCESS_TIMEOUT,
         )
+    except subprocess.TimeoutExpired:
+        try:
+            if os.path.isfile(filepath):
+                os.remove(filepath)
+        except OSError:
+            pass
+        raise RuntimeError(
+            f'pg_dump timed out after {_SUBPROCESS_TIMEOUT // 60} minutes.')
     except subprocess.CalledProcessError as e:
         err = (e.stderr or '').strip() or f'pg_dump exited with status {e.returncode}'
         try:
@@ -134,11 +149,22 @@ def restore_backup(filename):
     try:
         subprocess.run(
             [psql, '--dbname=' + db_url, '-v', 'ON_ERROR_STOP=1',
-             '--single-transaction', '--file=' + filepath],
+             '--single-transaction',
+             # Never wait forever on a table lock (e.g. another session's
+             # idle transaction): fail with a clear error instead.
+             '-c', "SET lock_timeout = '120s'",
+             '--file=' + filepath],
             check=True,
             capture_output=True,
             text=True,
+            # Never inherit the server's stdin: a password prompt would
+            # otherwise block forever waiting on a terminal that isn't there.
+            stdin=subprocess.DEVNULL,
+            timeout=_SUBPROCESS_TIMEOUT,
         )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f'psql timed out after {_SUBPROCESS_TIMEOUT // 60} minutes.')
     except subprocess.CalledProcessError as e:
         err = (e.stderr or '').strip() or f'psql exited with status {e.returncode}'
         raise RuntimeError(err)

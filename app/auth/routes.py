@@ -1,6 +1,5 @@
 import csv
 import io
-import os
 import secrets
 from datetime import datetime
 
@@ -18,7 +17,7 @@ from app.bloom_registry import bloom_registry
 from .models import (
     get_user_by_email, get_user_by_oauth_sub, create_user,
     create_pending_user, create_borrower, get_roles, get_role_by_name,
-    log_activity, get_all_users, get_pending_users,
+    log_activity, log_system_event, get_all_users, get_pending_users,
     approve_user, update_user_role, toggle_user_status,
     update_user_details, archive_user, unarchive_user, delete_user, get_admin_count, get_user_by_id,
     get_departments, is_valid_department, create_department,
@@ -83,6 +82,7 @@ def google_login():
         return redirect(authorization_url)
     except Exception as e:
         current_app.logger.error('Failed to initiate Google OAuth: %s', str(e))
+        log_system_event('system:login_failed:initiate')
         flash('Unable to connect to Google. Please try again.', 'error')
         return redirect(url_for('auth.login'))
 
@@ -91,6 +91,7 @@ def google_login():
 def google_callback():
     state = session.pop('_oauth_state', None)
     if not state:
+        log_system_event('system:login_failed:invalid_state')
         flash('Invalid OAuth state. Please try again.', 'error')
         return redirect(url_for('auth.login'))
 
@@ -105,11 +106,13 @@ def google_callback():
         flow.fetch_token(authorization_response=request.url)
     except Exception as e:
         current_app.logger.error('Token exchange failed: %s', str(e))
+        log_system_event('system:login_failed:token_exchange')
         flash(f'Authentication failed: {e}', 'error')
         return redirect(url_for('auth.login'))
 
     credentials = flow.credentials
     if not credentials or not credentials.id_token:
+        log_system_event('system:login_failed:no_id_token')
         flash('No identity token received.', 'error')
         return redirect(url_for('auth.login'))
 
@@ -122,19 +125,23 @@ def google_callback():
         )
     except ValueError as e:
         current_app.logger.error('ID token verification failed: %s', str(e))
+        log_system_event('system:login_failed:verify')
         flash(f'Authentication failed: {e}', 'error')
         return redirect(url_for('auth.login'))
 
     if id_info.get('iss') not in ('accounts.google.com', 'https://accounts.google.com'):
+        log_system_event('system:login_failed:issuer')
         flash('Invalid token issuer.', 'error')
         return redirect(url_for('auth.login'))
 
     email = id_info.get('email')
     if not email:
+        log_system_event('system:login_failed:email')
         flash('No email address provided by Google.', 'error')
         return redirect(url_for('auth.login'))
 
     if not _allowed_email(email):
+        log_system_event('system:login_failed:domain')
         flash(f'Only @{ALLOWED_DOMAIN} email addresses are allowed.', 'error')
         return redirect(url_for('auth.login'))
 
@@ -259,10 +266,25 @@ def role_select():
 @login_required
 @librarian_required
 def admin_users():
-    users = get_all_users()
-    pending = get_pending_users()
+    users = get_all_users() or []
+    pending = get_pending_users() or []
     status_filter = request.args.get('status', '')
     role_filter = request.args.get('role', '')
+    scope = (request.args.get('scope', '') or '').strip().lower()
+    if scope not in ('', 'staff', 'members'):
+        scope = ''
+    is_admin_view = current_user.role == 'Admin'
+    # Librarians manage members only (Student + Faculty). Admins default
+    # to all accounts but can scope to staff (Librarian/Faculty/Admin)
+    # or members (Student/Faculty) via ?scope=.
+    if not is_admin_view:
+        scope = 'members'
+    if scope == 'staff':
+        users = [u for u in users if u[3] in ('Librarian', 'Faculty', 'Admin')]
+        pending = [p for p in pending if p[3] in ('Librarian', 'Faculty', 'Admin')]
+    elif scope == 'members':
+        users = [u for u in users if u[3] in ('Student', 'Faculty')]
+        pending = [p for p in pending if p[3] in ('Student', 'Faculty')]
     if status_filter:
         users = [u for u in users if u[4] == status_filter]
     if role_filter:
@@ -272,6 +294,8 @@ def admin_users():
     students = sum(1 for u in users if u[3] == 'Student')
     inactive = sum(1 for u in users if u[4] == 'disabled')
     archived = sum(1 for u in users if u[4] == 'archived')
+    sidebar = ('components/admin_sidebar_nav.html' if is_admin_view
+               else 'components/librarian_sidebar_nav.html')
     return render_template('users/users.html',
                            users=users, roles=get_roles(),
                            pending=pending, total=total,
@@ -279,6 +303,10 @@ def admin_users():
                            inactive=inactive, archived=archived,
                            status_filter=status_filter,
                            role_filter=role_filter,
+                           scope=scope,
+                           is_staff_view=(scope == 'staff'),
+                           is_admin_view=is_admin_view,
+                           sidebar=sidebar,
                            programs=get_departments('program'),
                            departments=get_departments('department'))
 
@@ -370,7 +398,19 @@ def export_users():
     if status not in ('active', 'disabled', 'pending', 'archived'):
         status = ''
 
-    users = get_all_users()
+    users = get_all_users() or []
+    scope = (request.args.get('scope', '') or '').strip().lower()
+    if scope not in ('', 'staff', 'members'):
+        scope = ''
+    # Librarians may only export members; admins may scope to staff.
+    if current_user.role != 'Admin':
+        scope = 'members'
+    if scope == 'staff':
+        users = [u for u in users
+                 if u[_USER_COL['role']] in ('Librarian', 'Faculty', 'Admin')]
+    elif scope == 'members':
+        users = [u for u in users
+                 if u[_USER_COL['role']] in ('Student', 'Faculty')]
     if status:
         users = [u for u in users if (u[_USER_COL['status']] or '').lower() == status]
     role = request.args.get('role', '').strip()
@@ -382,6 +422,8 @@ def export_users():
     suffix = status or 'all'
     # filename uses UI term inactive for readability
     file_suffix = 'inactive' if suffix == 'disabled' else suffix
+    if scope:
+        file_suffix = f'{file_suffix}_{scope}'
     if role:
         file_suffix = f'{file_suffix}_{role.lower()}'
     filename = f'users_{file_suffix}_{stamp}.{fmt}'
@@ -572,41 +614,6 @@ def delete_department_route(department_id):
     log_activity(current_user.id, f'deleted_department:{department_id}')
     flash(f'"{dept[1]}" deleted.', 'success')
     return redirect(url_for('auth.admin_users'))
-
-
-@auth_bp.route('/admin/reset-db', methods=['GET', 'POST'])
-@login_required
-@admin_required
-def reset_db():
-    import psycopg2
-    dsn = current_app.config['DATABASE_URL']
-    schema_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'schema.sql')
-    conn = psycopg2.connect(dsn)
-    conn.autocommit = True
-    try:
-        with conn.cursor() as cur:
-            cur.execute('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
-            if os.path.isfile(schema_path):
-                with open(schema_path, 'r') as f:
-                    cur.execute(f.read())
-            cur.execute("""
-                ALTER TABLE user_accounts
-                DROP CONSTRAINT IF EXISTS user_accounts_account_status_check;
-            """)
-            cur.execute("""
-                ALTER TABLE user_accounts
-                ADD CONSTRAINT user_accounts_account_status_check
-                CHECK (account_status IN ('active', 'disabled', 'pending'));
-            """)
-        conn.close()
-        current_app.logger.info('Database reset complete.')
-    except Exception as e:
-        current_app.logger.error('Database reset failed: %s', e)
-        flash('Reset failed: ' + str(e), 'error')
-        return redirect(url_for('auth.admin_users'))
-    logout_user()
-    flash('Database reset. Please log in again.', 'info')
-    return redirect(url_for('auth.login'))
 
 
 @auth_bp.route('/logout')
