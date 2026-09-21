@@ -78,6 +78,15 @@ def run_schema(app):
                 CHECK (account_status IN ('active', 'disabled', 'pending', 'archived'));
             """)
             cur.execute("""
+                ALTER TABLE backup_log
+                DROP CONSTRAINT IF EXISTS backup_log_status_check;
+            """)
+            cur.execute("""
+                ALTER TABLE backup_log
+                ADD CONSTRAINT backup_log_status_check
+                CHECK (status IN ('completed', 'failed', 'in_progress'));
+            """)
+            cur.execute("""
                 ALTER TABLE accession_log
                 DROP CONSTRAINT IF EXISTS accession_log_source_check;
             """)

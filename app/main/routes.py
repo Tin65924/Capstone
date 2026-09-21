@@ -400,7 +400,11 @@ def admin_dashboard():
     pending = get_pending_users() or []
     activity = get_audit_logs(limit=8) or []
     backups = get_backup_logs() or []
-    last_backup = backups[0] if backups else None
+    completed = [b for b in backups if b[3] == 'completed']
+    last_backup = completed[0] if completed else None
+    from app.backup import jobs as backup_jobs
+    backup_busy = (backup_jobs.active_job() is not None
+                   or any(b[3] == 'in_progress' for b in backups))
     backup_day = current_app.config.get('BACKUP_DAY', 1)
     backup_hour = current_app.config.get('BACKUP_HOUR', 2)
     backup_keep = current_app.config.get('BACKUP_KEEP', 12)
@@ -409,7 +413,8 @@ def admin_dashboard():
                            pending_total=len(pending),
                            activity=activity,
                            last_backup=last_backup,
-                           backup_count=len(backups),
+                           backup_count=len(completed),
+                           backup_busy=backup_busy,
                            backup_schedule={'day': backup_day,
                                             'hour': backup_hour,
                                             'keep': backup_keep},
