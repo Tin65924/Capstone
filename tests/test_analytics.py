@@ -850,3 +850,85 @@ class TestReviewFeedbackRegression:
         import pathlib
         js = pathlib.Path('app/static/js/autosuggest.js').read_text(encoding='utf-8')
         assert 'data.category_record' in js
+
+
+class TestUsageDepartmentFilter:
+    def test_trend_department_filter(self, mock_db):
+        from app.analytics.models import borrowings_trend
+        mock_db['fetch_all'].return_value = []
+        borrowings_trend(None, None, None, ['BSIT'])
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'JOIN borrowers' in query
+        assert params == ('BSIT',)
+
+    def test_trend_no_department_unchanged(self, mock_db):
+        from app.analytics.models import borrowings_trend
+        mock_db['fetch_all'].return_value = []
+        borrowings_trend()
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'JOIN borrowers' not in query
+        assert params is None
+
+    def test_overview_department_scopes(self, mock_db):
+        from app.analytics.models import circulation_overview
+        mock_db['fetch_one'].side_effect = [
+            (10,), (4,), (2,), (3.0,), (6,), (7,)]
+        circulation_overview(None, None, ['BSIT'])
+        query, params = mock_db['fetch_one'].call_args_list[0][0]
+        assert 'JOIN borrowers' in query
+        assert params == ('BSIT',)
+
+    def test_top_books_department(self, mock_db):
+        from app.analytics.models import top_borrowed_books_detailed
+        mock_db['fetch_all'].return_value = []
+        top_borrowed_books_detailed(None, None, 5, None, ['BSIT'])
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'JOIN borrowers' in query
+        assert 'BSIT' in params
+
+    def test_no_program_pseudo_label(self, mock_db):
+        from app.analytics.models import books_borrowed_per_program
+        mock_db['fetch_all'].return_value = []
+        books_borrowed_per_program(None, None, ['No program'])
+        query = mock_db['fetch_all'].call_args[0][0]
+        assert 'NOT IN' in query
+        assert 'b.department IN' not in query
+
+    def test_dashboard_json_scopes_usage_only(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics/dashboard?department=BSIT')
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body['usage']['department'] == 'BSIT'
+        assert body['usage']['by_department_all'] == []
+        # collection tab ignores the program filter
+        assert body['collection']['total_titles'] == 0
+
+    def test_page_renders_program_select(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (5,)
+        mock_db['fetch_all'].return_value = [('BSIT', 12)]
+        resp = librarian_client.get('/librarian/analytics')
+        assert resp.status_code == 200
+        assert b'id="usage-department"' in resp.data
+        assert b'onUsageDepartmentChange' in resp.data
+        assert b'by_department_all' in resp.data
+        assert b'BSIT' in resp.data
+
+    def test_page_preselects_department(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (5,)
+        mock_db['fetch_all'].return_value = [('BSIT', 12)]
+        resp = librarian_client.get('/librarian/analytics?department=BSIT')
+        assert resp.status_code == 200
+        assert b'value="BSIT" selected' in resp.data
+
+    def test_export_honors_department(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [('BSIT', 12)]
+        resp = librarian_client.post(
+            '/librarian/analytics/export',
+            data={'kpi_type': 'books_borrowed_per_program', 'format': 'pdf',
+                  'department': 'BSIT'})
+        assert resp.status_code == 200
+        assert resp.data[:4] == b'%PDF'
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'BSIT' in params

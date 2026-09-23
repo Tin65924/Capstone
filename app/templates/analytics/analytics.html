@@ -341,7 +341,14 @@
                             <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Usage Analytics Dashboard</h2>
                             <p class="text-xs text-slate-500">Who is using the library, what are they borrowing, and how often?</p>
                         </div>
-                        <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">All Departments / Programs · {{ period_label }}</span>
+                        <select id="usage-department" onchange="onUsageDepartmentChange()" title="Filter Usage tab by program" class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600 outline-none focus:border-primary bg-white max-w-[220px]">
+                            <option value="">All Departments / Programs</option>
+                            {% for row in dashboard.usage.by_department_all %}
+                            <option value="{{ row[0] }}" {% if department == row[0] %}selected{% endif %}>{{ row[0] }} ({{ row[1] }})</option>
+                            {% endfor %}
+                        </select>
+                        <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">{{ period_label }}</span>
+                        <span id="usage-dept-loading" class="hidden text-[11px] font-bold text-primary">Loading…</span>
                         <button onclick="exportDashboard(['circulation_summary', 'books_borrowed_per_program', 'by_user_type', 'top_books', 'recent_circulation'])" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
                     </div>
                     <div id="usage-kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3"></div>
@@ -368,7 +375,7 @@
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">4. Borrowings by User Type</h3>
                             
                         <div class="flex items-center gap-4"><div id="donut-usertype" class="shrink-0"></div><div id="legend-usertype" class="flex-1 space-y-1 text-xs min-w-0"></div></div></div>
-                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">5. Overdue Items by Department</h3><div id="overdue-dept-note" class="text-[11px] text-slate-500">Overdue counts are tracked per loan; department split reuses the borrowings mix and follows the department filter in card 1.</div><div id="overdue-dept-bars" class="space-y-1.5 mt-2"></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">5. Overdue Items by Department</h3><div id="overdue-dept-note" class="text-[11px] text-slate-500">Overdue counts are tracked per loan; department split reuses the borrowings mix and follows the program selector above.</div><div id="overdue-dept-bars" class="space-y-1.5 mt-2"></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">6. Borrowings by Time of Day</h3>
                             
                         <div id="tod-bars" class="space-y-1.5"></div><p class="text-[10px] text-slate-400 mt-1">Bucketed by borrow day (no time-of-day column).</p></div>
@@ -451,8 +458,10 @@
 
     <script>
         const EXPORT_URL = '{{ url_for("analytics.export_report") }}';
+        const DASHBOARD_URL = '{{ url_for("analytics.dashboard_json") }}';
         const ALL_DASHBOARD_SECTIONS = ['circulation_summary', 'collection_by_category', 'copies_by_status', 'recent_collection', 'trend_borrowings', 'top_categories', 'trend_overdue', 'high_demand', 'recent_circulation', 'books_borrowed_per_program', 'by_user_type', 'top_books'];
         const GLOBAL = { preset: '{{ preset }}', from: '{{ from_date }}', to: '{{ to_date }}' };
+        var USAGE_DEPT = {{ department|tojson }};
 
         function escapeHtml(str) {
             const div = document.createElement('div');
@@ -493,7 +502,9 @@
         function exportDashboard(items) {
             // Dashboard-tab exports: address dashboard sections by name so each
             // tab Export Report / Quick Reports button downloads matching content.
+            // Usage-tab exports also carry the selected program filter.
             var extra = { kpi_types: (items || []).join(',') };
+            if (USAGE_DEPT) extra.department = USAGE_DEPT;
             submitExport('all', 'pdf', GLOBAL.preset, GLOBAL.from, GLOBAL.to, extra);
         }
 
@@ -840,12 +851,18 @@ function syncGlobalFilterCustomDates() {
                 return '<tr class="border-b last:border-0"><td class="py-2 pr-2">' + escapeHtml(r[0]) + '</td><td class="py-2 pr-2 font-semibold">TXN-' + escapeHtml(String(r[1])) + '</td><td class="py-2 pr-2">' + escapeHtml(r[2]) + '</td><td class="py-2 pr-2">' + escapeHtml(r[4]) + '</td><td class="py-2 pr-2">' + pill(escapeHtml(r[6] || ''), 'blue') + '</td><td class="py-2 pr-2 text-slate-500">' + escapeHtml(r[7] || '-') + '</td><td class="py-2">' + st + '</td></tr>';
             }).join('') || '<tr><td colspan="7" class="py-6 text-center text-slate-400">No circulation yet.</td></tr>';
 
+            paintUsage(U);
+        }
+
+        function paintUsage(U) {
+            U = U || {};
+            var scope = USAGE_DEPT ? ' · ' + USAGE_DEPT : '';
             var uk = document.getElementById('usage-kpis');
             if (uk) uk.innerHTML =
-                kpiCard('book', 'Total Borrowings', rNum(U.total), '', 'bg-blue-50')
-                + kpiCard('group', 'Unique Borrowers', rNum(U.unique_borrowers), '', 'bg-green-50')
+                kpiCard('book', 'Total Borrowings' + scope, rNum(U.total), '', 'bg-blue-50')
+                + kpiCard('group', 'Unique Borrowers' + scope, rNum(U.unique_borrowers), '', 'bg-green-50')
                 + kpiCard('layers', 'Avg. Books per Borrower', (U.avg_per_borrower || 0), '', 'bg-violet-50')
-                + kpiCard('schedule', 'Overdue Rate', rNum(U.overdue), 'items', 'bg-red-50')
+                + kpiCard('schedule', 'Overdue Items' + scope, rNum(U.overdue), 'items', 'bg-red-50')
                 + kpiCard('check_circle', 'Return Rate (On-time)', (U.return_rate || 0) + '%', '', 'bg-blue-50')
                 + kpiCard('account_balance', 'Active Departments', rNum(U.active_departments), '', 'bg-amber-50');
             paintDeptCharts(U.by_department || []);
@@ -855,7 +872,48 @@ function syncGlobalFilterCustomDates() {
             var rub = document.getElementById('recent-usage-body');
             if (rub) rub.innerHTML = (U.recent || []).slice(0, 8).map(function (r) {
                 return '<tr class="border-b last:border-0"><td class="py-2 pr-2">' + escapeHtml(r[0]) + '</td><td class="py-2 pr-2">' + escapeHtml(r[2]) + ' <span class="text-slate-400">(' + escapeHtml(r[3] || '') + ')</span></td><td class="py-2 pr-2">' + escapeHtml(r[4]) + '</td><td class="py-2 pr-2">' + pill(escapeHtml(r[6] || ''), 'blue') + '</td><td class="py-2 pr-2 text-slate-500">' + escapeHtml(r[7] || '-') + '</td><td class="py-2">' + pill(escapeHtml(r[8] || ''), 'green') + '</td></tr>';
-            }).join('') || '<tr><td colspan="6" class="py-6 text-center text-slate-400">No activity yet.</td></tr>';
+            }).join('') || '<tr><td colspan="6" class="py-6 text-center text-slate-400">' + (USAGE_DEPT ? 'No activity for ' + escapeHtml(USAGE_DEPT) + ' in this period.' : 'No activity yet.') + '</td></tr>';
+        }
+
+        function syncUsageDeptOptions(U) {
+            var sel = document.getElementById('usage-department');
+            if (!sel || !U) return;
+            var all = U.by_department_all || U.by_department || [];
+            var cur = USAGE_DEPT || '';
+            sel.innerHTML = '<option value="">All Departments / Programs</option>' + all.map(function (r) {
+                var selAttr = (r[0] === cur) ? ' selected' : '';
+                return '<option value="' + escapeHtml(r[0]).replace(/"/g, '&quot;') + '"' + selAttr + '>' + escapeHtml(r[0]) + ' (' + rNum(r[1]) + ')</option>';
+            }).join('');
+            sel.value = cur;
+        }
+
+        function onUsageDepartmentChange() {
+            var sel = document.getElementById('usage-department');
+            USAGE_DEPT = sel ? sel.value : '';
+            var loading = document.getElementById('usage-dept-loading');
+            if (loading) loading.classList.remove('hidden');
+            var params = new URLSearchParams({ preset: GLOBAL.preset || 'all' });
+            if (GLOBAL.from) params.set('from', GLOBAL.from);
+            if (GLOBAL.to) params.set('to', GLOBAL.to);
+            if (USAGE_DEPT) params.set('department', USAGE_DEPT);
+            fetch(DASHBOARD_URL + '?' + params.toString())
+                .then(function (r) {
+                    if (!r.ok) throw new Error('status ' + r.status);
+                    return r.json();
+                })
+                .then(function (json) {
+                    DASHBOARD.usage = (json && json.usage) || {};
+                    paintUsage(DASHBOARD.usage);
+                    syncUsageDeptOptions(DASHBOARD.usage);
+                    var url = new URL(window.location.href);
+                    if (USAGE_DEPT) url.searchParams.set('department', USAGE_DEPT);
+                    else url.searchParams.delete('department');
+                    window.history.replaceState({}, '', url.toString());
+                    if (loading) loading.classList.add('hidden');
+                })
+                .catch(function () {
+                    if (loading) loading.classList.add('hidden');
+                });
         }
 
         /* All cards share the page-level time range from the top-bar Filters

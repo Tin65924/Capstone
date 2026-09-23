@@ -119,12 +119,19 @@ def _normalize_range(preset, from_str, to_str):
     return preset, from_str, to_str
 
 
-def compute_dashboard(start_date, end_date):
+def _clean_department(value):
+    """Single program/department selector; '' means all programs."""
+    return (value or '').strip()[:100]
+
+
+def compute_dashboard(start_date, end_date, department=None):
     """Assemble Riverside-style dashboard payload from model queries.
 
     Returns JSON-serializable dicts/lists only (dates stringified); the
     template embeds it as ``dashboard-data`` and renders the three tabs
     client-side.  Missing tables/rows degrade to zeros/empty lists.
+    department scopes ONLY the usage section (whole Usage tab filter);
+    collection/circulation sections always use the full range.
     """
     def _safe(fn, *args, **kwargs):
         try:
@@ -187,22 +194,56 @@ def compute_dashboard(start_date, end_date):
     # available, and lost-flagged loans count as lost/damaged.
     available = max(total_copies - borrowed - overdue - reserved - lost_damaged - maintenance, 0)
 
+    dept = _clean_department(department)
+    dept_list = [dept] if dept else None
+
     by_category = _pair(_safe(models.collection_by_category, start_date, end_date))
-    by_user_type = _pair(_safe(models.borrowings_by_user_type, start_date, end_date))
-    by_program = _pair(_safe(models.books_borrowed_per_program, start_date, end_date))
+    by_program_all = _pair(_safe(models.books_borrowed_per_program, start_date, end_date))
     trend = _pair(_safe(models.borrowings_trend, start_date, end_date))
     overdue_t = _pair(_safe(models.overdue_trend, start_date, end_date))
     top_cats = _pair(_safe(models.top_borrowed_categories, start_date, end_date))
-    top_books = _triple(_safe(models.top_borrowed_books_detailed, start_date, end_date))
     high_demand = _triple(_safe(models.high_demand_titles, start_date, end_date))
     overview = _safe(models.circulation_overview, start_date, end_date)
     if not overview:
         overview = (0, 0, 0, 0.0, 0.0, 0)
+    # Usage-tab scoped queries (whole-tab program filter).
+    if dept_list:
+        overview_u = _safe(models.circulation_overview, start_date, end_date, dept_list)
+        trend_u = _pair(_safe(models.borrowings_trend, start_date, end_date, None, dept_list))
+        top_books_u = _triple(_safe(
+            models.top_borrowed_books_detailed, start_date, end_date, 5, None, dept_list))
+        by_user_type_u = _pair(_safe(
+            models.borrowings_by_user_type, start_date, end_date, None, None, dept_list))
+        by_program_u = _pair(_safe(
+            models.books_borrowed_per_program, start_date, end_date, dept_list))
+        recent_u_raw = _safe(
+            models.recent_circulation, 10, dept_list, start_date, end_date) or []
+    else:
+        overview_u = overview
+        trend_u = trend
+        top_books_u = _triple(_safe(models.top_borrowed_books_detailed, start_date, end_date))
+        by_user_type_u = _pair(_safe(models.borrowings_by_user_type, start_date, end_date))
+        by_program_u = by_program_all
+        recent_u_raw = _safe(models.recent_circulation) or []
+    if not overview_u:
+        overview_u = (0, 0, 0, 0.0, 0.0, 0)
     recent_circ_raw = _safe(models.recent_circulation) or []
     recent_circ = []
     for c in recent_circ_raw:
         try:
             recent_circ.append([
+                str(c[0]), c[1] if len(c) > 1 else '', c[2] if len(c) > 2 else '',
+                c[3] if len(c) > 3 else '', c[4] if len(c) > 4 else '',
+                c[5] if len(c) > 5 else '', c[6] if len(c) > 6 else '',
+                str(c[7]) if len(c) > 7 and c[7] else '',
+                c[8] if len(c) > 8 else '',
+            ])
+        except (IndexError, TypeError):
+            continue
+    recent_u = []
+    for c in recent_u_raw:
+        try:
+            recent_u.append([
                 str(c[0]), c[1] if len(c) > 1 else '', c[2] if len(c) > 2 else '',
                 c[3] if len(c) > 3 else '', c[4] if len(c) > 4 else '',
                 c[5] if len(c) > 5 else '', c[6] if len(c) > 6 else '',
@@ -266,17 +307,19 @@ def compute_dashboard(start_date, end_date):
             'recent': recent_circ,
         },
         'usage': {
-            'total': overview[0],
-            'unique_borrowers': overview[1],
-            'avg_per_borrower': round(overview[0] / overview[1], 2) if overview[1] else 0.0,
-            'overdue': overview[2],
-            'return_rate': overview[4],
-            'active_departments': len(by_program),
-            'by_department': by_program,
-            'trend': trend,
-            'top_books': top_books,
-            'by_user_type': by_user_type,
-            'recent': recent_circ,
+            'total': overview_u[0],
+            'unique_borrowers': overview_u[1],
+            'avg_per_borrower': round(overview_u[0] / overview_u[1], 2) if overview_u[1] else 0.0,
+            'overdue': overview_u[2],
+            'return_rate': overview_u[4],
+            'active_departments': len(by_program_all),
+            'by_department': by_program_u,
+            'by_department_all': by_program_all,
+            'trend': trend_u,
+            'top_books': top_books_u,
+            'by_user_type': by_user_type_u,
+            'recent': recent_u,
+            'department': dept,
         },
     }
 
@@ -288,11 +331,12 @@ def analytics_page():
     preset = request.args.get('preset', 'all')
     from_str = request.args.get('from', '').strip()
     to_str = request.args.get('to', '').strip()
+    department = _clean_department(request.args.get('department', ''))
     # Normalize: semester/year presets ignore stale custom dates in the URL;
     # invalid presets fall back to no bounds (same as kpi_json/export_report).
     preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
     start_date, end_date = resolve_dates(preset, from_str, to_str)
-    dashboard = compute_dashboard(start_date, end_date)
+    dashboard = compute_dashboard(start_date, end_date, department)
     period_label = _format_period(start_date, end_date, preset, from_str, to_str)
     return render_template(
         'analytics/analytics.html',
@@ -300,6 +344,7 @@ def analytics_page():
         from_date=from_str,
         to_date=to_str,
         period_label=period_label,
+        department=department,
         dashboard=dashboard,
     )
 
@@ -489,9 +534,10 @@ def dashboard_json():
     preset = request.args.get('preset', 'all')
     from_str = request.args.get('from', '').strip()
     to_str = request.args.get('to', '').strip()
+    department = _clean_department(request.args.get('department', ''))
     preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
     start_date, end_date = resolve_dates(preset, from_str, to_str)
-    return jsonify(compute_dashboard(start_date, end_date))
+    return jsonify(compute_dashboard(start_date, end_date, department))
 
 
 CHART_NAMES = frozenset({
@@ -654,41 +700,61 @@ def _as_2d_rows(kpi_type, kpi_data):
     raise ValueError('Unknown KPI type: %s' % kpi_type)
 
 
-def _run_kpi(kpi_type, start_date, end_date):
+USAGE_SCOPED_KPIS = frozenset({
+    'books_borrowed_per_program', 'trend_borrowings', 'trend_overdue',
+    'top_books', 'high_demand', 'by_user_type', 'recent_circulation',
+    'circulation_summary',
+})
+
+
+def _run_kpi(kpi_type, start_date, end_date, departments=None):
+    dept_list = _normalize_dept_list(departments)
+    # Only usage-scoped sections honor the program filter; collection
+    # sections always report the full catalog.
+    scoped = dept_list if kpi_type in USAGE_SCOPED_KPIS else None
     if kpi_type == 'utilization_rate':
         return models.utilization_rate(start_date, end_date)
     if kpi_type == 'books_borrowed_per_program':
-        return models.books_borrowed_per_program(start_date, end_date)
+        return models.books_borrowed_per_program(start_date, end_date, scoped)
     if kpi_type == 'most_borrowed_titles':
         return models.most_borrowed_titles(start_date, end_date)
     if kpi_type == 'underutilized_titles':
         return models.underutilized_titles(start_date, end_date)
     if kpi_type == 'trend_borrowings':
-        return models.borrowings_trend(start_date, end_date)
+        return models.borrowings_trend(start_date, end_date, None, scoped)
     if kpi_type == 'trend_overdue':
-        return models.overdue_trend(start_date, end_date)
+        return models.overdue_trend(start_date, end_date, None, scoped)
     if kpi_type == 'top_categories':
         return models.top_borrowed_categories(start_date, end_date)
     if kpi_type == 'top_books':
-        return models.top_borrowed_books_detailed(start_date, end_date)
+        return models.top_borrowed_books_detailed(start_date, end_date, 5, None, scoped)
     if kpi_type == 'high_demand':
-        return models.high_demand_titles(start_date, end_date)
+        return models.high_demand_titles(start_date, end_date, borrow_type=None)
     if kpi_type == 'by_user_type':
-        return models.borrowings_by_user_type(start_date, end_date)
+        return models.borrowings_by_user_type(start_date, end_date, None, None, scoped)
     if kpi_type == 'collection_by_category':
         return models.collection_by_category(start_date, end_date)
     if kpi_type == 'copies_by_status':
         return models.copies_by_status_summary(start_date, end_date)
     if kpi_type == 'recent_circulation':
-        return models.recent_circulation()
+        return models.recent_circulation(10, scoped, start_date, end_date)
     if kpi_type == 'recent_collection':
         return models.recent_collection_status()
     if kpi_type == 'circulation_summary':
-        t, b, o, avg, rate, new = models.circulation_overview(start_date, end_date)
+        t, b, o, avg, rate, new = models.circulation_overview(start_date, end_date, scoped)
         return [['Total borrowings', t], ['Active borrowers', b], ['Overdue items', o],
                 ['Avg. loan duration (days)', avg], ['On-time return rate (%)', rate],
                 ['New additions', new]]
     raise ValueError('Unknown KPI type: %s' % kpi_type)
+
+
+def _normalize_dept_list(departments):
+    if departments is None:
+        return None
+    if isinstance(departments, str):
+        departments = [departments]
+    cleaned = [d.strip() for d in departments if d and d.strip()]
+    return cleaned or None
 
 
 def _all_labels():
@@ -888,7 +954,7 @@ def _section_chart(kt, rows, width):
 
 
 def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
-               from_str='', to_str=''):
+               from_str='', to_str='', department=''):
     """Build a polished PDF report from (kpi_type, kpi_data) sections."""
     buf = io.BytesIO()
 
@@ -989,6 +1055,8 @@ def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
 
     now = datetime.now()
     period_label = _format_period(start_date, end_date, preset, from_str, to_str)
+    if department:
+        period_label = period_label + ' · ' + department
 
     gen_name = getattr(current_user, 'full_name', None) or getattr(current_user, 'email', '') or 'System'
     gen_role = getattr(current_user, 'role', '') or ''
@@ -1281,6 +1349,7 @@ def export_report():
     preset = request.form.get('preset', 'all')
     from_str = request.form.get('from', '').strip()
     to_str = request.form.get('to', '').strip()
+    department = _clean_department(request.form.get('department', ''))
     # Semester/year presets must not carry stale custom dates.
     if preset in ('semester', 'year'):
         from_str = to_str = ''
@@ -1330,11 +1399,13 @@ def export_report():
         kpi_types = [kpi_type]
 
     sections = []
+    dept_list = [department] if department else None
     for kt in kpi_types:
-        kpi_data = _run_kpi(kt, start_date, end_date)
+        kpi_data = _run_kpi(kt, start_date, end_date, dept_list)
         models.save_report_snapshot(
             kt,
-            {'preset': preset, 'from': from_str, 'to': to_str},
+            {'preset': preset, 'from': from_str, 'to': to_str,
+             'department': department},
             _jsonable(kpi_data),
             current_user.id,
         )
@@ -1347,7 +1418,7 @@ def export_report():
     body = _pdf_bytes(
         sections,
         preset=preset, start_date=start_date, end_date=end_date,
-        from_str=from_str, to_str=to_str,
+        from_str=from_str, to_str=to_str, department=department,
     )
     return Response(
         body,

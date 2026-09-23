@@ -14,13 +14,64 @@ def _date_filter(clause_prefix, column):
     return parts, params
 
 
+def _normalize_departments(departments):
+    if departments is None:
+        return []
+    if isinstance(departments, str):
+        departments = [departments]
+    return [d.strip() for d in departments if d and d.strip()]
+
+
+def _department_clause(departments, b_alias='b', r_alias='r'):
+    """Return (clause, params) matching the program_label expression.
+
+    program_label = COALESCE(NULLIF(department, ''),
+        CASE WHEN role IN ('Admin','Librarian') THEN role ELSE 'No program' END).
+    Caller must have joined borrowers AS b_alias, user_accounts, roles AS r_alias.
+    Returns (None, []) when no departments given.
+    """
+    depts = _normalize_departments(departments)
+    if not depts:
+        return None, []
+    conds = []
+    params = []
+    for d in depts:
+        if d in ('Admin', 'Librarian'):
+            conds.append(
+                "(NULLIF({b}.department, '') IS NULL AND {r}.role_name = %s)".format(
+                    b=b_alias, r=r_alias))
+            params.append(d)
+        elif d == 'No program':
+            conds.append(
+                "(NULLIF({b}.department, '') IS NULL AND "
+                "{r}.role_name NOT IN ('Admin', 'Librarian'))".format(
+                    b=b_alias, r=r_alias))
+        else:
+            conds.append("{b}.department = %s".format(b=b_alias))
+            params.append(d)
+    if len(conds) == 1:
+        return conds[0], params
+    return '(' + ' OR '.join(conds) + ')', params
+
+
 def books_borrowed_per_program(start_date=None, end_date=None, departments=None,
                                 borrow_type=None):
     parts, params = _date_filter({'start': start_date, 'end': end_date}, 'c.borrow_date')
-    departments = [d.strip() for d in (departments or []) if d and d.strip()]
+    departments = _normalize_departments(departments)
     if departments:
-        parts.append('b.department IN ({})'.format(', '.join(['%s'] * len(departments))))
-        params.extend(departments)
+        pseudo = [d for d in departments if d in ('Admin', 'Librarian', 'No program')]
+        normal = [d for d in departments if d not in ('Admin', 'Librarian', 'No program')]
+        if pseudo and normal:
+            clause, cparams = _department_clause(departments, 'b', 'r')
+            parts.append(clause)
+            params.extend(cparams)
+        elif pseudo:
+            clause, cparams = _department_clause(pseudo, 'b', 'r')
+            parts.append(clause)
+            params.extend(cparams)
+        else:
+            parts.append('b.department IN ({})'.format(', '.join(['%s'] * len(departments))))
+            params.extend(departments)
     if borrow_type:
         parts.append('c.borrow_type = %s')
         params.append(borrow_type)
@@ -243,28 +294,46 @@ def collection_by_category(start_date=None, end_date=None, categories=None):
     )
 
 
-def borrowings_trend(start_date=None, end_date=None, borrow_type=None):
-    parts, params = _range_clause('borrow_date', start_date, end_date)
+def borrowings_trend(start_date=None, end_date=None, borrow_type=None,
+                     departments=None):
+    parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    joins = ''
     if borrow_type:
-        parts.append('borrow_type = %s')
+        parts.append('c.borrow_type = %s')
         params.append(borrow_type)
+    dept_clause, dept_params = _department_clause(departments, 'br', 'r')
+    if dept_clause:
+        joins = (' JOIN borrowers br ON br.borrower_id = c.borrower_id'
+                 ' JOIN user_accounts u ON br.user_id = u.user_id'
+                 ' JOIN roles r ON u.role_id = r.role_id')
+        parts.append(dept_clause)
+        params.extend(dept_params)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
-        '''SELECT borrow_date, COUNT(*)
-           FROM circulation_records {} GROUP BY borrow_date ORDER BY borrow_date'''.format(where),
+        '''SELECT c.borrow_date, COUNT(*)
+           FROM circulation_records c{} {} GROUP BY c.borrow_date ORDER BY c.borrow_date'''.format(joins, where),
         tuple(params) if params else None
     )
 
 
-def overdue_trend(start_date=None, end_date=None, borrow_type=None):
-    parts, params = _range_clause('borrow_date', start_date, end_date)
+def overdue_trend(start_date=None, end_date=None, borrow_type=None,
+                  departments=None):
+    parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    joins = ''
     if borrow_type:
-        parts.append('borrow_type = %s')
+        parts.append('c.borrow_type = %s')
         params.append(borrow_type)
-    parts.append("transaction_status = 'overdue'")
+    dept_clause, dept_params = _department_clause(departments, 'br', 'r')
+    if dept_clause:
+        joins = (' JOIN borrowers br ON br.borrower_id = c.borrower_id'
+                 ' JOIN user_accounts u ON br.user_id = u.user_id'
+                 ' JOIN roles r ON u.role_id = r.role_id')
+        parts.append(dept_clause)
+        params.extend(dept_params)
+    parts.append("c.transaction_status = 'overdue'")
     return db.fetch_all(
-        '''SELECT borrow_date, COUNT(*) FROM circulation_records
-           WHERE {} GROUP BY borrow_date ORDER BY borrow_date'''.format(' AND '.join(parts)),
+        '''SELECT c.borrow_date, COUNT(*) FROM circulation_records c{}
+           WHERE {} GROUP BY c.borrow_date ORDER BY c.borrow_date'''.format(joins, ' AND '.join(parts)),
         tuple(params)
     )
 
@@ -287,7 +356,7 @@ def top_borrowed_categories(start_date=None, end_date=None, limit=6, borrow_type
 
 
 def borrowings_by_user_type(start_date=None, end_date=None, roles=None,
-                              borrow_type=None):
+                              borrow_type=None, departments=None):
     parts, params = _range_clause('c.borrow_date', start_date, end_date)
     roles = [r.strip() for r in (roles or []) if r and r.strip()]
     if roles:
@@ -296,6 +365,10 @@ def borrowings_by_user_type(start_date=None, end_date=None, roles=None,
     if borrow_type:
         parts.append('c.borrow_type = %s')
         params.append(borrow_type)
+    dept_clause, dept_params = _department_clause(departments, 'b', 'r')
+    if dept_clause:
+        parts.append(dept_clause)
+        params.extend(dept_params)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
         '''SELECT r.role_name, COUNT(c.circulation_id)
@@ -308,33 +381,46 @@ def borrowings_by_user_type(start_date=None, end_date=None, roles=None,
     )
 
 
-def circulation_overview(start_date=None, end_date=None):
+def circulation_overview(start_date=None, end_date=None, departments=None):
     """Return (total, active_borrowers, overdue, avg_loan_days, return_rate, new_additions).
 
     Positional tuple; callers index by position per the module tuple contract.
+    departments optionally scopes loan aggregates to borrower program(s),
+    matching the program_label logic (handles 'No program'/'Admin'/'Librarian').
+    New additions always count titles and ignore the department filter.
     """
+    dept_clause, dept_params = _department_clause(departments, 'br', 'r')
+    joins = ''
+    if dept_clause:
+        joins = (' JOIN borrowers br ON br.borrower_id = circulation_records.borrower_id'
+                 ' JOIN user_accounts u ON br.user_id = u.user_id'
+                 ' JOIN roles r ON u.role_id = r.role_id')
     parts, params = _range_clause('borrow_date', start_date, end_date)
+    if dept_clause:
+        parts.append(dept_clause)
+        params.extend(dept_params)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
+    base = 'FROM circulation_records{} {}'.format(joins, where)
     p = tuple(params) if params else None
     total = db.fetch_one(
-        'SELECT COUNT(*) FROM circulation_records {}'.format(where), p)
+        'SELECT COUNT(*) {}'.format(base), p)
     borrowers = db.fetch_one(
-        'SELECT COUNT(DISTINCT borrower_id) FROM circulation_records {}'.format(where), p)
+        'SELECT COUNT(DISTINCT borrower_id) {}'.format(base), p)
 
     def _and(cond):
         return (where + ' AND ' + cond) if where else ('WHERE ' + cond)
 
     overdue = db.fetch_one(
-        'SELECT COUNT(*) FROM circulation_records {}'.format(
-            _and("transaction_status = 'overdue'")),
+        'SELECT COUNT(*) FROM circulation_records{} {}'.format(
+            joins, _and("transaction_status = 'overdue'")),
         p)
     avg_loan = db.fetch_one(
-        '''SELECT AVG(return_date - borrow_date) FROM circulation_records
-           {}'''.format(_and('return_date IS NOT NULL')),
+        '''SELECT AVG(return_date - borrow_date) FROM circulation_records{}{}'''.format(
+            joins, _and('return_date IS NOT NULL')),
         p)
     returned = db.fetch_one(
-        'SELECT COUNT(*) FROM circulation_records {}'.format(
-            _and("transaction_status = 'returned'")),
+        'SELECT COUNT(*) FROM circulation_records{} {}'.format(
+            joins, _and("transaction_status = 'returned'")),
         p)
     # New additions filter on book_catalog.date_added with the same range.
     bparts, bparams = _range_clause('date_added', start_date, end_date)
@@ -366,19 +452,27 @@ def circulation_overview(start_date=None, end_date=None):
 
 
 def top_borrowed_books_detailed(start_date=None, end_date=None, limit=5,
-                                  borrow_type=None):
+                                  borrow_type=None, departments=None):
     parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    joins = ''
     if borrow_type:
         parts.append('c.borrow_type = %s')
         params.append(borrow_type)
+    dept_clause, dept_params = _department_clause(departments, 'br', 'r')
+    if dept_clause:
+        joins = (' JOIN borrowers br ON c.borrower_id = br.borrower_id'
+                 ' JOIN user_accounts u ON br.user_id = u.user_id'
+                 ' JOIN roles r ON u.role_id = r.role_id')
+        parts.append(dept_clause)
+        params.extend(dept_params)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     params.append(limit)
     return db.fetch_all(
         '''SELECT b.title, b.author, COUNT(c.circulation_id)
            FROM book_catalog b
-           JOIN circulation_records c ON b.book_id = c.book_id
+           JOIN circulation_records c ON b.book_id = c.book_id{}
            {} GROUP BY b.book_id, b.title, b.author
-           ORDER BY 3 DESC LIMIT %s'''.format(where),
+           ORDER BY 3 DESC LIMIT %s'''.format(joins, where),
         tuple(params)
     )
 
@@ -459,7 +553,14 @@ def count_accessions(start_date=None, end_date=None):
     return row[0] if row else 0
 
 
-def recent_circulation(limit=10):
+def recent_circulation(limit=10, departments=None, start_date=None, end_date=None):
+    parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    dept_clause, dept_params = _department_clause(departments, 'br', 'r')
+    if dept_clause:
+        parts.append(dept_clause)
+        params.extend(dept_params)
+    where = 'WHERE ' + ' AND '.join(parts) if parts else ''
+    params.append(limit)
     return db.fetch_all(
         '''SELECT c.borrow_date, c.circulation_id, u.full_name, r.role_name,
                   b.title, b.author, c.transaction_type, c.due_date, c.transaction_status
@@ -468,8 +569,8 @@ def recent_circulation(limit=10):
            JOIN borrowers br ON c.borrower_id = br.borrower_id
            JOIN user_accounts u ON br.user_id = u.user_id
            JOIN roles r ON u.role_id = r.role_id
-           ORDER BY c.borrow_date DESC LIMIT %s''',
-        (limit,)
+           {} ORDER BY c.borrow_date DESC LIMIT %s'''.format(where),
+        tuple(params)
     )
 
 
