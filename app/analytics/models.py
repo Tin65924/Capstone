@@ -1,6 +1,7 @@
 import json
 
 from app.database import db
+from app.resources.models import resource_usage, count_accesses
 
 
 def _date_filter(clause_prefix, column):
@@ -555,6 +556,20 @@ def count_accessions(start_date=None, end_date=None):
         tuple(params) if params else None,
     )
     return row[0] if row else 0
+
+
+def online_resource_usage(start_date=None, end_date=None, limit=5):
+    """Top online resources by recorded visits: [(title, provider, accesses)].
+
+    Owned by the resources module; imported here so the Module 5
+    dashboard and exports share one query.
+    """
+    return resource_usage(start_date, end_date, limit)
+
+
+def online_resource_total(start_date=None, end_date=None):
+    """Total recorded e-resource visits in the range."""
+    return count_accesses(start_date, end_date)
 
 
 def recent_circulation(limit=10, departments=None, start_date=None, end_date=None):
