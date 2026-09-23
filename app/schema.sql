@@ -250,3 +250,18 @@ INSERT INTO departments (name, dept_type) VALUES
     ('BSN', 'program'),
     ('BACOMM', 'program')
 ON CONFLICT DO NOTHING;
+
+-- Supplier book list uploaded by the librarian. Faculty requests are
+-- checked against this catalog: titles found here proceed straight to
+-- librarian approval, others are entered manually as usual.
+CREATE TABLE IF NOT EXISTS supplier_catalog (
+    supplier_id   SERIAL PRIMARY KEY,
+    supplier_name VARCHAR(150) NOT NULL DEFAULT 'Supplier',
+    book_title    VARCHAR(255) NOT NULL,
+    author        VARCHAR(150),
+    uploaded_by   INT REFERENCES user_accounts(user_id),
+    uploaded_at   TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_supplier_catalog_title
+    ON supplier_catalog (book_title);
