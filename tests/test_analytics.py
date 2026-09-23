@@ -660,23 +660,19 @@ class TestForecastJson:
 
 class TestForecastTab:
     def test_page_embeds_forecast_tab(self, librarian_client, mock_db):
+        """Insights tab was removed: all cards share the global time filter."""
         mock_db['fetch_one'].return_value = (5,)
         mock_db['fetch_all'].return_value = []
         resp = librarian_client.get('/librarian/analytics')
         assert resp.status_code == 200
-        assert b'data-rtab="forecast"' in resp.data
-        assert b'data-rtab-panel="forecast"' in resp.data
-        assert b'/librarian/analytics/forecast' in resp.data
-        assert b'loadForecast' in resp.data
-        assert b'forecast-gaps-body' in resp.data
-        assert b'forecast-insights' in resp.data
-        assert b'Projected Borrowing Demand' in resp.data
-        assert b'Expected Borrowing Activity by Weekday' in resp.data
-        assert b'>Insights</button>' in resp.data
-        assert b'Insights Dashboard' in resp.data
-        assert b'Forecasting Dashboard' not in resp.data
-        assert b'forecast-demand-line' in resp.data
-        assert b'id="forecast-basis"' in resp.data
+        assert b'data-rtab="forecast"' not in resp.data
+        assert b'data-rtab-panel="forecast"' not in resp.data
+        assert b'loadForecast' not in resp.data
+        assert b'forecast-gaps-body' not in resp.data
+        assert b'forecast-insights' not in resp.data
+        assert b'Projected Borrowing Demand' not in resp.data
+        assert b'>Insights</button>' not in resp.data
+        assert b'Insights Dashboard' not in resp.data
 
 
 class TestChartJson:
@@ -785,44 +781,22 @@ class TestChartJson:
 
 class TestChartFilterControls:
     def test_page_embeds_filter_modal(self, librarian_client, mock_db):
-        """Each card gets one filter button opening the shared modal."""
+        """Per-card filters were removed: all cards share the global filter."""
         mock_db['fetch_one'].return_value = (5,)
         mock_db['fetch_all'].return_value = []
         resp = librarian_client.get('/librarian/analytics')
         assert resp.status_code == 200
-        assert b'id="chartFilterModal"' in resp.data
-        assert b'id="chartFilterBody"' in resp.data
-        assert b'id="chartFilterApply"' in resp.data
-        assert b'id="chartFilterReset"' in resp.data
-        assert b'CHART_FILTER_DEFS' in resp.data
-        assert b'FILTER_BUTTON_CARDS' in resp.data
-        assert b'openChartFilter' in resp.data
-        assert b'data-cbadge' in resp.data
-        for name in (b'collection_by_category', b'copies_by_status',
-                     b'borrowings_trend', b'borrowings_by_department',
-                     b'borrowings_by_user_type'):
-            assert name in resp.data
-        # borrow-type option lives in the modal definition
-        assert b'value="overnight"' in resp.data
-        assert b'value="daily_circulation"' in resp.data
-        assert b'/librarian/analytics/chart' in resp.data
-        # category multi-select with autosuggest-backed input
-        assert b'Category name' in resp.data
-        assert b'Title contains' not in resp.data
-        assert b'data-suggest="book_subject"' in resp.data
-        assert b'js/autosuggest.js' in resp.data
-        assert b'data-mf="catadd"' in resp.data
-        assert b'MCSTAutosuggest' in resp.data
-        # category bloom check: unknown values get a warning, not a block
-        assert b'category_record' in resp.data
-        assert b'ensureBloom' in resp.data
-        assert b'data-mf="catwarn"' in resp.data
-        # copies-by-status is a snapshot: no borrow-type option
-        assert b"copies_by_status: { title: 'Copies by Status', controls: ['dates'] }" in resp.data
-        # inline filter rows are gone: cards stay compact
-        assert b'class="chart-filter ' not in resp.data
-        assert b'id="dept-checks"' not in resp.data
-        assert b'id="role-checks"' not in resp.data
+        assert b'id="chartFilterModal"' not in resp.data
+        assert b'id="chartFilterBody"' not in resp.data
+        assert b'id="chartFilterApply"' not in resp.data
+        assert b'id="chartFilterReset"' not in resp.data
+        assert b'CHART_FILTER_DEFS' not in resp.data
+        assert b'FILTER_BUTTON_CARDS' not in resp.data
+        assert b'openChartFilter' not in resp.data
+        assert b'data-cbadge' not in resp.data
+        # global time filter remains the single source of truth
+        assert b'id="globalFilterModal"' in resp.data
+        assert b'applyGlobalFilter' in resp.data
 
     def test_collection_table_controls_work(self, librarian_client, mock_db):
         """Search + status filter are real inputs; View All links go somewhere."""
