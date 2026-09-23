@@ -120,13 +120,17 @@ def most_borrowed_titles(start_date=None, end_date=None, limit=10):
     )
 
 
-def underutilized_titles(start_date=None, end_date=None):
+def underutilized_titles(start_date=None, end_date=None, limit=None):
     parts, params = _date_filter({'start': start_date, 'end': end_date}, 'c.borrow_date')
     on_cond = ' AND ' + ' AND '.join(parts) if parts else ''
+    limit_clause = ''
+    if limit is not None:
+        limit_clause = ' LIMIT %s'
+        params.append(limit)
     return db.fetch_all(
         '''SELECT bc.title FROM book_catalog bc
            LEFT JOIN circulation_records c ON bc.book_id = c.book_id{}
-           GROUP BY bc.book_id, bc.title HAVING COUNT(c.circulation_id) = 0'''.format(on_cond),
+           GROUP BY bc.book_id, bc.title HAVING COUNT(c.circulation_id) = 0{}'''.format(on_cond, limit_clause),
         tuple(params) if params else None
     )
 

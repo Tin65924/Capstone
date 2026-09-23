@@ -273,6 +273,13 @@ def compute_dashboard(start_date, end_date, departments=None):
             ])
         except (IndexError, TypeError):
             continue
+    underutilized_raw = _safe(models.underutilized_titles, start_date, end_date, 10) or []
+    underutilized = []
+    for r in underutilized_raw:
+        try:
+            underutilized.append([r[0]])
+        except (IndexError, TypeError):
+            continue
 
     # Condition buckets derived from inventory_state (no condition column).
     cond_total = max(sum(inv.values()), 1)
@@ -301,6 +308,7 @@ def compute_dashboard(start_date, end_date, departments=None):
             'condition': condition,
             'cond_total': cond_total,
             'recent': recent_coll,
+            'underutilized': underutilized,
         },
         'circulation': {
             'total': overview[0],

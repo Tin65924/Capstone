@@ -288,6 +288,11 @@
                                 <h3 class="text-sm font-extrabold mb-2">Items Requiring Attention</h3>
                                 <div id="attention-list" class="space-y-2 text-xs"></div>
                             </div>
+                            <div class="bg-white rounded-xl border border-slate-200 p-4">
+                                <h3 class="text-sm font-extrabold mb-1">Underutilized Titles</h3>
+                                <p class="text-[10px] text-slate-400 mb-2">Zero borrows in the selected period.</p>
+                                <div id="underutilized-list" class="space-y-1.5 text-[11px]"></div>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -826,6 +831,10 @@ function syncGlobalFilterCustomDates() {
                 '<a href="{{ url_for('cataloging.cataloging_page', copy_status='overdue') }}" class="flex items-center gap-2 border rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors"><span class="material-symbols-outlined text-red-500">schedule</span><span class="flex-1"><b>Overdue Copies</b><br><span class="text-slate-500">Require immediate follow-up</span></span><b class="text-red-600">' + rNum(C.overdue) + '</b></a>'
                 + '<a href="{{ url_for('cataloging.cataloging_page', copy_status='lost_damaged') }}" class="flex items-center gap-2 border rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors"><span class="material-symbols-outlined text-red-500">warning</span><span class="flex-1"><b>Lost / Damaged Copies</b><br><span class="text-slate-500">Require replacement or review</span></span><b class="text-red-600">' + rNum(C.lost_damaged) + '</b></a>'
                 + '<a href="{{ url_for('cataloging.cataloging_page', copy_status='maintenance') }}" class="flex items-center gap-2 border rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors"><span class="material-symbols-outlined text-blue-600">build</span><span class="flex-1"><b>Due for Maintenance</b><br><span class="text-slate-500">Inventory flagged missing</span></span><b class="text-blue-600">' + rNum(C.maintenance) + '</b></a>';
+            var uu = document.getElementById('underutilized-list');
+            if (uu) uu.innerHTML = (C.underutilized || []).map(function (r, i) {
+                return '<div class="flex items-center gap-2 border rounded-lg px-2.5 py-2"><span class="w-6 h-6 rounded-full bg-amber-50 text-amber-700 text-[11px] font-extrabold flex items-center justify-center shrink-0">' + (i + 1) + '</span><span class="flex-1 min-w-0 truncate font-semibold text-slate-600">' + escapeHtml(r[0]) + '</span><span class="text-[10px] text-slate-400 whitespace-nowrap">0 borrows</span></div>';
+            }).join('') || '<div class="text-xs text-slate-400">Every title was borrowed in this period.</div>';
 
             var lk = document.getElementById('library-kpis');
             if (lk) lk.innerHTML =
