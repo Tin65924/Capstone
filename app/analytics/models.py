@@ -405,7 +405,7 @@ def circulation_overview(start_date=None, end_date=None, departments=None):
     total = db.fetch_one(
         'SELECT COUNT(*) {}'.format(base), p)
     borrowers = db.fetch_one(
-        'SELECT COUNT(DISTINCT borrower_id) {}'.format(base), p)
+        'SELECT COUNT(DISTINCT circulation_records.borrower_id) {}'.format(base), p)
 
     def _and(cond):
         return (where + ' AND ' + cond) if where else ('WHERE ' + cond)
@@ -415,7 +415,7 @@ def circulation_overview(start_date=None, end_date=None, departments=None):
             joins, _and("transaction_status = 'overdue'")),
         p)
     avg_loan = db.fetch_one(
-        '''SELECT AVG(return_date - borrow_date) FROM circulation_records{}{}'''.format(
+        'SELECT AVG(return_date - borrow_date) FROM circulation_records{} {}'.format(
             joins, _and('return_date IS NOT NULL')),
         p)
     returned = db.fetch_one(

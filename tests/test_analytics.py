@@ -922,6 +922,36 @@ class TestUsageDepartmentFilter:
         assert resp.status_code == 200
         assert b'value="BSIT" selected' in resp.data
 
+    def test_overview_sql_has_valid_spacing(self, mock_db):
+        """Regression: every overview query must keep whitespace after the
+        FROM table (a missing space is a syntax error on real Postgres,
+        swallowed by _safe -> all KPIs render 0)."""
+        import re
+        from app.analytics.models import circulation_overview
+        mock_db['fetch_one'].side_effect = [
+            (10,), (4,), (2,), (3.0,), (6,), (7,)]
+        assert circulation_overview(None, None) == (10, 4, 2, 3.0, 60.0, 7)
+        queries = [c[0][0] for c in mock_db['fetch_one'].call_args_list
+                   if 'circulation_records' in c[0][0]]
+        assert len(queries) == 5
+        for q in queries:
+            assert 'recordsWHERE' not in q
+            assert re.search(r'circulation_records(\s|$)', q), q
+
+    def test_overview_department_sql_unambiguous(self, mock_db):
+        """Regression: dept-scoped overview joins borrowers, so borrower_id
+        must be table-qualified (ambiguous column -> exception -> KPIs 0)."""
+        import re
+        from app.analytics.models import circulation_overview
+        mock_db['fetch_one'].side_effect = [
+            (10,), (4,), (2,), (3.0,), (6,), (7,)]
+        circulation_overview(None, None, ['BSIT'])
+        queries = [c[0][0] for c in mock_db['fetch_one'].call_args_list]
+        assert any('JOIN borrowers' in q for q in queries)
+        for q in queries:
+            if 'JOIN borrowers' in q:
+                assert re.search(r'(?<!\.)\bborrower_id\b', q) is None, q
+
     def test_export_honors_department(self, librarian_client, mock_db):
         mock_db['fetch_all'].return_value = [('BSIT', 12)]
         resp = librarian_client.post(
