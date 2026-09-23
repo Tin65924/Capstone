@@ -9,7 +9,7 @@ from .models import (
     get_scanned_in_session, cancel_inventory_session,
     upsert_inventory_record, get_accession_status, mark_copy_damaged,
     mark_copy_lost, update_session_scan, get_session_export_rows, get_scan_history,
-    count_scan_history
+    count_scan_history, get_session_discrepancies
 )
 from app.cataloging.models import get_accession_by_number
 from app.circulation.models import get_active_loan_by_accession
@@ -42,6 +42,10 @@ def inventory_page():
     total_scans = count_scan_history(status_filter=status_filter)
     total_pages = max(1, (total_scans + 9) // 10)
 
+    discrepancies = []
+    if session and session[4] == 'completed':
+        discrepancies = get_session_discrepancies(session[0])
+
     return render_template(
         'inventory/inventory.html',
         session=session,
@@ -49,7 +53,8 @@ def inventory_page():
         scan_rows=scan_rows,
         current_status=status_filter,
         current_page=page,
-        total_pages=total_pages
+        total_pages=total_pages,
+        discrepancies=discrepancies
     )
 
 
@@ -217,11 +222,17 @@ def export_session(session_id):
         return redirect(url_for('inventory.inventory_page', session_id=session_id))
 
     rows = get_session_export_rows(session_id)
+    discrepancies = get_session_discrepancies(session_id)
 
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(['Accession Number', 'Title', 'Status', 'Last Checked', 'Notes'])
     for row in rows:
+        writer.writerow(row)
+    writer.writerow([])
+    writer.writerow(['DISCREPANCIES (missing, unscanned and not on loan)'])
+    writer.writerow(['Accession Number', 'Title', 'Status', 'Last Checked', 'Notes'])
+    for row in discrepancies:
         writer.writerow(row)
 
     log_activity(current_user.id, f'inventory:export_session:{session_id}')
