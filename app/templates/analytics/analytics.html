@@ -341,12 +341,24 @@
                             <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Usage Analytics Dashboard</h2>
                             <p class="text-xs text-slate-500">Who is using the library, what are they borrowing, and how often?</p>
                         </div>
-                        <select id="usage-department" onchange="onUsageDepartmentChange()" title="Filter Usage tab by program" class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600 outline-none focus:border-primary bg-white max-w-[220px]">
-                            <option value="">All Departments / Programs</option>
-                            {% for row in dashboard.usage.by_department_all %}
-                            <option value="{{ row[0] }}" {% if department == row[0] %}selected{% endif %}>{{ row[0] }} ({{ row[1] }})</option>
-                            {% endfor %}
-                        </select>
+                        <div class="relative" id="usage-dept-wrapper">
+                            <button type="button" id="usage-dept-btn" onclick="toggleUsageDeptDropdown(event)" title="Filter Usage tab by program"
+                                class="flex items-center justify-between gap-2 text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600 bg-white outline-none focus:border-primary min-w-[200px] max-w-[240px]">
+                                <span id="usage-dept-label" class="truncate">All Departments / Programs</span>
+                                <span class="material-symbols-outlined text-slate-400 text-[18px] shrink-0">expand_more</span>
+                            </button>
+                            <div id="usage-dept-dropdown" class="hidden absolute z-50 right-0 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-xl p-2">
+                                <div id="usage-dept-options" class="max-h-56 overflow-y-auto divide-y divide-gray-100">
+                                    {% for row in dashboard.usage.by_department_all %}
+                                    <label class="flex items-center gap-2 px-3 py-2 text-[11px] hover:bg-gray-50 cursor-pointer rounded-lg"><input type="checkbox" value="{{ row[0] }}"{% if row[0] in departments %} checked{% endif %} class="rounded border-gray-300"> <span class="flex-1 truncate font-bold text-slate-600">{{ row[0] }}</span><span class="text-slate-400 font-bold">{{ row[1] }}</span></label>
+                                    {% endfor %}
+                                </div>
+                                <div class="flex gap-2 p-2 border-t border-gray-100">
+                                    <button type="button" onclick="onUsageDeptApply()" class="flex-1 bg-primary hover:bg-primary/90 text-white px-3 py-2 rounded-lg font-bold text-[11px] transition-all">Apply</button>
+                                    <button type="button" onclick="onUsageDeptClear()" class="px-3 py-2 rounded-lg font-bold text-[11px] border border-gray-200 hover:bg-gray-50 transition-all">Clear</button>
+                                </div>
+                            </div>
+                        </div>
                         <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">{{ period_label }}</span>
                         <span id="usage-dept-loading" class="hidden text-[11px] font-bold text-primary">Loading…</span>
                         <button onclick="exportDashboard(['circulation_summary', 'books_borrowed_per_program', 'by_user_type', 'top_books', 'recent_circulation'])" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
@@ -448,7 +460,7 @@
         const DASHBOARD_URL = '{{ url_for("analytics.dashboard_json") }}';
         const ALL_DASHBOARD_SECTIONS = ['circulation_summary', 'collection_by_category', 'copies_by_status', 'recent_collection', 'trend_borrowings', 'top_categories', 'trend_overdue', 'high_demand', 'recent_circulation', 'books_borrowed_per_program', 'by_user_type', 'top_books'];
         const GLOBAL = { preset: '{{ preset }}', from: '{{ from_date }}', to: '{{ to_date }}' };
-        var USAGE_DEPT = {{ department|tojson }};
+        var USAGE_DEPTS = {{ departments|tojson }};
 
         function escapeHtml(str) {
             const div = document.createElement('div');
@@ -474,11 +486,14 @@
             });
             if (extraFields) {
                 Object.keys(extraFields).forEach(function (k) {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = k;
-                    input.value = extraFields[k] || '';
-                    form.appendChild(input);
+                    var vals = Array.isArray(extraFields[k]) ? extraFields[k] : [extraFields[k]];
+                    vals.forEach(function (v) {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = k;
+                        input.value = v || '';
+                        form.appendChild(input);
+                    });
                 });
             }
             document.body.appendChild(form);
@@ -489,9 +504,9 @@
         function exportDashboard(items) {
             // Dashboard-tab exports: address dashboard sections by name so each
             // tab Export Report / Quick Reports button downloads matching content.
-            // Usage-tab exports also carry the selected program filter.
+            // Usage-tab exports also carry the selected program filter(s).
             var extra = { kpi_types: (items || []).join(',') };
-            if (USAGE_DEPT) extra.department = USAGE_DEPT;
+            if (USAGE_DEPTS && USAGE_DEPTS.length) extra.department = USAGE_DEPTS.slice();
             submitExport('all', 'pdf', GLOBAL.preset, GLOBAL.from, GLOBAL.to, extra);
         }
 
@@ -839,9 +854,15 @@ function syncGlobalFilterCustomDates() {
             paintUsage(U);
         }
 
+        function usageScopeLabel() {
+            if (!USAGE_DEPTS || !USAGE_DEPTS.length) return '';
+            if (USAGE_DEPTS.length === 1) return ' · ' + USAGE_DEPTS[0];
+            return ' · ' + USAGE_DEPTS.length + ' programs';
+        }
+
         function paintUsage(U) {
             U = U || {};
-            var scope = USAGE_DEPT ? ' · ' + USAGE_DEPT : '';
+            var scope = usageScopeLabel();
             var uk = document.getElementById('usage-kpis');
             if (uk) uk.innerHTML =
                 kpiCard('book', 'Total Borrowings' + scope, rNum(U.total), '', 'bg-blue-50')
@@ -855,27 +876,59 @@ function syncGlobalFilterCustomDates() {
             paintUserType(U.by_user_type || [], U.total);
         }
 
-        function syncUsageDeptOptions(U) {
-            var sel = document.getElementById('usage-department');
-            if (!sel || !U) return;
-            var all = U.by_department_all || U.by_department || [];
-            var cur = USAGE_DEPT || '';
-            sel.innerHTML = '<option value="">All Departments / Programs</option>' + all.map(function (r) {
-                var selAttr = (r[0] === cur) ? ' selected' : '';
-                return '<option value="' + escapeHtml(r[0]).replace(/"/g, '&quot;') + '"' + selAttr + '>' + escapeHtml(r[0]) + ' (' + rNum(r[1]) + ')</option>';
-            }).join('');
-            sel.value = cur;
+        function updateUsageDeptLabel() {
+            var label = document.getElementById('usage-dept-label');
+            if (!label) return;
+            if (!USAGE_DEPTS || !USAGE_DEPTS.length) label.textContent = 'All Departments / Programs';
+            else if (USAGE_DEPTS.length === 1) label.textContent = USAGE_DEPTS[0];
+            else label.textContent = USAGE_DEPTS.length + ' programs selected';
         }
 
-        function onUsageDepartmentChange() {
-            var sel = document.getElementById('usage-department');
-            USAGE_DEPT = sel ? sel.value : '';
+        function usageDeptCheckbox(name, count, checked) {
+            return '<label class="flex items-center gap-2 px-3 py-2 text-[11px] hover:bg-gray-50 cursor-pointer rounded-lg">'
+                + '<input type="checkbox" value="' + escapeHtml(name).replace(/"/g, '&quot;') + '"' + (checked ? ' checked' : '') + ' class="rounded border-gray-300">'
+                + ' <span class="flex-1 truncate font-bold text-slate-600">' + escapeHtml(name) + '</span>'
+                + '<span class="text-slate-400 font-bold">' + rNum(count) + '</span></label>';
+        }
+
+        function syncUsageDeptOptions(U) {
+            var box = document.getElementById('usage-dept-options');
+            if (!box || !U) return;
+            var all = U.by_department_all || U.by_department || [];
+            var cur = USAGE_DEPTS || [];
+            box.innerHTML = all.map(function (r) {
+                return usageDeptCheckbox(r[0], r[1], cur.indexOf(r[0]) !== -1);
+            }).join('') || '<div class="px-3 py-2 text-[11px] text-slate-400">No programs yet.</div>';
+            updateUsageDeptLabel();
+        }
+
+        function stagedUsageDepts() {
+            var box = document.getElementById('usage-dept-options');
+            if (!box) return [];
+            return Array.prototype.map.call(
+                box.querySelectorAll('input[type="checkbox"]:checked'),
+                function (c) { return c.value; });
+        }
+
+        function toggleUsageDeptDropdown(e) {
+            if (e) e.stopPropagation();
+            var dd = document.getElementById('usage-dept-dropdown');
+            if (dd) dd.classList.toggle('hidden');
+        }
+
+        function closeUsageDeptDropdown() {
+            var dd = document.getElementById('usage-dept-dropdown');
+            if (dd) dd.classList.add('hidden');
+        }
+
+        function onUsageDeptApply() {
+            USAGE_DEPTS = stagedUsageDepts();
             var loading = document.getElementById('usage-dept-loading');
             if (loading) loading.classList.remove('hidden');
             var params = new URLSearchParams({ preset: GLOBAL.preset || 'all' });
             if (GLOBAL.from) params.set('from', GLOBAL.from);
             if (GLOBAL.to) params.set('to', GLOBAL.to);
-            if (USAGE_DEPT) params.set('department', USAGE_DEPT);
+            (USAGE_DEPTS || []).forEach(function (d) { params.append('department', d); });
             fetch(DASHBOARD_URL + '?' + params.toString())
                 .then(function (r) {
                     if (!r.ok) throw new Error('status ' + r.status);
@@ -886,14 +939,21 @@ function syncGlobalFilterCustomDates() {
                     paintUsage(DASHBOARD.usage);
                     syncUsageDeptOptions(DASHBOARD.usage);
                     var url = new URL(window.location.href);
-                    if (USAGE_DEPT) url.searchParams.set('department', USAGE_DEPT);
-                    else url.searchParams.delete('department');
+                    url.searchParams.delete('department');
+                    (USAGE_DEPTS || []).forEach(function (d) { url.searchParams.append('department', d); });
                     window.history.replaceState({}, '', url.toString());
+                    closeUsageDeptDropdown();
                     if (loading) loading.classList.add('hidden');
                 })
                 .catch(function () {
                     if (loading) loading.classList.add('hidden');
                 });
+        }
+
+        function onUsageDeptClear() {
+            var box = document.getElementById('usage-dept-options');
+            if (box) box.querySelectorAll('input[type="checkbox"]:checked').forEach(function (c) { c.checked = false; });
+            onUsageDeptApply();
         }
 
         /* All cards share the page-level time range from the top-bar Filters
@@ -943,7 +1003,17 @@ function syncGlobalFilterCustomDates() {
             });
         });
 
+        document.addEventListener('click', function (e) {
+            var wrap = document.getElementById('usage-dept-wrapper');
+            var dd = document.getElementById('usage-dept-dropdown');
+            if (dd && !dd.classList.contains('hidden') && wrap && !wrap.contains(e.target)) closeUsageDeptDropdown();
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') closeUsageDeptDropdown();
+        });
+
         renderRiverside();
+        updateUsageDeptLabel();
     </script>
 </body>
 

@@ -901,26 +901,40 @@ class TestUsageDepartmentFilter:
         assert resp.status_code == 200
         body = resp.get_json()
         assert body['usage']['department'] == 'BSIT'
+        assert body['usage']['departments'] == ['BSIT']
         assert body['usage']['by_department_all'] == []
         # collection tab ignores the program filter
         assert body['collection']['total_titles'] == 0
+
+    def test_dashboard_json_multi_departments(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get(
+            '/librarian/analytics/dashboard?department=BSIT&department=BSBA')
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body['usage']['departments'] == ['BSIT', 'BSBA']
+        assert body['usage']['department'] == 'BSIT, BSBA'
 
     def test_page_renders_program_select(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = (5,)
         mock_db['fetch_all'].return_value = [('BSIT', 12)]
         resp = librarian_client.get('/librarian/analytics')
         assert resp.status_code == 200
-        assert b'id="usage-department"' in resp.data
-        assert b'onUsageDepartmentChange' in resp.data
+        assert b'id="usage-dept-dropdown"' in resp.data
+        assert b'id="usage-dept-options"' in resp.data
+        assert b'onUsageDeptApply' in resp.data
         assert b'by_department_all' in resp.data
         assert b'BSIT' in resp.data
 
     def test_page_preselects_department(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = (5,)
-        mock_db['fetch_all'].return_value = [('BSIT', 12)]
-        resp = librarian_client.get('/librarian/analytics?department=BSIT')
+        mock_db['fetch_all'].return_value = [('BSIT', 12), ('BSBA', 7)]
+        resp = librarian_client.get(
+            '/librarian/analytics?department=BSIT&department=BSBA')
         assert resp.status_code == 200
-        assert b'value="BSIT" selected' in resp.data
+        assert b'value="BSIT" checked' in resp.data
+        assert b'value="BSBA" checked' in resp.data
 
     def test_overview_sql_has_valid_spacing(self, mock_db):
         """Regression: every overview query must keep whitespace after the
@@ -952,6 +966,15 @@ class TestUsageDepartmentFilter:
             if 'JOIN borrowers' in q:
                 assert re.search(r'(?<!\.)\bborrower_id\b', q) is None, q
 
+    def test_overview_multi_departments_or_clause(self, mock_db):
+        from app.analytics.models import circulation_overview
+        mock_db['fetch_one'].side_effect = [
+            (10,), (4,), (2,), (3.0,), (6,), (7,)]
+        circulation_overview(None, None, ['BSIT', 'BSBA'])
+        query, params = mock_db['fetch_one'].call_args_list[0][0]
+        assert 'OR' in query
+        assert params == ('BSIT', 'BSBA')
+
     def test_export_honors_department(self, librarian_client, mock_db):
         mock_db['fetch_all'].return_value = [('BSIT', 12)]
         resp = librarian_client.post(
@@ -962,3 +985,14 @@ class TestUsageDepartmentFilter:
         assert resp.data[:4] == b'%PDF'
         query, params = mock_db['fetch_all'].call_args[0]
         assert 'BSIT' in params
+
+    def test_export_honors_multi_departments(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [('BSIT', 12), ('BSBA', 7)]
+        resp = librarian_client.post(
+            '/librarian/analytics/export',
+            data={'kpi_type': 'books_borrowed_per_program', 'format': 'pdf',
+                  'department': ['BSIT', 'BSBA']})
+        assert resp.status_code == 200
+        assert resp.data[:4] == b'%PDF'
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'BSIT' in params and 'BSBA' in params

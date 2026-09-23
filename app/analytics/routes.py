@@ -119,19 +119,27 @@ def _normalize_range(preset, from_str, to_str):
     return preset, from_str, to_str
 
 
-def _clean_department(value):
-    """Single program/department selector; '' means all programs."""
-    return (value or '').strip()[:100]
+def _clean_department_list(values):
+    """Multi program/department selector; [] means all programs."""
+    seen = []
+    for v in (values or []):
+        v = (v or '').strip()
+        if v and v not in seen:
+            seen.append(v[:100])
+        if len(seen) >= 50:
+            break
+    return seen
 
 
-def compute_dashboard(start_date, end_date, department=None):
+def compute_dashboard(start_date, end_date, departments=None):
     """Assemble Riverside-style dashboard payload from model queries.
 
     Returns JSON-serializable dicts/lists only (dates stringified); the
     template embeds it as ``dashboard-data`` and renders the three tabs
     client-side.  Missing tables/rows degrade to zeros/empty lists.
-    department scopes ONLY the usage section (whole Usage tab filter);
-    collection/circulation sections always use the full range.
+    departments (str or list of str) scopes ONLY the usage section
+    (whole Usage tab program filter); collection/circulation sections
+    always use the full range.
     """
     def _safe(fn, *args, **kwargs):
         try:
@@ -194,8 +202,9 @@ def compute_dashboard(start_date, end_date, department=None):
     # available, and lost-flagged loans count as lost/damaged.
     available = max(total_copies - borrowed - overdue - reserved - lost_damaged - maintenance, 0)
 
-    dept = _clean_department(department)
-    dept_list = [dept] if dept else None
+    if isinstance(departments, str):
+        departments = [departments]
+    dept_list = _clean_department_list(departments) or None
 
     by_category = _pair(_safe(models.collection_by_category, start_date, end_date))
     by_program_all = _pair(_safe(models.books_borrowed_per_program, start_date, end_date))
@@ -319,7 +328,8 @@ def compute_dashboard(start_date, end_date, department=None):
             'top_books': top_books_u,
             'by_user_type': by_user_type_u,
             'recent': recent_u,
-            'department': dept,
+            'departments': dept_list or [],
+            'department': ', '.join(dept_list) if dept_list else '',
         },
     }
 
@@ -331,12 +341,12 @@ def analytics_page():
     preset = request.args.get('preset', 'all')
     from_str = request.args.get('from', '').strip()
     to_str = request.args.get('to', '').strip()
-    department = _clean_department(request.args.get('department', ''))
+    departments = _clean_department_list(request.args.getlist('department'))
     # Normalize: semester/year presets ignore stale custom dates in the URL;
     # invalid presets fall back to no bounds (same as kpi_json/export_report).
     preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
     start_date, end_date = resolve_dates(preset, from_str, to_str)
-    dashboard = compute_dashboard(start_date, end_date, department)
+    dashboard = compute_dashboard(start_date, end_date, departments)
     period_label = _format_period(start_date, end_date, preset, from_str, to_str)
     return render_template(
         'analytics/analytics.html',
@@ -344,7 +354,7 @@ def analytics_page():
         from_date=from_str,
         to_date=to_str,
         period_label=period_label,
-        department=department,
+        departments=departments,
         dashboard=dashboard,
     )
 
@@ -534,10 +544,10 @@ def dashboard_json():
     preset = request.args.get('preset', 'all')
     from_str = request.args.get('from', '').strip()
     to_str = request.args.get('to', '').strip()
-    department = _clean_department(request.args.get('department', ''))
+    departments = _clean_department_list(request.args.getlist('department'))
     preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
     start_date, end_date = resolve_dates(preset, from_str, to_str)
-    return jsonify(compute_dashboard(start_date, end_date, department))
+    return jsonify(compute_dashboard(start_date, end_date, departments))
 
 
 CHART_NAMES = frozenset({
@@ -1349,7 +1359,7 @@ def export_report():
     preset = request.form.get('preset', 'all')
     from_str = request.form.get('from', '').strip()
     to_str = request.form.get('to', '').strip()
-    department = _clean_department(request.form.get('department', ''))
+    departments = _clean_department_list(request.form.getlist('department'))
     # Semester/year presets must not carry stale custom dates.
     if preset in ('semester', 'year'):
         from_str = to_str = ''
@@ -1399,13 +1409,14 @@ def export_report():
         kpi_types = [kpi_type]
 
     sections = []
-    dept_list = [department] if department else None
+    dept_list = departments or None
+    dept_label = ', '.join(departments)
     for kt in kpi_types:
         kpi_data = _run_kpi(kt, start_date, end_date, dept_list)
         models.save_report_snapshot(
             kt,
             {'preset': preset, 'from': from_str, 'to': to_str,
-             'department': department},
+             'department': departments},
             _jsonable(kpi_data),
             current_user.id,
         )
@@ -1418,7 +1429,7 @@ def export_report():
     body = _pdf_bytes(
         sections,
         preset=preset, start_date=start_date, end_date=end_date,
-        from_str=from_str, to_str=to_str, department=department,
+        from_str=from_str, to_str=to_str, department=dept_label,
     )
     return Response(
         body,
