@@ -352,14 +352,11 @@
                         <button onclick="exportDashboard(['circulation_summary', 'books_borrowed_per_program', 'by_user_type', 'top_books', 'recent_circulation'])" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
                     </div>
                     <div id="usage-kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3"></div>
-                    <div class="grid grid-cols-1 xl:grid-cols-4 gap-4">
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
                         <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">1. Borrowings by Department / Program</h3>
                             
                         <div id="dept-bars" class="space-y-1.5"></div></div>
-                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-1">2. Borrowings Trend</h3>
-                            
-                        <div id="usage-trend-line" class="w-full overflow-hidden"></div></div>
-                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">3. Top Borrowed Books</h3>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">2. Top Borrowed Books</h3>
                             
                         <div id="top-books-list" class="space-y-2"></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">Quick Reports</h3>
@@ -371,21 +368,11 @@
                             </div>
                         </div>
                     </div>
-                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">4. Borrowings by User Type</h3>
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">3. Borrowings by User Type</h3>
                             
                         <div class="flex items-center gap-4"><div id="donut-usertype" class="shrink-0"></div><div id="legend-usertype" class="flex-1 space-y-1 text-xs min-w-0"></div></div></div>
-                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">5. Overdue Items by Department</h3><div id="overdue-dept-note" class="text-[11px] text-slate-500">Overdue counts are tracked per loan; department split reuses the borrowings mix and follows the program selector above.</div><div id="overdue-dept-bars" class="space-y-1.5 mt-2"></div></div>
-                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">6. Borrowings by Time of Day</h3>
-                            
-                        <div id="tod-bars" class="space-y-1.5"></div><p class="text-[10px] text-slate-400 mt-1">Bucketed by borrow day (no time-of-day column).</p></div>
-                    </div>
-                    <div class="bg-white rounded-xl border border-slate-200 p-4 overflow-hidden">
-                        <div class="flex items-center mb-2"><h3 class="text-sm font-extrabold mr-auto">7. Recent Borrowing Activity</h3><a href="{{ url_for('circulation.circulation_page') }}" class="text-[11px] font-bold border rounded-lg px-3 py-1.5 hover:bg-gray-50">View All Activity</a></div>
-                        <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[820px]">
-                            <thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-2">Date &amp; Time</th><th class="py-2 pr-2">Borrower</th><th class="py-2 pr-2">Book Title</th><th class="py-2 pr-2">Action</th><th class="py-2 pr-2">Due Date</th><th class="py-2">Status</th></tr></thead>
-                            <tbody id="recent-usage-body"></tbody>
-                        </table></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">4. Overdue Items by Department</h3><div id="overdue-dept-note" class="text-[11px] text-slate-500">Overdue counts are tracked per loan; department split reuses the borrowings mix and follows the program selector above.</div><div id="overdue-dept-bars" class="space-y-1.5 mt-2"></div></div>
                     </div>
                 </section>
 
@@ -734,9 +721,7 @@ function syncGlobalFilterCustomDates() {
 
         function paintTrendCharts(rows) {
             lineChart(document.getElementById('trend-line'), rows, '#2563eb');
-            lineChart(document.getElementById('usage-trend-line'), rows, '#2563eb');
             hbars(document.getElementById('peak-bars'), rows.slice(-7).map(function (r) { return [String(r[0]).slice(5), r[1]]; }), 'bg-blue-600');
-            hbars(document.getElementById('tod-bars'), rows.slice(-6).map(function (r) { return [String(r[0]).slice(5), r[1]]; }), 'bg-blue-600');
         }
 
         function paintOverdueTrend(rows) {
@@ -866,13 +851,8 @@ function syncGlobalFilterCustomDates() {
                 + kpiCard('check_circle', 'Return Rate (On-time)', (U.return_rate || 0) + '%', '', 'bg-blue-50')
                 + kpiCard('account_balance', 'Active Departments', rNum(U.active_departments), '', 'bg-amber-50');
             paintDeptCharts(U.by_department || []);
-            paintTrendCharts(U.trend || []);
             paintTopBooks(U.top_books || []);
             paintUserType(U.by_user_type || [], U.total);
-            var rub = document.getElementById('recent-usage-body');
-            if (rub) rub.innerHTML = (U.recent || []).slice(0, 8).map(function (r) {
-                return '<tr class="border-b last:border-0"><td class="py-2 pr-2">' + escapeHtml(r[0]) + '</td><td class="py-2 pr-2">' + escapeHtml(r[2]) + ' <span class="text-slate-400">(' + escapeHtml(r[3] || '') + ')</span></td><td class="py-2 pr-2">' + escapeHtml(r[4]) + '</td><td class="py-2 pr-2">' + pill(escapeHtml(r[6] || ''), 'blue') + '</td><td class="py-2 pr-2 text-slate-500">' + escapeHtml(r[7] || '-') + '</td><td class="py-2">' + pill(escapeHtml(r[8] || ''), 'green') + '</td></tr>';
-            }).join('') || '<tr><td colspan="6" class="py-6 text-center text-slate-400">' + (USAGE_DEPT ? 'No activity for ' + escapeHtml(USAGE_DEPT) + ' in this period.' : 'No activity yet.') + '</td></tr>';
         }
 
         function syncUsageDeptOptions(U) {
