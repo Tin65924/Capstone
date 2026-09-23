@@ -23,6 +23,7 @@ def create_app(test_config=None):
     from .auth import auth_bp
     from .requests import requests_bp
     from .procurement import procurement_bp
+    from .resources import resources_bp
     from .cataloging import cataloging_bp
     from .circulation import circulation_bp
     from .inventory import inventory_bp
@@ -34,6 +35,7 @@ def create_app(test_config=None):
     app.register_blueprint(auth_bp)
     app.register_blueprint(requests_bp)
     app.register_blueprint(procurement_bp)
+    app.register_blueprint(resources_bp)
     app.register_blueprint(cataloging_bp)
     app.register_blueprint(circulation_bp)
     app.register_blueprint(inventory_bp)

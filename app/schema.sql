@@ -265,3 +265,27 @@ CREATE TABLE IF NOT EXISTS supplier_catalog (
 
 CREATE INDEX IF NOT EXISTS idx_supplier_catalog_title
     ON supplier_catalog (book_title);
+
+-- Online resources (e-journals, databases, e-books) managed by the
+-- librarian. Every visit through the app is logged for the
+-- Online Resource Usage KPI in Module 5.
+CREATE TABLE IF NOT EXISTS online_resources (
+    resource_id SERIAL PRIMARY KEY,
+    title       VARCHAR(255) NOT NULL,
+    provider    VARCHAR(150),
+    url         TEXT NOT NULL,
+    description TEXT,
+    is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+    added_by    INT REFERENCES user_accounts(user_id),
+    date_added  TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS online_resource_access (
+    access_id   SERIAL PRIMARY KEY,
+    resource_id INT NOT NULL REFERENCES online_resources(resource_id),
+    user_id     INT NOT NULL REFERENCES user_accounts(user_id),
+    accessed_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_online_access_resource
+    ON online_resource_access (resource_id);
