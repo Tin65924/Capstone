@@ -45,6 +45,10 @@ def _apply_retention(app, keep_n):
         return
     for row in stale or []:
         backup_id, filename = row[0], row[1]
+        if row[3] != 'completed':
+            # Never touch in_progress or failed rows — only finished backups
+            # with real files on disk are retention candidates.
+            continue
         try:
             path = resolve_backup_path(filename)
             if os.path.isfile(path):

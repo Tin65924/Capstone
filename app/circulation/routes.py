@@ -22,6 +22,7 @@ from .models import (
     expire_overdue_reservations, get_borrowers_for_history,
     get_full_reservation_history_by_borrower, get_user_loan_history,
     get_fines_by_borrower, get_total_fines, get_fine_record, mark_fine_paid,
+    is_book_blocked_for_daily,
 )
 
 VALID_BORROW_TYPES = ('overnight', 'daily_circulation')
@@ -122,6 +123,10 @@ def desk_borrow():
     limit = _borrow_limit(borrower_row[6])
     if count_active_loans(borrower_row[0]) >= limit:
         flash(f'{borrower_row[4]} has reached the borrow limit ({limit} books).', 'error')
+        return redirect(url_for('circulation.circulation_page', search=borrower_row[1]))
+
+    if borrow_type == 'daily_circulation' and is_book_blocked_for_daily(accession[2]):
+        flash('Not Available — this book is borrowed as Overnight and already allocated.', 'error')
         return redirect(url_for('circulation.circulation_page', search=borrower_row[1]))
 
     due_date = _compute_due_date(borrow_type, borrower_row[6])
@@ -402,6 +407,10 @@ def user_borrow():
     limit = _borrow_limit(current_user.role)
     if count_active_loans(borrower_row[0]) >= limit:
         flash(f'You have reached the borrow limit ({limit} books).', 'error')
+        return redirect(url_for('cataloging.book_info', book_id=book_id))
+
+    if borrow_type == 'daily_circulation' and is_book_blocked_for_daily(book_id):
+        flash('Not Available — this book is borrowed as Overnight and already allocated.', 'error')
         return redirect(url_for('cataloging.book_info', book_id=book_id))
 
     due_date = _compute_due_date(borrow_type, current_user.role)

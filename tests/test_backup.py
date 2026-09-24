@@ -333,26 +333,102 @@ class TestBackupRoutes:
         assert b'.123456' not in resp.data
         assert now.strftime('%Y-%m-%d %H:%M').encode() in resp.data
 
-    def test_create_route_logs_row(self, admin_client, mock_db):
-        mock_db['fetch_one'].return_value = (3,)
-        with patch('app.backup.routes.create_backup', return_value=('f.sql', 42)), \
-             patch('app.backup.routes.apply_retention'), \
-             patch('app.backup.routes.log_activity'):
+    def test_create_route_starts_async_and_completes(self, admin_client, mock_db):
+        """POST returns at once with an in_progress row; the worker finishes it."""
+        from app.backup import jobs as jobs_mod
+        # Guard lookup finds nothing running; the INSERT returns id 3.
+        mock_db['fetch_one'].side_effect = [None, (3,)]
+        with patch('app.backup.jobs.create_backup',
+                   return_value=('f.sql', 42)), \
+             patch('app.backup.jobs.apply_retention'), \
+             patch('app.backup.jobs.log_activity'):
             resp = admin_client.post('/admin/backup/create')
-        assert resp.status_code == 302
-        assert '/admin/backup' in resp.location
-        inserts = [c for c in mock_db['fetch_one'].call_args_list
-                   if 'INSERT INTO backup_log' in c[0][0]]
-        assert inserts
+            assert resp.status_code == 302
+            assert '/admin/backup' in resp.location
+            # The request returned while an in_progress row exists.
+            inserts = [c for c in mock_db['fetch_one'].call_args_list
+                       if 'INSERT INTO backup_log' in c[0][0]]
+            assert inserts
+            assert 'in_progress' in inserts[0][0][1]
+            _wait_for_idle()
+            assert jobs_mod.active_job() is None
+        updates = [c for c in mock_db['execute'].call_args_list
+                   if 'UPDATE backup_log' in c[0][0]]
+        assert updates
+        query, params = updates[0][0]
+        assert 'completed' in params
+        assert 'f.sql' in params
 
-    def test_create_route_failure_logs_failed(self, admin_client, mock_db):
-        with patch('app.backup.routes.create_backup', side_effect=RuntimeError('boom')), \
-             patch('app.backup.routes.log_activity'):
+    def test_create_returns_without_waiting_for_worker(self, admin_client, mock_db):
+        """The response must not block on pg_dump (true background thread)."""
+        import threading
+        import time
+        from app.backup import jobs as jobs_mod
+        # Guard lookup finds nothing running; the INSERT returns id 3.
+        mock_db['fetch_one'].side_effect = [None, (3,)]
+        release = threading.Event()
+
+        def slow():
+            assert release.wait(10)
+            return ('slow.sql', 1)
+
+        with patch('app.backup.jobs.create_backup', side_effect=slow), \
+             patch('app.backup.jobs.apply_retention'), \
+             patch('app.backup.jobs.log_activity'):
+            started = time.time()
             resp = admin_client.post('/admin/backup/create')
-        assert resp.status_code == 302
-        query, params = mock_db['fetch_one'].call_args[0]
-        assert 'INSERT INTO backup_log' in query
+            elapsed = time.time() - started
+            assert resp.status_code == 302
+            # Returned fast while the worker is still blocked on pg_dump.
+            assert elapsed < 5
+            assert jobs_mod.active_job() is not None
+            inserts = [c for c in mock_db['fetch_one'].call_args_list
+                       if 'INSERT INTO backup_log' in c[0][0]]
+            assert inserts and 'in_progress' in inserts[0][0][1]
+            release.set()
+            _wait_for_idle()
+        updates = [c for c in mock_db['execute'].call_args_list
+                   if 'UPDATE backup_log' in c[0][0]]
+        assert updates and 'completed' in updates[0][0][1]
+
+    def test_create_route_failure_flips_row_to_failed(self, admin_client, mock_db):
+        mock_db['fetch_one'].side_effect = [None, (3,)]
+        with patch('app.backup.jobs.create_backup',
+                   side_effect=RuntimeError('boom')), \
+             patch('app.backup.jobs.log_activity'):
+            resp = admin_client.post('/admin/backup/create')
+            assert resp.status_code == 302
+            _wait_for_idle()
+        updates = [c for c in mock_db['execute'].call_args_list
+                   if 'UPDATE backup_log' in c[0][0]]
+        assert updates
+        query, params = updates[0][0]
         assert 'failed' in params
+        assert any('boom' in str(p) for p in params)
+
+    def test_create_refused_while_busy(self, admin_client, mock_db):
+        """A second backup while one runs redirects — no second row."""
+        import threading
+        release = threading.Event()
+
+        def slow():
+            assert release.wait(10)
+            return ('slow.sql', 1)
+
+        mock_db['fetch_one'].side_effect = [None, (3,)]
+        with patch('app.backup.jobs.create_backup', side_effect=slow), \
+             patch('app.backup.jobs.apply_retention'), \
+             patch('app.backup.jobs.log_activity'):
+            resp = admin_client.post('/admin/backup/create')
+            assert resp.status_code == 302
+            resp2 = admin_client.post('/admin/backup/create')
+            assert resp2.status_code == 302
+            assert '/admin/backup' in resp2.location
+            inserts = [c for c in mock_db['fetch_one'].call_args_list
+                       if 'INSERT INTO backup_log' in c[0][0]]
+            assert len(inserts) == 1
+            release.set()
+            _wait_for_idle()
 
     def test_download_serves_file(self, admin_client, mock_db, tmp_path, app):
         target = tmp_path / 'library_backup_20260101_020000.sql'
@@ -370,14 +446,16 @@ class TestBackupRoutes:
             resp = admin_client.get('/admin/backup/1/download')
         assert resp.status_code == 302
 
-    def test_restore_auto_backups_then_psql(self, admin_client, mock_db):
-        mock_db['fetch_one'].return_value = _row()
-        with patch('app.backup.routes.create_backup', return_value=('safety.sql', 9)) as mk, \
-             patch('app.backup.routes.restore_backup') as rs, \
-             patch('app.backup.routes.apply_retention'), \
-             patch('app.backup.routes.log_activity') as log_act:
+    def test_restore_starts_async_then_replaces(self, admin_client, mock_db):
+        mock_db['fetch_one'].side_effect = [('1',), _row(), None, _row(), (5,)]
+        with patch('app.backup.jobs.create_backup',
+                   return_value=('safety.sql', 9)) as mk, \
+             patch('app.backup.jobs.restore_backup') as rs, \
+             patch('app.backup.jobs.log_activity') as log_act:
             resp = admin_client.post('/admin/backup/1/restore')
-        assert resp.status_code == 302
+            assert resp.status_code == 302
+            assert '/admin/backup' in resp.location
+            _wait_for_idle()
         mk.assert_called_once()
         rs.assert_called_once_with('library_backup_20260101_020000.sql')
         acts = [c[0][1] for c in log_act.call_args_list]
@@ -385,35 +463,42 @@ class TestBackupRoutes:
 
     def test_restore_refuses_failed_backup(self, admin_client, mock_db):
         mock_db['fetch_one'].return_value = _row(status='failed')
-        with patch('app.backup.routes.create_backup') as mk:
+        with patch('app.backup.jobs.create_backup') as mk:
             resp = admin_client.post('/admin/backup/1/restore')
         assert resp.status_code == 302
         mk.assert_not_called()
 
     def test_restore_aborts_without_safety_net(self, admin_client, mock_db):
-        mock_db['fetch_one'].return_value = _row()
-        with patch('app.backup.routes.create_backup', side_effect=RuntimeError('no space')), \
-             patch('app.backup.routes.restore_backup') as rs, \
-             patch('app.backup.routes.log_activity'):
+        from app.backup import jobs as jobs_mod
+        mock_db['fetch_one'].side_effect = [('1',), _row(), None, _row()]
+        with patch('app.backup.jobs.create_backup',
+                   side_effect=RuntimeError('no space')), \
+             patch('app.backup.jobs.restore_backup') as rs, \
+             patch('app.backup.jobs.log_activity'):
             resp = admin_client.post('/admin/backup/1/restore')
-        assert resp.status_code == 302
+            assert resp.status_code == 302
+            _wait_for_idle()
         rs.assert_not_called()
+        assert jobs_mod.recent_finished_job()['status'] == 'failed'
 
-    def test_restore_psql_failure_flashes_error_not_success(self, admin_client, mock_db):
-        """A mid-restore psql error must surface — never a false success."""
-        import subprocess as sp
-        mock_db['fetch_one'].return_value = _row()
+    def test_restore_psql_failure_recorded_on_job(self, admin_client, mock_db):
+        """A mid-restore psql error surfaces on the finished job, never success."""
+        from app.backup import jobs as jobs_mod
+        mock_db['fetch_one'].side_effect = [('1',), _row(), None, _row(), (5,)]
         mock_db['fetch_all'].return_value = []
-        with patch('app.backup.routes.create_backup', return_value=('safety.sql', 9)), \
-             patch('app.backup.routes.restore_backup',
+        with patch('app.backup.jobs.create_backup',
+                   return_value=('safety.sql', 9)), \
+             patch('app.backup.jobs.restore_backup',
                    side_effect=RuntimeError('psql exited with status 3')), \
-             patch('app.backup.routes.apply_retention'), \
-             patch('app.backup.routes.log_activity'):
-            resp = admin_client.post('/admin/backup/1/restore', follow_redirects=True)
-        assert resp.status_code == 200
-        assert b'Restore failed' in resp.data
-        # No false success flash (the result-modal JS owns the bare phrase).
-        assert b'Restore complete: the database was replaced' not in resp.data
+             patch('app.backup.jobs.log_activity'):
+            resp = admin_client.post('/admin/backup/1/restore')
+            assert resp.status_code == 302
+            assert '/admin/backup' in resp.location
+            _wait_for_idle()
+            job = jobs_mod.recent_finished_job()
+        assert job['status'] == 'failed'
+        assert 'psql exited with status 3' in job['error']
+        assert 'safety.sql' in job['error']
 
 
 class TestScheduler:
@@ -506,224 +591,256 @@ class TestScheduler:
         assert sched.reschedule(app) is False
 
 
-def _wait_for_job(client, job_id, timeout=10):
-    """Poll the status endpoint until the job reaches a terminal state."""
+def _wait_for_idle(timeout=10):
+    """Block until the backup worker thread finishes (or fail)."""
     import time
+    from app.backup import jobs as jobs_mod
     deadline = time.time() + timeout
     while time.time() < deadline:
-        resp = client.get(f'/admin/backup/jobs/{job_id}')
-        assert resp.status_code == 200
-        job = resp.get_json()
-        if job['status'] in ('done', 'failed'):
-            return job
+        if jobs_mod.active_job() is None:
+            return True
         time.sleep(0.05)
-    raise AssertionError('backup job did not reach a terminal state')
+    raise AssertionError('backup worker did not finish')
+
+
+@pytest.fixture(autouse=True)
+def _clean_backup_jobs():
+    """Module-global job registry must not leak between tests."""
+    from app.backup import jobs as jobs_mod
+    jobs_mod._jobs.clear()
+    yield
+    jobs_mod._jobs.clear()
+
+
+def _in_progress_row(**overrides):
+    row = (9, 'library_backup_20260920_020000_in_progress.sql', None,
+           'in_progress', 'manual', None, datetime.now().replace(microsecond=0))
+    for key, value in overrides.items():
+        idx = {'backup_id': 0, 'filename': 1, 'size': 2, 'status': 3,
+               'btype': 4, 'error': 5, 'created': 6}[key]
+        row = row[:idx] + (value,) + row[idx + 1:]
+    return row
 
 
 class TestBackupJobs:
-    def test_jobs_require_admin(self, client, student_client, librarian_client,
-                                mock_db):
-        resp = client.post('/admin/backup/jobs')
+    def test_create_and_restore_require_admin(self, client, student_client,
+                                              librarian_client, mock_db):
+        resp = client.post('/admin/backup/create')
         assert resp.status_code == 302
-        resp = student_client.post('/admin/backup/jobs')
+        resp = student_client.post('/admin/backup/create')
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
-        resp = librarian_client.post('/admin/backup/jobs')
+        resp = librarian_client.post('/admin/backup/create')
         assert resp.status_code == 302
-        resp = client.get('/admin/backup/jobs/abc')
+        resp = student_client.post('/admin/backup/1/restore')
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
+        resp = client.post('/admin/backup/1/restore')
         assert resp.status_code == 302
 
-    def test_backup_job_completes_with_progress(self, admin_client, mock_db):
-        mock_db['fetch_one'].return_value = (3,)
+    def test_restore_refuses_in_progress_row(self, admin_client, mock_db):
+        """An in_progress history row is not restorable."""
+        mock_db['fetch_one'].return_value = _in_progress_row()
+        with patch('app.backup.jobs.create_backup') as mk:
+            resp = admin_client.post('/admin/backup/9/restore')
+        assert resp.status_code == 302
+        mk.assert_not_called()
+
+    def test_restore_missing_backup(self, admin_client, mock_db):
+        mock_db['fetch_one'].return_value = None
+        resp = admin_client.post('/admin/backup/9/restore')
+        assert resp.status_code == 302
+
+    def test_stale_in_progress_reaped(self, admin_client, mock_db):
+        """A worker that died hours ago must not block new backups forever."""
+        stale = _in_progress_row(created=datetime(2026, 9, 18, 2, 0, 0))
+        mock_db['fetch_one'].side_effect = [stale, (3,)]
         with patch('app.backup.jobs.create_backup',
-                   return_value=('f.sql', 42)), \
+                   return_value=('f.sql', 1)), \
              patch('app.backup.jobs.apply_retention'), \
              patch('app.backup.jobs.log_activity'):
-            resp = admin_client.post('/admin/backup/jobs')
-            assert resp.status_code == 202
-            job = _wait_for_job(admin_client, resp.get_json()['job_id'])
-        assert job['status'] == 'done'
-        assert job['progress'] == 100
-        assert job['filename'] == 'f.sql'
-        inserts = [c for c in mock_db['fetch_one'].call_args_list
-                   if 'INSERT INTO backup_log' in c[0][0]]
-        assert inserts
+            resp = admin_client.post('/admin/backup/create')
+            assert resp.status_code == 302
+            _wait_for_idle()
+        failed = [c for c in mock_db['execute'].call_args_list
+                  if 'UPDATE backup_log' in c[0][0]
+                  and 'failed' in c[0][1]]
+        assert failed
 
-    def test_backup_job_failure_surfaces_error(self, admin_client, mock_db):
+    def test_page_has_no_progress_modal(self, admin_client, mock_db):
+        mock_db['fetch_all'].return_value = [_row()]
+        mock_db['fetch_one'].return_value = None
+        resp = admin_client.get('/admin/backup')
+        assert resp.status_code == 200
+        assert b'backup-progress-modal' not in resp.data
+        assert b'backup-progress-bar' not in resp.data
+        assert b'data-restore-job-url' not in resp.data
+        assert b'run-backup-form' not in resp.data
+        assert b'restore-modal-' not in resp.data
+
+    def test_backup_form_posts_to_create_endpoint(self, admin_client, mock_db):
+        mock_db['fetch_all'].return_value = []
+        mock_db['fetch_one'].return_value = None
+        resp = admin_client.get('/admin/backup')
+        assert resp.status_code == 200
+        assert b'action="/admin/backup/create"' in resp.data
+
+    def test_restore_uses_plain_forms(self, admin_client, mock_db):
+        mock_db['fetch_all'].return_value = [_row()]
+        mock_db['fetch_one'].return_value = None
+        resp = admin_client.get('/admin/backup')
+        assert resp.status_code == 200
+        assert b'action="/admin/backup/1/restore"' in resp.data
+
+    def test_page_shows_in_progress_state(self, admin_client, mock_db):
+        running = _in_progress_row()
+        mock_db['fetch_all'].return_value = [running, _row()]
+        mock_db['fetch_one'].return_value = running
+        resp = admin_client.get('/admin/backup')
+        assert resp.status_code == 200
+        assert b'In Progress' in resp.data
+        assert b'Backup Running' in resp.data
+        assert b'http-equiv="refresh"' in resp.data
+        # Restore is unavailable while busy.
+        assert b'action="/admin/backup/1/restore"' not in resp.data
+
+    def test_page_shows_recent_failure_banner(self, admin_client, mock_db):
+        from app.backup import jobs as jobs_mod
+        mock_db['fetch_one'].return_value = _row()
+        mock_db['fetch_all'].return_value = []
         with patch('app.backup.jobs.create_backup',
                    side_effect=RuntimeError('disk full')), \
              patch('app.backup.jobs.log_activity'):
-            resp = admin_client.post('/admin/backup/jobs')
-            assert resp.status_code == 202
-            job = _wait_for_job(admin_client, resp.get_json()['job_id'])
-        assert job['status'] == 'failed'
-        assert 'disk full' in job['error']
-        query, params = mock_db['fetch_one'].call_args[0]
-        assert 'INSERT INTO backup_log' in query
-        assert 'failed' in params
+            admin_client.post('/admin/backup/create')
+            _wait_for_idle()
+            assert jobs_mod.recent_finished_job()['status'] == 'failed'
+            resp = admin_client.get('/admin/backup')
+        assert resp.status_code == 200
+        assert b'failed.' in resp.data
+        assert b'disk full' in resp.data
 
-    def test_job_status_unknown_404(self, admin_client, mock_db):
-        resp = admin_client.get('/admin/backup/jobs/does-not-exist')
-        assert resp.status_code == 404
-        assert 'Unknown backup job' in resp.get_json()['error']
 
-    def test_concurrent_backup_job_rejected(self, admin_client, mock_db):
-        import threading
-        release = threading.Event()
+class TestBackupStatsInProgress:
+    def test_newest_in_progress_ignored_for_health(self):
+        from app.backup.routes import _backup_stats
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        running = _in_progress_row(created=now)
+        ok = _row(1, 'f.sql', 50, 'completed', 'manual', now)
+        stats = _backup_stats([running, ok])
+        assert stats['count'] == 1
+        assert stats['total_size'] == 50
+        assert stats['healthy'] is True
+        assert stats['last'][0] == 1
 
-        def slow(*args, **kwargs):
-            assert release.wait(10)
-            return ('f.sql', 1)
+    def test_only_in_progress_means_no_last(self):
+        from app.backup.routes import _backup_stats
+        stats = _backup_stats([_in_progress_row()])
+        assert stats['count'] == 0
+        assert stats['last'] is None
+        assert stats['healthy'] is False
 
-        with patch('app.backup.jobs.create_backup', side_effect=slow), \
-             patch('app.backup.jobs.apply_retention'), \
-             patch('app.backup.jobs.log_activity'):
-            resp = admin_client.post('/admin/backup/jobs')
-            assert resp.status_code == 202
-            resp2 = admin_client.post('/admin/backup/jobs')
-            assert resp2.status_code == 409
-            assert 'already running' in resp2.get_json()['error']
-            release.set()
-            job = _wait_for_job(admin_client, resp.get_json()['job_id'])
-        assert job['status'] == 'done'
 
-    def test_concurrent_restore_job_rejected(self, admin_client, mock_db):
-        import threading
-        mock_db['fetch_one'].return_value = _row()
-        release = threading.Event()
-
-        def slow(*args, **kwargs):
-            assert release.wait(10)
-            return ('safety.sql', 1)
-
-        with patch('app.backup.jobs.create_backup', side_effect=slow), \
-             patch('app.backup.jobs.restore_backup'), \
-             patch('app.backup.jobs.log_activity'):
-            resp = admin_client.post('/admin/backup/1/restore-job')
-            assert resp.status_code == 202
-            resp2 = admin_client.post('/admin/backup/1/restore-job')
-            assert resp2.status_code == 409
-            release.set()
-            job = _wait_for_job(admin_client, resp.get_json()['job_id'])
-        assert job['status'] == 'done'
-
-    def test_job_status_reports_stage_history(self, admin_client, mock_db):
-        mock_db['fetch_one'].return_value = (3,)
-        with patch('app.backup.jobs.create_backup',
-                   return_value=('f.sql', 42)), \
-             patch('app.backup.jobs.apply_retention'), \
-             patch('app.backup.jobs.log_activity'):
-            resp = admin_client.post('/admin/backup/jobs')
-            assert resp.status_code == 202
-            job = _wait_for_job(admin_client, resp.get_json()['job_id'])
-        assert job['status'] == 'done'
-        assert 'Dumping database…' in job['history']
-        assert 'Backup complete.' in job['history']
-
-    def test_restore_job_completes(self, admin_client, mock_db):
-        mock_db['fetch_one'].return_value = _row()
-        with patch('app.backup.jobs.create_backup',
-                   return_value=('safety.sql', 9)) as mk, \
-             patch('app.backup.jobs.restore_backup') as rs, \
-             patch('app.backup.jobs.log_activity') as log_act:
-            resp = admin_client.post('/admin/backup/1/restore-job')
-            assert resp.status_code == 202
-            job = _wait_for_job(admin_client, resp.get_json()['job_id'])
-        assert job['status'] == 'done'
-        assert job['progress'] == 100
-        mk.assert_called_once()
-        rs.assert_called_once_with('library_backup_20260101_020000.sql')
-        acts = [c[0][1] for c in log_act.call_args_list]
-        assert any('backup:restored:' in a for a in acts)
-
-    def test_restore_job_refuses_failed_backup(self, admin_client, mock_db):
-        mock_db['fetch_one'].return_value = _row(status='failed')
-        with patch('app.backup.jobs.create_backup') as mk:
-            resp = admin_client.post('/admin/backup/1/restore-job')
-        assert resp.status_code == 400
-        assert 'Only completed' in resp.get_json()['error']
-        mk.assert_not_called()
-
-    def test_restore_job_missing_backup_404(self, admin_client, mock_db):
+class TestBackupModelsStatus:
+    def test_get_in_progress_uses_bound_param(self, mock_db):
+        from app.backup import models
         mock_db['fetch_one'].return_value = None
-        resp = admin_client.post('/admin/backup/9/restore-job')
-        assert resp.status_code == 404
+        assert models.get_in_progress_backup() is None
+        query, params = mock_db['fetch_one'].call_args[0]
+        assert "status = %s" in query
+        assert params == ('in_progress',)
 
-    def test_restore_job_aborts_without_safety_net(self, admin_client,
-                                                   mock_db):
-        mock_db['fetch_one'].return_value = _row()
-        with patch('app.backup.jobs.create_backup',
-                   side_effect=RuntimeError('no space')), \
-             patch('app.backup.jobs.restore_backup') as rs, \
-             patch('app.backup.jobs.log_activity'):
-            resp = admin_client.post('/admin/backup/1/restore-job')
-            assert resp.status_code == 202
-            job = _wait_for_job(admin_client, resp.get_json()['job_id'])
-        assert job['status'] == 'failed'
-        assert 'snapshot' in job['error']
-        rs.assert_not_called()
+    def test_update_backup_status_completed(self, mock_db):
+        from app.backup import models
+        models.update_backup_status(9, 'completed', filename='f.sql',
+                                    size_bytes=10)
+        query, params = mock_db['execute'].call_args[0]
+        assert query.startswith('UPDATE backup_log SET')
+        assert 'status = %s' in query
+        assert 'filename = %s' in query
+        assert 'size_bytes = %s' in query
+        assert params == ('completed', 'f.sql', 10, 9)
 
-    def test_page_uses_progress_modal(self, admin_client, mock_db):
-        mock_db['fetch_all'].return_value = [_row()]
-        resp = admin_client.get('/admin/backup')
-        assert resp.status_code == 200
-        assert b'backup-progress-modal' in resp.data
-        assert b'backup-progress-bar' in resp.data
-        assert b'data-restore-job-url' in resp.data
-        assert b'run-backup-form' in resp.data
-        # Per-backup confirmation modals are gone.
-        assert b'restore-modal-' not in resp.data
+    def test_update_backup_status_failed(self, mock_db):
+        from app.backup import models
+        models.update_backup_status(9, 'failed', error_msg='boom')
+        query, params = mock_db['execute'].call_args[0]
+        assert 'error_msg = %s' in query
+        assert params == ('failed', 'boom', 9)
 
-    def test_backup_form_posts_to_jobs_endpoint(self, admin_client, mock_db):
-        """The intercepted form must target the JSON job endpoint — posting
-        to the sync route returns a redirect (HTML), which breaks .json()."""
-        mock_db['fetch_all'].return_value = []
-        resp = admin_client.get('/admin/backup')
-        assert resp.status_code == 200
-        assert b'action="/admin/backup/jobs"' in resp.data
-
+    def test_retention_skips_in_progress(self, app, tmp_path, monkeypatch,
+                                         mock_db):
+        from app.backup import scheduler
+        monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))
+        keep_file = tmp_path / 'library_backup_new.sql'
+        keep_file.write_text('new')
+        stale = [
+            _in_progress_row(backup_id=98),
+            (99, 'library_backup_old.sql', 5, 'completed', 'manual', None,
+             datetime(2025, 1, 1)),
+        ]
+        mock_db['fetch_all'].return_value = stale
+        with app.app_context():
+            scheduler.apply_retention(app, 1)
+        deletes = [c[0][1] for c in mock_db['execute'].call_args_list
+                   if 'DELETE FROM backup_log' in c[0][0]]
+        assert (99,) in deletes
+        assert (98,) not in deletes
 
 class TestRestoreToggle:
-    def test_page_shows_restore_when_enabled(self, admin_client, mock_db):
+    """BACKUP_RESTORE_ENABLED gates the async restore entry point."""
+
+    def test_page_shows_restore_form_when_enabled(self, admin_client,
+                                                  mock_db):
         mock_db['fetch_all'].return_value = [_row()]
-        mock_db['fetch_one'].return_value = None  # empty settings → on
+        mock_db['fetch_one'].return_value = None  # empty settings ? on
         resp = admin_client.get('/admin/backup')
         assert resp.status_code == 200
-        assert b'title="Restore"' in resp.data
+        assert b'action="/admin/backup/1/restore"' in resp.data
+        assert b'title="Restore' in resp.data
         assert b'restore disabled in Library Settings' not in resp.data
 
-    def test_page_hides_restore_when_disabled(self, admin_client, mock_db):
+    def test_page_greys_restore_when_disabled(self, admin_client, mock_db):
         mock_db['fetch_all'].return_value = [_row()]
         with patch('app.backup.routes.is_restore_enabled', return_value=False):
             resp = admin_client.get('/admin/backup')
         assert resp.status_code == 200
-        # No clickable restore button (the JS selector string below still
-        # mentions the attribute name, so assert on the button title).
+        # No restore form posts (the JS selector string still mentions the
+        # attribute name, so assert on the form action).
+        assert b'action="/admin/backup/1/restore"' not in resp.data
         assert b'title="Restore"' not in resp.data
         assert b'restore disabled in Library Settings' in resp.data
-        # Download stays available — only restore is gated.
+        # Download stays available - only restore is gated.
         assert b'/admin/backup/1/download' in resp.data
 
-    def test_sync_restore_refused_when_disabled(self, admin_client, mock_db):
-        mock_db['fetch_one'].return_value = _row()
+    def test_restore_refused_when_disabled(self, admin_client, mock_db):
         with patch('app.backup.routes.is_restore_enabled', return_value=False), \
-             patch('app.backup.routes.create_backup') as mk, \
-             patch('app.backup.routes.restore_backup') as rs:
+             patch('app.backup.jobs.create_backup') as mk:
             resp = admin_client.post('/admin/backup/1/restore')
         assert resp.status_code == 302
-        mk.assert_not_called()
-        rs.assert_not_called()
-
-    def test_job_restore_refused_when_disabled(self, admin_client, mock_db):
-        with patch('app.backup.routes.is_restore_enabled', return_value=False), \
-             patch('app.backup.routes.create_backup') as mk:
-            resp = admin_client.post('/admin/backup/1/restore-job')
-        assert resp.status_code == 403
-        assert 'disabled' in resp.get_json()['error'].lower()
+        assert '/admin/backup' in resp.location
         mk.assert_not_called()
 
+    def test_restore_redirect_carries_started_signal(self, admin_client,
+                                                     mock_db):
+        """The POST redirects with ?restore_started= so the outcome modal
+        opens exactly once on the reloaded page."""
+        from app.backup import jobs as jobs_mod
+        mock_db['fetch_one'].side_effect = [('1',), _row(), None, _row(),
+                                            (6,)]
+        mock_db['fetch_all'].return_value = []
+        with patch('app.backup.jobs.create_backup',
+                   return_value=('safety.sql', 9)), \
+             patch('app.backup.jobs.restore_backup'), \
+             patch('app.backup.jobs.log_activity'):
+            resp = admin_client.post('/admin/backup/1/restore')
+            assert resp.status_code == 302
+            assert 'restore_started=library_backup_20260101_020000.sql' \
+                in resp.location
+            _wait_for_idle()
+            assert jobs_mod.active_job() is None
 
-class TestRestoreModals:
+
+class TestRestoreConfirmModal:
     def test_confirm_modal_states_consequences(self, admin_client, mock_db):
         """Modal 1 of 2 must spell out what restoring will do."""
         mock_db['fetch_all'].return_value = [_row()]
@@ -735,35 +852,38 @@ class TestRestoreModals:
         assert b'safety snapshot' in resp.data.lower()
         assert b'permanently lost' in resp.data.lower()
         assert b'id="restore-confirm-cancel"' in resp.data
-        assert b'id="restore-confirm-proceed"' in resp.data
         assert b'Yes, restore' in resp.data
 
-    def test_result_modal_present_with_reload(self, admin_client, mock_db):
-        """Modal 2 of 2 reports the outcome once the job finishes."""
+    def test_result_modal_opens_once_after_restore_post(self, admin_client,
+                                                        mock_db):
+        """Modal 2 of 2 opens on the redirected load and names the file."""
         mock_db['fetch_all'].return_value = [_row()]
         mock_db['fetch_one'].return_value = None
-        resp = admin_client.get('/admin/backup')
+        resp = admin_client.get(
+            '/admin/backup?restore_started=library_backup_20260101_020000.sql')
         assert resp.status_code == 200
-        assert b'id="restore-result-modal"' in resp.data
-        assert b'id="restore-result-close"' in resp.data
-        assert b'id="restore-result-reload"' in resp.data
-        assert b'Reload page' in resp.data
+        assert b'id="restore-result-modal" class="modal-overlay open"' \
+            in resp.data
+        assert b'data-auto-open="1"' in resp.data
+        assert b'library_backup_20260101_020000.sql' in resp.data
+        assert b'Restore started' in resp.data
 
-    def test_restore_buttons_open_confirm_not_job_directly(self, admin_client,
-                                                           mock_db):
-        """Row buttons must carry the job URL for the confirm step."""
+    def test_result_modal_stays_closed_otherwise(self, admin_client,
+                                                 mock_db):
         mock_db['fetch_all'].return_value = [_row()]
         mock_db['fetch_one'].return_value = None
         resp = admin_client.get('/admin/backup')
         assert resp.status_code == 200
-        assert b'data-restore-job-url="/admin/backup/1/restore-job"' in resp.data
+        assert b'id="restore-result-modal" class="modal-overlay"' in resp.data
+        # The JS still names the attribute, so assert on its rendered value.
+        assert b'data-auto-open="1"' not in resp.data
 
 
 class TestRestorePreservesHistory:
     """Restoring an older backup must never drop newer backup history.
 
     pg_dump dumps backup_log too, so the replay reverts the table to the
-    backup-time state. Both restore paths must re-record the rows logged
+    backup-time state. The restore worker must re-record the rows logged
     since (newer backups + the safety snapshot).
     """
 
@@ -781,104 +901,65 @@ class TestRestorePreservesHistory:
                 if 'INSERT INTO backup_log' in c[0][0]
                 and len(c[0][1]) == 6]
 
-    def test_sync_restore_rerecords_newer_rows(self, admin_client, mock_db):
+    def test_worker_rerecords_newer_rows(self, admin_client, mock_db):
+        from app.backup import jobs as jobs_mod
         old, new, safety = self._old_and_new()
-        mock_db['fetch_one'].return_value = old
+        # Gate setting, route lookup, busy guard, worker lookup, safety log.
+        mock_db['fetch_one'].side_effect = [('1',), old, None, old, (6,)]
         # Pre-restore snapshot, then the dump-time table after the replay.
         mock_db['fetch_all'].side_effect = [[new, safety, old], [old]]
-        with patch('app.backup.routes.create_backup',
+        with patch('app.backup.jobs.create_backup',
                    return_value=('safety.sql', 9)), \
-             patch('app.backup.routes.restore_backup') as rs, \
-             patch('app.backup.routes.apply_retention'), \
-             patch('app.backup.routes.log_activity'):
+             patch('app.backup.jobs.restore_backup') as rs, \
+             patch('app.backup.jobs.log_activity'):
             resp = admin_client.post('/admin/backup/1/restore')
-        assert resp.status_code == 302
+            assert resp.status_code == 302
+            _wait_for_idle()
+            assert jobs_mod.active_job() is None
+            job = jobs_mod.recent_finished_job()
+        assert job['status'] == 'done'
         rs.assert_called_once_with('library_backup_20250101_020000.sql')
         filenames = self._reinserted_filenames(mock_db)
         assert 'library_backup_20260301_020000.sql' in filenames
         assert 'library_backup_20260401_020000.sql' in filenames
-        # Dump-time rows survive the replay — never duplicated.
+        # Dump-time rows survive the replay - never duplicated.
         assert 'library_backup_20250101_020000.sql' not in filenames
 
-    def test_sync_restore_skips_already_present_rows(self, admin_client,
+    def test_worker_failed_restore_does_not_reinsert(self, admin_client,
                                                      mock_db):
-        old, _, _ = self._old_and_new()
-        mock_db['fetch_one'].return_value = old
-        mock_db['fetch_all'].side_effect = [[old], [old]]
-        with patch('app.backup.routes.create_backup',
-                   return_value=('safety.sql', 9)), \
-             patch('app.backup.routes.restore_backup'), \
-             patch('app.backup.routes.apply_retention'), \
-             patch('app.backup.routes.log_activity'):
-            resp = admin_client.post('/admin/backup/1/restore')
-        assert resp.status_code == 302
-        assert self._reinserted_filenames(mock_db) == []
-
-    def test_failed_restore_does_not_reinsert(self, admin_client, mock_db):
+        from app.backup import jobs as jobs_mod
         old, new, _ = self._old_and_new()
-        mock_db['fetch_one'].return_value = old
-        mock_db['fetch_all'].return_value = [new, old]
-        with patch('app.backup.routes.create_backup',
-                   return_value=('safety.sql', 9)), \
-             patch('app.backup.routes.restore_backup',
-                   side_effect=RuntimeError('psql exited with status 3')), \
-             patch('app.backup.routes.log_activity'):
-            resp = admin_client.post('/admin/backup/1/restore')
-        assert resp.status_code == 302
-        assert self._reinserted_filenames(mock_db) == []
-
-    def test_reconcile_failure_warns_but_restore_succeeds(self, admin_client,
-                                                          mock_db):
-        """History bookkeeping must never turn a good restore into an error."""
-        old, new, _ = self._old_and_new()
-        mock_db['fetch_one'].return_value = old
-        # Preserve snapshot, post-replay table, then the follow-up page GET.
-        mock_db['fetch_all'].side_effect = [[new, old], [old], [old]]
-        mock_db['execute'].side_effect = RuntimeError('db down')
-        with patch('app.backup.routes.create_backup',
-                   return_value=('safety.sql', 9)), \
-             patch('app.backup.routes.restore_backup'), \
-             patch('app.backup.routes.apply_retention'), \
-             patch('app.backup.routes.log_activity'):
-            resp = admin_client.post('/admin/backup/1/restore',
-                                     follow_redirects=True)
-        assert resp.status_code == 200
-        assert b'Restore complete: the database was replaced' in resp.data
-        assert b'could not be re-recorded' in resp.data
-        mock_db['execute'].side_effect = None
-
-    def test_job_restore_rerecords_newer_rows(self, admin_client, mock_db):
-        old, new, safety = self._old_and_new()
-        mock_db['fetch_one'].return_value = old
-        mock_db['fetch_all'].side_effect = [[new, safety, old], [old]]
-        with patch('app.backup.jobs.create_backup',
-                   return_value=('safety.sql', 9)), \
-             patch('app.backup.jobs.restore_backup'), \
-             patch('app.backup.jobs.log_activity'):
-            resp = admin_client.post('/admin/backup/1/restore-job')
-            assert resp.status_code == 202
-            job = _wait_for_job(admin_client, resp.get_json()['job_id'])
-        assert job['status'] == 'done'
-        filenames = self._reinserted_filenames(mock_db)
-        assert 'library_backup_20260301_020000.sql' in filenames
-        assert 'library_backup_20260401_020000.sql' in filenames
-        assert 'library_backup_20250101_020000.sql' not in filenames
-
-    def test_job_failed_restore_does_not_reinsert(self, admin_client,
-                                                  mock_db):
-        old, new, _ = self._old_and_new()
-        mock_db['fetch_one'].return_value = old
+        mock_db['fetch_one'].side_effect = [('1',), old, None, old, (6,)]
         mock_db['fetch_all'].return_value = [new, old]
         with patch('app.backup.jobs.create_backup',
                    return_value=('safety.sql', 9)), \
              patch('app.backup.jobs.restore_backup',
                    side_effect=RuntimeError('psql exited with status 3')), \
              patch('app.backup.jobs.log_activity'):
-            resp = admin_client.post('/admin/backup/1/restore-job')
-            assert resp.status_code == 202
-            job = _wait_for_job(admin_client, resp.get_json()['job_id'])
+            resp = admin_client.post('/admin/backup/1/restore')
+            assert resp.status_code == 302
+            _wait_for_idle()
+            job = jobs_mod.recent_finished_job()
         assert job['status'] == 'failed'
         assert self._reinserted_filenames(mock_db) == []
+
+    def test_reconcile_failure_keeps_job_done(self, admin_client, mock_db):
+        """History bookkeeping must never fail a good restore."""
+        from app.backup import jobs as jobs_mod
+        old, new, _ = self._old_and_new()
+        mock_db['fetch_one'].side_effect = [('1',), old, None, old, (6,)]
+        mock_db['fetch_all'].side_effect = [[new, old], [old]]
+        mock_db['execute'].side_effect = RuntimeError('db down')
+        with patch('app.backup.jobs.create_backup',
+                   return_value=('safety.sql', 9)), \
+             patch('app.backup.jobs.restore_backup'), \
+             patch('app.backup.jobs.log_activity'):
+            resp = admin_client.post('/admin/backup/1/restore')
+            assert resp.status_code == 302
+            _wait_for_idle()
+            job = jobs_mod.recent_finished_job()
+        assert job['status'] == 'done'
+        mock_db['execute'].side_effect = None
 
 
 class TestDeleteBackup:

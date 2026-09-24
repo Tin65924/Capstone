@@ -68,6 +68,50 @@ def get_active_loan_borrower_user_ids_by_book(book_id):
     return {row[0]: row[1] for row in rows}
 
 
+def count_allocated_reservations(book_id):
+    row = db.fetch_one(
+        "SELECT COUNT(*) FROM reservation_queue WHERE book_id = %s AND reservation_status = 'allocated'",
+        (book_id,)
+    )
+    return row[0] if row else 0
+
+
+def has_active_overnight_loan(book_id):
+    row = db.fetch_one(
+        """SELECT 1 FROM circulation_records
+           WHERE book_id = %s AND borrow_type = 'overnight'
+             AND transaction_status IN ('active', 'overdue')
+           LIMIT 1""",
+        (book_id,)
+    )
+    return row is not None
+
+
+def is_book_blocked_for_daily(book_id):
+    """A book borrowed as Overnight that is already allocated is
+    Not Available for Daily Circulation.
+
+    Returns True when the book has at least one active/overdue
+    overnight loan AND at least one allocated reservation.
+    """
+    try:
+        row = db.fetch_one(
+            """SELECT 1 WHERE
+                   EXISTS (SELECT 1 FROM circulation_records
+                           WHERE book_id = %s AND borrow_type = 'overnight'
+                             AND transaction_status IN ('active', 'overdue'))
+               AND EXISTS (SELECT 1 FROM reservation_queue
+                           WHERE book_id = %s AND reservation_status = 'allocated')""",
+            (book_id, book_id)
+        )
+    except Exception:
+        return False
+    # Real query returns (1,) when blocked, None otherwise. Any other
+    # shape is a stale mock (e.g. a book/accession tuple reused as
+    # fetch_one return_value) — treat it as not blocked.
+    return row is not None and len(row) == 1 and row[0] == 1
+
+
 def get_available_accession_by_book(book_id):
     return db.fetch_one(
         '''SELECT a.* FROM accession_log a
@@ -76,6 +120,13 @@ def get_available_accession_by_book(book_id):
                  SELECT 1 FROM circulation_records c
                  WHERE c.accession_id = a.accession_id
                    AND c.transaction_status IN ('active', 'overdue')
+             )
+             AND NOT (
+                   EXISTS (SELECT 1 FROM circulation_records c2
+                           WHERE c2.book_id = a.book_id AND c2.borrow_type = 'overnight'
+                             AND c2.transaction_status IN ('active', 'overdue'))
+               AND EXISTS (SELECT 1 FROM reservation_queue r
+                           WHERE r.book_id = a.book_id AND r.reservation_status = 'allocated')
              )
            ORDER BY a.accession_id
            LIMIT 1''',

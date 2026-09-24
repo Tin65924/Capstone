@@ -2,7 +2,7 @@ import os
 import threading
 from datetime import datetime, timedelta, timezone
 
-from flask import current_app, flash, jsonify, redirect, render_template, send_file, url_for
+from flask import current_app, flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 
 from app.auth.decorators import admin_required
@@ -11,20 +11,62 @@ from app.settings.models import is_restore_enabled
 
 from . import backup_bp
 from . import jobs
-from .models import (delete_backup_row, get_backup_by_id, get_backup_logs,
-                     log_backup, preserve_backup_history,
-                     reconcile_backup_history)
-from .scheduler import apply_retention
-from .utils import create_backup, resolve_backup_path, restore_backup
+from .models import (
+    delete_backup_row,
+    get_backup_by_id,
+    get_backup_logs,
+    get_in_progress_backup,
+    log_backup,
+    update_backup_status,
+)
+from .utils import resolve_backup_path
 
 _RESTORE_DISABLED_MSG = ('Backup restore is disabled — '
                          'turn it on in Library Settings to restore.')
+
+# An in_progress row older than this is presumed orphaned (the worker died
+# with the process, e.g. a restart) — the next request marks it failed so
+# backups are never blocked forever.
+_STALE_IN_PROGRESS_AGE = timedelta(hours=2)
+
+
+def _live_in_progress():
+    """Newest in_progress row that is still fresh, else None.
+
+    Stale rows are flipped to failed so a dead worker never blocks backups.
+    """
+    row = get_in_progress_backup()
+    if not row or len(row) < 7:
+        # No row, or a malformed one we cannot age-check: stay safe and
+        # treat it as busy rather than starting a second worker.
+        return row
+    created = row[6]
+    try:
+        if isinstance(created, str):
+            created = datetime.fromisoformat(created)
+        if getattr(created, 'tzinfo', None) is None:
+            created = created.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) - created > _STALE_IN_PROGRESS_AGE:
+            update_backup_status(row[0], 'failed',
+                                 error_msg='Worker did not finish (stale in-progress run).')
+            return None
+    except Exception:  # noqa: BLE001 — unparseable timestamp: stay safe
+        current_app.logger.exception('Could not age-check in-progress backup %s', row[0])
+        return row
+    return row
+
+
+def _busy():
+    """True while a backup/restore worker is running (memory or DB row)."""
+    return jobs.active_job() is not None or _live_in_progress() is not None
 
 
 def _backup_stats(logs):
     completed = [row for row in logs if row[3] == 'completed']
     total_size = sum((row[2] or 0) for row in completed)
-    last = logs[0] if logs else None
+    # The newest row may be an in_progress run — health is about the newest
+    # *finished* backup, so look at completed rows only.
+    last = completed[0] if completed else None
     # Healthy only when the newest run succeeded and is recent — a failed
     # latest run must show Warning, never Healthy.
     healthy = False
@@ -49,13 +91,21 @@ def backup_page():
     stats = _backup_stats(logs or [])
     recovery_events = [row for row in (logs or []) if row[3] == 'failed'][:10]
     keep_n = current_app.config.get('BACKUP_KEEP', 12)
+    busy = _busy()
+    last_job = None if busy else jobs.recent_finished_job()
     return render_template(
         'backup/backup.html',
         backups=logs or [],
         stats=stats,
         recovery_events=recovery_events,
         keep_n=keep_n,
+        busy=busy,
+        last_job=last_job,
         restore_enabled=is_restore_enabled(),
+        # One-shot signal: the restore POST redirects here with the
+        # filename so the outcome modal opens exactly once (JS strips
+        # the query before the busy auto-refresh fires).
+        restore_started=request.args.get('restore_started'),
     )
 
 
@@ -63,23 +113,34 @@ def backup_page():
 @login_required
 @admin_required
 def create_backup_route():
-    keep_n = current_app.config.get('BACKUP_KEEP', 12)
-    try:
-        filename, size_bytes = create_backup()
-    except Exception as e:  # noqa: BLE001 — expected user-visible failure path
-        log_backup(
-            filename='manual_backup_failed.sql',
-            backup_type='manual',
-            status='failed',
-            error_msg=str(e)[:500],
-        )
-        log_activity(current_user.id, 'backup:failed:manual')
-        flash(f'Backup failed: {e}', 'error')
+    """Start a backup on a background thread and return immediately.
+
+    The history table shows the new row as In Progress until the worker
+    flips it to completed/failed — the request never waits for pg_dump.
+    """
+    if _busy():
+        flash('A backup or restore is already running — '
+              'wait for it to finish first.', 'error')
         return redirect(url_for('backup.backup_page'))
-    log_backup(filename, size_bytes, backup_type='manual', status='completed')
-    apply_retention(current_app, keep_n)
-    log_activity(current_user.id, f'backup:created:{filename}')
-    flash(f'Backup created: {filename}', 'success')
+    keep_n = current_app.config.get('BACKUP_KEEP', 12)
+    placeholder = f"library_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}_in_progress.sql"
+    backup_id = log_backup(placeholder, None, backup_type='manual',
+                           status='in_progress')
+    if not backup_id:
+        flash('Could not start the backup. Please try again.', 'error')
+        return redirect(url_for('backup.backup_page'))
+    app = current_app._get_current_object()
+    user_id = current_user.id
+    job_id = jobs.start_job('backup', 'Creating backup…', user_id,
+                            backup_id=backup_id)
+    thread = threading.Thread(
+        target=jobs.run_backup_job,
+        args=(app, job_id, backup_id, user_id, keep_n),
+        daemon=True,
+    )
+    thread.start()
+    flash('Backup started — it is running in the background and will '
+          'appear below as In Progress until it finishes.', 'info')
     return redirect(url_for('backup.backup_page'))
 
 
@@ -106,6 +167,11 @@ def download_backup(backup_id):
 @login_required
 @admin_required
 def restore_backup_route(backup_id):
+    """Start a restore on a background thread and return immediately.
+
+    The worker snapshots the current data first, then replaces the
+    database — the request never waits for either step.
+    """
     if not is_restore_enabled():
         flash(_RESTORE_DISABLED_MSG, 'error')
         return redirect(url_for('backup.backup_page'))
@@ -116,42 +182,23 @@ def restore_backup_route(backup_id):
     if row[3] != 'completed':
         flash('Only completed backups can be restored.', 'error')
         return redirect(url_for('backup.backup_page'))
-
-    # Safety net: snapshot the current state before the destructive restore.
-    try:
-        safety_file, safety_size = create_backup()
-        log_backup(safety_file, safety_size, backup_type='manual',
-                   status='completed', error_msg='pre-restore auto-backup')
-    except Exception as e:  # noqa: BLE001 — refuse a restore with no safety net
-        log_activity(current_user.id, f'backup:restore_aborted:{row[1]}')
-        flash(f'Restore aborted — could not snapshot current data: {e}', 'error')
+    if _busy():
+        flash('A backup or restore is already running — '
+              'wait for it to finish first.', 'error')
         return redirect(url_for('backup.backup_page'))
 
-    # The restore replays a full dump, which reverts backup_log to the
-    # backup-time state. Snapshot history now (includes the safety row
-    # above) so newer backups survive the replace.
-    preserved = preserve_backup_history()
-
-    try:
-        restore_backup(row[1])
-    except (FileNotFoundError, ValueError) as e:
-        log_activity(current_user.id, f'backup:restore_failed:{row[1]}')
-        flash(f'Restore failed: {e}', 'error')
-        return redirect(url_for('backup.backup_page'))
-    except Exception as e:  # noqa: BLE001 — psql failure; safety backup is the recovery point
-        log_activity(current_user.id, f'backup:restore_failed:{row[1]}')
-        flash(f'Restore failed: {e}. Current data was snapshotted as {safety_file}.', 'error')
-        return redirect(url_for('backup.backup_page'))
-
-    not_rerecorded = reconcile_backup_history(preserved)
-    log_activity(current_user.id, f'backup:restored:{row[1]}')
-    flash(f'Restore complete: the database was replaced from {row[1]}. '
-          'Anything added after that backup was lost.', 'success')
-    if not_rerecorded:
-        flash(f'Warning: {not_rerecorded} backup history row(s) could not '
-              'be re-recorded — newer backups may be missing below, but '
-              'their files are still on disk.', 'warning')
-    return redirect(url_for('backup.backup_page'))
+    app = current_app._get_current_object()
+    user_id = current_user.id
+    job_id = jobs.start_job('restore', f'Restoring {row[1]}…', user_id)
+    thread = threading.Thread(
+        target=jobs.run_restore_job,
+        args=(app, job_id, user_id, backup_id, row[1]),
+        daemon=True,
+    )
+    thread.start()
+    flash(f'Restore started — {row[1]} is being restored in the background.',
+          'info')
+    return redirect(url_for('backup.backup_page', restore_started=row[1]))
 
 
 @backup_bp.route('/admin/backup/<int:backup_id>/delete', methods=['POST'])
@@ -161,10 +208,10 @@ def delete_backup_route(backup_id):
     """Delete one backup's file and history row.
 
     JSON (like the job endpoints) so the delete modals can report the
-    outcome without reloading. Refuses while a job runs so a file that
-    is being written or restored can never be pulled mid-operation.
+    outcome without reloading. Refuses while a worker runs so a file
+    that is being written or restored can never be pulled mid-operation.
     """
-    if jobs.active_job():
+    if _busy():
         return jsonify({'error': 'A backup or restore is running — '
                                  'wait for it to finish before deleting.'}), 409
     row = get_backup_by_id(backup_id)
@@ -187,63 +234,3 @@ def delete_backup_route(backup_id):
                         'note': 'The file was already missing from storage; '
                                 'its history row was removed.'})
     return jsonify({'deleted': row[1]})
-
-
-@backup_bp.route('/admin/backup/jobs', methods=['POST'])
-@login_required
-@admin_required
-def start_backup_job_route():
-    """Start a backup in a background thread; poll the status endpoint."""
-    busy = jobs.active_job()
-    if busy:
-        return jsonify({'error': 'A backup or restore is already running — '
-                                 'wait for it to finish first.'}), 409
-    app = current_app._get_current_object()
-    job_id = jobs.start_job('backup', 'Creating backup…', current_user.id)
-    thread = threading.Thread(
-        target=jobs.run_backup_job,
-        args=(app, job_id, current_user.id,
-              current_app.config.get('BACKUP_KEEP', 12)),
-        daemon=True,
-    )
-    thread.start()
-    return jsonify({'job_id': job_id}), 202
-
-
-@backup_bp.route('/admin/backup/jobs/<job_id>')
-@login_required
-@admin_required
-def backup_job_status(job_id):
-    """Pollable progress snapshot for a backup/restore job."""
-    job = jobs.get_job(job_id)
-    if not job:
-        return jsonify({'error': 'Unknown backup job.'}), 404
-    return jsonify(job)
-
-
-@backup_bp.route('/admin/backup/<int:backup_id>/restore-job', methods=['POST'])
-@login_required
-@admin_required
-def start_restore_job_route(backup_id):
-    """Start a restore in a background thread; poll the status endpoint."""
-    if not is_restore_enabled():
-        return jsonify({'error': _RESTORE_DISABLED_MSG}), 403
-    row = get_backup_by_id(backup_id)
-    if not row:
-        return jsonify({'error': 'Backup not found.'}), 404
-    if row[3] != 'completed':
-        return jsonify({'error': 'Only completed backups can be restored.'}), 400
-    busy = jobs.active_job()
-    if busy:
-        return jsonify({'error': 'A backup or restore is already running — '
-                                 'wait for it to finish first.'}), 409
-    app = current_app._get_current_object()
-    job_id = jobs.start_job('restore', f'Restoring {row[1]}…',
-                            current_user.id)
-    thread = threading.Thread(
-        target=jobs.run_restore_job,
-        args=(app, job_id, current_user.id, backup_id, row[1]),
-        daemon=True,
-    )
-    thread.start()
-    return jsonify({'job_id': job_id}), 202

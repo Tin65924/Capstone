@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Backup & Recovery | MCST Library</title>
+    {% if busy %}<meta http-equiv="refresh" content="5">{% endif %}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
@@ -154,6 +155,15 @@
         .badge-info { background: #e0e7ff; color: #3730a3; }
         .badge-muted { background: #f1f5f9; color: #475569; }
 
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-up {
+            animation: slideUp 0.4s ease-out forwards;
+        }
+
         .modal-overlay {
             position: fixed;
             inset: 0;
@@ -166,55 +176,6 @@
         }
 
         .modal-overlay.open { display: flex; }
-
-        .progress-track {
-            height: 0.75rem;
-            border-radius: 9999px;
-            background: #e2e8f0;
-            overflow: hidden;
-        }
-
-        .progress-fill {
-            height: 100%;
-            width: 0%;
-            border-radius: 9999px;
-            background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%);
-            transition: width 0.4s ease;
-        }
-
-        .progress-fill.striped {
-            background-image: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%),
-                linear-gradient(45deg, rgba(255,255,255,0.25) 25%, transparent 25%,
-                    transparent 50%, rgba(255,255,255,0.25) 50%,
-                    rgba(255,255,255,0.25) 75%, transparent 75%);
-            background-size: auto, 1rem 1rem;
-            animation: progress-stripes 1s linear infinite;
-        }
-
-        @keyframes progress-stripes {
-            from { background-position: 0, 1rem 0; }
-            to { background-position: 0, 0 0; }
-        }
-
-        .spinner {
-            width: 2.5rem;
-            height: 2.5rem;
-            border-radius: 9999px;
-            border: 3px solid #e0e7ff;
-            border-top-color: #1e3a8a;
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .animate-up {
-            animation: slideUp 0.4s ease-out forwards;
-        }
     </style>
 </head>
 <body>
@@ -257,7 +218,9 @@
                 <div class="flex gap-6 mt-8">
                     <div>
                         <div class="text-[10px] font-black uppercase tracking-widest text-indigo-200 mb-1">Status</div>
-                        {% if stats.healthy %}
+                        {% if busy %}
+                        <div class="flex items-center gap-2 font-bold"><span class="w-2 h-2 rounded-full bg-sky-300 animate-pulse"></span> In Progress</div>
+                        {% elif stats.healthy %}
                         <div class="flex items-center gap-2 font-bold"><span class="w-2 h-2 rounded-full bg-emerald-400"></span> Healthy</div>
                         {% else %}
                         <div class="flex items-center gap-2 font-bold"><span class="w-2 h-2 rounded-full bg-amber-400"></span> Warning</div>
@@ -277,12 +240,31 @@
                     </div>
                 </div>
             </div>
-            <form id="run-backup-form" method="POST" action="{{ url_for('backup.start_backup_job_route') }}">
-                <button type="submit" class="bg-white text-indigo-600 px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-50 transition-all shadow-lg">
-                    <span class="material-symbols-outlined">cloud_upload</span> Run Backup Now
+            <form method="POST" action="{{ url_for('backup.create_backup_route') }}">
+                <button type="submit" {% if busy %}disabled{% endif %} class="bg-white text-indigo-600 px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-50 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span class="material-symbols-outlined">cloud_upload</span> {% if busy %}Backup Running…{% else %}Run Backup Now{% endif %}
                 </button>
             </form>
         </div>
+
+        {% if busy %}
+        <div class="card animate-up !border-sky-200" style="background:#f0f9ff;border-color:#bae6fd;padding:1rem 1.5rem;display:flex;align-items:center;gap:0.75rem;">
+            <span class="material-symbols-outlined text-sky-600 animate-pulse">sync</span>
+            <p class="text-sm text-sky-900"><strong>A backup or restore is running in the background.</strong> Its row shows <strong>In Progress</strong> below — this page refreshes automatically, no need to stay here.</p>
+        </div>
+        {% elif last_job %}
+        {% if last_job.status == 'done' %}
+        <div class="card animate-up" style="background:#f0fdf4;border-color:#bbf7d0;padding:1rem 1.5rem;display:flex;align-items:center;gap:0.75rem;">
+            <span class="material-symbols-outlined text-emerald-600">check_circle</span>
+            <p class="text-sm text-emerald-900"><strong>{{ last_job.label }}</strong>{% if last_job.filename %} — {{ last_job.filename }}{% endif %}</p>
+        </div>
+        {% else %}
+        <div class="card animate-up" style="background:#fef2f2;border-color:#fecaca;padding:1rem 1.5rem;display:flex;align-items:center;gap:0.75rem;">
+            <span class="material-symbols-outlined text-rose-600">error</span>
+            <p class="text-sm text-rose-900"><strong>{{ last_job.label }} failed.</strong>{% if last_job.error %} {{ last_job.error }}{% endif %}</p>
+        </div>
+        {% endif %}
+        {% endif %}
 
         <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
             <!-- Backup History -->
@@ -312,6 +294,8 @@
                                 <td>
                                     {% if b[3] == 'completed' %}
                                     <span class="badge badge-success">Completed</span>
+                                    {% elif b[3] == 'in_progress' %}
+                                    <span class="badge badge-info">In Progress</span>
                                     {% else %}
                                     <span class="badge badge-error" title="{{ b[5] or '' }}">Failed</span>
                                     {% endif %}
@@ -319,10 +303,14 @@
                                 <td>
                                     <div class="flex gap-2 items-center">
                                         <a href="{{ url_for('backup.download_backup', backup_id=b[0]) }}" class="text-gray-400 hover:text-primary" title="Download"><span class="material-symbols-outlined text-lg">download</span></a>
-                                        {% if b[3] == 'completed' and restore_enabled|default(true) %}
-                                        <button type="button" class="text-gray-400 hover:text-primary" title="Restore" data-restore-job-url="{{ url_for('backup.start_restore_job_route', backup_id=b[0]) }}" data-restore-job-name="{{ b[1] }}"><span class="material-symbols-outlined text-lg">settings_backup_restore</span></button>
-                                        {% elif b[3] == 'completed' %}
+                                        {% if b[3] == 'completed' and not restore_enabled|default(true) %}
                                         <span class="text-gray-300 cursor-not-allowed" title="Restore is disabled — turn it on in Library Settings"><span class="material-symbols-outlined text-lg">settings_backup_restore</span></span>
+                                        {% elif b[3] == 'completed' and not busy %}
+                                        <form method="POST" action="{{ url_for('backup.restore_backup_route', backup_id=b[0]) }}" style="display:inline;" data-restore-form data-restore-name="{{ b[1] }}">
+                                            <button type="submit" class="text-gray-400 hover:text-primary" title="Restore {{ b[1] }}"><span class="material-symbols-outlined text-lg">settings_backup_restore</span></button>
+                                        </form>
+                                        {% elif b[3] == 'completed' and busy %}
+                                        <span class="text-gray-300" title="A backup or restore is already running"><span class="material-symbols-outlined text-lg">settings_backup_restore</span></span>
                                         {% else %}
                                         <span class="text-gray-400" title="{{ b[5] or 'Failed backup' }}"><span class="material-symbols-outlined text-lg">info</span></span>
                                         {% endif %}
@@ -403,20 +391,24 @@
         </div>
     </div>
 
-    <!-- Restore result modal (2 of 2): what happened after restoring -->
-    <div id="restore-result-modal" class="modal-overlay">
+    <!-- Restore started modal (2 of 2): what happens after restoring -->
+    <div id="restore-result-modal" class="modal-overlay{% if restore_started %} open{% endif %}"{% if restore_started %} data-auto-open="1" data-restore-started="{{ restore_started }}"{% endif %}>
         <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-up">
             <div class="flex items-center gap-3 mb-3">
-                <div id="restore-result-icon" class="w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
-                    <span class="material-symbols-outlined">info</span>
+                <div class="w-10 h-10 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
+                    <span class="material-symbols-outlined">sync</span>
                 </div>
-                <h3 id="restore-result-title" class="text-lg font-extrabold">Restore finished</h3>
+                <h3 class="text-lg font-extrabold">Restore started</h3>
             </div>
-            <p id="restore-result-body" class="text-sm text-gray-600 mb-2"></p>
-            <p id="restore-result-error" class="hidden text-sm text-rose-600 bg-rose-50 border border-rose-100 rounded-lg p-3 mb-4 break-words"></p>
+            <p class="text-sm text-gray-600 mb-3"><strong class="break-all">{% if restore_started %}{{ restore_started }}{% endif %}</strong> is being restored in the background. This is what happens next:</p>
+            <ul class="text-sm text-gray-600 space-y-1.5 mb-4 list-disc pl-5">
+                <li>A safety snapshot of the current data is saved first.</li>
+                <li>The database is then replaced — newer backup history is preserved.</li>
+                <li>Anything added after this backup will be lost.</li>
+                <li>This page refreshes automatically; the outcome banner appears below when it finishes.</li>
+            </ul>
             <div class="flex gap-3 justify-end">
-                <button id="restore-result-close" type="button" class="px-4 py-2 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-100">Close</button>
-                <button id="restore-result-reload" type="button" class="hidden px-4 py-2 rounded-lg text-sm font-bold bg-primary text-white hover:bg-blue-800">Reload page</button>
+                <button id="restore-result-close" type="button" class="px-4 py-2 rounded-lg text-sm font-bold bg-primary text-white hover:bg-blue-800">Got it</button>
             </div>
         </div>
     </div>
@@ -461,271 +453,54 @@
         </div>
     </div>
 
-    <!-- Backup/restore progress modal (driven by job polling) -->
-    <div id="backup-progress-modal" class="modal-overlay">
-        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-up">
-            <div class="flex items-center gap-4 mb-4">
-                <div id="backup-progress-icon" class="spinner shrink-0"></div>
-                <div class="min-w-0">
-                    <h3 id="backup-progress-title" class="text-lg font-extrabold">Working…</h3>
-                    <p id="backup-progress-stage" class="text-sm text-gray-600">Starting…</p>
-                </div>
-            </div>
-            <div class="progress-track mb-2">
-                <div id="backup-progress-bar" class="progress-fill striped" style="width: 0%"></div>
-            </div>
-            <div class="flex justify-between items-center mb-2">
-                <span class="text-xs text-gray-400">Do not close this page while running.</span>
-                <span id="backup-progress-pct" class="text-sm font-extrabold text-primary">0%</span>
-            </div>
-            <ul id="backup-progress-history" class="text-xs text-gray-500 space-y-1 mb-2 max-h-28 overflow-y-auto"></ul>
-            <p id="backup-progress-stall" class="hidden text-xs text-amber-600 font-semibold mb-2"></p>
-            <p id="backup-progress-error" class="hidden text-sm text-rose-600 bg-rose-50 border border-rose-100 rounded-lg p-3 mb-4 break-words"></p>
-            <div class="flex gap-3 justify-end">
-                <button id="backup-progress-close" type="button" class="hidden px-4 py-2 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-100">Close</button>
-                <button id="backup-progress-reload" type="button" class="hidden px-4 py-2 rounded-lg text-sm font-bold bg-primary text-white hover:bg-blue-800">Reload page</button>
-            </div>
-        </div>
-    </div>
-
 <script>
 (function() {
-    var modal = document.getElementById('backup-progress-modal');
-    var icon = document.getElementById('backup-progress-icon');
-    var title = document.getElementById('backup-progress-title');
-    var stage = document.getElementById('backup-progress-stage');
-    var bar = document.getElementById('backup-progress-bar');
-    var pct = document.getElementById('backup-progress-pct');
-    var errBox = document.getElementById('backup-progress-error');
-    var closeBtn = document.getElementById('backup-progress-close');
-    var reloadBtn = document.getElementById('backup-progress-reload');
-    var historyList = document.getElementById('backup-progress-history');
-    var stallNote = document.getElementById('backup-progress-stall');
-    var lastStage = null;
-    var lastChangeAt = null;
-    var stallTimer = null;
-
-    function noteChange() {
-        lastChangeAt = Date.now();
-        stallNote.classList.add('hidden');
-    }
-
-    function checkStall() {
-        if (!modal.classList.contains('open') || lastChangeAt === null) return;
-        var idleSecs = Math.floor((Date.now() - lastChangeAt) / 1000);
-        if (idleSecs >= 10) {
-            stallNote.textContent = 'Still working… no update for ' + idleSecs + 's. The database tool is running — leave this page open.';
-            stallNote.classList.remove('hidden');
-        }
-    }
-
-    function reset(titleText) {
-        title.textContent = titleText;
-        stage.textContent = 'Starting…';
-        bar.style.width = '0%';
-        bar.classList.add('striped');
-        pct.textContent = '0%';
-        errBox.classList.add('hidden');
-        errBox.textContent = '';
-        historyList.innerHTML = '';
-        stallNote.classList.add('hidden');
-        closeBtn.classList.add('hidden');
-        reloadBtn.classList.add('hidden');
-        icon.className = 'spinner shrink-0';
-        lastStage = null;
-        lastChangeAt = Date.now();
-        modal.classList.add('open');
-        if (stallTimer === null) {
-            stallTimer = setInterval(checkStall, 1000);
-        }
-    }
-
-    function pushHistory(text) {
-        if (text === lastStage) return;
-        lastStage = text;
-        var li = document.createElement('li');
-        li.className = 'flex items-start gap-1.5';
-        li.innerHTML = '<span class="material-symbols-outlined text-[14px] text-emerald-500 shrink-0">check_circle</span>';
-        li.appendChild(document.createTextNode(text));
-        historyList.appendChild(li);
-    }
-
-    function render(job) {
-        var progress = Math.max(0, Math.min(100, job.progress || 0));
-        bar.style.width = progress + '%';
-        pct.textContent = progress + '%';
-        if (job.stage) {
-            if (job.stage !== stage.textContent) {
-                pushHistory(stage.textContent);
-                stage.textContent = job.stage;
-            }
-            noteChange();
-        }
-        if (Array.isArray(job.history)) {
-            job.history.forEach(function(h) { pushHistory(h); });
-        }
-    }
-
-    function succeed(job) {
-        if (currentKind === 'restore') {
-            showRestoreResult(true, job || {});
-            return;
-        }
-        bar.style.width = '100%';
-        bar.classList.remove('striped');
-        pct.textContent = '100%';
-        pushHistory(stage.textContent);
-        stage.textContent = job.stage || 'Complete.';
-        pushHistory(stage.textContent);
-        stallNote.classList.add('hidden');
-        lastChangeAt = null;
-        icon.className = 'w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0';
-        icon.innerHTML = '<span class="material-symbols-outlined">check</span>';
-        reloadBtn.classList.remove('hidden');
-        setTimeout(function() { window.location.reload(); }, 1500);
-    }
-
-    function fail(message) {
-        if (currentKind === 'restore') {
-            showRestoreResult(false, { error: message });
-            return;
-        }
-        bar.classList.remove('striped');
-        pushHistory(stage.textContent);
-        stage.textContent = 'Failed.';
-        stallNote.classList.add('hidden');
-        lastChangeAt = null;
-        icon.className = 'w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0';
-        icon.innerHTML = '<span class="material-symbols-outlined">error</span>';
-        errBox.textContent = message;
-        errBox.classList.remove('hidden');
-        closeBtn.classList.remove('hidden');
-    }
-
-    function poll(jobId) {
-        fetch('/admin/backup/jobs/' + encodeURIComponent(jobId), {
-            headers: { 'Accept': 'application/json' }
-        }).then(function(resp) {
-            if (!resp.ok) throw new Error('Could not read job status (' + resp.status + ').');
-            return resp.json();
-        }).then(function(job) {
-            render(job);
-            if (job.status === 'done') {
-                succeed(job);
-            } else if (job.status === 'failed') {
-                fail(job.error || 'The operation failed with no further detail.');
-            } else {
-                setTimeout(function() { poll(jobId); }, 500);
-            }
-        }).catch(function(e) {
-            fail(e.message);
-        });
-    }
-
-    function startJob(url, titleText, kind) {
-        currentKind = kind || 'backup';
-        reset(titleText);
-        fetch(url, {
-            method: 'POST',
-            headers: { 'Accept': 'application/json' }
-        }).then(function(resp) {
-            return resp.json().then(function(data) {
-                if (!resp.ok) throw new Error(data.error || 'Could not start the job (' + resp.status + ').');
-                return data;
-            });
-        }).then(function(data) {
-            poll(data.job_id);
-        }).catch(function(e) {
-            fail(e.message);
-        });
-    }
-
-    var backupForm = document.getElementById('run-backup-form');
-    if (backupForm) {
-        backupForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            startJob(backupForm.action, 'Creating backup…', 'backup');
-        });
-    }
-
     // Restore is a two-step confirmation: consequences first, outcome after.
-    var confirmModal = document.getElementById('restore-confirm-modal');
-    var confirmName = document.getElementById('restore-confirm-name');
-    var confirmCancel = document.getElementById('restore-confirm-cancel');
-    var confirmProceed = document.getElementById('restore-confirm-proceed');
-    var resultModal = document.getElementById('restore-result-modal');
-    var resultIcon = document.getElementById('restore-result-icon');
-    var resultTitle = document.getElementById('restore-result-title');
-    var resultBody = document.getElementById('restore-result-body');
-    var resultError = document.getElementById('restore-result-error');
-    var resultClose = document.getElementById('restore-result-close');
-    var resultReload = document.getElementById('restore-result-reload');
-    var currentKind = null;
-    var pendingRestore = null;
+    var restoreConfirm = document.getElementById('restore-confirm-modal');
+    var restoreConfirmName = document.getElementById('restore-confirm-name');
+    var restoreConfirmCancel = document.getElementById('restore-confirm-cancel');
+    var restoreConfirmProceed = document.getElementById('restore-confirm-proceed');
+    var restoreResult = document.getElementById('restore-result-modal');
+    var restoreResultClose = document.getElementById('restore-result-close');
+    var pendingRestoreForm = null;
 
-    function showRestoreResult(ok, job) {
-        modal.classList.remove('open');
-        var filename = (job && job.filename) ||
-            (pendingRestore && pendingRestore.name) || 'backup';
-        if (ok) {
-            resultIcon.className = 'w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0';
-            resultIcon.innerHTML = '<span class="material-symbols-outlined">check</span>';
-            resultTitle.textContent = 'Restore complete';
-            resultBody.textContent = 'The database was replaced from ' + filename + '. ' +
-                'A safety snapshot of the previous data was saved automatically, and newer backup history was preserved. ' +
-                'Anything added after this backup was lost, and the restore was recorded in the audit trail.';
-            resultError.classList.add('hidden');
-            resultError.textContent = '';
-            resultReload.classList.remove('hidden');
-        } else {
-            resultIcon.className = 'w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0';
-            resultIcon.innerHTML = '<span class="material-symbols-outlined">error</span>';
-            resultTitle.textContent = 'Restore failed';
-            resultBody.textContent = 'The database was not changed. ' +
-                'No data was lost by this attempt — try again or pick another backup.';
-            resultError.textContent = (job && job.error) || 'The operation failed with no further detail.';
-            resultError.classList.remove('hidden');
-            resultReload.classList.add('hidden');
-        }
-        pendingRestore = null;
-        resultModal.classList.add('open');
-    }
-
-    document.querySelectorAll('[data-restore-job-url]').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            pendingRestore = {
-                url: btn.getAttribute('data-restore-job-url'),
-                name: btn.getAttribute('data-restore-job-name') || 'backup'
-            };
-            confirmName.textContent = pendingRestore.name;
-            confirmModal.classList.add('open');
+    document.querySelectorAll('[data-restore-form]').forEach(function(form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            pendingRestoreForm = form;
+            restoreConfirmName.textContent = form.getAttribute('data-restore-name') || 'backup';
+            restoreConfirm.classList.add('open');
         });
     });
 
-    if (confirmCancel) {
-        confirmCancel.addEventListener('click', function() {
-            pendingRestore = null;
-            confirmModal.classList.remove('open');
+    if (restoreConfirmCancel) {
+        restoreConfirmCancel.addEventListener('click', function() {
+            pendingRestoreForm = null;
+            restoreConfirm.classList.remove('open');
         });
     }
-    if (confirmProceed) {
-        confirmProceed.addEventListener('click', function() {
-            if (!pendingRestore) return;
-            var url = pendingRestore.url;
-            var name = pendingRestore.name;
-            confirmModal.classList.remove('open');
-            startJob(url, 'Restoring ' + name + '…', 'restore');
+    if (restoreConfirmProceed) {
+        restoreConfirmProceed.addEventListener('click', function() {
+            if (!pendingRestoreForm) return;
+            var form = pendingRestoreForm;
+            pendingRestoreForm = null;
+            restoreConfirm.classList.remove('open');
+            form.submit();
         });
     }
-    if (resultClose) {
-        resultClose.addEventListener('click', function() {
-            resultModal.classList.remove('open');
+    if (restoreResultClose) {
+        restoreResultClose.addEventListener('click', function() {
+            restoreResult.classList.remove('open');
         });
     }
-    if (resultReload) {
-        resultReload.addEventListener('click', function() {
-            window.location.reload();
-        });
+    // One-shot outcome modal: opened server-side after a restore POST.
+    // Strip the query before the busy auto-refresh fires so it never reopens.
+    if (restoreResult && restoreResult.getAttribute('data-auto-open') === '1') {
+        try {
+            var url = new URL(window.location.href);
+            url.searchParams.delete('restore_started');
+            window.history.replaceState(null, '', url.toString());
+        } catch (err) { /* older browsers: modal simply stays until closed */ }
     }
 
     // Delete is a two-step confirmation: consequences first, outcome after.
@@ -813,13 +588,6 @@
             window.location.reload();
         });
     }
-
-    closeBtn.addEventListener('click', function() {
-        modal.classList.remove('open');
-    });
-    reloadBtn.addEventListener('click', function() {
-        window.location.reload();
-    });
 })();
 </script>
 

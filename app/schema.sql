@@ -207,7 +207,7 @@ CREATE TABLE IF NOT EXISTS backup_log (
     filename    VARCHAR(255) NOT NULL,
     size_bytes  BIGINT,
     status      VARCHAR(20) NOT NULL DEFAULT 'completed'
-                CHECK (status IN ('completed', 'failed')),
+                CHECK (status IN ('completed', 'failed', 'in_progress')),
     backup_type VARCHAR(20) NOT NULL DEFAULT 'manual'
                 CHECK (backup_type IN ('manual', 'scheduled')),
     error_msg   VARCHAR(500),
