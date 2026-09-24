@@ -1,4 +1,4 @@
-from app.procurement.models import create_procurement, find_supplier_match
+from app.procurement.models import create_procurement
 from app.auth.models import log_activity
 from flask import render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
@@ -117,7 +117,6 @@ def user_request_book():
             flash('You already requested this book.', 'error')
             return redirect(url_for('requests.user_request_book'))
 
-        supplier_match = find_supplier_match(book_title, author)
         new_request_id = create_request(borrower_id, book_title, author)
         try:
             from app.circulation.models import create_notification
@@ -130,26 +129,9 @@ def user_request_book():
         except Exception:
             pass
         log_activity(current_user.id, f'requests:create:{new_request_id}')
-        if supplier_match:
-            suppliers = ', '.join(sorted({m[0] for m in supplier_match if m[0]}))
-            flash(f'Your request has been submitted! Good news: this title is on the supplier list ({suppliers}) — routed for approval.', 'success')
-        else:
-            flash('Your request has been submitted!', 'success')
+        flash('Your request has been submitted!', 'success')
         return redirect(url_for('requests.user_request_book'))
 
     borrower_id = get_borrower_by_user(current_user.id)
     my_requests = get_requests_by_borrower(borrower_id) if borrower_id else []
     return render_template('requests/user_request_book.html', my_requests=my_requests)
-
-
-@requests_bp.route('/user/supplier-check')
-@login_required
-def supplier_check():
-    """Live supplier-list lookup for the request form (title/author query)."""
-    title = request.args.get('title', '').strip()
-    author = request.args.get('author', '').strip() or None
-    matches = find_supplier_match(title, author) if title else []
-    return jsonify([
-        {'supplier': m[0], 'title': m[1], 'author': m[2] if len(m) > 2 else ''}
-        for m in matches
-    ])

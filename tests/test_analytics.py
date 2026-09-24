@@ -63,20 +63,6 @@ class TestAnalyticsModels:
         mock_db['fetch_all'].return_value = [('Rare Book',)]
         assert underutilized_titles() == [('Rare Book',)]
 
-    def test_underutilized_titles_limit(self, mock_db):
-        from app.analytics.models import underutilized_titles
-        mock_db['fetch_all'].return_value = []
-        underutilized_titles(None, None, limit=5)
-        query, params = mock_db['fetch_all'].call_args[0]
-        assert 'LIMIT %s' in query
-        assert params == (5,)
-
-    def test_underutilized_no_limit_by_default(self, mock_db):
-        from app.analytics.models import underutilized_titles
-        mock_db['fetch_all'].return_value = []
-        underutilized_titles(None, None)
-        assert 'LIMIT' not in mock_db['fetch_all'].call_args[0][0]
-
     def test_circulation_overview_returns_tuple(self, mock_db):
         from app.analytics.models import circulation_overview
         mock_db['fetch_one'].side_effect = [(10,), (4,), (2,), (3.0,), (6,), (7,)]
@@ -1010,65 +996,3 @@ class TestUsageDepartmentFilter:
         assert resp.data[:4] == b'%PDF'
         query, params = mock_db['fetch_all'].call_args[0]
         assert 'BSIT' in params and 'BSBA' in params
-
-
-class TestUnderutilizedCard:
-    def test_dashboard_includes_underutilized(self, librarian_client, mock_db):
-        mock_db['fetch_one'].return_value = (0,)
-        mock_db['fetch_all'].return_value = [('Rare Book',)]
-        body = librarian_client.get('/librarian/analytics/dashboard').get_json()
-        assert body['collection']['underutilized'] == [['Rare Book']]
-
-    def test_page_has_underutilized_card(self, librarian_client, mock_db):
-        mock_db['fetch_one'].return_value = (5,)
-        mock_db['fetch_all'].return_value = []
-        resp = librarian_client.get('/librarian/analytics')
-        assert resp.status_code == 200
-        assert b'Underutilized Titles' in resp.data
-        assert b'id="underutilized-list"' in resp.data
-
-
-class TestOnlineResourceUsage:
-    def test_kpi_json_returns_data(self, librarian_client, mock_db):
-        mock_db['fetch_all'].return_value = [('JSTOR', 'Provider', 9)]
-        resp = librarian_client.get(
-            '/librarian/analytics/kpi?kpi_type=online_resource_usage')
-        assert resp.status_code == 200
-        body = resp.get_json()
-        assert body['kpi_type'] == 'online_resource_usage'
-        assert body['data'] == [['JSTOR', 'Provider', 9]]
-
-    def test_dashboard_includes_online(self, librarian_client, mock_db):
-        mock_db['fetch_one'].return_value = (0,)
-        mock_db['fetch_all'].return_value = []
-        body = librarian_client.get('/librarian/analytics/dashboard').get_json()
-        assert body['circulation']['online_resources'] == []
-        assert body['circulation']['online_total'] == 0
-
-    def test_export_online_section(self, librarian_client, mock_db):
-        mock_db['fetch_all'].return_value = [('JSTOR', 'Provider', 9)]
-        resp = librarian_client.post('/librarian/analytics/export',
-                                     data={'kpi_type': 'online_resource_usage',
-                                           'format': 'pdf'})
-        assert resp.status_code == 200
-        assert resp.data[:4] == b'%PDF'
-
-    def test_page_has_online_card(self, librarian_client, mock_db):
-        mock_db['fetch_one'].return_value = (5,)
-        mock_db['fetch_all'].return_value = []
-        resp = librarian_client.get('/librarian/analytics')
-        assert resp.status_code == 200
-        assert b'Online Resource Usage' in resp.data
-        assert b'id="online-usage-body"' in resp.data
-
-
-class TestKpiBuilder:
-    def test_page_has_builder_controls(self, librarian_client, mock_db):
-        mock_db['fetch_one'].return_value = (5,)
-        mock_db['fetch_all'].return_value = []
-        resp = librarian_client.get('/librarian/analytics')
-        assert resp.status_code == 200
-        assert b'id="kbuilderToggle"' in resp.data
-        assert b'toggleKpiBuilder' in resp.data
-        assert b'resetKpiLayout' in resp.data
-        assert b'mcst-analytics-layout-v1' in resp.data

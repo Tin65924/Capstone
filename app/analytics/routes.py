@@ -30,7 +30,6 @@ VALID_KPIS = {
     'utilization_rate',
     'most_borrowed_titles',
     'underutilized_titles',
-    'online_resource_usage',
 }
 
 KPI_LABELS = {
@@ -38,7 +37,6 @@ KPI_LABELS = {
     'utilization_rate': 'Utilization Rate',
     'most_borrowed_titles': 'Most Borrowed Titles',
     'underutilized_titles': 'Underutilized Titles',
-    'online_resource_usage': 'Online Resource Usage',
 }
 
 KPI_DESCRIPTIONS = {
@@ -46,12 +44,11 @@ KPI_DESCRIPTIONS = {
     'utilization_rate': 'Share of the active collection currently on loan.',
     'most_borrowed_titles': 'Top titles by quantity of borrows in the selected period.',
     'underutilized_titles': 'Titles with zero borrows in the selected period.',
-    'online_resource_usage': 'Most visited e-resources in the selected period.',
 }
 
 # Dashboard export sections (Statistics tabs + Quick Reports). The custom KPI
-# board is removed, so these are the only exportable contents, plus the
-# paper-listed Online Resource Usage KPI served through the same pipeline.
+# board is removed, so these are the only exportable contents; kpi_json stays
+# limited to the board-era VALID_KPIS for backwards compatibility.
 DASHBOARD_LABELS = {
     'trend_borrowings': 'Borrowings Trend',
     'trend_overdue': 'Overdue Trend',
@@ -64,7 +61,6 @@ DASHBOARD_LABELS = {
     'recent_circulation': 'Recent Circulation Activity',
     'recent_collection': 'Recent Collection Status',
     'circulation_summary': 'Circulation Summary',
-    'online_resource_usage': 'Online Resource Usage',
 }
 
 DASHBOARD_DESCRIPTIONS = {
@@ -79,7 +75,6 @@ DASHBOARD_DESCRIPTIONS = {
     'recent_circulation': 'Latest circulation transactions.',
     'recent_collection': 'Latest accessioned copies with status.',
     'circulation_summary': 'Headline circulation totals for the period.',
-    'online_resource_usage': 'Most visited e-resources with visit counts.',
 }
 
 EXPORTABLE_KPIS = set(VALID_KPIS) | set(DASHBOARD_LABELS)
@@ -217,8 +212,6 @@ def compute_dashboard(start_date, end_date, departments=None):
     overdue_t = _pair(_safe(models.overdue_trend, start_date, end_date))
     top_cats = _pair(_safe(models.top_borrowed_categories, start_date, end_date))
     high_demand = _triple(_safe(models.high_demand_titles, start_date, end_date))
-    online_resources = _triple(_safe(models.online_resource_usage, start_date, end_date))
-    online_total = _safe(models.online_resource_total, start_date, end_date) or 0
     overview = _safe(models.circulation_overview, start_date, end_date)
     if not overview:
         overview = (0, 0, 0, 0.0, 0.0, 0)
@@ -280,13 +273,6 @@ def compute_dashboard(start_date, end_date, departments=None):
             ])
         except (IndexError, TypeError):
             continue
-    underutilized_raw = _safe(models.underutilized_titles, start_date, end_date, 10) or []
-    underutilized = []
-    for r in underutilized_raw:
-        try:
-            underutilized.append([r[0]])
-        except (IndexError, TypeError):
-            continue
 
     # Condition buckets derived from inventory_state (no condition column).
     cond_total = max(sum(inv.values()), 1)
@@ -315,7 +301,6 @@ def compute_dashboard(start_date, end_date, departments=None):
             'condition': condition,
             'cond_total': cond_total,
             'recent': recent_coll,
-            'underutilized': underutilized,
         },
         'circulation': {
             'total': overview[0],
@@ -329,8 +314,6 @@ def compute_dashboard(start_date, end_date, departments=None):
             'top_categories': top_cats,
             'high_demand': high_demand,
             'recent': recent_circ,
-            'online_resources': online_resources,
-            'online_total': online_total,
         },
         'usage': {
             'total': overview_u[0],
@@ -700,8 +683,6 @@ def _as_2d_rows(kpi_type, kpi_data):
         return [('Title', 'Borrow Count')] + [(r[0], r[1]) for r in kpi_data]
     if kpi_type == 'underutilized_titles':
         return [('Title',)] + [(r[0],) for r in kpi_data]
-    if kpi_type == 'online_resource_usage':
-        return [('Resource', 'Provider', 'Visits')] + [(r[0], r[1], r[2]) for r in (kpi_data or [])]
     if kpi_type == 'trend_borrowings':
         return [('Date', 'Borrowings')] + [(r[0], r[1]) for r in (kpi_data or [])]
     if kpi_type == 'trend_overdue':
@@ -749,8 +730,6 @@ def _run_kpi(kpi_type, start_date, end_date, departments=None):
         return models.most_borrowed_titles(start_date, end_date)
     if kpi_type == 'underutilized_titles':
         return models.underutilized_titles(start_date, end_date)
-    if kpi_type == 'online_resource_usage':
-        return models.online_resource_usage(start_date, end_date)
     if kpi_type == 'trend_borrowings':
         return models.borrowings_trend(start_date, end_date, None, scoped)
     if kpi_type == 'trend_overdue':

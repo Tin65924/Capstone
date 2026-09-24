@@ -118,8 +118,7 @@
                             <input
                                 class="w-full px-3 sm:px-4 py-3 sm:py-3.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm sm:text-base focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder:text-gray-400"
                                 id="book-title" name="book-title" placeholder="Enter the full title of the book"
-                                required="" type="text" autocomplete="off">
-                            <p id="supplier-hint" class="hidden mt-1.5 sm:mt-2 text-[11px] sm:text-xs font-bold text-emerald-600"></p>
+                                required="" type="text">
                         </div>
                         <!-- Author Field -->
                         <div>
@@ -187,41 +186,6 @@
         if (closeBtn) closeBtn.addEventListener('click', close);
         if (backdrop) backdrop.addEventListener('click', close);
         document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && drawer && !drawer.classList.contains('hidden')) close(); });
-    })();
-    // Live supplier-list check: tells faculty/students if the typed title
-    // is already on the librarian-uploaded supplier list.
-    (function() {
-        var titleEl = document.getElementById('book-title');
-        var authorEl = document.getElementById('author');
-        var hint = document.getElementById('supplier-hint');
-        if (!titleEl || !hint) return;
-        var timer = null;
-        function check() {
-            var q = titleEl.value.trim();
-            if (q.length < 3) { hint.classList.add('hidden'); return; }
-            var params = new URLSearchParams({ title: q });
-            if (authorEl && authorEl.value.trim()) params.set('author', authorEl.value.trim());
-            fetch('{{ url_for('requests.supplier_check') }}?' + params.toString())
-                .then(function (r) { return r.ok ? r.json() : []; })
-                .then(function (rows) {
-                    if (rows && rows.length) {
-                        var suppliers = rows.map(function (m) { return m.supplier; })
-                            .filter(function (s, i, a) { return s && a.indexOf(s) === i; })
-                            .join(', ');
-                        hint.textContent = 'On the supplier list' + (suppliers ? ' (' + suppliers + ')' : '') + ' — submit and it goes straight for approval.';
-                        hint.classList.remove('hidden');
-                    } else { hint.classList.add('hidden'); }
-                })
-                .catch(function () { hint.classList.add('hidden'); });
-        }
-        titleEl.addEventListener('input', function () {
-            if (timer) clearTimeout(timer);
-            timer = setTimeout(check, 400);
-        });
-        if (authorEl) authorEl.addEventListener('input', function () {
-            if (timer) clearTimeout(timer);
-            timer = setTimeout(check, 400);
-        });
     })();
     </script>
 </body>

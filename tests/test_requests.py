@@ -122,38 +122,3 @@ class TestLibrarianReview:
 
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
-
-
-class TestSupplierCheck:
-    def test_requires_login(self, client, mock_db):
-        resp = client.get('/user/supplier-check?title=Dune')
-        assert resp.status_code == 302
-
-    def test_blank_title_returns_empty(self, faculty_client, mock_db):
-        resp = faculty_client.get('/user/supplier-check?title=  ')
-        assert resp.status_code == 200
-        assert resp.get_json() == []
-
-    def test_match_returns_suppliers(self, faculty_client, mock_db):
-        mock_db['fetch_all'].return_value = [('Acme', 'Dune', 'Herbert')]
-        resp = faculty_client.get('/user/supplier-check?title=Dune')
-        assert resp.status_code == 200
-        assert resp.get_json() == [
-            {'supplier': 'Acme', 'title': 'Dune', 'author': 'Herbert'}]
-
-    def test_submit_checks_supplier_list(self, student_client, mock_db):
-        mock_db['fetch_one'].side_effect = [(5,), None]
-        mock_db['fetch_all'].side_effect = [
-            [],  # check_duplicate_request -> no duplicate
-            [('Acme', 'Dune', 'Herbert')],  # find_supplier_match -> on list
-        ]
-        mock_db['execute'].return_value = [(7,)]
-        resp = student_client.post('/user/request-book', data={
-            'book-title': 'Dune',
-            'author': 'Herbert',
-        })
-        assert resp.status_code == 302
-        first_call = mock_db['execute'].call_args_list[0]
-        assert 'INSERT INTO request_records' in first_call[0][0]
-        supplier_queries = [c[0][0] for c in mock_db['fetch_all'].call_args_list]
-        assert any('supplier_catalog' in q for q in supplier_queries)

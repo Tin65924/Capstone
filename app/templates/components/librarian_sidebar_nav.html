@@ -40,10 +40,6 @@
                 <span class="material-symbols-outlined">analytics</span>
                 <span class="text-sm">Reports & Analytics</span>
             </a>
-            <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'resources.manage_resources' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('resources.manage_resources') }}">
-                <span class="material-symbols-outlined">language</span>
-                <span class="text-sm">E-Resources</span>
-            </a>
             <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint and 'settings' in request.endpoint %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('settings.settings_page') }}">
                 <span class="material-symbols-outlined">settings</span>
                 <span class="text-sm">Library Settings</span>

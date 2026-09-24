@@ -7,10 +7,6 @@
         <span class="material-symbols-outlined">menu_book</span>
         <span class="text-sm">Catalog</span>
     </a>
-    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'resources.browse_resources' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('resources.browse_resources') }}">
-        <span class="material-symbols-outlined">language</span>
-        <span class="text-sm">E-Resources</span>
-    </a>
     <hr class="border-gray-200 dark:border-gray-700 my-1">
     <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'main.user_profile' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('main.user_profile') }}">
         <span class="material-symbols-outlined">Overview</span>

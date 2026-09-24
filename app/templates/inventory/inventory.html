@@ -380,38 +380,6 @@
             </div>
         </div>
 
-        <!-- Discrepancy Report (completed sessions) -->
-        {% if session and session[4] == 'completed' %}
-        <div class="card p-4 sm:p-6 mb-4 sm:mb-6">
-            <div class="flex flex-wrap items-center gap-2 mb-3">
-                <h2 class="text-base sm:text-lg font-bold text-gray-900 mr-auto">Discrepancy Report</h2>
-                <span class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded {% if discrepancies %}bg-red-100 text-red-700{% else %}bg-green-100 text-green-700{% endif %}">
-                    {{ discrepancies|length }} missing
-                </span>
-                <a href="{{ url_for('inventory.export_session', session_id=session[0]) }}" class="text-primary text-xs sm:text-sm font-bold hover:underline">Export CSV</a>
-            </div>
-            {% if discrepancies %}
-            <div class="overflow-x-auto"><table class="w-full text-xs sm:text-sm min-w-[560px]">
-                <thead><tr class="text-left text-gray-500 border-b">
-                    <th class="py-2 pr-2">Accession No.</th><th class="py-2 pr-2">Title</th><th class="py-2 pr-2">Issue</th><th class="py-2">Last Checked</th>
-                </tr></thead>
-                <tbody>
-                    {% for d in discrepancies %}
-                    <tr class="border-b last:border-0">
-                        <td class="py-2 pr-2 font-semibold">{{ d[0] }}</td>
-                        <td class="py-2 pr-2">{{ d[1] }}</td>
-                        <td class="py-2 pr-2"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">Missing</span></td>
-                        <td class="py-2 text-gray-500">{{ d[3] }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table></div>
-            {% else %}
-            <p class="text-sm text-gray-500">No discrepancies — every copy was accounted for (present or on loan).</p>
-            {% endif %}
-        </div>
-        {% endif %}
-
         <!-- Inventory Status Overview -->
         <div class="status-grid animate-in">
             <div class="status-box">

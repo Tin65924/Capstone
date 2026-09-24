@@ -180,21 +180,6 @@ def cancel_inventory_session(session_id):
         (date.today(), session_id)
     )
 
-def get_session_discrepancies(session_id):
-    """Discrepancy report for a completed session: copies marked missing
-    during reconciliation (unscanned and not on loan)."""
-    return db.fetch_all(
-        '''SELECT al.accession_number, bc.title, ist.inventory_state,
-                  ist.last_checked_date, ist.notes
-           FROM inventory_status ist
-           JOIN accession_log al ON al.accession_id = ist.accession_id
-           JOIN book_catalog bc ON bc.book_id = al.book_id
-           WHERE ist.session_id = %s AND ist.inventory_state = 'missing'
-           ORDER BY al.accession_number''',
-        (session_id,)
-    )
-
-
 def get_session_export_rows(session_id):
     return db.fetch_all(
         '''SELECT al.accession_number, bc.title, ist.inventory_state, ist.last_checked_date, ist.notes

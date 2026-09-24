@@ -78,20 +78,6 @@
             border-radius: 10px;
         }
 
-        /* KPI layout builder (edit mode) */
-        .kbuilder-editing {
-            outline: 2px dashed #93c5fd;
-            outline-offset: -2px;
-            cursor: move;
-        }
-        .kbuilder-editing a,
-        .kbuilder-editing button:not(.kbuilder-eye) {
-            pointer-events: none;
-        }
-        .kbuilder-dragging {
-            opacity: 0.5;
-        }
-
         main {
             flex: 1;
             display: flex;
@@ -222,16 +208,6 @@
                     <span class="w-2 h-2 rounded-full bg-primary"></span>
                     {% endif %}
                 </button>
-                <button id="kbuilderToggle" onclick="toggleKpiBuilder()"
-                    class="flex items-center gap-1 sm:gap-2 text-[11px] sm:text-xs font-bold px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all whitespace-nowrap">
-                    <span class="material-symbols-outlined text-base sm:text-lg">dashboard_customize</span>
-                    <span id="kbuilderToggleLabel">Customize</span>
-                </button>
-                <button id="kbuilderReset" onclick="resetKpiLayout()"
-                    class="hidden items-center gap-1 sm:gap-2 text-[11px] sm:text-xs font-bold px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all whitespace-nowrap">
-                    <span class="material-symbols-outlined text-base sm:text-lg">restart_alt</span>
-                    Reset
-                </button>
                 <div class="w-[1px] h-5 sm:h-6 bg-gray-200 mx-0.5 sm:mx-1 hidden sm:block"></div>
                 <button id="exportAllBtn" onclick="exportDashboard(ALL_DASHBOARD_SECTIONS)"
                     class="flex items-center gap-1 sm:gap-2 text-[11px] sm:text-xs font-bold px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all whitespace-nowrap">
@@ -312,11 +288,6 @@
                                 <h3 class="text-sm font-extrabold mb-2">Items Requiring Attention</h3>
                                 <div id="attention-list" class="space-y-2 text-xs"></div>
                             </div>
-                            <div class="bg-white rounded-xl border border-slate-200 p-4">
-                                <h3 class="text-sm font-extrabold mb-1">Underutilized Titles</h3>
-                                <p class="text-[10px] text-slate-400 mb-2">Zero borrows in the selected period.</p>
-                                <div id="underutilized-list" class="space-y-1.5 text-[11px]"></div>
-                            </div>
                         </div>
                     </div>
                 </section>
@@ -330,7 +301,7 @@
                             <p class="text-xs text-slate-500">What patterns are happening and what may happen next?</p>
                         </div>
                         <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">{{ period_label }}</span>
-                        <button onclick="exportDashboard(['circulation_summary', 'trend_borrowings', 'top_categories', 'trend_overdue', 'high_demand', 'recent_circulation', 'online_resource_usage'])" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
+                        <button onclick="exportDashboard(['circulation_summary', 'trend_borrowings', 'top_categories', 'trend_overdue', 'high_demand', 'recent_circulation'])" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
                     </div>
                     <div id="library-kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3"></div>
                     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -358,13 +329,6 @@
                         <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[820px]">
                             <thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-2">Date/Time</th><th class="py-2 pr-2">TXN</th><th class="py-2 pr-2">User</th><th class="py-2 pr-2">Title</th><th class="py-2 pr-2">Action</th><th class="py-2 pr-2">Due Date</th><th class="py-2">Status</th></tr></thead>
                             <tbody id="recent-circ-body"></tbody>
-                        </table></div>
-                    </div>
-                    <div class="bg-white rounded-xl border border-slate-200 p-4 overflow-hidden">
-                        <div class="flex items-center mb-2"><h3 class="text-sm font-extrabold mr-auto">8. Online Resource Usage</h3><span id="online-total-badge" class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">0 visits</span></div>
-                        <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[560px]">
-                            <thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-2">#</th><th class="py-2 pr-2">Resource</th><th class="py-2 pr-2">Provider</th><th class="py-2 text-right">Visits</th></tr></thead>
-                            <tbody id="online-usage-body"></tbody>
                         </table></div>
                     </div>
                 </section>
@@ -862,10 +826,6 @@ function syncGlobalFilterCustomDates() {
                 '<a href="{{ url_for('cataloging.cataloging_page', copy_status='overdue') }}" class="flex items-center gap-2 border rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors"><span class="material-symbols-outlined text-red-500">schedule</span><span class="flex-1"><b>Overdue Copies</b><br><span class="text-slate-500">Require immediate follow-up</span></span><b class="text-red-600">' + rNum(C.overdue) + '</b></a>'
                 + '<a href="{{ url_for('cataloging.cataloging_page', copy_status='lost_damaged') }}" class="flex items-center gap-2 border rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors"><span class="material-symbols-outlined text-red-500">warning</span><span class="flex-1"><b>Lost / Damaged Copies</b><br><span class="text-slate-500">Require replacement or review</span></span><b class="text-red-600">' + rNum(C.lost_damaged) + '</b></a>'
                 + '<a href="{{ url_for('cataloging.cataloging_page', copy_status='maintenance') }}" class="flex items-center gap-2 border rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors"><span class="material-symbols-outlined text-blue-600">build</span><span class="flex-1"><b>Due for Maintenance</b><br><span class="text-slate-500">Inventory flagged missing</span></span><b class="text-blue-600">' + rNum(C.maintenance) + '</b></a>';
-            var uu = document.getElementById('underutilized-list');
-            if (uu) uu.innerHTML = (C.underutilized || []).map(function (r, i) {
-                return '<div class="flex items-center gap-2 border rounded-lg px-2.5 py-2"><span class="w-6 h-6 rounded-full bg-amber-50 text-amber-700 text-[11px] font-extrabold flex items-center justify-center shrink-0">' + (i + 1) + '</span><span class="flex-1 min-w-0 truncate font-semibold text-slate-600">' + escapeHtml(r[0]) + '</span><span class="text-[10px] text-slate-400 whitespace-nowrap">0 borrows</span></div>';
-            }).join('') || '<div class="text-xs text-slate-400">Every title was borrowed in this period.</div>';
 
             var lk = document.getElementById('library-kpis');
             if (lk) lk.innerHTML =
@@ -890,12 +850,6 @@ function syncGlobalFilterCustomDates() {
                 var st = /overdue/i.test(r[8] || '') ? pill('Overdue', 'red') : /return/i.test(r[6] || '') ? pill('Returned', 'green') : pill('Active', 'green');
                 return '<tr class="border-b last:border-0"><td class="py-2 pr-2">' + escapeHtml(r[0]) + '</td><td class="py-2 pr-2 font-semibold">TXN-' + escapeHtml(String(r[1])) + '</td><td class="py-2 pr-2">' + escapeHtml(r[2]) + '</td><td class="py-2 pr-2">' + escapeHtml(r[4]) + '</td><td class="py-2 pr-2">' + pill(escapeHtml(r[6] || ''), 'blue') + '</td><td class="py-2 pr-2 text-slate-500">' + escapeHtml(r[7] || '-') + '</td><td class="py-2">' + st + '</td></tr>';
             }).join('') || '<tr><td colspan="7" class="py-6 text-center text-slate-400">No circulation yet.</td></tr>';
-            var badge = document.getElementById('online-total-badge');
-            if (badge) badge.textContent = rNum(L.online_total || 0) + ' visits';
-            var orb = document.getElementById('online-usage-body');
-            if (orb) orb.innerHTML = (L.online_resources || []).map(function (r, i) {
-                return '<tr class="border-b last:border-0"><td class="py-2 pr-2">' + (i + 1) + '</td><td class="py-2 pr-2 font-semibold">' + escapeHtml(r[0]) + '</td><td class="py-2 pr-2 text-slate-500">' + escapeHtml(r[1] || '-') + '</td><td class="py-2 text-right font-bold">' + rNum(r[2]) + '</td></tr>';
-            }).join('') || '<tr><td colspan="4" class="py-6 text-center text-slate-400">No e-resource visits in this period.</td></tr>';
 
             paintUsage(U);
         }
@@ -1058,193 +1012,8 @@ function syncGlobalFilterCustomDates() {
             if (e.key === 'Escape') closeUsageDeptDropdown();
         });
 
-        /* ============ KPI layout builder (drag-and-drop + show/hide) ============
-           Customize mode lets librarians drag cards to reorder them and hide
-           cards they don't need. Layout persists per browser in localStorage;
-           Reset restores the default view. */
-        var KBUILDER_KEY = 'mcst-analytics-layout-v1';
-        var kbuilderEditing = false;
-        var kbuilderDragEl = null;
-
-        function kbuilderCards() {
-            var cards = document.querySelectorAll(
-                '#riverside-root [data-rtab-panel] div.bg-white.rounded-xl,' +
-                ' #riverside-root [data-rtab-panel] div[id$="-kpis"]');
-            return Array.prototype.filter.call(cards, function (el) {
-                return !el.querySelector('button[onclick*="exportDashboard"]');
-            });
-        }
-
-        function kbuilderCardId(el, i) {
-            var id = el.getAttribute('data-kcard');
-            if (!id) {
-                var h = el.querySelector('h3');
-                var slug = h ? h.textContent.trim().toLowerCase()
-                    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) : 'kpis';
-                id = slug + '-' + i;
-                el.setAttribute('data-kcard', id);
-            }
-            return id;
-        }
-
-        function kbuilderTag() {
-            var cards = kbuilderCards();
-            cards.forEach(function (el, i) { kbuilderCardId(el, i); });
-            var seen = [];
-            cards.forEach(function (el) {
-                var p = el.parentElement;
-                if (p && seen.indexOf(p) === -1) seen.push(p);
-            });
-            seen.forEach(function (p, i) {
-                if (!p.getAttribute('data-kzone')) p.setAttribute('data-kzone', 'zone-' + i);
-            });
-        }
-
-        function kbuilderLoad() {
-            try { return JSON.parse(localStorage.getItem(KBUILDER_KEY)) || {}; }
-            catch (e) { return {}; }
-        }
-
-        function kbuilderSave(state) {
-            try { localStorage.setItem(KBUILDER_KEY, JSON.stringify(state)); } catch (e) {}
-        }
-
-        function kbuilderPersist() {
-            var order = {};
-            document.querySelectorAll('#riverside-root [data-kzone]').forEach(function (zone) {
-                var ids = [];
-                Array.prototype.forEach.call(zone.children, function (c) {
-                    var id = c.getAttribute && c.getAttribute('data-kcard');
-                    if (id) ids.push(id);
-                });
-                if (ids.length) order[zone.getAttribute('data-kzone')] = ids;
-            });
-            var hidden = kbuilderCards()
-                .filter(function (el) { return el.style.display === 'none'; })
-                .map(function (el) { return el.getAttribute('data-kcard'); });
-            kbuilderSave({ order: order, hidden: hidden });
-        }
-
-        function kbuilderApplyLayout() {
-            var state = kbuilderLoad();
-            var hidden = state.hidden || [];
-            var order = state.order || {};
-            kbuilderCards().forEach(function (el) {
-                el.style.display = hidden.indexOf(el.getAttribute('data-kcard')) !== -1 ? 'none' : '';
-            });
-            document.querySelectorAll('#riverside-root [data-kzone]').forEach(function (zone) {
-                var want = order[zone.getAttribute('data-kzone')];
-                if (!want || !want.length) return;
-                var byId = {};
-                Array.prototype.forEach.call(zone.children, function (c) {
-                    var id = c.getAttribute && c.getAttribute('data-kcard');
-                    if (id) byId[id] = c;
-                });
-                want.forEach(function (id) { if (byId[id]) zone.appendChild(byId[id]); });
-            });
-        }
-
-        function kbuilderToggleHide(el) {
-            el.style.display = el.style.display === 'none' ? '' : 'none';
-            kbuilderPersist();
-        }
-
-        function toggleKpiBuilder() {
-            kbuilderEditing = !kbuilderEditing;
-            document.getElementById('kbuilderToggleLabel').textContent = kbuilderEditing ? 'Done' : 'Customize';
-            var reset = document.getElementById('kbuilderReset');
-            if (reset) {
-                reset.classList.toggle('hidden', !kbuilderEditing);
-                reset.classList.toggle('flex', kbuilderEditing);
-            }
-            kbuilderCards().forEach(function (el) {
-                el.draggable = kbuilderEditing;
-                el.classList.toggle('kbuilder-editing', kbuilderEditing);
-                var eye = el.querySelector('[data-kbuilder-eye]');
-                if (kbuilderEditing && !eye) {
-                    eye = document.createElement('button');
-                    eye.type = 'button';
-                    eye.setAttribute('data-kbuilder-eye', '1');
-                    eye.title = 'Show / hide card';
-                    eye.className = 'kbuilder-eye absolute p-1.5 rounded-lg bg-white shadow border border-gray-200 text-slate-400 hover:text-primary';
-                    eye.style.top = '8px';
-                    eye.style.right = '8px';
-                    eye.style.zIndex = '5';
-                    eye.innerHTML = '<span class="material-symbols-outlined text-[18px]">visibility</span>';
-                    eye.addEventListener('click', function (e) {
-                        e.stopPropagation();
-                        kbuilderToggleHide(el);
-                    });
-                    el.style.position = 'relative';
-                    el.appendChild(eye);
-                } else if (!kbuilderEditing && eye) {
-                    eye.remove();
-                }
-            });
-            updateKbuilderHint();
-        }
-
-        function updateKbuilderHint() {
-            var b = document.getElementById('kbuilder-hint');
-            if (kbuilderEditing && !b) {
-                b = document.createElement('div');
-                b.id = 'kbuilder-hint';
-                b.className = 'mx-1 mt-1 text-[11px] font-bold text-primary bg-blue-50 border border-blue-200 rounded-lg px-3 py-2';
-                b.textContent = 'Customize mode: drag cards to reorder, use the eye button to hide/show. Layout saves automatically in this browser.';
-                var board = document.getElementById('riverside-root');
-                if (board) board.insertBefore(b, board.firstChild);
-            } else if (!kbuilderEditing && b) {
-                b.remove();
-            }
-        }
-
-        function resetKpiLayout() {
-            try { localStorage.removeItem(KBUILDER_KEY); } catch (e) {}
-            window.location.reload();
-        }
-
-        function initKpiBuilder() {
-            kbuilderTag();
-            kbuilderApplyLayout();
-            document.addEventListener('dragstart', function (e) {
-                if (!kbuilderEditing) return;
-                var card = e.target.closest ? e.target.closest('[data-kcard]') : null;
-                if (!card || card.draggable !== true) return;
-                kbuilderDragEl = card;
-                card.classList.add('kbuilder-dragging');
-                e.dataTransfer.effectAllowed = 'move';
-                try { e.dataTransfer.setData('text/plain', card.getAttribute('data-kcard')); } catch (err) {}
-            });
-            document.addEventListener('dragover', function (e) {
-                if (!kbuilderEditing || !kbuilderDragEl) return;
-                var over = e.target.closest ? e.target.closest('[data-kcard]') : null;
-                var zone = e.target.closest ? e.target.closest('[data-kzone]') : null;
-                if (over && over !== kbuilderDragEl && over.parentElement === kbuilderDragEl.parentElement) {
-                    e.preventDefault();
-                    var rect = over.getBoundingClientRect();
-                    var after = (e.clientY - rect.top) > rect.height / 2;
-                    over.parentElement.insertBefore(kbuilderDragEl, after ? over.nextSibling : over);
-                } else if (zone && !over) {
-                    e.preventDefault();
-                    zone.appendChild(kbuilderDragEl);
-                }
-            });
-            document.addEventListener('drop', function (e) {
-                if (!kbuilderEditing || !kbuilderDragEl) return;
-                e.preventDefault();
-                kbuilderDragEl.classList.remove('kbuilder-dragging');
-                kbuilderDragEl = null;
-                kbuilderPersist();
-            });
-            document.addEventListener('dragend', function () {
-                if (kbuilderDragEl) kbuilderDragEl.classList.remove('kbuilder-dragging');
-                kbuilderDragEl = null;
-            });
-        }
-
         renderRiverside();
         updateUsageDeptLabel();
-        initKpiBuilder();
     </script>
 </body>
 
