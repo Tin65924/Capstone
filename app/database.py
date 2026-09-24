@@ -34,7 +34,14 @@ class Database:
             with conn.cursor() as cur:
                 cur.execute(query, params)
                 if cur.description:
-                    return cur.fetchall()
+                    rows = cur.fetchall()
+                    # End the read transaction: otherwise the pooled
+                    # connection sits idle-in-transaction holding shared
+                    # locks, which blocks DDL (e.g. a backup restore's
+                    # DROP TABLE) forever. Harmless under READ COMMITTED —
+                    # every statement already sees the latest snapshot.
+                    conn.commit()
+                    return rows
                 conn.commit()
                 return cur.rowcount
         except Exception as e:

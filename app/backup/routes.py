@@ -1,13 +1,15 @@
 import os
+import threading
 from datetime import datetime, timedelta, timezone
 
-from flask import current_app, flash, redirect, render_template, send_file, url_for
+from flask import current_app, flash, jsonify, redirect, render_template, send_file, url_for
 from flask_login import current_user, login_required
 
 from app.auth.decorators import admin_required
 from app.auth.models import log_activity
 
 from . import backup_bp
+from . import jobs
 from .models import get_backup_by_id, get_backup_logs, log_backup
 from .scheduler import apply_retention
 from .utils import create_backup, resolve_backup_path, restore_backup
@@ -130,3 +132,61 @@ def restore_backup_route(backup_id):
     flash(f'Restore complete: the database was replaced from {row[1]}. '
           'Anything added after that backup was lost.', 'success')
     return redirect(url_for('backup.backup_page'))
+
+
+@backup_bp.route('/admin/backup/jobs', methods=['POST'])
+@login_required
+@admin_required
+def start_backup_job_route():
+    """Start a backup in a background thread; poll the status endpoint."""
+    busy = jobs.active_job()
+    if busy:
+        return jsonify({'error': 'A backup or restore is already running — '
+                                 'wait for it to finish first.'}), 409
+    app = current_app._get_current_object()
+    job_id = jobs.start_job('backup', 'Creating backup…', current_user.id)
+    thread = threading.Thread(
+        target=jobs.run_backup_job,
+        args=(app, job_id, current_user.id,
+              current_app.config.get('BACKUP_KEEP', 12)),
+        daemon=True,
+    )
+    thread.start()
+    return jsonify({'job_id': job_id}), 202
+
+
+@backup_bp.route('/admin/backup/jobs/<job_id>')
+@login_required
+@admin_required
+def backup_job_status(job_id):
+    """Pollable progress snapshot for a backup/restore job."""
+    job = jobs.get_job(job_id)
+    if not job:
+        return jsonify({'error': 'Unknown backup job.'}), 404
+    return jsonify(job)
+
+
+@backup_bp.route('/admin/backup/<int:backup_id>/restore-job', methods=['POST'])
+@login_required
+@admin_required
+def start_restore_job_route(backup_id):
+    """Start a restore in a background thread; poll the status endpoint."""
+    row = get_backup_by_id(backup_id)
+    if not row:
+        return jsonify({'error': 'Backup not found.'}), 404
+    if row[3] != 'completed':
+        return jsonify({'error': 'Only completed backups can be restored.'}), 400
+    busy = jobs.active_job()
+    if busy:
+        return jsonify({'error': 'A backup or restore is already running — '
+                                 'wait for it to finish first.'}), 409
+    app = current_app._get_current_object()
+    job_id = jobs.start_job('restore', f'Restoring {row[1]}…',
+                            current_user.id)
+    thread = threading.Thread(
+        target=jobs.run_restore_job,
+        args=(app, job_id, current_user.id, backup_id, row[1]),
+        daemon=True,
+    )
+    thread.start()
+    return jsonify({'job_id': job_id}), 202

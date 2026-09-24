@@ -2,7 +2,7 @@ from flask import render_template, redirect, url_for, jsonify, request, flash, c
 from datetime import date, datetime
 from flask_login import login_required, current_user
 from . import main_bp
-from .models import get_dashboard_stats, get_recent_activity, get_daily_borrows, get_attention_summary
+from .models import get_dashboard_stats, get_recent_activity, get_daily_borrows, get_attention_summary, get_admin_overview_stats
 from app.cataloging.models import get_recent_books, suggest_book_values, get_book_by_title_author_isbn
 from app.auth.decorators import librarian_required, admin_required
 
@@ -392,11 +392,47 @@ def librarian_dashboard():
 @login_required
 @admin_required
 def admin_dashboard():
-    stats = get_dashboard_stats()
-    activity = get_recent_activity(5)
-    daily = get_daily_borrows(6)
-    attention = get_attention_summary()
-    return render_template('dashboard/dashboard.html', stats=stats,
-                           activity=activity, daily=daily,
-                           attention=attention,
+    from app.auth.models import get_audit_logs, get_pending_users
+    from app.backup.models import get_backup_logs
+    from app.backup.scheduler import next_scheduled_backup
+    from flask import current_app
+    stats = get_admin_overview_stats()
+    pending = get_pending_users() or []
+    activity = get_audit_logs(limit=8) or []
+    backups = get_backup_logs() or []
+    last_backup = backups[0] if backups else None
+    backup_day = current_app.config.get('BACKUP_DAY', 1)
+    backup_hour = current_app.config.get('BACKUP_HOUR', 2)
+    backup_keep = current_app.config.get('BACKUP_KEEP', 12)
+    return render_template('dashboard/admin_overview.html', stats=stats,
+                           pending=pending[:5],
+                           pending_total=len(pending),
+                           activity=activity,
+                           last_backup=last_backup,
+                           backup_count=len(backups),
+                           backup_schedule={'day': backup_day,
+                                            'hour': backup_hour,
+                                            'keep': backup_keep},
+                           next_backup=next_scheduled_backup(backup_day,
+                                                             backup_hour),
+                           sidebar='components/admin_sidebar_nav.html')
+
+
+@main_bp.route('/admin/audits')
+@login_required
+@admin_required
+def admin_audits():
+    from app.auth.models import AUDIT_TABS, get_audit_logs
+    search = (request.args.get('q', '') or '').strip()
+    tab = (request.args.get('tab', '') or '').strip().lower()
+    if tab not in AUDIT_TABS:
+        tab = 'all'
+    try:
+        limit = int(request.args.get('limit', '50'))
+    except (TypeError, ValueError):
+        limit = 50
+    limit = max(1, min(limit, 200))
+    logs = get_audit_logs(limit=limit, search=search or None, tab=tab) or []
+    return render_template('dashboard/admin_audits.html', logs=logs,
+                           search=search, limit=limit, tab=tab,
                            sidebar='components/admin_sidebar_nav.html')

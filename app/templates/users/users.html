@@ -184,7 +184,7 @@
         </div>
 
         <!-- Navigation -->
-        {% include 'components/librarian_sidebar_nav.html' %}
+        {% include sidebar|default('components/librarian_sidebar_nav.html') %}
 
       </div>
 
@@ -211,7 +211,7 @@
                 <button id="mobile-sidebar-close" type="button" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">close</span></button>
             </div>
             <div class="flex-1 overflow-y-auto p-6">
-                {% include 'components/librarian_sidebar_nav.html' %}
+                {% include sidebar|default('components/librarian_sidebar_nav.html') %}
             </div>
             <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
                 <div class="flex flex-col items-center mb-4">
@@ -232,7 +232,7 @@
             <button id="mobile-sidebar-open" type="button" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">menu</span></button>
             <div class="flex items-center gap-2">
                 <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover">
-                <span class="font-bold text-sm">User Management</span>
+                <span class="font-bold text-sm">{% if is_staff_view|default(false) %}Staff Management{% else %}User Management{% endif %}</span>
             </div>
             <div class="w-10"></div>
         </div>
@@ -241,8 +241,20 @@
         {% endif %}
         <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8 animate-in">
             <div class="min-w-0">
+                {% if is_staff_view|default(false) %}
+                <h1 class="text-2xl sm:text-3xl font-bold font-outfit leading-tight">Staff Management</h1>
+                <p class="text-sm sm:text-base text-gray-500 mt-1">Manage librarians, faculty, and admin access.</p>
+                {% else %}
                 <h1 class="text-2xl sm:text-3xl font-bold font-outfit leading-tight">User Management</h1>
-                <p class="text-sm sm:text-base text-gray-500 mt-1">Control access roles and monitor library members.</p>
+                <p class="text-sm sm:text-base text-gray-500 mt-1">{% if is_admin_view|default(false) %}Control access roles and monitor all library accounts.{% else %}Control access roles and monitor library members (students and faculty).{% endif %}</p>
+                {% endif %}
+                {% if is_admin_view|default(false) %}
+                <div class="flex gap-2 mt-3">
+                    <a href="{{ url_for('auth.admin_users', status=status_filter, role=role_filter) }}" class="px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors {% if not scope %}bg-primary text-white border-primary{% else %}bg-white text-gray-600 border-gray-200 hover:border-primary{% endif %}">All</a>
+                    <a href="{{ url_for('auth.admin_users', scope='staff', status=status_filter, role=role_filter) }}" class="px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors {% if scope == 'staff' %}bg-primary text-white border-primary{% else %}bg-white text-gray-600 border-gray-200 hover:border-primary{% endif %}">Staff</a>
+                    <a href="{{ url_for('auth.admin_users', scope='members', status=status_filter, role=role_filter) }}" class="px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors {% if scope == 'members' %}bg-primary text-white border-primary{% else %}bg-white text-gray-600 border-gray-200 hover:border-primary{% endif %}">Members</a>
+                </div>
+                {% endif %}
             </div>
             <div class="flex gap-2 sm:gap-3 shrink-0">
                 <a href="{{ url_for('circulation.user_history_list') }}"
@@ -258,32 +270,34 @@
 
 
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-6 sm:mb-8 animate-in" style="animation-delay: 0.1s;">
-            <a href="{{ url_for('auth.admin_users') }}"
+            <a href="{{ url_for('auth.admin_users', scope=scope) }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if not status_filter and not role_filter %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">group</span></div>
                 <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Total</div><div class="text-base sm:text-xl font-bold">{{ total }}</div></div>
             </a>
-            <a href="{{ url_for('auth.admin_users', status='active') }}"
+            <a href="{{ url_for('auth.admin_users', scope=scope, status='active') }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if status_filter == 'active' %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">verified_user</span></div>
                 <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Active</div><div class="text-base sm:text-xl font-bold">{{ active }}</div></div>
             </a>
-            <a href="{{ url_for('auth.admin_users', role='Student') }}"
+            {% if not is_staff_view|default(false) %}
+            <a href="{{ url_for('auth.admin_users', scope=scope, role='Student') }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if role_filter == 'Student' %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">school</span></div>
                 <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Students</div><div class="text-base sm:text-xl font-bold">{{ students }}</div></div>
             </a>
-            <a href="{{ url_for('auth.admin_users', status='disabled') }}"
+            {% endif %}
+            <a href="{{ url_for('auth.admin_users', scope=scope, status='disabled') }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if status_filter == 'disabled' %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">person_off</span></div>
                 <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Inactive</div><div class="text-base sm:text-xl font-bold">{{ inactive }}</div></div>
             </a>
-            <a href="{{ url_for('auth.admin_users', status='archived') }}"
+            <a href="{{ url_for('auth.admin_users', scope=scope, status='archived') }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if status_filter == 'archived' %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">archive</span></div>
                 <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Archived</div><div class="text-base sm:text-xl font-bold">{{ archived }}</div></div>
             </a>
-            <a href="{{ url_for('auth.admin_users', status='pending') }}"
+            <a href="{{ url_for('auth.admin_users', scope=scope, status='pending') }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if status_filter == 'pending' %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">pending_actions</span></div>
                 <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Pending</div><div class="text-base sm:text-xl font-bold">{{ pending|length }}</div></div>
@@ -402,23 +416,23 @@
         <!-- Users Table -->
         <div class="card animate-in overflow-hidden" style="animation-delay: 0.2s;">
             <div class="p-3 sm:p-4 border-b border-gray-100 flex items-center gap-1.5 sm:gap-2 bg-gray-50/20 overflow-x-auto">
-                <a href="{{ url_for('auth.admin_users') }}"
+                <a href="{{ url_for('auth.admin_users', scope=scope) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if not status_filter and not role_filter %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     All
                 </a>{% if role_filter %}<span class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md whitespace-nowrap bg-primary text-white">{{ role_filter }}s</span>{% endif %}
-                <a href="{{ url_for('auth.admin_users', status='active') }}"
+                <a href="{{ url_for('auth.admin_users', scope=scope, status='active') }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if status_filter == 'active' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Active
                 </a>
-                <a href="{{ url_for('auth.admin_users', status='disabled') }}"
+                <a href="{{ url_for('auth.admin_users', scope=scope, status='disabled') }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if status_filter == 'disabled' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Inactive
                 </a>
-                <a href="{{ url_for('auth.admin_users', status='pending') }}"
+                <a href="{{ url_for('auth.admin_users', scope=scope, status='pending') }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if status_filter == 'pending' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Pending
                 </a>
-                <a href="{{ url_for('auth.admin_users', status='archived') }}"
+                <a href="{{ url_for('auth.admin_users', scope=scope, status='archived') }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if status_filter == 'archived' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Archived
                 </a>
@@ -460,15 +474,18 @@
                             </td>
                             <td>
                                 <div class="flex gap-2 items-center">
+                                    {% if is_admin_view|default(false) %}
                                     <button data-user-id="{{ u[0] }}" data-user-name="{{ u[2]|escape }}" data-user-idnum="{{ u[6] or '' }}" data-user-dept="{{ u[7] or '' }}" data-user-role="{{ u[3] }}"
                                         onclick="openEditModal(this)"
                                         class="btn-action hover:border-blue-500 hover:text-blue-500" title="Edit">
                                         <span class="material-symbols-outlined text-lg">edit</span>
                                     </button>
+                                    {% endif %}
                                     <a href="{{ url_for('circulation.user_history_detail', user_id=u[0]) }}"
                                         class="btn-action hover:border-indigo-500 hover:text-indigo-600" title="View user history">
                                         <span class="material-symbols-outlined text-lg">history</span>
                                     </a>
+                                    {% if is_admin_view|default(false) %}
                                     {% if u[4] == 'active' %}
                                     <button class="btn-action hover:border-rose-500 hover:text-rose-500"
                                         data-confirm-title="Deactivate User"
@@ -532,6 +549,7 @@
                                             {% endfor %}
                                         </select>
                                     </form>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
@@ -554,8 +572,11 @@
                         <span class="badge badge-role text-[11px]">{{ u[3] }}</span>
                     </div>
                     <div class="flex flex-wrap gap-1.5 mb-3">
+                        {% if is_admin_view|default(false) %}
                         <button data-user-id="{{ u[0] }}" data-user-name="{{ u[2]|escape }}" data-user-idnum="{{ u[6] or '' }}" data-user-dept="{{ u[7] or '' }}" data-user-role="{{ u[3] }}" onclick="openEditModal(this)" class="flex-1 py-2 rounded-lg border border-gray-200 bg-white text-xs font-bold flex items-center justify-center gap-1" title="Edit"><span class="material-symbols-outlined text-[16px]">edit</span> Edit</button>
+                        {% endif %}
                         <a href="{{ url_for('circulation.user_history_detail', user_id=u[0]) }}" class="flex-1 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-bold flex items-center justify-center gap-1" title="View user history"><span class="material-symbols-outlined text-[16px]">history</span> History</a>
+                        {% if is_admin_view|default(false) %}
                         {% if u[4] == 'active' %}
                         <button class="flex-1 py-2 rounded-lg border border-rose-200 bg-rose-50 text-rose-600 text-xs font-bold flex items-center justify-center gap-1" data-confirm-title="Deactivate User" data-confirm-message="Are you sure you want to deactivate &#34;{{ u[2] }}&#34;?" data-confirm-action="{{ url_for('auth.toggle_user_status_route', user_id=u[0]) }}" data-confirm-button="Deactivate" data-confirm-class="bg-rose-600 hover:bg-rose-700" data-confirm-icon="person_off" onclick="confirmFromData(this)" title="Deactivate"><span class="material-symbols-outlined text-[16px]">person_off</span> Deactivate</button>
                         {% elif u[4] == 'disabled' %}
@@ -567,7 +588,9 @@
                         <button class="flex-1 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-600 text-xs font-bold flex items-center justify-center gap-1" data-confirm-title="Restore User" data-confirm-message="Are you sure you want to restore &#34;{{ u[2] }}&#34;?" data-confirm-action="{{ url_for('auth.unarchive_user_route', user_id=u[0]) }}" data-confirm-button="Restore" data-confirm-class="bg-blue-600 hover:bg-blue-700" data-confirm-icon="unarchive" onclick="confirmFromData(this)" title="Restore"><span class="material-symbols-outlined text-[16px]">unarchive</span> Restore</button>
                         <button class="flex-1 py-2 rounded-lg border border-red-200 bg-white text-red-600 text-xs font-bold flex items-center justify-center gap-1" data-confirm-title="Delete User" data-confirm-message="Are you sure you want to permanently delete &#34;{{ u[2] }}&#34;? This cannot be undone." data-confirm-action="{{ url_for('auth.delete_user_route', user_id=u[0]) }}" data-confirm-button="Delete" data-confirm-class="bg-red-600 hover:bg-red-700" data-confirm-icon="delete_forever" onclick="confirmFromData(this)" title="Delete"><span class="material-symbols-outlined text-[16px]">delete_forever</span> Delete</button>
                         {% endif %}
+                        {% endif %}
                     </div>
+                    {% if is_admin_view|default(false) %}
                     <form method="POST" action="{{ url_for('auth.change_user_role', user_id=u[0]) }}" class="mt-2">
                         <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Change Role</label>
                         <div class="relative" id="role-select-wrapper-{{ u[0] }}">
@@ -588,12 +611,14 @@
                             </ul>
                         </div>
                     </form>
+                    {% endif %}
                 </div>
                 {% endfor %}
             </div>
         </div>
     </main>
 
+{% if is_admin_view|default(false) %}
 <div id="editModal" class="fixed inset-0 z-50 hidden bg-black/40 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-md mx-4 p-4 sm:p-6 animate-in max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between mb-6">
@@ -645,6 +670,7 @@
         </form>
     </div>
 </div>
+{% endif %}
 
 <div id="usersExportModal" class="fixed inset-0 z-50 hidden bg-black/40 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-md mx-4 p-4 sm:p-6 animate-in max-h-[90vh] overflow-y-auto">
@@ -654,15 +680,15 @@
                 <span class="material-symbols-outlined">close</span>
             </button>
         </div>
-        <p class="text-sm text-gray-500 mb-4">Choose a file format. Current filter: <span class="font-bold text-gray-700">{{ 'All' if not status_filter else ('Inactive' if status_filter == 'disabled' else status_filter|capitalize) }}{{ (' · ' + role_filter + 's') if role_filter else '' }}</span> — export respects the active tab.</p>
+        <p class="text-sm text-gray-500 mb-4">Choose a file format. Current filter: <span class="font-bold text-gray-700">{{ 'All' if not status_filter else ('Inactive' if status_filter == 'disabled' else status_filter|capitalize) }}{{ (' · ' + role_filter + 's') if role_filter else '' }}{{ (' · ' + scope|capitalize) if scope else '' }}</span> — export respects the active tab.</p>
         <div class="grid grid-cols-2 gap-3">
-            <a href="{{ url_for('auth.export_users', status=status_filter, role=role_filter, format='csv') }}"
+            <a href="{{ url_for('auth.export_users', status=status_filter, role=role_filter, scope=scope, format='csv') }}"
                class="flex flex-col items-center gap-1.5 p-4 border border-gray-200 rounded-xl hover:border-primary hover:bg-primary/5 transition-all text-center">
                 <span class="material-symbols-outlined text-3xl text-emerald-600">table_rows</span>
                 <span class="text-sm font-bold">CSV</span>
                 <span class="text-[11px] text-gray-400">Spreadsheet</span>
             </a>
-            <a href="{{ url_for('auth.export_users', status=status_filter, role=role_filter, format='xlsx') }}"
+            <a href="{{ url_for('auth.export_users', status=status_filter, role=role_filter, scope=scope, format='xlsx') }}"
                class="flex flex-col items-center gap-1.5 p-4 border border-gray-200 rounded-xl hover:border-primary hover:bg-primary/5 transition-all text-center">
                 <span class="material-symbols-outlined text-3xl text-primary">grid_on</span>
                 <span class="text-sm font-bold">XLSX</span>
@@ -677,6 +703,7 @@ function openUsersExportModal() { document.getElementById('usersExportModal').cl
 function closeUsersExportModal() { document.getElementById('usersExportModal').classList.add('hidden'); }
 document.getElementById('usersExportModal').addEventListener('click', function(e) { if (e.target === this) closeUsersExportModal(); });
 
+{% if is_admin_view|default(false) %}
 var PROGRAM_NAMES = {{ programs|map(attribute=1)|list|tojson }};
 var DEPARTMENT_NAMES = {{ departments|map(attribute=1)|list|tojson }};
 
@@ -745,9 +772,11 @@ function confirmDeptDelete(form) {
     }
 })();
 
-document.getElementById('editModal').addEventListener('click', function(e) {
+var _editModal = document.getElementById('editModal');
+if (_editModal) { _editModal.addEventListener('click', function(e) {
     if (e.target === this) closeEditModal();
-});
+}); }
+{% endif %}
 </script>
 <script>
 // Mobile sidebar

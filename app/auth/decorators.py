@@ -27,6 +27,12 @@ def role_required(*roles):
                 flash('Please sign in to access this page.', 'info')
                 return redirect(url_for('auth.login', next=request.path))
             if current_user.role not in roles:
+                try:
+                    from app.auth.models import log_activity
+                    log_activity(current_user.id,
+                                 f'security:denied:{request.endpoint or request.path}')
+                except Exception:  # noqa: BLE001 — audit must never break the redirect
+                    pass
                 flash(f'Access denied. You must be logged in as {_roles_text(roles)} to access this page.', 'error')
                 return redirect(url_for('main.user_profile'))
             return f(*args, **kwargs)

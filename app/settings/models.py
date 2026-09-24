@@ -1,5 +1,14 @@
 from flask import current_app
 from app.database import db
+import os
+
+
+def _env_default(name, fallback):
+    """String default honoring an env override (BACKUP_* live in env today)."""
+    try:
+        return str(int(os.getenv(name, fallback)))
+    except (TypeError, ValueError):
+        return str(fallback)
 
 
 # Sidebar categories: (anchor id, title, icon, blurb, setting keys).
@@ -18,7 +27,15 @@ SETTING_CATEGORIES = [
     ('reservations', 'Reservation Settings', 'bookmark',
      'Pickup windows and due-date reminders.',
      ['RESERVATION_CLAIM_DAYS', 'DUE_SOON_NOTIFY_DAYS']),
+    ('backup-schedule', 'Backup Schedule', 'settings_backup_restore',
+     'Automatic monthly backups and retention. Admin only.',
+     ['BACKUP_DAY', 'BACKUP_HOUR', 'BACKUP_KEEP']),
 ]
+
+
+# Keys only admins may view or edit. Librarians get the circulation
+# categories; admins get exactly these.
+ADMIN_ONLY_KEYS = frozenset({'BACKUP_DAY', 'BACKUP_HOUR', 'BACKUP_KEEP'})
 
 
 # key -> (label, kind, description). Kinds: int, float.
@@ -32,6 +49,17 @@ SETTING_DEFS = {
     'OVERDUE_GRACE_DAYS': ('Overdue grace days', 'int', 'Grace days before fines accrue'),
     'RESERVATION_CLAIM_DAYS': ('Reservation claim days', 'int', 'Days to claim an allocated reservation'),
     'DUE_SOON_NOTIFY_DAYS': ('Due-soon reminder days', 'int', 'Days before due date to send due-soon reminders'),
+    'BACKUP_DAY': ('Auto-backup day of month', 'int', 'Day of month for the automatic backup (1-28)'),
+    'BACKUP_HOUR': ('Auto-backup hour (0-23)', 'int', 'Hour of day for the automatic backup'),
+    'BACKUP_KEEP': ('Backups to retain', 'int', 'Newest backups kept; older ones are deleted'),
+}
+
+# key -> (min, max) inclusive bounds; None means unbounded. Enforced on
+# update — out-of-range values are rejected, never clamped silently.
+SETTING_RANGES = {
+    'BACKUP_DAY': (1, 28),
+    'BACKUP_HOUR': (0, 23),
+    'BACKUP_KEEP': (1, None),
 }
 
 DEFAULTS = {
@@ -44,6 +72,9 @@ DEFAULTS = {
     'OVERDUE_GRACE_DAYS': '0',
     'RESERVATION_CLAIM_DAYS': '2',
     'DUE_SOON_NOTIFY_DAYS': '2',
+    'BACKUP_DAY': _env_default('BACKUP_DAY', 1),
+    'BACKUP_HOUR': _env_default('BACKUP_HOUR', 2),
+    'BACKUP_KEEP': _env_default('BACKUP_KEEP', 12),
 }
 
 

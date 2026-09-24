@@ -58,6 +58,43 @@ def get_attention_summary():
     }
 
 
+def get_admin_overview_stats():
+    """Governance-focused counts for the admin System Overview.
+
+    Unlike get_dashboard_stats (circulation-focused for librarians),
+    this answers: how many accounts exist, who is waiting for approval,
+    and how is staff distributed. Backup health is rendered separately
+    from backup_log so this stays cheap to mock and test.
+    """
+    from app.auth.models import (
+        count_active_users_by_role,
+        count_pending_users,
+        count_total_users,
+    )
+
+    total = count_total_users()
+    pending = count_pending_users()
+    by_role_rows = count_active_users_by_role() or []
+    by_role = {}
+    for row in by_role_rows:
+        try:
+            by_role[row[0]] = int(row[1] or 0)
+        except (IndexError, TypeError, ValueError):
+            continue
+    collection = db.fetch_one(
+        "SELECT COUNT(*) FROM book_catalog WHERE catalog_status = 'active'"
+    )
+    return {
+        'total_users': total,
+        'pending_users': pending,
+        'active_librarians': by_role.get('Librarian', 0),
+        'active_faculty': by_role.get('Faculty', 0),
+        'active_students': by_role.get('Student', 0),
+        'active_admins': by_role.get('Admin', 0),
+        'total_collection': collection[0] if collection else 0,
+    }
+
+
 def get_recent_activity(limit=5):
     return db.fetch_all(
         '''SELECT u.full_name, u.user_id,

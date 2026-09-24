@@ -93,6 +93,19 @@ def log_activity(user_id, activity, session_token=None):
     )
 
 
+def log_system_event(activity):
+    """Record something the application did on its own (no actor).
+
+    Stored with a NULL user_id so it surfaces under the System tab of
+    the admin Audit Logs. Activity should be a short namespaced string,
+    e.g. 'system:scheduled_backup:completed:<filename>'.
+    """
+    db.execute(
+        'INSERT INTO audit_trail (user_id, activity, session_token) VALUES (%s, %s, %s)',
+        (None, activity, None)
+    )
+
+
 def get_all_users():
     return db.fetch_all(
         '''SELECT u.user_id, u.email, u.full_name, r.role_name, u.account_status,
@@ -113,6 +126,81 @@ def get_pending_users():
            LEFT JOIN borrowers b ON u.user_id = b.user_id
            WHERE u.account_status = 'pending'
            ORDER BY u.created_at ASC'''
+    )
+
+
+def count_total_users():
+    row = db.fetch_one('SELECT COUNT(*) FROM user_accounts')
+    return row[0] if row else 0
+
+
+def count_pending_users():
+    row = db.fetch_one(
+        "SELECT COUNT(*) FROM user_accounts WHERE account_status = 'pending'"
+    )
+    return row[0] if row else 0
+
+
+def count_active_users_by_role():
+    """Active user counts keyed by role name.
+
+    Returns a list of (role_name, count) tuples.
+    """
+    return db.fetch_all(
+        '''SELECT r.role_name, COUNT(*)
+            FROM user_accounts u
+            JOIN roles r ON u.role_id = r.role_id
+            WHERE u.account_status = 'active'
+            GROUP BY r.role_name'''
+    )
+
+
+# Audit trail contract:
+#   (log_id, full_name, email, role_name, activity, log_timestamp)
+#
+# Tab filters are a fixed whitelist (never user input): the caller passes
+# one of 'all', 'staff', 'members', 'system' and only the matching fragment
+# is interpolated. Activity text always stays a bound %s parameter.
+_TAB_FILTERS = {
+    'staff': "r.role_name IN ('Admin', 'Librarian')",
+    'members': "r.role_name IN ('Student', 'Faculty')",
+    'system': "a.user_id IS NULL",
+}
+
+AUDIT_TABS = ('all', 'staff', 'members', 'system')
+
+# Day-to-day operational noise stays out of the admin audit views —
+# borrowing/returning (circulation:) and book requests (requests:) already
+# have dedicated pages (user history, circulation, requests). The audit
+# trail keeps governance and technical events only.
+OPERATIONAL_PREFIXES = ('circulation:', 'requests:')
+
+
+def get_audit_logs(limit=50, search=None, tab='all'):
+    """Newest-first audit trail rows for the admin Audit Logs page.
+
+    LIKE patterns travel as bound parameters, never inline: a literal %
+    inside the SQL string breaks psycopg2 placeholder parsing.
+    """
+    clauses = ['(a.activity NOT LIKE %s AND a.activity NOT LIKE %s)']
+    params = ['circulation:%', 'requests:%']
+    if tab in _TAB_FILTERS:
+        clauses.append(_TAB_FILTERS[tab])
+    if search:
+        clauses.append('a.activity ILIKE %s')
+        params.append(f'%{search}%')
+    where = f"WHERE {' AND '.join(clauses)}"
+    params.append(limit)
+    return db.fetch_all(
+        f'''SELECT a.log_id, u.full_name, u.email, r.role_name,
+                   a.activity, a.log_timestamp
+            FROM audit_trail a
+            LEFT JOIN user_accounts u ON a.user_id = u.user_id
+            LEFT JOIN roles r ON u.role_id = r.role_id
+            {where}
+            ORDER BY a.log_timestamp DESC
+            LIMIT %s''',
+        tuple(params)
     )
 
 
