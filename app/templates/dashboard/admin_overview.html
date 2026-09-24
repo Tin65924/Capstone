@@ -136,7 +136,7 @@
             <a href="{{ url_for('backup.backup_page') }}" class="card block p-2 sm:p-4 cursor-pointer hover:border-primary/40">
                 <div class="text-slate-500 mb-1"><span class="material-symbols-outlined">settings_backup_restore</span></div>
                 <div class="stat-label">Backup Status</div>
-                <div class="text-sm font-bold mt-2">{% if last_backup %}{{ last_backup[1] }}{% else %}No backups yet{% endif %}</div>
+                <div class="text-sm font-bold mt-2">{% if backup_busy %}Backup running…{% elif last_backup %}{{ last_backup[1] }}{% else %}No backups yet{% endif %}</div>
                 <div class="text-[11px] text-gray-400">{{ backup_count }} stored · keeps newest {{ backup_schedule.keep }}</div>
                 <div class="text-[11px] text-gray-400 mt-1">Auto-backup: day {{ backup_schedule.day }} · {{ '%02d' % backup_schedule.hour }}:00 · next {{ next_backup.strftime('%Y-%m-%d %H:%M') }}</div>
             </a>
@@ -163,7 +163,7 @@
                 </a>
                 <a href="{{ url_for('backup.backup_page') }}" class="flex items-center gap-3 px-4 sm:px-6 py-3 hover:bg-gray-50 transition-colors">
                     <div class="w-9 h-9 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined">cloud_upload</span></div>
-                    <div class="flex-1 min-w-0"><div class="text-sm font-bold">Backup health</div><div class="text-[11px] text-gray-400">{% if last_backup %}{{ last_backup[1] }} · {{ last_backup[3] }}{% else %}No backups yet{% endif %}</div></div>
+                    <div class="flex-1 min-w-0"><div class="text-sm font-bold">Backup health</div><div class="text-[11px] text-gray-400">{% if backup_busy %}Backup running…{% elif last_backup %}{{ last_backup[1] }} · {{ last_backup[3] }}{% else %}No backups yet{% endif %}</div></div>
                     <span class="material-symbols-outlined text-gray-300">chevron_right</span>
                 </a>
             </div>
