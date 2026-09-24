@@ -46,6 +46,29 @@ def update_settings():
     errors = []
     updated = 0
     for key, (label, kind, _desc) in SETTING_DEFS.items():
+        if kind == 'bool':
+            # Toggle switches submit getlist values (checkbox '1' when
+            # on plus a hidden '0' fallback). Absent entirely means the
+            # field wasn't rendered — leave the stored value alone.
+            raws = [r.strip().lower()
+                    for r in request.form.getlist(key)]
+            if not raws:
+                continue
+            if key not in ADMIN_ONLY_KEYS:
+                errors.append(f'{label}: not editable here.')
+                continue
+            try:
+                if any(r not in ('1', 'true', 'on', 'yes',
+                                 '0', 'false', 'off', 'no') for r in raws):
+                    raise ValueError('must be on or off')
+                value = (1 if any(r in ('1', 'true', 'on', 'yes')
+                                  for r in raws) else 0)
+            except ValueError as e:
+                errors.append(f'{label}: invalid value ({e}).')
+                continue
+            update_setting(key, value, current_user.id)
+            updated += 1
+            continue
         raw = request.form.get(key, '').strip()
         if raw == '':
             continue

@@ -14,7 +14,8 @@ import uuid
 
 from app.auth.models import log_activity
 
-from .models import get_backup_by_id, log_backup
+from .models import (get_backup_by_id, log_backup, preserve_backup_history,
+                     reconcile_backup_history)
 from .scheduler import apply_retention
 from .utils import create_backup, restore_backup
 
@@ -164,6 +165,10 @@ def run_restore_job(app, job_id, user_id, backup_id, filename):
             return
         _set(job_id, app,
              stage=f'Safety snapshot saved as {safety_file}.', progress=28)
+        # The restore replays a full dump, which reverts backup_log to the
+        # backup-time state. Snapshot history now (includes the safety row
+        # above) so newer backups survive the replace.
+        preserved = preserve_backup_history()
         _set(job_id, app, stage=f'Restoring {filename}…', progress=32)
         try:
             _run_with_ticker(job_id, 90, restore_backup, filename)
@@ -173,6 +178,11 @@ def run_restore_job(app, job_id, user_id, backup_id, filename):
                  error=f'{e}. Current data was snapshotted as {safety_file}.')
             return
         _set(job_id, app, stage='Finalizing restore…', progress=95)
+        not_rerecorded = reconcile_backup_history(preserved)
+        if not_rerecorded:
+            app.logger.warning(
+                'Restore of %s succeeded but %d history row(s) could not '
+                'be re-recorded.', filename, not_rerecorded)
         log_activity(user_id, f'backup:restored:{filename}')
         _set(job_id, app, status='done',
              stage='Restore complete — the database was replaced.',

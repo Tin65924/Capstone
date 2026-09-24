@@ -289,7 +289,7 @@
             <div class="xl:col-span-2 card animate-up" style="animation-delay:0.1s">
                 <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/20">
                     <h3 class="font-bold text-xs uppercase tracking-wider text-gray-400">Recent Backup History</h3>
-                    <span class="text-xs text-gray-500">Retention: newest {{ keep_n }} backups &middot; monthly auto-backup</span>
+                    <span class="text-xs text-gray-500">Retention: newest {{ keep_n }} backups &middot; monthly auto-backup{% if not restore_enabled|default(true) %} &middot; <span class="font-bold text-amber-600">restore disabled in Library Settings</span>{% endif %}</span>
                 </div>
                 <div class="overflow-x-auto">
                     <table>
@@ -319,11 +319,14 @@
                                 <td>
                                     <div class="flex gap-2 items-center">
                                         <a href="{{ url_for('backup.download_backup', backup_id=b[0]) }}" class="text-gray-400 hover:text-primary" title="Download"><span class="material-symbols-outlined text-lg">download</span></a>
-                                        {% if b[3] == 'completed' %}
+                                        {% if b[3] == 'completed' and restore_enabled|default(true) %}
                                         <button type="button" class="text-gray-400 hover:text-primary" title="Restore" data-restore-job-url="{{ url_for('backup.start_restore_job_route', backup_id=b[0]) }}" data-restore-job-name="{{ b[1] }}"><span class="material-symbols-outlined text-lg">settings_backup_restore</span></button>
+                                        {% elif b[3] == 'completed' %}
+                                        <span class="text-gray-300 cursor-not-allowed" title="Restore is disabled — turn it on in Library Settings"><span class="material-symbols-outlined text-lg">settings_backup_restore</span></span>
                                         {% else %}
                                         <span class="text-gray-400" title="{{ b[5] or 'Failed backup' }}"><span class="material-symbols-outlined text-lg">info</span></span>
                                         {% endif %}
+                                        <button type="button" class="text-gray-400 hover:text-rose-600" title="Delete" data-delete-url="{{ url_for('backup.delete_backup_route', backup_id=b[0]) }}" data-delete-name="{{ b[1] }}"><span class="material-symbols-outlined text-lg">delete</span></button>
                                     </div>
                                 </td>
                             </tr>
@@ -377,6 +380,86 @@
             </div>
         </div>
     </main>
+
+    <!-- Restore confirmation modal (1 of 2): what restoring will do -->
+    <div id="restore-confirm-modal" class="modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-up">
+            <div class="flex items-center gap-3 mb-3">
+                <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+                    <span class="material-symbols-outlined">warning</span>
+                </div>
+                <h3 class="text-lg font-extrabold">Restore this backup?</h3>
+            </div>
+            <p class="text-sm text-gray-600 mb-3">You are about to restore <strong id="restore-confirm-name" class="break-all"></strong>. If you continue, this will happen:</p>
+            <ul class="text-sm text-gray-600 space-y-1.5 mb-4 list-disc pl-5">
+                <li>A safety snapshot of the current data is saved first.</li>
+                <li>The entire database is then replaced with the backup.</li>
+                <li>Anything added after this backup was created is permanently lost.</li>
+            </ul>
+            <div class="flex gap-3 justify-end">
+                <button id="restore-confirm-cancel" type="button" class="px-4 py-2 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-100">Cancel</button>
+                <button id="restore-confirm-proceed" type="button" class="px-4 py-2 rounded-lg text-sm font-bold bg-primary text-white hover:bg-blue-800">Yes, restore</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restore result modal (2 of 2): what happened after restoring -->
+    <div id="restore-result-modal" class="modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-up">
+            <div class="flex items-center gap-3 mb-3">
+                <div id="restore-result-icon" class="w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                    <span class="material-symbols-outlined">info</span>
+                </div>
+                <h3 id="restore-result-title" class="text-lg font-extrabold">Restore finished</h3>
+            </div>
+            <p id="restore-result-body" class="text-sm text-gray-600 mb-2"></p>
+            <p id="restore-result-error" class="hidden text-sm text-rose-600 bg-rose-50 border border-rose-100 rounded-lg p-3 mb-4 break-words"></p>
+            <div class="flex gap-3 justify-end">
+                <button id="restore-result-close" type="button" class="px-4 py-2 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-100">Close</button>
+                <button id="restore-result-reload" type="button" class="hidden px-4 py-2 rounded-lg text-sm font-bold bg-primary text-white hover:bg-blue-800">Reload page</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete confirmation modal (1 of 2): what deleting will do -->
+    <div id="delete-confirm-modal" class="modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-up">
+            <div class="flex items-center gap-3 mb-3">
+                <div class="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                    <span class="material-symbols-outlined">warning</span>
+                </div>
+                <h3 class="text-lg font-extrabold">Delete this backup?</h3>
+            </div>
+            <p class="text-sm text-gray-600 mb-3">You are about to delete <strong id="delete-confirm-name" class="break-all"></strong>. If you continue, this will happen:</p>
+            <ul class="text-sm text-gray-600 space-y-1.5 mb-4 list-disc pl-5">
+                <li>The backup file is permanently removed from storage.</li>
+                <li>Its row is removed from the backup history.</li>
+                <li>If this is the only copy, it can never be restored afterwards.</li>
+            </ul>
+            <div class="flex gap-3 justify-end">
+                <button id="delete-confirm-cancel" type="button" class="px-4 py-2 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-100">Cancel</button>
+                <button id="delete-confirm-proceed" type="button" class="px-4 py-2 rounded-lg text-sm font-bold bg-rose-600 text-white hover:bg-rose-700">Yes, delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete result modal (2 of 2): what happened after deleting -->
+    <div id="delete-result-modal" class="modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-up">
+            <div class="flex items-center gap-3 mb-3">
+                <div id="delete-result-icon" class="w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                    <span class="material-symbols-outlined">info</span>
+                </div>
+                <h3 id="delete-result-title" class="text-lg font-extrabold">Delete finished</h3>
+            </div>
+            <p id="delete-result-body" class="text-sm text-gray-600 mb-2"></p>
+            <p id="delete-result-error" class="hidden text-sm text-rose-600 bg-rose-50 border border-rose-100 rounded-lg p-3 mb-4 break-words"></p>
+            <div class="flex gap-3 justify-end">
+                <button id="delete-result-close" type="button" class="px-4 py-2 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-100">Close</button>
+                <button id="delete-result-reload" type="button" class="hidden px-4 py-2 rounded-lg text-sm font-bold bg-primary text-white hover:bg-blue-800">Reload page</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Backup/restore progress modal (driven by job polling) -->
     <div id="backup-progress-modal" class="modal-overlay">
@@ -484,6 +567,10 @@
     }
 
     function succeed(job) {
+        if (currentKind === 'restore') {
+            showRestoreResult(true, job || {});
+            return;
+        }
         bar.style.width = '100%';
         bar.classList.remove('striped');
         pct.textContent = '100%';
@@ -499,6 +586,10 @@
     }
 
     function fail(message) {
+        if (currentKind === 'restore') {
+            showRestoreResult(false, { error: message });
+            return;
+        }
         bar.classList.remove('striped');
         pushHistory(stage.textContent);
         stage.textContent = 'Failed.';
@@ -531,7 +622,8 @@
         });
     }
 
-    function startJob(url, titleText) {
+    function startJob(url, titleText, kind) {
+        currentKind = kind || 'backup';
         reset(titleText);
         fetch(url, {
             method: 'POST',
@@ -552,16 +644,175 @@
     if (backupForm) {
         backupForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            startJob(backupForm.action, 'Creating backup…');
+            startJob(backupForm.action, 'Creating backup…', 'backup');
         });
+    }
+
+    // Restore is a two-step confirmation: consequences first, outcome after.
+    var confirmModal = document.getElementById('restore-confirm-modal');
+    var confirmName = document.getElementById('restore-confirm-name');
+    var confirmCancel = document.getElementById('restore-confirm-cancel');
+    var confirmProceed = document.getElementById('restore-confirm-proceed');
+    var resultModal = document.getElementById('restore-result-modal');
+    var resultIcon = document.getElementById('restore-result-icon');
+    var resultTitle = document.getElementById('restore-result-title');
+    var resultBody = document.getElementById('restore-result-body');
+    var resultError = document.getElementById('restore-result-error');
+    var resultClose = document.getElementById('restore-result-close');
+    var resultReload = document.getElementById('restore-result-reload');
+    var currentKind = null;
+    var pendingRestore = null;
+
+    function showRestoreResult(ok, job) {
+        modal.classList.remove('open');
+        var filename = (job && job.filename) ||
+            (pendingRestore && pendingRestore.name) || 'backup';
+        if (ok) {
+            resultIcon.className = 'w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0';
+            resultIcon.innerHTML = '<span class="material-symbols-outlined">check</span>';
+            resultTitle.textContent = 'Restore complete';
+            resultBody.textContent = 'The database was replaced from ' + filename + '. ' +
+                'A safety snapshot of the previous data was saved automatically, and newer backup history was preserved. ' +
+                'Anything added after this backup was lost, and the restore was recorded in the audit trail.';
+            resultError.classList.add('hidden');
+            resultError.textContent = '';
+            resultReload.classList.remove('hidden');
+        } else {
+            resultIcon.className = 'w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0';
+            resultIcon.innerHTML = '<span class="material-symbols-outlined">error</span>';
+            resultTitle.textContent = 'Restore failed';
+            resultBody.textContent = 'The database was not changed. ' +
+                'No data was lost by this attempt — try again or pick another backup.';
+            resultError.textContent = (job && job.error) || 'The operation failed with no further detail.';
+            resultError.classList.remove('hidden');
+            resultReload.classList.add('hidden');
+        }
+        pendingRestore = null;
+        resultModal.classList.add('open');
     }
 
     document.querySelectorAll('[data-restore-job-url]').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            startJob(btn.getAttribute('data-restore-job-url'),
-                     'Restoring ' + (btn.getAttribute('data-restore-job-name') || 'backup') + '…');
+            pendingRestore = {
+                url: btn.getAttribute('data-restore-job-url'),
+                name: btn.getAttribute('data-restore-job-name') || 'backup'
+            };
+            confirmName.textContent = pendingRestore.name;
+            confirmModal.classList.add('open');
         });
     });
+
+    if (confirmCancel) {
+        confirmCancel.addEventListener('click', function() {
+            pendingRestore = null;
+            confirmModal.classList.remove('open');
+        });
+    }
+    if (confirmProceed) {
+        confirmProceed.addEventListener('click', function() {
+            if (!pendingRestore) return;
+            var url = pendingRestore.url;
+            var name = pendingRestore.name;
+            confirmModal.classList.remove('open');
+            startJob(url, 'Restoring ' + name + '…', 'restore');
+        });
+    }
+    if (resultClose) {
+        resultClose.addEventListener('click', function() {
+            resultModal.classList.remove('open');
+        });
+    }
+    if (resultReload) {
+        resultReload.addEventListener('click', function() {
+            window.location.reload();
+        });
+    }
+
+    // Delete is a two-step confirmation: consequences first, outcome after.
+    var delConfirmModal = document.getElementById('delete-confirm-modal');
+    var delConfirmName = document.getElementById('delete-confirm-name');
+    var delConfirmCancel = document.getElementById('delete-confirm-cancel');
+    var delConfirmProceed = document.getElementById('delete-confirm-proceed');
+    var delResultModal = document.getElementById('delete-result-modal');
+    var delResultIcon = document.getElementById('delete-result-icon');
+    var delResultTitle = document.getElementById('delete-result-title');
+    var delResultBody = document.getElementById('delete-result-body');
+    var delResultError = document.getElementById('delete-result-error');
+    var delResultClose = document.getElementById('delete-result-close');
+    var delResultReload = document.getElementById('delete-result-reload');
+    var pendingDelete = null;
+
+    function showDeleteResult(ok, data) {
+        if (ok) {
+            delResultIcon.className = 'w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0';
+            delResultIcon.innerHTML = '<span class="material-symbols-outlined">check</span>';
+            delResultTitle.textContent = 'Backup deleted';
+            delResultBody.textContent = (data.deleted || 'The backup') +
+                ' was removed from storage and history and can no longer be restored.' +
+                (data.note ? ' ' + data.note : '');
+            delResultError.classList.add('hidden');
+            delResultError.textContent = '';
+            delResultReload.classList.remove('hidden');
+        } else {
+            delResultIcon.className = 'w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0';
+            delResultIcon.innerHTML = '<span class="material-symbols-outlined">error</span>';
+            delResultTitle.textContent = 'Delete failed';
+            delResultBody.textContent = 'The backup was not deleted — nothing was changed.';
+            delResultError.textContent = (data && data.error) || 'The operation failed with no further detail.';
+            delResultError.classList.remove('hidden');
+            delResultReload.classList.add('hidden');
+        }
+        pendingDelete = null;
+        delResultModal.classList.add('open');
+    }
+
+    document.querySelectorAll('[data-delete-url]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            pendingDelete = {
+                url: btn.getAttribute('data-delete-url'),
+                name: btn.getAttribute('data-delete-name') || 'backup'
+            };
+            delConfirmName.textContent = pendingDelete.name;
+            delConfirmModal.classList.add('open');
+        });
+    });
+
+    if (delConfirmCancel) {
+        delConfirmCancel.addEventListener('click', function() {
+            pendingDelete = null;
+            delConfirmModal.classList.remove('open');
+        });
+    }
+    if (delConfirmProceed) {
+        delConfirmProceed.addEventListener('click', function() {
+            if (!pendingDelete) return;
+            var url = pendingDelete.url;
+            delConfirmModal.classList.remove('open');
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json' }
+            }).then(function(resp) {
+                return resp.json().then(function(data) {
+                    if (!resp.ok) throw new Error(data.error || ('Could not delete (' + resp.status + ').'));
+                    return data;
+                });
+            }).then(function(data) {
+                showDeleteResult(true, data);
+            }).catch(function(e) {
+                showDeleteResult(false, { error: e.message });
+            });
+        });
+    }
+    if (delResultClose) {
+        delResultClose.addEventListener('click', function() {
+            delResultModal.classList.remove('open');
+        });
+    }
+    if (delResultReload) {
+        delResultReload.addEventListener('click', function() {
+            window.location.reload();
+        });
+    }
 
     closeBtn.addEventListener('click', function() {
         modal.classList.remove('open');

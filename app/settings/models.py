@@ -29,16 +29,17 @@ SETTING_CATEGORIES = [
      ['RESERVATION_CLAIM_DAYS', 'DUE_SOON_NOTIFY_DAYS']),
     ('backup-schedule', 'Backup Schedule', 'settings_backup_restore',
      'Automatic monthly backups and retention. Admin only.',
-     ['BACKUP_DAY', 'BACKUP_HOUR', 'BACKUP_KEEP']),
+     ['BACKUP_DAY', 'BACKUP_HOUR', 'BACKUP_KEEP', 'BACKUP_RESTORE_ENABLED']),
 ]
 
 
 # Keys only admins may view or edit. Librarians get the circulation
 # categories; admins get exactly these.
-ADMIN_ONLY_KEYS = frozenset({'BACKUP_DAY', 'BACKUP_HOUR', 'BACKUP_KEEP'})
+ADMIN_ONLY_KEYS = frozenset({'BACKUP_DAY', 'BACKUP_HOUR', 'BACKUP_KEEP',
+                             'BACKUP_RESTORE_ENABLED'})
 
 
-# key -> (label, kind, description). Kinds: int, float.
+# key -> (label, kind, description). Kinds: int, float, bool.
 SETTING_DEFS = {
     'MAX_BORROW_LIMIT_STUDENT': ('Max borrows (Student)', 'int', 'Max active loans for students'),
     'MAX_BORROW_LIMIT_FACULTY': ('Max borrows (Faculty)', 'int', 'Max active loans for faculty'),
@@ -52,6 +53,7 @@ SETTING_DEFS = {
     'BACKUP_DAY': ('Auto-backup day of month', 'int', 'Day of month for the automatic backup (1-28)'),
     'BACKUP_HOUR': ('Auto-backup hour (0-23)', 'int', 'Hour of day for the automatic backup'),
     'BACKUP_KEEP': ('Backups to retain', 'int', 'Newest backups kept; older ones are deleted'),
+    'BACKUP_RESTORE_ENABLED': ('Allow backup restore', 'bool', 'When off, the Restore action on Backup & Recovery is disabled'),
 }
 
 # key -> (min, max) inclusive bounds; None means unbounded. Enforced on
@@ -75,6 +77,7 @@ DEFAULTS = {
     'BACKUP_DAY': _env_default('BACKUP_DAY', 1),
     'BACKUP_HOUR': _env_default('BACKUP_HOUR', 2),
     'BACKUP_KEEP': _env_default('BACKUP_KEEP', 12),
+    'BACKUP_RESTORE_ENABLED': '1',
 }
 
 
@@ -110,6 +113,20 @@ def get_setting(key, default=None):
     return DEFAULTS.get(key)
 
 
+def is_restore_enabled():
+    """Whether an admin may restore a backup.
+
+    Reads BACKUP_RESTORE_ENABLED (default on). Only explicit off-values
+    disable restore; anything else — including an unreadable settings
+    table — preserves the historical behavior (restore allowed).
+    """
+    try:
+        raw = get_setting('BACKUP_RESTORE_ENABLED', '1')
+    except Exception:
+        return True
+    return str(raw).strip().lower() not in ('0', 'false', 'off', 'no')
+
+
 def update_setting(key, value, updated_by=None):
     return db.execute(
         '''INSERT INTO library_settings (setting_key, setting_value, updated_at, updated_by)
@@ -131,7 +148,11 @@ def sync_settings_to_config(app=None):
     for key, raw in data.items():
         kind = SETTING_DEFS.get(key, (key, 'int', ''))[1]
         try:
-            value = float(raw) if kind == 'float' else int(float(raw))
+            if kind == 'bool':
+                value = (1 if str(raw).strip().lower()
+                         in ('1', 'true', 'on', 'yes') else 0)
+            else:
+                value = float(raw) if kind == 'float' else int(float(raw))
         except (TypeError, ValueError):
             continue
         app.config[key] = value

@@ -179,9 +179,18 @@
                                 <label for="setting-{{ key }}" class="block text-sm font-bold text-slate-800 dark:text-slate-100">{{ meta[0] }}</label>
                                 <p class="text-xs text-slate-500">{{ meta[2] }} <span class="font-mono text-slate-400">{{ key }}</span></p>
                             </div>
+                            {% if meta[1] == 'bool' %}
+                            <label for="setting-{{ key }}" class="relative inline-flex cursor-pointer items-center shrink-0" title="{{ 'On' if values.get(key, '1')|string in ('1', 'True', 'true') else 'Off' }}">
+                                <input id="setting-{{ key }}" name="{{ key }}" type="checkbox" value="1" {% if values.get(key, '1')|string in ('1', 'True', 'true') %}checked{% endif %} class="peer sr-only">
+                                <span class="block h-6 w-11 rounded-full bg-slate-300 dark:bg-slate-700 peer-checked:bg-primary transition-colors"></span>
+                                <span class="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5 pointer-events-none"></span>
+                                <input type="hidden" name="{{ key }}" value="0">
+                            </label>
+                            {% else %}
                             <input id="setting-{{ key }}" name="{{ key }}" type="number" {% if meta[1] == 'float' %}step="0.01"{% else %}step="1"{% endif %} min="0"
                                 value="{{ values.get(key, '') }}"
                                 class="w-full sm:w-40 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+                            {% endif %}
                         </div>
                         {% endfor %}
                     </div>

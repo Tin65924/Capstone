@@ -260,3 +260,92 @@ class TestResetDbRemoved:
         resp = librarian_client.get('/librarian')
         assert resp.status_code == 200
         assert b'Library Settings' not in resp.data
+
+
+class TestRestoreToggle:
+    def test_toggle_renders_checked_by_default(self, admin_client, mock_db):
+        mock_db['fetch_all'].return_value = []
+        resp = admin_client.get(SETTINGS_URL)
+        assert resp.status_code == 200
+        assert b'BACKUP_RESTORE_ENABLED' in resp.data
+        assert b'Allow backup restore' in resp.data
+        assert b'type="checkbox"' in resp.data
+        assert b'value="1" checked' in resp.data
+
+    def test_toggle_renders_unchecked_when_off(self, admin_client, mock_db):
+        mock_db['fetch_all'].return_value = [
+            ('BACKUP_RESTORE_ENABLED', '0', '', None),
+        ]
+        resp = admin_client.get(SETTINGS_URL)
+        assert resp.status_code == 200
+        assert b'type="checkbox"' in resp.data
+        assert b'value="1" checked' not in resp.data
+        # Hidden fallback still submits an explicit off-value.
+        assert b'type="hidden"' in resp.data
+
+    def test_update_toggle_on(self, admin_client, mock_db):
+        mock_db['fetch_all'].return_value = []
+        with patch('app.backup.scheduler.reschedule'):
+            resp = admin_client.post(UPDATE_URL, data={
+                'BACKUP_RESTORE_ENABLED': '1',
+            })
+        assert resp.status_code == 302
+        first = mock_db['execute'].call_args_list[0]
+        assert 'INSERT INTO library_settings' in first[0][0]
+        assert first[0][1][0] == 'BACKUP_RESTORE_ENABLED'
+        assert first[0][1][1] == '1'
+
+    def test_update_toggle_off(self, admin_client, mock_db):
+        mock_db['fetch_all'].return_value = []
+        with patch('app.backup.scheduler.reschedule'):
+            resp = admin_client.post(UPDATE_URL, data={
+                'BACKUP_RESTORE_ENABLED': '0',
+            })
+        assert resp.status_code == 302
+        first = mock_db['execute'].call_args_list[0]
+        assert first[0][1][0] == 'BACKUP_RESTORE_ENABLED'
+        assert first[0][1][1] == '0'
+
+    def test_update_toggle_checkbox_plus_hidden_submission(self, admin_client,
+                                                           mock_db):
+        """A real browser submits checkbox '1' + hidden '0' — stays on."""
+        mock_db['fetch_all'].return_value = []
+        with patch('app.backup.scheduler.reschedule'):
+            resp = admin_client.post(UPDATE_URL, data={
+                'BACKUP_RESTORE_ENABLED': ['1', '0'],
+            })
+        assert resp.status_code == 302
+        first = mock_db['execute'].call_args_list[0]
+        assert first[0][1][0] == 'BACKUP_RESTORE_ENABLED'
+        assert first[0][1][1] == '1'
+
+    def test_update_toggle_rejects_garbage(self, admin_client, mock_db):
+        mock_db['fetch_all'].return_value = []
+        resp = admin_client.post(UPDATE_URL, data={
+            'BACKUP_RESTORE_ENABLED': 'maybe',
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_update_toggle_absent_leaves_value_alone(self, admin_client,
+                                                     mock_db):
+        """A form without the toggle must not flip restore off."""
+        mock_db['fetch_all'].return_value = []
+        with patch('app.backup.scheduler.reschedule'):
+            resp = admin_client.post(UPDATE_URL, data={'BACKUP_DAY': '15'})
+        assert resp.status_code == 302
+        keys = [c[0][1][0] for c in mock_db['execute'].call_args_list
+                if 'INSERT INTO library_settings' in c[0][0]]
+        assert keys == ['BACKUP_DAY']
+
+    def test_is_restore_enabled(self, mock_db):
+        from app.settings.models import is_restore_enabled
+        mock_db['fetch_one'].return_value = None  # empty table → default on
+        assert is_restore_enabled() is True
+        mock_db['fetch_one'].return_value = ('1',)
+        assert is_restore_enabled() is True
+        mock_db['fetch_one'].return_value = ('0',)
+        assert is_restore_enabled() is False
+        mock_db['fetch_one'].side_effect = RuntimeError('db down')
+        assert is_restore_enabled() is True  # fail open preserves restore
+        mock_db['fetch_one'].side_effect = None
