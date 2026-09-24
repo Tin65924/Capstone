@@ -733,6 +733,7 @@ def book_info(book_id):
     from app.circulation.models import (
         get_active_loan_accession_ids_by_book,
         get_active_loan_borrower_user_ids_by_book,
+        is_book_blocked_for_daily,
     )
     borrowed_ids = get_active_loan_accession_ids_by_book(book_id)
     borrower_map = get_active_loan_borrower_user_ids_by_book(book_id)
@@ -740,6 +741,11 @@ def book_info(book_id):
         (acc, acc[0] not in borrowed_ids) for acc in accessions
     ]
     any_available = any(is_available for _, is_available in accessions_with_status)
+    # An Overnight-borrowed book that is already allocated is Not Available
+    # for Daily Circulation — hide the remaining free copy from borrowers.
+    if any_available and is_book_blocked_for_daily(book_id):
+        accessions_with_status = [(acc, False) for acc, _ in accessions_with_status]
+        any_available = False
     user_data = get_user_by_id(current_user.id) if current_user.is_authenticated else None
     return render_template('public/bookinfo.html', book=book,
                            accessions=accessions_with_status, any_available=any_available,
