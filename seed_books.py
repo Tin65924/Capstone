@@ -15,29 +15,42 @@ physical copies. Follows the existing schema exactly (no schema changes):
 
 Conventions (per AGENTS.md): raw psycopg2, %s placeholders, no ORM.
 
-Usage:
-    venv\\Scripts\\python.exe seed_books.py --dsn "postgresql://user:pw@host:5432/db"
-    venv\\Scripts\\python.exe seed_books.py                      # uses DATABASE_URL from .env
-    venv\\Scripts\\python.exe seed_books.py --reset              # delete prior seeded rows first
-    venv\\Scripts\\python.exe seed_books.py --target 5500        # raise the copy target
+Usage — local dev (uses DATABASE_URL from .env):
+    venv\\Scripts\\python.exe seed_books.py
+
+Usage — prod (Neon): pass the connection string with --dsn so your local
+.env stays untouched. Neon requires SSL, so keep ?sslmode=require
+(which Neon already appends to the URL it shows you):
+    venv\\Scripts\\python.exe seed_books.py --dsn "postgresql://<user>:<pw>@<host>.neon.tech/<db>?sslmode=require"
+
+    venv\\Scripts\\python.exe seed_books.py --dsn "..." --reset   # wipe prior seeded rows first
+    venv\\Scripts\\python.exe seed_books.py --dsn "..." --target 5500
+    venv\\Scripts\\python.exe seed_books.py --prefix BKSEED-      # old prefixed numbering
+
+Accession numbers are plain zero-padded sequences: 0001, 0002, ...
+On a fresh database the seeded copies become 0001..NNNN with no gaps.
+On a rerun, books that already have their planned copies are skipped and
+any missing copies continue from max(existing)+1, so numbering is never
+reused and no duplicates are created.
 
 Idempotent / safely rerunnable:
   * Books are matched on their natural key (title, author, isbn) —
     existing titles are reused, never duplicated.
-  * Copies use deterministic accession numbers (BKSEED-000001, ...) —
-    existing accession numbers are skipped via pre-check (same pattern
-    as the bulk-import worker in app/cataloging/routes.py).
-  * A rerun only tops up whatever copies are still missing, then reports.
-  * --reset removes ONLY rows created by this seeder (accessions with the
-    BKSEED- prefix and their dependent circulation/inventory rows, plus
-    catalog rows left with no copies), never user data.
+  * Seeded books carry a [SEED-BOOKS] marker in their description; reruns
+    count each seeded book's existing copies and only top up the shortfall
+    (same no-duplicate principle as the bulk-import worker in
+    app/cataloging/routes.py).
+  * --reset removes ONLY rows created by this seeder (accessions belonging
+    to [SEED-BOOKS] titles, plus their dependent circulation/inventory rows
+    and catalog rows left with no copies), never user data.
 """
 
 import argparse
 import os
+import re
 import sys
 
-ACCESSION_PREFIX = "BKSEED-"
+SEED_MARKER = "[SEED-BOOKS]"
 SEED_LIBRARIAN_EMAIL = "seed-books@mcst.edu.ph"
 TARGET_COPIES = 5100  # >= 5,000 required; slight headroom for safety
 
@@ -637,10 +650,14 @@ def ensure_departments(cur):
 
 
 def reset_seed(cur):
-    """Delete ONLY rows created by this seeder (BKSEED- prefix)."""
+    """Delete ONLY rows created by this seeder: accessions belonging to
+    [SEED-BOOKS] titles (whatever their number format), then catalog rows
+    left with no copies."""
     cur.execute(
-        "SELECT accession_id FROM accession_log WHERE accession_number LIKE %s",
-        (ACCESSION_PREFIX + "%",),
+        """SELECT a.accession_id FROM accession_log a
+           JOIN book_catalog b ON b.book_id = a.book_id
+           WHERE b.description LIKE %s""",
+        ("%" + SEED_MARKER + "%",),
     )
     aids = [r[0] for r in cur.fetchall()]
     if aids:
@@ -661,12 +678,38 @@ def reset_seed(cur):
            WHERE b.description LIKE %s
              AND NOT EXISTS (SELECT 1 FROM accession_log a
                              WHERE a.book_id = b.book_id)""",
-        ("%[SEED-BOOKS]%",),
+        ("%" + SEED_MARKER + "%",),
     )
     print("removed %d orphaned seeded catalog rows" % cur.rowcount)
 
 
-def seed(conn, target):
+def _next_accession_seq(cur, prefix):
+    """Next free sequence number: max(numeric suffix)+1 over accession
+    numbers matching this run's format, so reruns never reuse a number."""
+    cur.execute("SELECT accession_number FROM accession_log")
+    pattern = re.compile(r"^%s(\d+)$" % re.escape(prefix))
+    best = 0
+    for (acc_no,) in cur.fetchall():
+        m = pattern.match(acc_no or "")
+        if m:
+            best = max(best, int(m.group(1)))
+    return best + 1
+
+
+def _seeded_copy_counts(cur):
+    """Existing copy count per [SEED-BOOKS] title."""
+    cur.execute(
+        """SELECT a.book_id, COUNT(*)
+           FROM accession_log a
+           JOIN book_catalog b ON b.book_id = a.book_id
+           WHERE b.description LIKE %s
+           GROUP BY a.book_id""",
+        ("%" + SEED_MARKER + "%",),
+    )
+    return dict(cur.fetchall())
+
+
+def seed(conn, target, prefix=""):
     cur = conn.cursor()
     ensure_departments(cur)
     librarian_id = ensure_seed_librarian(cur)
@@ -687,17 +730,11 @@ def seed(conn, target):
         extra -= 1
         k += 1
 
-    # Cache existing books by natural key and existing accessions.
+    # Cache existing books by natural key.
     cur.execute("SELECT book_id, title, author, isbn FROM book_catalog")
     book_by_key = {(t, a, i): bid for bid, t, a, i in cur.fetchall()}
-    cur.execute(
-        "SELECT accession_number FROM accession_log WHERE accession_number LIKE %s",
-        (ACCESSION_PREFIX + "%",),
-    )
-    existing_acc = {r[0] for r in cur.fetchall()}
 
     titles_new = titles_reused = copies_new = copies_skipped = 0
-    seq = 0
     per_program = {p: [0, 0] for p in PROGRAMS}  # books, copies (new this run)
     for n, (program, title, author, edition, publisher, year,
             subject, copies, blurb) in enumerate(entries):
@@ -716,20 +753,34 @@ def seed(conn, target):
                    RETURNING book_id""",
                 (title, author, edition, publisher, year, subject,
                  call_number_for(program, n, year), isbn,
-                 "%s Recommended for %s. [SEED-BOOKS]"
-                 % (blurb, PROGRAM_LABEL[program])),
+                 "%s Recommended for %s. %s"
+                 % (blurb, PROGRAM_LABEL[program], SEED_MARKER)),
             )
             book_id = cur.fetchone()[0]
             book_by_key[key] = book_id
             titles_new += 1
         else:
             titles_reused += 1
-        for c in range(copies):
+        per_program[program][0] += 1
+
+    # Top up each seeded title to its planned copy count, numbering new
+    # copies sequentially from max(existing)+1 (0001, 0002, ... on a fresh
+    # DB). Reruns only fill shortfalls — never duplicates.
+    have = _seeded_copy_counts(cur)  # includes titles inserted above
+    seq = _next_accession_seq(cur, prefix)
+    cur.execute("SELECT accession_number FROM accession_log")
+    existing_acc = {r[0] for r in cur.fetchall()}
+    for n, (program, title, author, edition, publisher, year,
+            subject, copies, blurb) in enumerate(entries):
+        book_id = book_by_key[(title, author, isbn13_for(n))]
+        missing = copies - have.get(book_id, 0)
+        copies_skipped += copies - max(missing, 0)
+        for c in range(max(missing, 0)):
+            acc_no = "%s%04d" % (prefix, seq)
             seq += 1
-            acc_no = "%s%06d" % (ACCESSION_PREFIX, seq)
-            if acc_no in existing_acc:
-                copies_skipped += 1
-                continue
+            while acc_no in existing_acc:
+                acc_no = "%s%04d" % (prefix, seq)
+                seq += 1
             source = "donation" if (n + c) % 7 == 0 else "purchase"
             try:
                 cur.execute(
@@ -746,7 +797,6 @@ def seed(conn, target):
             existing_acc.add(acc_no)
             copies_new += 1
             per_program[program][1] += 1
-        per_program[program][0] += 1
 
     conn.commit()
 
@@ -756,8 +806,10 @@ def seed(conn, target):
     cur.execute("SELECT COUNT(*) FROM accession_log")
     total_copies = cur.fetchone()[0]
     cur.execute(
-        "SELECT COUNT(*) FROM accession_log WHERE accession_number LIKE %s",
-        (ACCESSION_PREFIX + "%",),
+        """SELECT COUNT(*) FROM accession_log a
+           JOIN book_catalog b ON b.book_id = a.book_id
+           WHERE b.description LIKE %s""",
+        ("%" + SEED_MARKER + "%",),
     )
     seeded_copies = cur.fetchone()[0]
     cur.execute(
@@ -765,7 +817,7 @@ def seed(conn, target):
                   (SELECT COUNT(*) FROM accession_log a
                    WHERE a.book_id = b.book_id)
            FROM book_catalog b WHERE b.description LIKE %s""",
-        ("%[SEED-BOOKS]%",),
+        ("%" + SEED_MARKER + "%",),
     )
     seeded_rows = cur.fetchall()
     # Attribute seeded rows back to programs via subject match.
@@ -791,7 +843,11 @@ def main():
     ap.add_argument("--target", type=int, default=TARGET_COPIES,
                     help="Minimum physical copies (default %d)" % TARGET_COPIES)
     ap.add_argument("--reset", action="store_true",
-                    help="Delete prior BKSEED- rows before seeding")
+                    help="Delete prior seeded rows before seeding")
+    ap.add_argument("--prefix", default="",
+                    help="Accession-number prefix (default: none, i.e. "
+                         "0001, 0002, ...). Use --prefix BKSEED- for the "
+                         "old prefixed scheme.")
     args = ap.parse_args()
 
     conn = get_conn(args.dsn)
@@ -802,7 +858,7 @@ def main():
             reset_seed(cur)
             conn.commit()
             cur.close()
-        report = seed(conn, args.target)
+        report = seed(conn, args.target, args.prefix)
     except Exception:
         conn.rollback()
         raise
@@ -814,7 +870,7 @@ def main():
           % (report["titles_new"], report["titles_reused"]))
     print("copies inserted: %d | copies skipped (already present): %d"
           % (report["copies_new"], report["copies_skipped"]))
-    print("seeded titles: %d | seeded copies (BKSEED-): %d"
+    print("seeded titles: %d | seeded copies: %d"
           % (report["seeded_titles"], report["seeded_copies"]))
     print("DB totals: %d titles, %d copies"
           % (report["total_titles"], report["total_copies"]))
