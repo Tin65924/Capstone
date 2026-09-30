@@ -1,0 +1,29 @@
+# Render blueprint for the MCST Library Management System.
+#
+# Deploy: push to main, then Dashboard -> New -> Blueprint -> select this repo.
+# Fill in DATABASE_URL + Google OAuth values when prompted (marked sync: false).
+#
+# Notes:
+# - Single gunicorn worker on purpose: the in-process APScheduler backup
+#   timer would fire once per worker with more workers.
+# - No database resource is declared here on purpose: attach any Postgres
+#   (Render, Neon, Supabase) and paste its URL as DATABASE_URL. External
+#   hosts need ?sslmode=require appended to the URL.
+# - backups/ live on ephemeral disk: pg_dump files vanish on restart or
+#   redeploy. Use your database provider's backups for anything that matters.
+services:
+  - type: web
+    name: mcst-library
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn run:app --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120
+    healthCheckPath: /
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
