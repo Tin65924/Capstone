@@ -256,6 +256,7 @@ ON CONFLICT (setting_key) DO NOTHING;
 -- Controlled vocabulary for borrower programs (students) and departments
 -- (faculty). Registration, profile, and user-management forms only accept
 -- values from this table; borrowers.department stores the canonical name.
+-- No seed rows: librarians add programs/departments via User Management.
 CREATE TABLE IF NOT EXISTS departments (
     department_id SERIAL PRIMARY KEY,
     name          VARCHAR(100) NOT NULL,
@@ -263,12 +264,6 @@ CREATE TABLE IF NOT EXISTS departments (
                   CHECK (dept_type IN ('program', 'department')),
     UNIQUE (dept_type, name)
 );
-
-INSERT INTO departments (name, dept_type) VALUES
-    ('BSIS', 'program'),
-    ('BSN', 'program'),
-    ('BACOMM', 'program')
-ON CONFLICT DO NOTHING;
 
 -- Audit columns (Updated By / Updated Date) for every table editable via
 -- the frontend. inventory_status already audits via checked_by /

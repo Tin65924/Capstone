@@ -31,7 +31,7 @@ class TestScopeFiltering:
         assert resp.status_code == 200
         assert b'Stu One' in resp.data
         assert b'Fac One' in resp.data
-        assert b'Lib One' not in resp.data
+        assert b'Lib One' in resp.data
         assert b'Admin One' not in resp.data
 
     def test_librarian_scope_staff_ignored(self, librarian_client, mock_db):
@@ -39,7 +39,8 @@ class TestScopeFiltering:
         resp = librarian_client.get('/librarian/users?scope=staff')
         assert resp.status_code == 200
         assert b'Stu One' in resp.data
-        assert b'Lib One' not in resp.data
+        assert b'Lib One' in resp.data
+        assert b'Admin One' not in resp.data
 
     def test_admin_default_sees_members_like_librarian(self, admin_client, mock_db):
         """Admin entering without an explicit scope (e.g. from the
@@ -50,11 +51,11 @@ class TestScopeFiltering:
         assert resp.status_code == 200
         assert b'Stu One' in resp.data
         assert b'Fac One' in resp.data
-        assert b'Lib One' not in resp.data
+        assert b'Lib One' in resp.data
         assert b'Admin One' not in resp.data
 
     def test_admin_staff_scope(self, admin_client, mock_db):
-        """Staff scope shows faculty + librarians only — never students."""
+        """Staff scope shows faculty + librarians + admins — never students."""
         _mock_lists(mock_db)
         resp = admin_client.get('/librarian/users?scope=staff')
         assert resp.status_code == 200
@@ -62,14 +63,15 @@ class TestScopeFiltering:
         assert b'Stu One' not in resp.data
         assert b'Fac One' in resp.data
         assert b'Lib One' in resp.data
-        assert b'Admin One' not in resp.data
+        assert b'Admin One' in resp.data
 
     def test_admin_members_scope(self, admin_client, mock_db):
         _mock_lists(mock_db)
         resp = admin_client.get('/librarian/users?scope=members')
         assert resp.status_code == 200
         assert b'Stu One' in resp.data
-        assert b'Lib One' not in resp.data
+        assert b'Lib One' in resp.data
+        assert b'Admin One' not in resp.data
 
     def test_invalid_scope_falls_back_to_members(self, admin_client, mock_db):
         _mock_lists(mock_db)
@@ -77,7 +79,8 @@ class TestScopeFiltering:
         assert resp.status_code == 200
         assert b'Stu One' in resp.data
         assert b'Fac One' in resp.data
-        assert b'Lib One' not in resp.data
+        assert b'Lib One' in resp.data
+        assert b'Admin One' not in resp.data
 
     def test_explicit_all_scope_shows_everyone(self, admin_client, mock_db):
         _mock_lists(mock_db)
@@ -216,7 +219,8 @@ class TestExportScope:
         resp = librarian_client.get('/librarian/users/export?role=Librarian&format=csv')
         assert resp.status_code == 200
         body = resp.data.decode('utf-8-sig')
-        assert 'Lib One' not in body
+        assert 'Lib One' in body
+        assert 'Admin One' not in body
 
     def test_admin_export_staff_scope(self, admin_client, mock_db):
         mock_db['fetch_all'].return_value = list(USERS)
@@ -226,6 +230,7 @@ class TestExportScope:
         assert 'Stu One' not in body
         assert 'Lib One' in body
         assert 'Fac One' in body
+        assert 'Admin One' in body
 
     def test_admin_export_filename_has_scope(self, admin_client, mock_db):
         mock_db['fetch_all'].return_value = list(USERS)
@@ -238,7 +243,7 @@ class TestExportScope:
         assert resp.status_code == 200
         body = resp.data.decode('utf-8-sig')
         assert 'Stu One' in body and 'Fac One' in body
-        assert 'Lib One' not in body and 'Admin One' not in body
+        assert 'Lib One' in body and 'Admin One' not in body
 
     def test_admin_export_all_scope(self, admin_client, mock_db):
         mock_db['fetch_all'].return_value = list(USERS)

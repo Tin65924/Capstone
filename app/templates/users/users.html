@@ -243,10 +243,10 @@
             <div class="min-w-0">
                 {% if is_staff_view|default(false) %}
                 <h1 class="text-2xl sm:text-3xl font-bold font-outfit leading-tight">Staff Management</h1>
-                <p class="text-sm sm:text-base text-gray-500 mt-1">Manage librarian and faculty accounts.</p>
+                <p class="text-sm sm:text-base text-gray-500 mt-1">Manage librarian, faculty, and admin accounts.</p>
                 {% else %}
                 <h1 class="text-2xl sm:text-3xl font-bold font-outfit leading-tight">User Management</h1>
-                <p class="text-sm sm:text-base text-gray-500 mt-1">{% if scope == 'all' and is_admin_view|default(false) %}Control access roles and monitor all library accounts.{% else %}Control access roles and monitor library members (students and faculty).{% endif %}</p>
+                <p class="text-sm sm:text-base text-gray-500 mt-1">{% if scope == 'all' and is_admin_view|default(false) %}Control access roles and monitor all library accounts.{% else %}Control access roles and monitor library members (students, faculty, and librarians).{% endif %}</p>
                 {% endif %}
             </div>
                 <div class="flex gap-2 sm:gap-3 shrink-0">

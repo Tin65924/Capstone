@@ -310,9 +310,9 @@ def admin_users():
         scope = ''
     is_admin_view = current_user.role == 'Admin'
     # User Management visibility rules:
-    # - Librarians always see members (Student + Faculty).
-    # - Admins default to members (like a librarian); explicit
-    #   ?scope=staff shows Librarian + Faculty only (never students),
+    # - Librarians see members + fellow librarians (everything except Admin).
+    # - Admins default to the same listing; explicit ?scope=staff shows
+    #   all staff (Librarian + Faculty + Admin, never students),
     #   ?scope=all shows every account.
     # - The sidebar follows the scope (staff -> admin sidebar,
     #   otherwise librarian sidebar), so entering from the librarian
@@ -323,11 +323,11 @@ def admin_users():
     elif not scope:
         scope = 'members'
     if scope == 'staff':
-        users = [u for u in users if u[3] in ('Librarian', 'Faculty')]
-        pending = [p for p in pending if p[3] in ('Librarian', 'Faculty')]
+        users = [u for u in users if u[3] in ('Librarian', 'Faculty', 'Admin')]
+        pending = [p for p in pending if p[3] in ('Librarian', 'Faculty', 'Admin')]
     elif scope == 'members':
-        users = [u for u in users if u[3] in ('Student', 'Faculty')]
-        pending = [p for p in pending if p[3] in ('Student', 'Faculty')]
+        users = [u for u in users if u[3] in ('Student', 'Faculty', 'Librarian')]
+        pending = [p for p in pending if p[3] in ('Student', 'Faculty', 'Librarian')]
     # KPIs reflect the current scope, not the table filters — compute
     # before applying status/role filters so clicking a card doesn't zero
     # the other cards.
@@ -466,19 +466,20 @@ def export_users():
     scope = (request.args.get('scope', '') or '').strip().lower()
     if scope not in ('', 'staff', 'members', 'all'):
         scope = ''
-    # Same visibility rules as the manage page: librarians export
-    # members only; admins default to members; explicit staff/all
-    # honored; the staff scope never leaks students.
+    # Same visibility rules as the manage page: librarians see
+    # members + fellow librarians (never admins); admins default to
+    # the same listing; explicit staff/all honored; staff never leaks
+    # students.
     if current_user.role != 'Admin':
         scope = 'members'
     elif not scope:
         scope = 'members'
     if scope == 'staff':
         users = [u for u in users
-                 if u[_USER_COL['role']] in ('Librarian', 'Faculty')]
+                 if u[_USER_COL['role']] in ('Librarian', 'Faculty', 'Admin')]
     elif scope == 'members':
         users = [u for u in users
-                 if u[_USER_COL['role']] in ('Student', 'Faculty')]
+                 if u[_USER_COL['role']] in ('Student', 'Faculty', 'Librarian')]
     if status:
         users = [u for u in users if (u[_USER_COL['status']] or '').lower() == status]
     role = request.args.get('role', '').strip()
