@@ -39,8 +39,6 @@ CREATE TABLE IF NOT EXISTS borrowers (
 
 ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS phone_number VARCHAR(30);
 
-ALTER TABLE circulation_records ADD COLUMN IF NOT EXISTS fine_paid BOOLEAN NOT NULL DEFAULT FALSE;
-
 CREATE TABLE IF NOT EXISTS book_catalog (
     book_id               SERIAL PRIMARY KEY,
     title                 VARCHAR(255) NOT NULL,
@@ -291,6 +289,7 @@ ALTER TABLE procurement_log ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
 ALTER TABLE procurement_log ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
 ALTER TABLE circulation_records ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
 ALTER TABLE circulation_records ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
+ALTER TABLE circulation_records ADD COLUMN IF NOT EXISTS fine_paid BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE reservation_queue ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
 ALTER TABLE reservation_queue ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
 ALTER TABLE inventory_sessions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;

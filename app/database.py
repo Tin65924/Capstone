@@ -65,58 +65,86 @@ def run_schema(app):
         return
     conn = db._pool.getconn()
     try:
-        with conn.cursor() as cur:
-            with open(schema_path, 'r') as f:
-                cur.execute(f.read())
-            cur.execute("""
+        def _exec_each(statements):
+            ok, failed = 0, 0
+            with conn.cursor() as cur:
+                for stmt in statements:
+                    stmt = stmt.strip()
+                    if not stmt:
+                        continue
+                    try:
+                        cur.execute(stmt)
+                        conn.commit()
+                        ok += 1
+                    except Exception as e:
+                        conn.rollback()
+                        failed += 1
+                        app.logger.warning('Schema statement skipped: %s | %.120s',
+                                           e, stmt)
+            return ok, failed
+
+        with open(schema_path, 'r') as f:
+            schema_sql = f.read()
+        # Drop full-line -- comments first: after splitting on ';' they
+        # would otherwise execute as bare text and spam skip-warnings.
+        schema_sql = '\n'.join(
+            line for line in schema_sql.splitlines()
+            if not line.strip().startswith('--')
+        )
+        # Statement-by-statement (schema.sql is plain DDL, no function
+        # bodies): one failing statement must never roll back the whole
+        # schema into an empty database again.
+        ok, failed = _exec_each(schema_sql.split(';'))
+        ok2, failed2 = _exec_each([
+            """
                 ALTER TABLE user_accounts
                 DROP CONSTRAINT IF EXISTS user_accounts_account_status_check;
-            """)
-            cur.execute("""
+            """,
+            """
                 ALTER TABLE user_accounts
                 ADD CONSTRAINT user_accounts_account_status_check
                 CHECK (account_status IN ('active', 'disabled', 'pending', 'archived'));
-            """)
-            cur.execute("""
+            """,
+            """
                 ALTER TABLE backup_log
                 DROP CONSTRAINT IF EXISTS backup_log_status_check;
-            """)
-            cur.execute("""
+            """,
+            """
                 ALTER TABLE backup_log
                 ADD CONSTRAINT backup_log_status_check
                 CHECK (status IN ('completed', 'failed', 'in_progress'));
-            """)
-            cur.execute("""
+            """,
+            """
                 ALTER TABLE accession_log
                 DROP CONSTRAINT IF EXISTS accession_log_source_check;
-            """)
-            cur.execute("""
+            """,
+            """
                 ALTER TABLE accession_log
                 ADD CONSTRAINT accession_log_source_check
                 CHECK (source IN ('purchase', 'donation', 'others'));
-            """)
-            cur.execute("""
+            """,
+            """
                 ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS phone_number VARCHAR(30);
-            """)
-            cur.execute("""
+            """,
+            """
                 ALTER TABLE notification_log ADD COLUMN IF NOT EXISTS is_read BOOLEAN NOT NULL DEFAULT FALSE;
-            """)
-            cur.execute("""
+            """,
+            """
                 ALTER TABLE notification_log
                 DROP CONSTRAINT IF EXISTS notification_log_notif_type_check;
-            """)
-            cur.execute("""
+            """,
+            """
                 ALTER TABLE notification_log
                 ADD CONSTRAINT notification_log_notif_type_check
                 CHECK (notif_type IN ('status_update', 'hold_ready', 'overdue_reminder',
                                       'borrow', 'return', 'request_update', 'fine',
                                       'due_soon', 'reservation'));
-            """)
-            cur.execute("""
+            """,
+            """
                 ALTER TABLE analytics_cache
                 DROP CONSTRAINT IF EXISTS analytics_cache_report_type_check;
-            """)
-            cur.execute("""
+            """,
+            """
                 ALTER TABLE analytics_cache
                 ADD CONSTRAINT analytics_cache_report_type_check
                 CHECK (report_type IN (
@@ -129,9 +157,10 @@ def run_schema(app):
                     'recent_circulation', 'recent_collection',
                     'circulation_summary'
                 ));
-            """)
-        conn.commit()
-        app.logger.info('Database schema initialized successfully.')
+            """,
+        ])
+        app.logger.info('Database schema initialized: %d applied, %d skipped.',
+                        ok + ok2, failed + failed2)
     except Exception as e:
         conn.rollback()
         app.logger.warning('Schema initialization skipped (may already exist): %s', e)
