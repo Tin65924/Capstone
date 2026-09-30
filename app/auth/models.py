@@ -42,6 +42,33 @@ def get_user_by_id_number(id_number):
     )
 
 
+def get_user_record(user_id):
+    """One user row regardless of account status (for audit enrichment).
+
+    Unlike get_user_by_id (active only): (user_id, email, role_name,
+    full_name, account_status) or None when the user is gone.
+    """
+    return db.fetch_one(
+        '''SELECT u.user_id, u.email, r.role_name, u.full_name, u.account_status
+           FROM user_accounts u
+           JOIN roles r ON u.role_id = r.role_id
+           WHERE u.user_id = %s''',
+        (user_id,)
+    )
+
+
+def audit_text(value, width=60):
+    """One-line audit-safe text for embedding in an activity code.
+
+    Collapses whitespace and strips colons (the code separator), then
+    truncates — activity is VARCHAR(255) and presenters split on ':'.
+    """
+    text = ' '.join(str(value or '').split()).replace(':', ' ').strip()
+    if len(text) > width:
+        text = text[:width - 3] + '...'
+    return text
+
+
 def suggest_programs(prefix, limit=8):
     return db.fetch_all(
         "SELECT DISTINCT department FROM borrowers WHERE department IS NOT NULL "
@@ -204,32 +231,396 @@ def get_audit_logs(limit=50, search=None, tab='all'):
     )
 
 
-def approve_user(user_id):
+def describe_activity(actor, activity):
+    """Human sentence for an audit row, e.g. 'Staff1 edited book #42'.
+
+    Pure presenter — the stored code is unchanged (still rendered small
+    next to the sentence). Both legacy codes and newer enriched codes
+    (with embedded names / before~>after detail) are understood;
+    unknown codes fall back to the raw string.
+    """
+    import re
+    who = actor or 'System'
+    code = activity or ''
+
+    m = re.match(r'^(approved_user|toggled_user_status|archived_user|'
+                 r'unarchived_user|deleted_user|edited_user):(\d+)(?::(.+))?$',
+                 code)
+    if m:
+        verbs = {'approved_user': 'approved',
+                 'toggled_user_status': 'changed the status of',
+                 'archived_user': 'archived',
+                 'unarchived_user': 'restored',
+                 'deleted_user': 'permanently deleted',
+                 'edited_user': 'edited the details of'}
+        target = m.group(3) or f'#{m.group(2)}'
+        if m.group(3):
+            target = f'{m.group(3)} (#{m.group(2)})'
+        return f'{who} {verbs[m.group(1)]} user {target}'
+
+    m = re.match(r'^changed_role:(\d+)_to_(\d+)(?::(.+))?$', code)
+    if m:
+        target = f'{m.group(3)} (#{m.group(1)})' if m.group(3) \
+            else f'user #{m.group(1)}'
+        return (f'{who} changed the role of {target} '
+                f'(to role #{m.group(2)})')
+    m = re.match(r'^changed_role:(\d+):(.+?)~>(.+?)(?::(.+))?$', code)
+    if m:
+        target = m.group(4) or f'#{m.group(1)}'
+        if m.group(4):
+            target = f'{m.group(4)} (#{m.group(1)})'
+        return (f'{who} changed the role of user {target} '
+                f'from {m.group(2)} to {m.group(3)}')
+
+    m = re.match(r'^cataloging:edit_book:(\d+)(?::title:(.+)~>(.+))?$', code)
+    if m:
+        if m.group(2) is not None:
+            return (f"{who} edited the title of book #{m.group(1)} "
+                    f"from '{m.group(2)}' to '{m.group(3)}'")
+        return f'{who} edited book #{m.group(1)}'
+    m = re.match(r'^cataloging:(add_book|add_book_duplicate|add_copy|'
+                 r'add_accession|delete_book|edit_accession|'
+                 r'delete_accession)(?::(\d+))?$', code)
+    if m:
+        verbs = {'add_book': 'added a new book',
+                 'add_book_duplicate': 'added a duplicate of book',
+                 'add_copy': 'added a copy of book',
+                 'add_accession': 'accessioned a copy of book',
+                 'delete_book': 'deleted book',
+                 'edit_accession': 'edited copy',
+                 'delete_accession': 'deleted copy'}
+        target = f' #{m.group(2)}' if m.group(2) else ''
+        return f'{who} {verbs[m.group(1)]}{target}'
+    m = re.match(r'^cataloging:toggle_status:(\d+):(.+)$', code)
+    if m:
+        verb = 'archived' if m.group(2) == 'archived' else 'activated'
+        return f'{who} {verb} book #{m.group(1)}'
+    m = re.match(r'^cataloging:bulk_import:(\d+)_success_(\d+)_errors$', code)
+    if m:
+        return (f'{who} bulk-imported {m.group(1)} book(s) '
+                f'with {m.group(2)} error(s)')
+    m = re.match(r'^cataloging:export_books:([^:]+):(\d+)$', code)
+    if m:
+        return f'{who} exported {m.group(2)} book(s) ({m.group(1)})'
+
+    m = re.match(r'^users:export:([^:]+):(\d+)$', code)
+    if m:
+        return f'{who} exported {m.group(2)} user(s) ({m.group(1)})'
+    m = re.match(r'^added_department:([^:]+):(.+)$', code)
+    if m:
+        return f'{who} added {m.group(1)} "{m.group(2)}"'
+    m = re.match(r'^deleted_department:(\d+)$', code)
+    if m:
+        return f'{who} deleted department #{m.group(1)}'
+
+    m = re.match(r'^settings:update:(\d+)(?::(.+))?$', code)
+    if m:
+        keys = f" ({m.group(2)})" if m.group(2) else ''
+        return f'{who} updated {m.group(1)} library setting(s){keys}'
+
+    m = re.match(r'^backup:(created|restored|deleted):(.+)$', code)
+    if m:
+        verbs = {'created': 'created backup',
+                 'restored': 'restored the database from',
+                 'deleted': 'deleted backup'}
+        return f'{who} {verbs[m.group(1)]} {m.group(2)}'
+    if code == 'backup:failed:manual':
+        return f"{who}'s manual backup failed"
+    m = re.match(r'^backup:restore_(failed|aborted):(.+)$', code)
+    if m:
+        why = ('failed' if m.group(1) == 'failed'
+               else 'was aborted (no safety snapshot)')
+        return f"{who}'s restore from {m.group(2)} {why}"
+
+    if code in ('login',):
+        return f'{who} signed in'
+    if code == 'first_login':
+        return f'{who} signed in for the first time'
+    if code == 'logout':
+        return f'{who} signed out'
+    if code == 'profile:update':
+        return f'{who} updated their profile'
+    m = re.match(r'^notifications:read:(\d+)$', code)
+    if m:
+        return f'{who} read notification #{m.group(1)}'
+    if code == 'notifications:read_all':
+        return f'{who} marked all notifications as read'
+
+    m = re.match(r'^inventory:(start_session|complete_session|'
+                 r'cancel_session|export_session):(\d+)$', code)
+    if m:
+        verbs = {'start_session': 'started inventory session',
+                 'complete_session': 'completed inventory session',
+                 'cancel_session': 'cancelled inventory session',
+                 'export_session': 'exported inventory session'}
+        return f'{who} {verbs[m.group(1)]} #{m.group(2)}'
+    m = re.match(r'^inventory:(scan|mark_damaged|mark_lost):(\d+)$', code)
+    if m:
+        verbs = {'scan': 'scanned copy',
+                 'mark_damaged': 'marked copy',
+                 'mark_lost': 'marked copy'}
+        suffix = {'scan': '', 'mark_damaged': ' as damaged',
+                  'mark_lost': ' as lost'}[m.group(1)]
+        return f'{who} {verbs[m.group(1)]} #{m.group(2)}{suffix}'
+    m = re.match(r'^procurement:update_status:(\d+)$', code)
+    if m:
+        return f'{who} updated procurement request #{m.group(1)}'
+    m = re.match(r'^circulation:([^:]+):(\d+)$', code)
+    if m:
+        verbs = {'borrow': 'borrowed copy', 'return': 'returned loan',
+                 'allocate_reservation': 'allocated reservation',
+                 'claim_reservation': 'claimed reservation',
+                 'expire_reservation': 'expired reservation',
+                 'user_borrow_request': 'requested book',
+                 'user_borrow': 'borrowed book', 'user_reserve': 'reserved book',
+                 'user_return': 'returned loan', 'fine_paid': 'paid fine'}
+        verb = verbs.get(m.group(1), m.group(1).replace('_', ' '))
+        return f'{who} {verb} #{m.group(2)}'
+    m = re.match(r'^requests:([^:]+):(\d+)$', code)
+    if m:
+        return f'{who} {m.group(1).replace("_", " ")} request #{m.group(2)}'
+
+    m = re.match(r'^system:login_failed:(.+)$', code)
+    if m:
+        reasons = {'initiate': 'could not reach Google',
+                   'invalid_state': 'invalid session state',
+                   'token_exchange': 'identity provider error',
+                   'no_id_token': 'missing identity token',
+                   'verify': 'token verification failed',
+                   'issuer': 'untrusted token issuer',
+                   'email': 'no email address provided',
+                   'domain': 'non-library email domain'}
+        why = reasons.get(m.group(1), m.group(1).replace('_', ' '))
+        return f'A sign-in attempt failed ({why})'
+    m = re.match(r'^system:scheduled_backup:completed:(.+)$', code)
+    if m:
+        return f'Scheduled backup completed ({m.group(1)})'
+    if code == 'system:scheduled_backup:failed':
+        return 'Scheduled backup failed'
+    m = re.match(r'^system:error:500:(.+)$', code)
+    if m:
+        return f'Server error (500) on {m.group(1)}'
+    m = re.match(r'^system:auth_required:(.+)$', code)
+    if m:
+        return f'Someone tried to open {m.group(1)} without signing in'
+    m = re.match(r'^security:denied:(.+)$', code)
+    if m:
+        return f'{who} was denied access to {m.group(1)}'
+
+    return code
+
+
+# Audit analytics: window + cap for the dashboard aggregation below.
+AUDIT_STATS_DAYS = 30
+AUDIT_STATS_MAX_ROWS = 2000
+AUDIT_STATS_DAILY_DAYS = 14
+
+LOGIN_ACTIVITIES = ('login', 'first_login')
+
+
+def _activity_category(code):
+    """Bucket an activity code for the category donut."""
+    c = code or ''
+    if c in LOGIN_ACTIVITIES:
+        return 'Sign-ins'
+    if c == 'logout':
+        return 'Sign-outs'
+    if c.startswith('system:login_failed:'):
+        return 'Failed sign-ins'
+    if c.startswith('system:error:500:'):
+        return 'Server errors'
+    if c.startswith('system:auth_required:'):
+        return 'Sign-in prompts'
+    if c.startswith('security:denied:'):
+        return 'Access denials'
+    if c.startswith('system:scheduled_backup:'):
+        return 'Scheduled backups'
+    if c.startswith('backup:'):
+        return 'Backups'
+    if c.startswith('cataloging:'):
+        return 'Cataloging'
+    if c.startswith('settings:'):
+        return 'Settings'
+    if c.startswith('inventory:'):
+        return 'Inventory'
+    if c.startswith('procurement:'):
+        return 'Procurement'
+    if c.startswith(('profile:', 'notifications:')):
+        return 'Profile & notifications'
+    if c.startswith(('approved_user:', 'toggled_user_status:',
+                     'archived_user:', 'unarchived_user:', 'deleted_user:',
+                     'edited_user:', 'changed_role:', 'added_department:',
+                     'deleted_department:', 'users:export:')):
+        return 'User management'
+    return 'Other'
+
+
+def _as_date(value):
+    """Best-effort date from a datetime or DB string; None if unparseable."""
+    from datetime import date
+    try:
+        if hasattr(value, 'date'):
+            return value.date()
+        return date.fromisoformat(str(value)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def _sortable_ts(value):
+    """Naive datetime for ordering mixed date/datetime/string stamps.
+
+    Raw log_timestamp values are naive datetimes in practice, but a mix
+    of dates, datetimes, and strings would crash every comparison, so
+    normalize once and compare only normalized values.
+    """
+    from datetime import date, datetime
+    try:
+        if isinstance(value, datetime):
+            return value.replace(tzinfo=None)
+        if isinstance(value, date):
+            return datetime.combine(value, datetime.min.time())
+        return datetime.fromisoformat(str(value)[:19])
+    except (TypeError, ValueError):
+        return None
+
+
+def get_audit_stats(days=AUDIT_STATS_DAYS, limit=AUDIT_STATS_MAX_ROWS,
+                    today=None):
+    """Aggregate login/error/category/role stats for the Audit Logs page.
+
+    One bounded query (same operational exclusions as get_audit_logs),
+    everything else in Python. All values JSON-serializable for tojson.
+    `today` is injectable for tests.
+    """
+    from collections import Counter
+    from datetime import date, datetime, timedelta
+    today = today or date.today()
+    cutoff = datetime.combine(today - timedelta(days=days - 1),
+                              datetime.min.time())
+    rows = db.fetch_all(
+        '''SELECT a.activity, a.log_timestamp, a.user_id, u.full_name,
+                  r.role_name
+           FROM audit_trail a
+           LEFT JOIN user_accounts u ON a.user_id = u.user_id
+           LEFT JOIN roles r ON u.role_id = r.role_id
+           WHERE a.log_timestamp >= %s
+             AND a.activity NOT LIKE %s AND a.activity NOT LIKE %s
+           ORDER BY a.log_timestamp DESC
+           LIMIT %s''',
+        (cutoff, 'circulation:%', 'requests:%', limit)
+    ) or []
+
+    day_list = [today - timedelta(days=i)
+                for i in reversed(range(AUDIT_STATS_DAILY_DAYS))]
+    day_index = {d: i for i, d in enumerate(day_list)}
+    logins_per_day = [0] * len(day_list)
+    errors_per_day = [0] * len(day_list)
+    logins_today = 0
+    logins_7d = 0
+    failed_logins = 0
+    denials = 0
+    server_errors = 0
+    categories = Counter()
+    logins_by_role = Counter()
+    error_paths = Counter()
+    # uid -> [last_login, last_logout, name, role]
+    sessions = {}
+
+    for row in rows:
+        try:
+            activity, ts, uid, name, role = row[0], row[1], row[2], row[3], row[4]
+        except (IndexError, TypeError):
+            continue
+        day = _as_date(ts)
+        sts = _sortable_ts(ts)
+        code = activity if isinstance(activity, str) else ''
+        categories[_activity_category(code)] += 1
+        if code in LOGIN_ACTIVITIES:
+            logins_by_role[role or 'Unknown'] += 1
+            if day is not None:
+                if day in day_index:
+                    logins_per_day[day_index[day]] += 1
+                if day == today:
+                    logins_today += 1
+                if (today - day).days < 7:
+                    logins_7d += 1
+            if uid is not None:
+                slot = sessions.setdefault(uid, [None, None, name, role])
+                slot[2] = slot[2] or name
+                slot[3] = slot[3] or role
+                if sts is not None and (slot[0] is None or sts > slot[0]):
+                    slot[0] = sts
+        elif code == 'logout' and uid is not None:
+            slot = sessions.setdefault(uid, [None, None, name, role])
+            if slot[1] is None or (sts is not None and sts > slot[1]):
+                slot[1] = sts if sts is not None else slot[1]
+        if code.startswith('system:login_failed:'):
+            failed_logins += 1
+            if day in day_index:
+                errors_per_day[day_index[day]] += 1
+        elif code.startswith('system:error:500:'):
+            server_errors += 1
+            parts = code.split(':', 3)
+            error_paths[parts[3] if len(parts) > 3 else code] += 1
+            if day in day_index:
+                errors_per_day[day_index[day]] += 1
+        elif code.startswith('security:denied:'):
+            denials += 1
+
+    active = [(uid, s[2], s[3], s[0]) for uid, s in sessions.items()
+              if s[0] is not None and (s[1] is None or s[0] > s[1])]
+    active.sort(key=lambda t: t[3], reverse=True)
+    active_users = [[(n or 'Someone'), (r or 'Unknown')] for _, n, r, _ in active[:5]]
+
+    labels = [d.strftime('%b %d') for d in day_list]
+    return {
+        'window_days': days,
+        'total_events': len(rows),
+        'logins_today': logins_today,
+        'logins_7d': logins_7d,
+        'active_now': len(active),
+        'active_users': active_users,
+        'failed_logins': failed_logins,
+        'denials': denials,
+        'server_errors': server_errors,
+        'logins_per_day': [[labels[i], logins_per_day[i]]
+                           for i in range(len(day_list))],
+        'errors_per_day': [[labels[i], errors_per_day[i]]
+                           for i in range(len(day_list))],
+        'by_category': [[label, count]
+                        for label, count in categories.most_common(8)],
+        'logins_by_role': sorted(logins_by_role.items()),
+        'top_error_paths': [[path, count]
+                            for path, count in error_paths.most_common(5)],
+    }
+
+
+def approve_user(user_id, updated_by=None):
     db.execute(
-        'UPDATE user_accounts SET account_status = %s WHERE user_id = %s',
-        ('active', user_id)
+        'UPDATE user_accounts SET account_status = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s',
+        ('active', updated_by, user_id)
     )
 
 
-def update_user_role(user_id, role_id):
+def update_user_role(user_id, role_id, updated_by=None):
     db.execute(
-        'UPDATE user_accounts SET role_id = %s WHERE user_id = %s',
-        (role_id, user_id)
+        'UPDATE user_accounts SET role_id = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s',
+        (role_id, updated_by, user_id)
     )
 
 
-def update_user_details(user_id, full_name, id_number, department):
+def update_user_details(user_id, full_name, id_number, department, updated_by=None):
     db.execute(
-        'UPDATE user_accounts SET full_name = %s WHERE user_id = %s',
-        (full_name, user_id)
+        'UPDATE user_accounts SET full_name = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s',
+        (full_name, updated_by, user_id)
     )
     db.execute(
-        'UPDATE borrowers SET id_number = %s, department = %s WHERE user_id = %s',
-        (id_number, department, user_id)
+        'UPDATE borrowers SET id_number = %s, department = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s',
+        (id_number, department, updated_by, user_id)
     )
 
 
-def toggle_user_status(user_id):
+def toggle_user_status(user_id, updated_by=None):
     cur = db.fetch_one(
         'SELECT account_status FROM user_accounts WHERE user_id = %s',
         (user_id,)
@@ -242,8 +633,8 @@ def toggle_user_status(user_id):
         else:
             return
         db.execute(
-            'UPDATE user_accounts SET account_status = %s WHERE user_id = %s',
-            (new_status, user_id)
+            'UPDATE user_accounts SET account_status = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s',
+            (new_status, updated_by, user_id)
         )
 
 
@@ -251,17 +642,17 @@ def delete_user(user_id):
     db.execute('DELETE FROM user_accounts WHERE user_id = %s', (user_id,))
 
 
-def archive_user(user_id):
+def archive_user(user_id, updated_by=None):
     db.execute(
-        'UPDATE user_accounts SET account_status = %s WHERE user_id = %s',
-        ('archived', user_id)
+        'UPDATE user_accounts SET account_status = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s',
+        ('archived', updated_by, user_id)
     )
 
 
-def unarchive_user(user_id):
+def unarchive_user(user_id, updated_by=None):
     db.execute(
-        'UPDATE user_accounts SET account_status = %s WHERE user_id = %s',
-        ('active', user_id)
+        'UPDATE user_accounts SET account_status = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s',
+        ('active', updated_by, user_id)
     )
 
 
@@ -294,12 +685,12 @@ def get_profile_by_user(user_id):
 def update_own_profile(user_id, full_name, phone_number=None, department=None):
     """Update editable self-service fields. Never touches id_number."""
     db.execute(
-        'UPDATE user_accounts SET full_name = %s WHERE user_id = %s',
-        (full_name, user_id)
+        'UPDATE user_accounts SET full_name = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s',
+        (full_name, user_id, user_id)
     )
     db.execute(
-        'UPDATE borrowers SET phone_number = %s, department = %s WHERE user_id = %s',
-        (phone_number, department, user_id)
+        'UPDATE borrowers SET phone_number = %s, department = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s',
+        (phone_number, department, user_id, user_id)
     )
 
 

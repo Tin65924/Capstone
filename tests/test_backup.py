@@ -115,6 +115,34 @@ class TestCreateBackup:
                 assert '-c' in cmd
                 assert "SET lock_timeout = '120s'" in cmd
 
+    def test_restore_precleans_before_replay(self, app, tmp_path, monkeypatch):
+        """Older dumps must replay when the live schema grew FKs since.
+
+        Regression: pg_dump --clean only drops objects known at backup
+        time, so replaying a pre-updated_by dump died on
+        DROP CONSTRAINT user_accounts_pkey ("other objects depend on it").
+        A CASCADE pre-clean must run before --file in the same call.
+        """
+        from app.backup import utils as backup_utils
+        monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))
+        monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
+        target = tmp_path / 'library_backup_20260101_020000.sql'
+        target.write_text('dump')
+
+        with app.app_context():
+            with patch('app.backup.utils.resolve_tool', return_value='psql'), \
+                 patch.object(backup_utils.subprocess, 'run') as mock_run:
+                mock_run.return_value = subprocess.CompletedProcess([], 0, '', '')
+                backup_utils.restore_backup('library_backup_20260101_020000.sql')
+                cmd = mock_run.call_args[0][0]
+                assert mock_run.call_count == 1
+                file_idx = next(i for i, p in enumerate(cmd)
+                                if p.startswith('--file='))
+                clean_idx = next(i for i, p in enumerate(cmd)
+                                 if 'DROP TABLE' in p and 'CASCADE' in p)
+                assert clean_idx < file_idx
+                assert 'public' in cmd[clean_idx]
+
     def test_raises_with_stderr_on_failure(self, app, tmp_path, monkeypatch):
         from app.backup import utils as backup_utils
         monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))

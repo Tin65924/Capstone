@@ -80,11 +80,40 @@
                     <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white" style="">Book Requests</h1>
                     <p class="text-gray-500 dark:text-gray-400 mt-1 text-sm sm:text-base" style=""><br></p>
                 </div>
+
+                <!-- Headline stats (click a card to filter) -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6 mb-6">
+                    <a href="{{ url_for('requests.list_requests', status='all', search=current_search) }}"
+                       class="block bg-white dark:bg-[#1a2235] rounded-xl border shadow-sm p-4 sm:p-5 transition-all hover:shadow-md hover:border-primary/40 {% if current_status is none %}border-primary ring-2 ring-primary/30{% else %}border-gray-100 dark:border-gray-700{% endif %}">
+                        <p class="text-[11px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500">Total Requests</p>
+                        <p class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mt-1">{{ total_all }}</p>
+                    </a>
+                    <a href="{{ url_for('requests.list_requests', status='pending_review', search=current_search) }}"
+                       class="block bg-white dark:bg-[#1a2235] rounded-xl border shadow-sm p-4 sm:p-5 transition-all hover:shadow-md hover:border-primary/40 {% if current_status == 'pending_review' %}border-primary ring-2 ring-primary/30{% else %}border-gray-100 dark:border-gray-700{% endif %}">
+                        <p class="text-[11px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500">Pending Review</p>
+                        <p class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mt-1">{{ pending_count }}</p>
+                    </a>
+                    <a href="{{ url_for('requests.list_requests', status='approved', search=current_search) }}"
+                       class="block bg-white dark:bg-[#1a2235] rounded-xl border shadow-sm p-4 sm:p-5 transition-all hover:shadow-md hover:border-primary/40 {% if current_status == 'approved' %}border-primary ring-2 ring-primary/30{% else %}border-gray-100 dark:border-gray-700{% endif %}">
+                        <p class="text-[11px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500">Approved</p>
+                        <p class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mt-1">{{ approved_count }}</p>
+                    </a>
+                    <a href="{{ url_for('requests.list_requests', status='rejected', search=current_search) }}"
+                       class="block bg-white dark:bg-[#1a2235] rounded-xl border shadow-sm p-4 sm:p-5 transition-all hover:shadow-md hover:border-primary/40 {% if current_status == 'rejected' %}border-primary ring-2 ring-primary/30{% else %}border-gray-100 dark:border-gray-700{% endif %}">
+                        <p class="text-[11px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500">Rejected</p>
+                        <p class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mt-1">{{ rejected_count }}</p>
+                    </a>
+                    <a href="{{ url_for('requests.list_requests', status='procured', search=current_search) }}"
+                       class="block bg-white dark:bg-[#1a2235] rounded-xl border shadow-sm p-4 sm:p-5 transition-all hover:shadow-md hover:border-primary/40 {% if current_status == 'procured' %}border-primary ring-2 ring-primary/30{% else %}border-gray-100 dark:border-gray-700{% endif %}">
+                        <p class="text-[11px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500">Procured</p>
+                        <p class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mt-1">{{ procured_count }}</p>
+                    </a>
+                </div>
                 
                 <form method="GET" action="{{ url_for('requests.list_requests') }}" id="requests-filter-form" class="flex flex-col sm:flex-row gap-3 mb-6">
     <div class="relative flex-1 w-full">
         <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-lg">search</span>
-        <input type="text" name="search" value="{{ current_search or '' }}" placeholder="Search by book title..."
+        <input type="text" name="search" value="{{ current_search or '' }}" placeholder="Search by book title..." data-suggest="book_search"
             class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a2235] text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none">
     </div>
 
@@ -371,6 +400,7 @@
         });
     })();
     </script>
+    <script src="{{ url_for('static', filename='js/autosuggest.js') }}"></script>
 </body>
 
 </html>

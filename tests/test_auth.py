@@ -361,6 +361,7 @@ class TestDepartmentsManager:
         mock_db['fetch_one'].side_effect = [
             (2, 'b@mcst.edu.ph', 'Admin', 'Boss', 9, 'A-1', 'Old Dept', None, 'active'),
             (1,),  # is_valid_any_department -> valid
+            (2, 'b@mcst.edu.ph', 'Admin', 'Boss', 'active'),  # audit name lookup
         ]
         resp = admin_client.post('/admin/users/2/edit', data={
             'full_name': 'Boss',
@@ -505,6 +506,7 @@ class TestUserManagement:
         assert '/user/profile' in resp.location
 
     def test_archive_user_admin(self, admin_client, mock_db):
+        mock_db['fetch_one'].return_value = (1, 'a@x.ph', 'Student', 'Ann')
         mock_db['execute'].return_value = 1
         resp = admin_client.post('/admin/users/1/archive')
         assert resp.status_code == 302
@@ -518,6 +520,7 @@ class TestUserManagement:
         assert '/user/profile' in resp.location
 
     def test_unarchive_user_admin(self, admin_client, mock_db):
+        mock_db['fetch_one'].return_value = (1, 'a@x.ph', 'Student', 'Ann')
         mock_db['execute'].return_value = 1
         resp = admin_client.post('/admin/users/1/unarchive')
         assert resp.status_code == 302

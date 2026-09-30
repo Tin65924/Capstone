@@ -1,5 +1,12 @@
 """Tests for the admin System Overview and Audit Logs (admin-only governance)."""
 
+from datetime import datetime
+
+
+def _admin_ok(mock_db):
+    mock_db['fetch_one'].return_value = (0,)
+    mock_db['fetch_all'].return_value = []
+
 
 class TestAdminOverviewStats:
     def test_keys_and_role_mapping(self, mock_db):
@@ -43,7 +50,8 @@ class TestAdminOverviewStats:
                 assert 'f-string' not in call[0][0].lower()
         # search path uses ILIKE with bound param
         auth_models.get_audit_logs(limit=10, search='backup')
-        query, params = mock_db['fetch_all'].call_args[0]
+        calls = mock_db['fetch_all'].call_args_list
+        query, params = [c[0] for c in calls if 'a.log_id' in c[0][0]][-1]
         assert 'ILIKE %s' in query
         assert params == ('circulation:%', 'requests:%', '%backup%', 10)
 
@@ -82,6 +90,13 @@ class TestAdminDashboardRoute:
         assert b'Auto-backup' in resp.data
         assert f'keeps newest {keep}'.encode() in resp.data
         assert expected.encode() in resp.data
+
+    def test_backup_filename_cannot_overflow_card(self, admin_client, mock_db):
+        """Long backup filenames must wrap/truncate, not overlap the card."""
+        self._mock_overview(mock_db)
+        resp = admin_client.get('/admin')
+        assert resp.status_code == 200
+        assert b'break-all' in resp.data
 
     def test_admin_sidebar_has_audit_link(self, admin_client, mock_db):
         self._mock_overview(mock_db)
@@ -141,7 +156,8 @@ class TestAdminAuditsRoute:
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get('/admin/audits?q=backup')
         assert resp.status_code == 200
-        query, params = mock_db['fetch_all'].call_args[0]
+        calls = mock_db['fetch_all'].call_args_list
+        query, params = [c[0] for c in calls if 'a.log_id' in c[0][0]][-1]
         assert 'ILIKE %s' in query
         assert params[2] == '%backup%'
         assert b'No entries match' in resp.data
@@ -150,12 +166,14 @@ class TestAdminAuditsRoute:
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get('/admin/audits?limit=9999')
         assert resp.status_code == 200
-        _, params = mock_db['fetch_all'].call_args[0]
+        calls = mock_db['fetch_all'].call_args_list
+        _, params = [c[0] for c in calls if 'a.log_id' in c[0][0]][-1]
         assert params[-1] == 200
         mock_db['fetch_all'].reset_mock()
         resp = admin_client.get('/admin/audits?limit=bogus')
         assert resp.status_code == 200
-        _, params = mock_db['fetch_all'].call_args[0]
+        calls = mock_db['fetch_all'].call_args_list
+        _, params = [c[0] for c in calls if 'a.log_id' in c[0][0]][-1]
         assert params[-1] == 50
 
     def test_empty_state(self, admin_client, mock_db):
@@ -170,7 +188,8 @@ class TestAuditTabs:
         from app.auth.models import get_audit_logs
         mock_db['fetch_all'].return_value = []
         get_audit_logs(limit=25, tab='staff')
-        query, params = mock_db['fetch_all'].call_args[0]
+        calls = mock_db['fetch_all'].call_args_list
+        query, params = [c[0] for c in calls if 'a.log_id' in c[0][0]][-1]
         assert "r.role_name IN ('Admin', 'Librarian')" in query
         assert 'ILIKE' not in query
         assert params == ('circulation:%', 'requests:%', 25)
@@ -179,28 +198,33 @@ class TestAuditTabs:
         from app.auth.models import get_audit_logs
         mock_db['fetch_all'].return_value = []
         get_audit_logs(tab='members')
-        query, _ = mock_db['fetch_all'].call_args[0]
+        calls = mock_db['fetch_all'].call_args_list
+        query, _ = [c[0] for c in calls if 'a.log_id' in c[0][0]][-1]
         assert "r.role_name IN ('Student', 'Faculty')" in query
         get_audit_logs(tab='system')
-        query, _ = mock_db['fetch_all'].call_args[0]
+        calls = mock_db['fetch_all'].call_args_list
+        query, _ = [c[0] for c in calls if 'a.log_id' in c[0][0]][-1]
         assert 'a.user_id IS NULL' in query
 
     def test_all_and_invalid_tab_have_no_role_filter(self, mock_db):
         from app.auth.models import get_audit_logs
         mock_db['fetch_all'].return_value = []
         get_audit_logs(tab='all')
-        query, _ = mock_db['fetch_all'].call_args[0]
+        calls = mock_db['fetch_all'].call_args_list
+        query, _ = [c[0] for c in calls if 'a.log_id' in c[0][0]][-1]
         assert 'role_name IN' not in query
         assert 'IS NULL' not in query
         get_audit_logs(tab='bogus')
-        query, _ = mock_db['fetch_all'].call_args[0]
+        calls = mock_db['fetch_all'].call_args_list
+        query, _ = [c[0] for c in calls if 'a.log_id' in c[0][0]][-1]
         assert 'role_name IN' not in query
 
     def test_tab_combines_with_search(self, mock_db):
         from app.auth.models import get_audit_logs
         mock_db['fetch_all'].return_value = []
         get_audit_logs(limit=10, search='backup', tab='staff')
-        query, params = mock_db['fetch_all'].call_args[0]
+        calls = mock_db['fetch_all'].call_args_list
+        query, params = [c[0] for c in calls if 'a.log_id' in c[0][0]][-1]
         assert "r.role_name IN ('Admin', 'Librarian')" in query
         assert 'a.activity ILIKE %s' in query
         assert params == ('circulation:%', 'requests:%', '%backup%', 10)
@@ -209,7 +233,8 @@ class TestAuditTabs:
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get('/admin/audits?tab=staff')
         assert resp.status_code == 200
-        query, _ = mock_db['fetch_all'].call_args[0]
+        calls = mock_db['fetch_all'].call_args_list
+        query, _ = [c[0] for c in calls if 'a.log_id' in c[0][0]][-1]
         assert "r.role_name IN ('Admin', 'Librarian')" in query
         assert b'Staff' in resp.data
         assert b'name="tab" value="staff"' in resp.data
@@ -218,14 +243,16 @@ class TestAuditTabs:
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get('/admin/audits?tab=bogus')
         assert resp.status_code == 200
-        query, _ = mock_db['fetch_all'].call_args[0]
+        calls = mock_db['fetch_all'].call_args_list
+        query, _ = [c[0] for c in calls if 'a.log_id' in c[0][0]][-1]
         assert 'role_name IN' not in query
 
     def test_route_search_keeps_tab(self, admin_client, mock_db):
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get('/admin/audits?tab=system&q=login')
         assert resp.status_code == 200
-        query, params = mock_db['fetch_all'].call_args[0]
+        calls = mock_db['fetch_all'].call_args_list
+        query, params = [c[0] for c in calls if 'a.log_id' in c[0][0]][-1]
         assert 'a.user_id IS NULL' in query
         assert params[2] == '%login%'
         assert b'tab=system' in resp.data
@@ -243,3 +270,87 @@ class TestAuditTabs:
         resp = client.get('/admin/audits')
         assert resp.status_code == 302
         assert '/login' in resp.location
+
+
+class TestStatsEdges:
+    def test_weird_role_rows(self, admin_client, mock_db):
+        mock_db['fetch_one'].return_value = (5,)
+        mock_db['fetch_all'].side_effect = [
+            [(None, 3), ('Student', -2), ('X', 'junk'), ('Y',)],
+            [], [], [],
+        ]
+        assert admin_client.get('/admin').status_code == 200
+
+    def test_short_pending_activity(self, admin_client, mock_db):
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].side_effect = [
+            [], [(9,)], [(7,)],
+            [(1, 'f', 100, 'completed', 'm', None, '2026-01-01')],
+        ]
+        assert admin_client.get('/admin').status_code == 200
+
+
+class TestBackupStates:
+    def test_failed_backup_banner(self, admin_client, mock_db):
+        _admin_ok(mock_db)
+        mock_db['fetch_all'].side_effect = [
+            [], [],
+            [(1, 'b.pg', 100, 'failed', 'manual', 'boom',
+              '2026-01-01')],
+            [(1, 'b.pg', 100, 'failed', 'manual', 'boom',
+              '2026-01-01')],
+        ]
+        assert admin_client.get('/admin').status_code == 200
+
+    def test_evil_filename_and_error(self, admin_client, mock_db):
+        evil = '<script>alert(1)</script>'
+        _admin_ok(mock_db)
+        row = (1, evil, 100, 'failed', 'manual', evil, '2026-01-01')
+        mock_db['fetch_all'].side_effect = [[], [], [row], [row]]
+        body = admin_client.get('/admin').data.decode()
+        assert evil not in body
+
+    def test_short_backup_rows(self, admin_client, mock_db):
+        _admin_ok(mock_db)
+        mock_db['fetch_all'].side_effect = [[], [], [(1,)], [(1,)]]
+        assert admin_client.get('/admin').status_code == 200
+
+
+class TestScheduler:
+    def test_garbage_config(self):
+        from app.backup.scheduler import next_scheduled_backup
+        for day, hour in ((None, None), ('x', 'y'), (-5, 99),
+                          (0, -1), (31, 25), ('15', '9')):
+            nxt = next_scheduled_backup(day, hour)
+            assert isinstance(nxt, datetime)
+
+    def test_december_rollover(self):
+        from app.backup.scheduler import next_scheduled_backup
+        now = datetime(2026, 12, 20, 10, 0)
+        nxt = next_scheduled_backup(1, 2, now=now)
+        assert (nxt.year, nxt.month) == (2027, 1)
+
+
+class TestDescribeActivity:
+    def test_garbage(self):
+        from app.auth.models import describe_activity
+        for actor, code in ((None, None), ('', ''), ('A', 'nonsense xyz'),
+                            ('A', 'approved_user:notanid'),
+                            ('<b>A</b>', 'deleted_user:1:<i>x</i>'),
+                            ('A', 'X' * 3000)):
+            out = describe_activity(actor, code)
+            assert isinstance(out, str)
+
+    def test_evil_audit_renders_escaped(self, admin_client, mock_db):
+        evil = '<img src=x onerror=alert(1)>'
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].side_effect = [
+            [(7, 1, evil, None, '2026-01-05')],
+            [(0,)],
+        ]
+        body = admin_client.get('/admin/audits').data.decode()
+        assert evil not in body
+
+    def test_audit_wildcard_search(self, admin_client, mock_db):
+        _admin_ok(mock_db)
+        assert admin_client.get('/admin/audits?q=%_').status_code == 200

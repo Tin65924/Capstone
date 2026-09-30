@@ -31,6 +31,10 @@ def _safe_next(default_endpoint):
     parsed = urlparse(nxt)
     if parsed.scheme or parsed.netloc:
         return fallback
+    # Backslashes are treated as slashes by browsers (open-redirect
+    # bypass like /\\evil.com), so reject them outright.
+    if '\\' in nxt:
+        return fallback
     if not nxt.startswith('/') or nxt.startswith('//'):
         return fallback
     return nxt
@@ -264,7 +268,7 @@ def mark_notification_read_route(notification_id):
     if not borrower:
         flash('No borrower record found.', 'error')
         return redirect(url_for('main.user_profile'))
-    mark_notification_read(notification_id, borrower[0])
+    mark_notification_read(notification_id, borrower[0], updated_by=current_user.id)
     log_activity(current_user.id, f'notifications:read:{notification_id}')
     return redirect(_safe_next('main.user_profile'))
 
@@ -278,7 +282,7 @@ def mark_all_notifications_read_route():
     if not borrower:
         flash('No borrower record found.', 'error')
         return redirect(url_for('main.user_profile'))
-    mark_all_notifications_read(borrower[0])
+    mark_all_notifications_read(borrower[0], updated_by=current_user.id)
     log_activity(current_user.id, 'notifications:read_all')
     flash('All notifications marked as read.', 'success')
     return redirect(_safe_next('main.user_profile'))
@@ -400,11 +404,11 @@ def admin_dashboard():
     pending = get_pending_users() or []
     activity = get_audit_logs(limit=8) or []
     backups = get_backup_logs() or []
-    completed = [b for b in backups if b[3] == 'completed']
+    completed = [b for b in backups if len(b) > 3 and b[3] == 'completed']
     last_backup = completed[0] if completed else None
     from app.backup import jobs as backup_jobs
     backup_busy = (backup_jobs.active_job() is not None
-                   or any(b[3] == 'in_progress' for b in backups))
+                   or any(len(b) > 3 and b[3] == 'in_progress' for b in backups))
     backup_day = current_app.config.get('BACKUP_DAY', 1)
     backup_hour = current_app.config.get('BACKUP_HOUR', 2)
     backup_keep = current_app.config.get('BACKUP_KEEP', 12)
@@ -427,7 +431,8 @@ def admin_dashboard():
 @login_required
 @admin_required
 def admin_audits():
-    from app.auth.models import AUDIT_TABS, get_audit_logs
+    from app.auth.models import (AUDIT_TABS, describe_activity, get_audit_logs,
+                                 get_audit_stats)
     search = (request.args.get('q', '') or '').strip()
     tab = (request.args.get('tab', '') or '').strip().lower()
     if tab not in AUDIT_TABS:
@@ -438,6 +443,13 @@ def admin_audits():
         limit = 50
     limit = max(1, min(limit, 200))
     logs = get_audit_logs(limit=limit, search=search or None, tab=tab) or []
+    try:
+        stats = get_audit_stats()
+    except Exception:
+        # Analytics must never break the primary table.
+        current_app.logger.exception('Audit stats failed; table still renders')
+        stats = None
     return render_template('dashboard/admin_audits.html', logs=logs,
                            search=search, limit=limit, tab=tab,
+                           describe_activity=describe_activity, stats=stats,
                            sidebar='components/admin_sidebar_nav.html')

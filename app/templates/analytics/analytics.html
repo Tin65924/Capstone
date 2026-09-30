@@ -130,6 +130,77 @@
         @media (min-width: 1024px) {
             .board { padding: 2rem; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
         }
+
+        /* ---- Chart legends + hover tooltips ---- */
+        #chart-tooltip {
+            position: fixed;
+            z-index: 200;
+            pointer-events: none;
+            background: #0f172a;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1.4;
+            padding: 6px 10px;
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, .25);
+            opacity: 0;
+            transform: translate(-50%, calc(-100% - 12px));
+            transition: opacity .12s ease;
+            white-space: nowrap;
+            max-width: 260px;
+        }
+        #chart-tooltip.show { opacity: 1; }
+        #chart-tooltip .tt-sub { display: block; font-weight: 500; color: #cbd5e1; font-size: 10px; }
+
+        .chart-donut-seg { cursor: pointer; transition: opacity .15s ease, stroke-width .15s ease; }
+        .chart-donut-seg:hover, .chart-donut-seg.active { stroke-width: 30; }
+        .chart-donut-dim .chart-donut-seg { opacity: .35; }
+        .chart-donut-dim .chart-donut-seg.active { opacity: 1; }
+
+        .legend-item { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 3px 6px; margin: 0 -6px; border-radius: 6px; cursor: default; transition: background .12s ease; }
+        .legend-item:hover { background: #f1f5f9; }
+        .legend-item .legend-dot { width: 8px; height: 8px; border-radius: 9999px; flex-shrink: 0; }
+
+        .hbar-row { border-radius: 8px; padding: 2px 4px; margin: 0 -4px; transition: background .12s ease; cursor: default; }
+        .hbar-row:hover { background: #f8fafc; }
+        .hbar-row:hover .hbar-fill { filter: brightness(.92); }
+        .hbar-fill { transition: filter .12s ease; }
+
+        .chart-legend { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 11px; font-weight: 700; color: #475569; }
+        .chart-legend .lg-swatch { display: inline-block; width: 18px; height: 4px; border-radius: 9999px; margin-right: 6px; vertical-align: middle; }
+        .chart-legend .lg-swatch.dashed { height: 0; border-top: 2px dashed #94a3b8; width: 18px; border-radius: 0; }
+        .chart-legend .lg-dot { display: inline-block; width: 8px; height: 8px; border-radius: 9999px; margin-right: 6px; vertical-align: middle; }
+
+        .line-dot { cursor: pointer; transition: r .12s ease; }
+        .line-dot:hover { stroke: #fff; stroke-width: 2; }
+
+        /* ---- Expand-to-modal buttons (all non-pie graph cards) ---- */
+        .chart-expand-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            color: #64748b;
+            background: #fff;
+            transition: background .12s ease, color .12s ease, border-color .12s ease;
+            flex-shrink: 0;
+        }
+        .chart-expand-btn:hover { background: #f1f5f9; color: #1e3a8a; border-color: #cbd5e1; }
+        .chart-expand-btn .material-symbols-outlined { font-size: 16px; }
+
+        /* ---- Expanded modal: bigger charts/tables ---- */
+        #chartExpandBody > div { border: none !important; padding: 0 !important; }
+        #chartExpandBody table { font-size: 13px; }
+        #chartExpandBody svg.w-full { height: 26rem !important; }
+        #chartExpandBody .hbar-row > div:first-child { font-size: 13px !important; }
+        #chartExpandBody .hbar-row .h-2 { height: 0.75rem; }
+        #chartExpandBody .chart-legend { font-size: 13px; }
+        /* Scrollable content inside the expanded modal (bars + tables). */
+        #chartExpandBody .expand-scroll { max-height: 55vh; overflow-y: auto; padding-right: 4px; }
     </style>
 </head>
 
@@ -215,11 +286,6 @@
                     <span class="hidden sm:inline">Export All</span>
                     <span class="sm:hidden">Export</span>
                 </button>
-                <button onclick="exportDashboard(ALL_DASHBOARD_SECTIONS)"
-                    class="hidden md:flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg bg-primary text-white hover:bg-blue-800 transition-all whitespace-nowrap">
-                    <span class="material-symbols-outlined text-lg">lab_profile</span>
-                    Export Report
-                </button>
             </div>
         </div>
 
@@ -228,24 +294,25 @@
             <div class="board !grid-cols-1 !max-w-[1400px] !mx-auto !w-full" id="riverside-root">
                 <!-- Riverside-style tab nav -->
                 <div class="flex items-center gap-2 flex-wrap">
-                    <button data-rtab="collection" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-primary text-white">Collection Tracking</button>
+                    <button data-rtab="collection" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-primary text-white">Circulation Tracking</button>
                     <button data-rtab="library" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Library Analytics</button>
-                    <button data-rtab="usage" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Usage Analytics</button>
+                    <button data-rtab="usage" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Department Analytics</button>
+                    <button data-rtab="book" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Book Analytics</button>
                 </div>
 
-                <!-- ============ TAB: Collection Tracking ============ -->
+                <!-- ============ TAB: Circulation Tracking ============ -->
                 <section data-rtab-panel="collection" class="space-y-4">
                     <div class="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 flex flex-wrap items-center gap-3">
                         <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-white">library_books</span></div>
                         <div class="min-w-0 flex-1">
-                            <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Collection Tracking Dashboard</h2>
+                            <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Circulation Tracking Dashboard</h2>
                             <p class="text-xs text-slate-500">What is the current status of books and copies?</p>
                         </div>
                         <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">{{ period_label }}</span>
-                        <button onclick="exportDashboard(['collection_by_category', 'copies_by_status', 'recent_collection'])" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
+                        <button onclick="exportDashboard(COLLECTION_SECTIONS)" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
                     </div>
                     <div id="collection-kpis" class="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3"></div>
-                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                         <div class="bg-white rounded-xl border border-slate-200 p-4">
                             <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-extrabold">Collection by Category</h3><span class="text-[11px] text-slate-400 border rounded px-2 py-0.5">By Titles</span></div>
                             
@@ -255,11 +322,6 @@
                             <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-extrabold">Copies by Status</h3><span class="text-[11px] text-slate-400 border rounded px-2 py-0.5">By Copies</span></div>
                             
                             <div class="flex items-center gap-4"><div id="donut-status" class="shrink-0"></div><div id="legend-status" class="flex-1 space-y-1 text-xs min-w-0"></div></div>
-                        </div>
-                        <div class="bg-white rounded-xl border border-slate-200 p-4">
-                            <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-extrabold">Collection Condition Summary</h3><span class="text-[11px] text-slate-400 border rounded px-2 py-0.5">By Copies</span></div>
-                            <div id="condition-bars" class="space-y-2.5"></div>
-                            <p class="text-[10px] text-slate-400 mt-2">Condition derived from inventory_state (no condition column in schema).</p>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -301,18 +363,19 @@
                             <p class="text-xs text-slate-500">What patterns are happening and what may happen next?</p>
                         </div>
                         <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">{{ period_label }}</span>
-                        <button onclick="exportDashboard(['circulation_summary', 'trend_borrowings', 'top_categories', 'trend_overdue', 'high_demand', 'recent_circulation'])" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
+                        <button onclick="exportDashboard(LIBRARY_SECTIONS)" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
                     </div>
                     <div id="library-kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3"></div>
                     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-1">1. Borrowings Trend</h3>
                             
-                        <div id="trend-line" class="w-full overflow-hidden"></div><p class="text-[10px] text-slate-400 mt-1">Solid = actual borrowings • dashed = 30-day moving-average forecast.</p></div>
+                        <div id="trend-line" class="w-full overflow-hidden"></div><p class="text-[10px] text-slate-400 mt-1">X: Date • Y: Borrowings. Solid = actual borrowings • dashed = 30-day moving-average forecast.</p></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">2. Top Borrowed Categories</h3>
                             
                         <div class="flex items-center gap-4"><div id="donut-topcats" class="shrink-0"></div><div id="legend-topcats" class="flex-1 space-y-1 text-xs min-w-0"></div></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">3. Peak Borrowing Periods</h3>
                             
+                        <div class="chart-legend mb-2" aria-label="Peak periods chart legend"><span title="Borrowings on each day"><span class="lg-dot" style="background:#2563eb"></span>Borrowings</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details</span></div>
                         <div id="peak-bars" class="space-y-1.5"></div><p class="text-[10px] text-slate-400 mt-1">Grouped by day (borrow_date has no time-of-day).</p></div>
                     </div>
                     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -321,28 +384,43 @@
                         <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[480px]"><thead><tr class="text-left text-slate-500 border-b"><th class="py-2">#</th><th class="py-2">Title</th><th class="py-2">Author</th><th class="py-2 text-right">Active</th></tr></thead><tbody id="high-demand-body"></tbody></table></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-1">5. Overdue Trend</h3>
                             
-                        <div id="overdue-line" class="w-full overflow-hidden"></div></div>
+                        <div id="overdue-line" class="w-full overflow-hidden"></div><p class="text-[10px] text-slate-400 mt-1">X: Date • Y: Overdue items. Solid = actual overdue • dashed = 30-day moving-average forecast.</p></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">6. Forecast Summary / Insights</h3><div id="insights-list" class="space-y-2.5 text-[11px] text-slate-600"></div></div>
                     </div>
                     <div class="bg-white rounded-xl border border-slate-200 p-4 overflow-hidden">
                         <div class="flex items-center mb-2"><h3 class="text-sm font-extrabold mr-auto">7. Recent Circulation Activity</h3><a href="{{ url_for('circulation.circulation_page') }}" class="text-[11px] font-bold border rounded-lg px-3 py-1.5 hover:bg-gray-50">View All Activity</a></div>
-                        <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[820px]">
-                            <thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-2">Date/Time</th><th class="py-2 pr-2">TXN</th><th class="py-2 pr-2">User</th><th class="py-2 pr-2">Title</th><th class="py-2 pr-2">Action</th><th class="py-2 pr-2">Due Date</th><th class="py-2">Status</th></tr></thead>
+                        <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[720px]">
+                            <thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-2">Date/Time</th><th class="py-2 pr-2">User</th><th class="py-2 pr-2">Title</th><th class="py-2 pr-2">Action</th><th class="py-2 pr-2">Due Date</th><th class="py-2">Status</th></tr></thead>
                             <tbody id="recent-circ-body"></tbody>
                         </table></div>
                     </div>
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">8. Top Requested Titles</h3>
+                        <div class="chart-legend mb-2" aria-label="Top requested titles legend"><span title="Requests per title"><span class="lg-dot" style="background:#2563eb"></span>Requests</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details</span></div>
+                        <div id="req-top-titles" class="space-y-1.5"></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">9. Student vs Faculty Demand</h3>
+                        <div class="chart-legend mb-2" aria-label="Request demand legend"><span><span class="lg-dot" style="background:#1d4ed8"></span>Student</span><span><span class="lg-dot" style="background:#0ea5e9"></span>Faculty</span><span><span class="lg-dot" style="background:#94a3b8"></span>Other staff</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details</span></div>
+                        <div id="req-role-split" class="space-y-3"></div></div>
+                    </div>
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">10. Requests Over Time</h3>
+                        <div id="req-trend-line" class="w-full overflow-hidden"></div><p class="text-[10px] text-slate-400 mt-1">X: Date · Y: Requests. Solid = actual requests · dashed = 30-day moving-average forecast.</p></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">11. Requests by Program</h3>
+                        <div class="chart-legend mb-2" aria-label="Requests by program legend"><span title="Requests per program"><span class="lg-dot" style="background:#8b5cf6"></span>Requests</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details</span></div>
+                        <div id="req-by-program" class="space-y-1.5"></div></div>
+                    </div>
                 </section>
 
-                <!-- ============ TAB: Usage Analytics ============ -->
+                <!-- ============ TAB: Department Analytics ============ -->
                 <section data-rtab-panel="usage" class="space-y-4 hidden">
                     <div class="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 flex flex-wrap items-center gap-3">
                         <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-white">group</span></div>
                         <div class="min-w-0 flex-1">
-                            <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Usage Analytics Dashboard</h2>
-                            <p class="text-xs text-slate-500">Who is using the library, what are they borrowing, and how often?</p>
+                            <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Department Analytics Dashboard</h2>
+                            <p class="text-xs text-slate-500">Which departments use the library most — borrowing, borrowers, and overdue per program.</p>
                         </div>
                         <div class="relative" id="usage-dept-wrapper">
-                            <button type="button" id="usage-dept-btn" onclick="toggleUsageDeptDropdown(event)" title="Filter Usage tab by program"
+                            <button type="button" id="usage-dept-btn" onclick="toggleUsageDeptDropdown(event)" title="Filter Department tab by program"
                                 class="flex items-center justify-between gap-2 text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600 bg-white outline-none focus:border-primary min-w-[200px] max-w-[240px]">
                                 <span id="usage-dept-label" class="truncate">All Departments / Programs</span>
                                 <span class="material-symbols-outlined text-slate-400 text-[18px] shrink-0">expand_more</span>
@@ -361,31 +439,228 @@
                         </div>
                         <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">{{ period_label }}</span>
                         <span id="usage-dept-loading" class="hidden text-[11px] font-bold text-primary">Loading…</span>
-                        <button onclick="exportDashboard(['circulation_summary', 'books_borrowed_per_program', 'by_user_type', 'top_books', 'recent_circulation'])" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
+                        <button onclick="exportDashboard(DEPARTMENT_SECTIONS)" class="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"><span class="material-symbols-outlined text-lg">download</span> Export Report</button>
                     </div>
                     <div id="usage-kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3"></div>
-                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                         <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">1. Borrowings by Department / Program</h3>
                             
+                        <div class="chart-legend mb-2" aria-label="Borrowings by department legend"><span title="Total borrowings per program"><span class="lg-dot" style="background:#2563eb"></span>Borrowings</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details</span></div>
                         <div id="dept-bars" class="space-y-1.5"></div></div>
-                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">2. Top Borrowed Books</h3>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">2. Active Borrowers by Department</h3>
                             
-                        <div id="top-books-list" class="space-y-2"></div></div>
-                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">Quick Reports</h3>
-                            <div class="space-y-2 text-[11px]">
-                                <button onclick="exportDashboard(['books_borrowed_per_program'])" class="w-full text-left border rounded-lg px-3 py-2.5 hover:bg-gray-50"><b>Department Usage Report</b><br><span class="text-slate-500">Detailed borrowing activity by program.</span></button>
-                                <button onclick="exportDashboard(['trend_overdue', 'recent_circulation'])" class="w-full text-left border rounded-lg px-3 py-2.5 hover:bg-gray-50"><b>Overdue Items Report</b><br><span class="text-slate-500">Overdue items with borrower and due dates.</span></button>
-                                <button onclick="exportDashboard(['top_books'])" class="w-full text-left border rounded-lg px-3 py-2.5 hover:bg-gray-50"><b>Top Borrowed Books Report</b><br><span class="text-slate-500">Most borrowed books in the period.</span></button>
-                                <button onclick="exportDashboard(['circulation_summary', 'trend_borrowings'])" class="w-full text-left border rounded-lg px-3 py-2.5 hover:bg-gray-50"><b>Monthly Circulation Summary</b><br><span class="text-slate-500">Borrowing and return statistics.</span></button>
-                            </div>
-                        </div>
+                        <div class="chart-legend mb-2" aria-label="Active borrowers legend"><span title="Distinct borrowers per program"><span class="lg-dot" style="background:#16a34a"></span>Borrowers</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details</span></div>
+                        <div id="borrowers-dept-bars" class="space-y-1.5"></div></div>
                     </div>
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">3. Borrowings by User Type</h3>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">3. Overdue Items by Department</h3><div class="chart-legend mb-1" aria-label="Overdue by department legend"><span title="Overdue items per program"><span class="lg-dot" style="background:#ef4444"></span>Overdue</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details</span></div><div id="overdue-dept-bars" class="space-y-1.5 mt-2"></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">4. Department Leaderboard</h3><div class="overflow-x-auto"><table class="w-full text-[11px]"><thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-2">Department</th><th class="py-2 pr-2 text-right">Borrowings</th><th class="py-2 pr-2 text-right">Borrowers</th><th class="py-2 text-right">Overdue</th></tr></thead><tbody id="dept-leaderboard-body"></tbody></table></div></div>
+                    </div>
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">5. Top Borrowed Books in Selected Departments</h3>
+                            
+                        <div id="top-books-list" class="space-y-2"></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">6. Borrowings by User Type</h3>
                             
                         <div class="flex items-center gap-4"><div id="donut-usertype" class="shrink-0"></div><div id="legend-usertype" class="flex-1 space-y-1 text-xs min-w-0"></div></div></div>
-                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">4. Overdue Items by Department</h3><div id="overdue-dept-note" class="text-[11px] text-slate-500">Overdue counts are tracked per loan; department split reuses the borrowings mix and follows the program selector above.</div><div id="overdue-dept-bars" class="space-y-1.5 mt-2"></div></div>
                     </div>
+                </section>
+
+                <!-- ============ TAB: Book Analytics ============ -->
+                <section data-rtab-panel="book" class="space-y-4 hidden">
+                    <div class="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 flex flex-wrap items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-white">menu_book</span></div>
+                        <div class="min-w-0 flex-1">
+                            <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Book Analytics</h2>
+                            <p class="text-xs text-slate-500">Pick one book to see its traffic — borrows, trend, borrowers, copies, and recent activity.</p>
+                        </div>
+                        <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">{{ period_label }}</span>
+                    </div>
+
+                    <!-- Book picker -->
+                    <div class="bg-white rounded-xl border border-slate-200 p-4">
+                        <form method="get" action="{{ url_for('analytics.analytics_page') }}" class="flex flex-col sm:flex-row gap-2">
+                            <input type="hidden" name="preset" value="{{ preset }}">
+                            {% if from_date %}<input type="hidden" name="from" value="{{ from_date }}">{% endif %}
+                            {% if to_date %}<input type="hidden" name="to" value="{{ to_date }}">{% endif %}
+                            {% for d in departments %}<input type="hidden" name="department" value="{{ d }}">{% endfor %}
+                            <input type="hidden" name="tab" value="book">
+                            <div class="relative flex-1">
+                                <input id="book-search" name="q" value="{{ q }}" autocomplete="off"
+                                    placeholder="Search by book title, category, or accession number…"
+                                    class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-primary">
+                                <div id="book-suggest" class="hidden absolute z-50 top-full left-0 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden text-sm max-h-72 overflow-y-auto"></div>
+                            </div>
+                            <button type="submit" class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg font-bold text-sm transition-all">Search</button>
+                            {% if q or book_id %}
+                            <a href="{{ url_for('analytics.analytics_page') }}?preset={{ preset }}&tab=book" class="px-4 py-2 rounded-lg font-bold text-sm border border-gray-200 hover:bg-gray-50 text-center">Clear</a>
+                            {% endif %}
+                        </form>
+
+                        {% if q %}
+                        <div id="book-results" class="mt-3">
+                            {% if results %}
+                            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[420px] overflow-y-auto pr-1">
+                            {% for r in results %}
+                            <div class="flex flex-col bg-slate-50 border {% if book_id == r[0] %}border-primary ring-1 ring-primary/30{% else %}border-gray-200{% endif %} rounded-xl p-4 gap-2">
+                                <div class="flex items-start gap-2">
+                                    <span class="w-9 h-9 rounded-lg {% if book_id == r[0] %}bg-primary text-white{% else %}bg-blue-100 text-blue-700{% endif %} flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[20px]">menu_book</span></span>
+                                    <div class="min-w-0 flex-1">
+                                        <p class="text-[13px] font-extrabold text-slate-800 leading-snug">{{ r[1] }}</p>
+                                        <p class="text-[11px] text-slate-500 truncate mt-0.5">{{ r[2] }}</p>
+                                    </div>
+                                </div>
+                                <div class="text-[11px] text-slate-500 space-y-0.5">
+                                    <p class="truncate"><span class="font-bold text-slate-600">Category:</span> {{ r[3] }}</p>
+                                    <p><span class="font-bold text-slate-600">Copyright Date:</span> {% if r|length > 4 and r[4] %}{{ r[4] }}{% else %}—{% endif %}</p>
+                                </div>
+                                <a href="{{ url_for('analytics.analytics_page', book_id=r[0], q=q, preset=preset, from=from_date, to=to_date, tab='book') }}"
+                                    class="mt-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-bold text-[12px] transition-all {% if book_id == r[0] %}bg-white border border-primary text-primary{% else %}bg-primary hover:bg-primary/90 text-white{% endif %}">
+                                    <span class="material-symbols-outlined text-[16px]">insights</span>
+                                    {% if book_id == r[0] %}Selected — Show Analytics{% else %}Show Analytics{% endif %}
+                                </a>
+                            </div>
+                            {% endfor %}
+                            </div>
+                            {% else %}
+                            <p class="px-3 py-4 text-[12px] text-slate-500 text-center border border-gray-100 rounded-xl">No books found for “{{ q }}”. Try a different book title, category, or accession number.</p>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {% if traffic %}
+                    <!-- Selected book header : graphs below render only after a
+                         card's "Show Analytics" is clicked (traffic present). -->
+                    <div class="bg-white rounded-xl border border-slate-200 p-4 sm:p-5">
+                        <h3 class="text-base sm:text-lg font-extrabold text-slate-900">{{ traffic.book.title }}</h3>
+                        <p class="text-xs text-slate-500 mt-0.5">by {{ traffic.book.author or '—' }}</p>
+                        <dl class="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 mt-3 text-[11px]">
+                            <div><dt class="font-bold text-slate-400 uppercase tracking-wide text-[10px]">Category</dt><dd class="text-slate-700 font-semibold truncate">{{ traffic.book.category or '—' }}</dd></div>
+                            <div><dt class="font-bold text-slate-400 uppercase tracking-wide text-[10px]">Publisher</dt><dd class="text-slate-700 font-semibold truncate">{{ traffic.book.publisher or '—' }}</dd></div>
+                            <div><dt class="font-bold text-slate-400 uppercase tracking-wide text-[10px]">Edition</dt><dd class="text-slate-700 font-semibold truncate">{{ traffic.book.edition or '—' }}</dd></div>
+                            <div><dt class="font-bold text-slate-400 uppercase tracking-wide text-[10px]">Copyright</dt><dd class="text-slate-700 font-semibold truncate">{{ traffic.book.copyright_date if traffic.book.copyright_date else '—' }}</dd></div>
+                            <div><dt class="font-bold text-slate-400 uppercase tracking-wide text-[10px]">ISBN</dt><dd class="text-slate-700 font-semibold truncate">{{ traffic.book.isbn or '—' }}</dd></div>
+                            <div><dt class="font-bold text-slate-400 uppercase tracking-wide text-[10px]">Call Number</dt><dd class="text-slate-700 font-semibold truncate">{{ traffic.book.call_number or '—' }}</dd></div>
+                            <div><dt class="font-bold text-slate-400 uppercase tracking-wide text-[10px]">Material Type</dt><dd class="text-slate-700 font-semibold truncate">{{ traffic.book.material_type or '—' }}</dd></div>
+                            <div><dt class="font-bold text-slate-400 uppercase tracking-wide text-[10px]">Copies</dt><dd class="text-slate-700 font-semibold truncate">{{ traffic.book.copies }} cop{{ 'y' if traffic.book.copies == 1 else 'ies' }}</dd></div>
+                        </dl>
+                        {% if traffic.book.description %}
+                        <p class="text-[11px] text-slate-500 mt-3 leading-relaxed">{{ traffic.book.description }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="bg-white rounded-xl border border-slate-200 p-4">
+                        <h3 class="text-sm font-extrabold mb-1">Status Trends — Borrowed, Returned &amp; Reservation Queue</h3>
+                        <p class="text-[10px] text-slate-400 mb-2">X: Date • Y: Items per day. Each line is one status; reservation lines are dated by request date.</p>
+                        <div class="flex items-center gap-2 mb-2">
+                            <button type="button" id="book-status-filter-btn" onclick="openStatusFilterModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold border border-gray-200 text-slate-600 hover:bg-gray-50 transition-colors">
+                                <span class="material-symbols-outlined text-[16px]">filter_list</span>
+                                <span data-status-filter-label>All statuses</span>
+                            </button>
+                        </div>
+                        <div id="book-status-legend" class="chart-legend mb-2"></div>
+                        <div id="book-status-lines" class="w-full overflow-hidden"></div>
+                    </div>
+
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        <div class="bg-white rounded-xl border border-slate-200 p-4">
+                            <h3 class="text-sm font-extrabold mb-1">Borrowings Trend</h3>
+                            <p class="text-[10px] text-slate-400 mb-2">Daily borrows in the selected period.</p>
+                            <div id="book-trend" class="space-y-1.5 max-h-64 overflow-y-auto pr-1"></div>
+                        </div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4">
+                            <h3 class="text-sm font-extrabold mb-2">Borrowings by Program</h3>
+                            <div id="book-program" class="space-y-1.5"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl border border-slate-200 p-4">
+                        <h3 class="text-sm font-extrabold mb-2">Borrowings by User Type</h3>
+                        <div id="book-usertype" class="space-y-1.5"></div>
+                    </div>
+
+                    <div class="bg-white rounded-xl border border-slate-200 p-4 overflow-hidden">
+                        <h3 class="text-sm font-extrabold mb-2">Recent Activity for This Book</h3>
+                        <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[720px]">
+                            <thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-2">Date</th><th class="py-2 pr-2">Accession No.</th><th class="py-2 pr-2">User</th><th class="py-2 pr-2">Role</th><th class="py-2 pr-2">Action</th><th class="py-2 pr-2">Due</th><th class="py-2">Status</th></tr></thead>
+                                <tbody id="book-recent-body">
+                                    {% for r in traffic.recent %}
+                                <tr class="border-b last:border-0">
+                                    <td class="py-2 pr-2">{{ r[0] }}</td>
+                                    <td class="py-2 pr-2">{{ r[1] }}</td>
+                                    <td class="py-2 pr-2">{{ r[2] }}</td>
+                                    <td class="py-2 pr-2">{{ r[3] }}</td>
+                                    <td class="py-2 pr-2">{{ r[4] }}</td>
+                                    <td class="py-2 pr-2">{{ r[5] or '—' }}</td>
+                                    <td class="py-2">{{ r[6] }}</td>
+                                </tr>
+                                {% else %}
+                                <tr><td colspan="7" class="py-3 text-center text-slate-400">No circulation yet for this book in the selected period.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table></div>
+                    </div>
+
+                    {% elif book_id %}
+                    <div class="bg-white rounded-xl border border-slate-200 p-8 text-center">
+                        <span class="material-symbols-outlined text-slate-300" style="font-size: 40px;">search_off</span>
+                        <h3 class="text-sm font-extrabold text-slate-700 mt-2">Book not found</h3>
+                        <p class="text-[11px] text-slate-400 mt-1">Search again and click one of the matching titles above.</p>
+                    </div>
+                    {% elif not q %}
+                    <!-- Empty state: single-book traffic renders only after a
+                         card's "Show Analytics" is clicked; top-10 sections
+                         below always show. -->
+                    <div id="book-empty" class="bg-white rounded-xl border border-dashed border-slate-300 p-8 sm:p-12 text-center">
+                        <span class="material-symbols-outlined text-slate-300" style="font-size: 44px;">touch_app</span>
+                        <h3 class="text-base font-extrabold text-slate-700 mt-3">No book selected yet</h3>
+                        <p class="text-xs text-slate-500 mt-1 max-w-md mx-auto">Search for a book title, category, or accession number above, then click a book card's “Show Analytics” to view its traffic — trend, borrowers, copies, and recent activity.</p>
+                    </div>
+                    {% endif %}
+
+                    <!-- Top-10 utilized / underutilized: shown until a
+                         specific book's graphs are showing (traffic
+                         present); hidden while single-book traffic renders. -->
+                    {% if not traffic %}
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        <div class="bg-white rounded-xl border border-slate-200 p-4">
+                            <h3 class="text-sm font-extrabold mb-1">Top 10 Utilized Books</h3>
+                            <p class="text-[10px] text-slate-400 mb-2">Most borrowed titles in the selected period.</p>
+                            <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[380px]">
+                                <thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-2">#</th><th class="py-2 pr-2">Title</th><th class="py-2 text-right">Borrows</th></tr></thead>
+                                <tbody>
+                                    {% for r in top_utilized %}
+                                    <tr class="border-b last:border-0">
+                                        <td class="py-2 pr-2 font-bold">{{ loop.index }}</td>
+                                        <td class="py-2 pr-2 font-semibold">{{ r[0] }}</td>
+                                        <td class="py-2 text-right font-bold">{{ r[1] }}</td>
+                                    </tr>
+                                    {% else %}
+                                    <tr><td colspan="3" class="py-3 text-center text-slate-400">No borrowing activity in the selected period.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table></div>
+                        </div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4">
+                            <h3 class="text-sm font-extrabold mb-1">Top 10 Underutilized Books</h3>
+                            <p class="text-[10px] text-slate-400 mb-2">Titles with zero borrows in the selected period.</p>
+                            <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[380px]">
+                                <thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-2">#</th><th class="py-2 pr-2">Title</th></tr></thead>
+                                <tbody id="book-top-under-body">
+                                    {% for r in top_underutilized %}
+                                    <tr class="border-b last:border-0">
+                                        <td class="py-2 pr-2 font-bold">{{ loop.index }}</td>
+                                        <td class="py-2 pr-2 font-semibold">{{ r[0] }}</td>
+                                    </tr>
+                                    {% else %}
+                                    <tr><td colspan="2" class="py-3 text-center text-slate-400">Every title was borrowed at least once in the selected period.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table></div>
+                        </div>
+                    </div>
+                    {% endif %}
                 </section>
 
             </div>
@@ -452,13 +727,57 @@
         </div>
     </div>
 
+    <!-- Chart expand modal: every non-pie graph card on every tab gets an
+         expand (open_in_full) button that pops the whole card + its data
+         into this dialog. -->
+    <div id="chartExpandModal" class="hidden fixed inset-0 z-[100] items-center justify-center p-4 sm:p-8">
+        <div class="absolute inset-0 bg-slate-900/60" onclick="closeChartExpand()"></div>
+        <div class="relative bg-slate-50 rounded-xl shadow-2xl border border-slate-200 w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div class="flex items-center gap-2 px-4 sm:px-5 py-3 border-b border-slate-200 bg-white shrink-0">
+                <h3 id="chartExpandTitle" class="text-sm sm:text-base font-extrabold text-slate-900 mr-auto truncate">Details</h3>
+                <button type="button" onclick="closeChartExpand()" title="Close" aria-label="Close expanded view"
+                    class="chart-expand-btn" style="width:30px;height:30px;"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <div id="chartExpandBody" class="p-5 sm:p-8 overflow-auto"></div>
+        </div>
+    </div>
+
+    <!-- Status Trends filter modal: checkbox list of statuses -->
+    <div id="statusFilterModal" class="hidden fixed inset-0 z-[110] items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-900/60" onclick="closeStatusFilterModal()"></div>
+        <div class="relative bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-xs overflow-hidden">
+            <div class="flex items-center gap-2 px-4 py-3 border-b border-slate-200">
+                <h3 class="text-sm font-extrabold text-slate-900 mr-auto">Filter Statuses</h3>
+                <button type="button" onclick="closeStatusFilterModal()" title="Close" aria-label="Close status filter"
+                    class="chart-expand-btn" style="width:30px;height:30px;"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <div id="status-filter-list" class="p-3 space-y-1 max-h-72 overflow-y-auto"></div>
+            <div class="flex items-center gap-2 px-4 py-3 border-t border-slate-200">
+                <button type="button" onclick="selectAllStatuses()" class="text-[11px] font-bold text-slate-600 hover:text-slate-900 transition-colors">Select all</button>
+                <button type="button" onclick="clearStatuses()" class="text-[11px] font-bold text-slate-600 hover:text-slate-900 transition-colors">Clear</button>
+                <button type="button" onclick="closeStatusFilterModal()" class="ml-auto bg-primary hover:bg-primary/90 text-white px-4 py-1.5 rounded-lg font-bold text-xs transition-all">Apply</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Server-side dashboard payload -->
     <script type="application/json" id="dashboard-data">{{ dashboard | tojson }}</script>
+    <script type="application/json" id="book-traffic-data">{{ traffic | tojson }}</script>
+    <script type="application/json" id="book-tops-data">{{ {'top_utilized': top_utilized, 'top_underutilized': top_underutilized} | tojson }}</script>
 
     <script>
         const EXPORT_URL = '{{ url_for("analytics.export_report") }}';
         const DASHBOARD_URL = '{{ url_for("analytics.dashboard_json") }}';
-        const ALL_DASHBOARD_SECTIONS = ['circulation_summary', 'collection_by_category', 'copies_by_status', 'recent_collection', 'trend_borrowings', 'top_categories', 'trend_overdue', 'high_demand', 'recent_circulation', 'books_borrowed_per_program', 'by_user_type', 'top_books'];
+        const REQUESTS_URL = '{{ url_for("requests.list_requests") }}';
+        function reqTitleSearchLink(row) { return REQUESTS_URL + '?status=all&search=' + encodeURIComponent(row[0]); }
+        const BOOK_SEARCH_URL = '{{ url_for("analytics.book_search_json") }}';
+        // Per-tab Export Report lists: each tab's upper-card button exports
+        // only that tab's analytics. Keep these in sync with the cards above.
+        const COLLECTION_SECTIONS = ['collection_by_category', 'copies_by_status', 'recent_collection'];
+        const LIBRARY_SECTIONS = ['circulation_summary', 'trend_borrowings', 'top_categories', 'peak_periods', 'trend_overdue', 'high_demand', 'recent_circulation', 'top_requested_titles', 'requests_by_role', 'requests_trend', 'requests_by_program'];
+        const DEPARTMENT_SECTIONS = ['circulation_summary', 'books_borrowed_per_program', 'borrowers_by_department', 'overdue_by_department', 'by_user_type', 'top_books', 'department_leaderboard'];
+        // Export All covers every graph/chart/table on all tabs.
+        const ALL_DASHBOARD_SECTIONS = [].concat(COLLECTION_SECTIONS, LIBRARY_SECTIONS, DEPARTMENT_SECTIONS).filter(function (s, i, a) { return a.indexOf(s) === i; });
         const GLOBAL = { preset: '{{ preset }}', from: '{{ from_date }}', to: '{{ to_date }}' };
         var USAGE_DEPTS = {{ departments|tojson }};
 
@@ -503,7 +822,7 @@
 
         function exportDashboard(items) {
             // Dashboard-tab exports: address dashboard sections by name so each
-            // tab Export Report / Quick Reports button downloads matching content.
+            // tab Export Report button downloads matching content.
             // Usage-tab exports also carry the selected program filter(s).
             var extra = { kpi_types: (items || []).join(',') };
             if (USAGE_DEPTS && USAGE_DEPTS.length) extra.department = USAGE_DEPTS.slice();
@@ -546,11 +865,22 @@ function syncGlobalFilterCustomDates() {
                 if (preset !== 'all') params.set('preset', preset);
                 else params.set('preset', 'all');
             }
+            // keep the Book Analytics tab selection + department filter across reloads
+            var current = new URLSearchParams(window.location.search);
+            ['q', 'book_id', 'tab', 'department'].forEach(function (k) {
+                current.getAll(k).forEach(function (v) { params.append(k, v); });
+            });
             window.location.search = params.toString();
         }
 
         function resetGlobalFilter() {
-            window.location.search = 'preset=all';
+            // stay on the Book Analytics tab if that is where reset was opened
+            var current = new URLSearchParams(window.location.search);
+            if (current.get('tab') === 'book' || current.get('q') || current.get('book_id')) {
+                window.location.search = 'preset=all&tab=book';
+            } else {
+                window.location.search = 'preset=all';
+            }
         }
 
         document.getElementById('globalFilterPreset').addEventListener('change', syncGlobalFilterCustomDates);
@@ -656,6 +986,57 @@ function syncGlobalFilterCustomDates() {
                 + (delta ? '<div class="text-[10px] text-slate-400 font-semibold">' + delta + '</div>' : '') + '</div>';
         }
 
+        function chartPct(val, total) {
+            if (!total) return '0%';
+            return (Math.round(val / total * 1000) / 10) + '%';
+        }
+
+        function ensureChartTooltip() {
+            var tip = document.getElementById('chart-tooltip');
+            if (!tip) {
+                tip = document.createElement('div');
+                tip.id = 'chart-tooltip';
+                tip.setAttribute('role', 'tooltip');
+                document.body.appendChild(tip);
+            }
+            return tip;
+        }
+
+        function showChartTip(html, x, y) {
+            var tip = ensureChartTooltip();
+            tip.innerHTML = html;
+            tip.style.left = x + 'px';
+            tip.style.top = y + 'px';
+            tip.classList.add('show');
+        }
+
+        function hideChartTip() {
+            var tip = document.getElementById('chart-tooltip');
+            if (tip) tip.classList.remove('show');
+        }
+
+        function bindChartTip(node, getHtml) {
+            if (!node) return;
+            node.addEventListener('mousemove', function (e) {
+                showChartTip(getHtml(), e.clientX, e.clientY);
+            });
+            node.addEventListener('mouseleave', hideChartTip);
+        }
+
+        function highlightDonut(donutEl, idx, on) {
+            if (!donutEl) return;
+            var segs = donutEl.querySelectorAll('.chart-donut-seg');
+            if (on) {
+                donutEl.classList.add('chart-donut-dim');
+                segs.forEach(function (s) {
+                    s.classList.toggle('active', s.getAttribute('data-idx') === String(idx));
+                });
+            } else {
+                donutEl.classList.remove('chart-donut-dim');
+                segs.forEach(function (s) { s.classList.remove('active'); });
+            }
+        }
+
         function donutSVG(el, rows, total, centerTop, centerSub) {
             if (!el) return;
             var R = 68, C = 2 * Math.PI * R, off = 0;
@@ -663,55 +1044,168 @@ function syncGlobalFilterCustomDates() {
             rows.slice(0, 8).forEach(function (r, i) {
                 var frac = total > 0 ? r[1] / total : 0;
                 var len = Math.max(frac * C - 2, 0.5);
-                segs += '<circle cx="92" cy="92" r="' + R + '" fill="none" stroke="' + RCOLORS[i % RCOLORS.length] + '" stroke-width="26" stroke-dasharray="' + len + ' ' + (C - len) + '" stroke-dashoffset="' + (-off) + '" transform="rotate(-90 92 92)"/>';
+                var color = RCOLORS[i % RCOLORS.length];
+                var label = String(r[0]);
+                var tip = escapeHtml(label) + ': ' + rNum(r[1]) + ' (' + chartPct(r[1], total) + ')';
+                segs += '<circle class="chart-donut-seg" data-idx="' + i + '" cx="92" cy="92" r="' + R + '" fill="none" stroke="' + color + '" stroke-width="26" stroke-dasharray="' + len + ' ' + (C - len) + '" stroke-dashoffset="' + (-off) + '" transform="rotate(-90 92 92)"><title>' + escapeHtml(label) + ': ' + rNum(r[1]) + ' (' + chartPct(r[1], total) + ')</title></circle>';
                 off += frac * C;
             });
-            el.innerHTML = '<svg width="184" height="184" viewBox="0 0 184 184"><circle cx="92" cy="92" r="' + R + '" fill="none" stroke="#f1f5f9" stroke-width="26"/>'
+            el.innerHTML = '<svg width="184" height="184" viewBox="0 0 184 184" role="img" aria-label="Donut chart: ' + escapeHtml(centerSub || 'chart') + '"><circle cx="92" cy="92" r="' + R + '" fill="none" stroke="#f1f5f9" stroke-width="26"/>'
                 + segs + '<text x="92" y="88" text-anchor="middle" font-size="20" font-weight="800" fill="#0f172a">' + centerTop + '</text>'
                 + '<text x="92" y="106" text-anchor="middle" font-size="11" fill="#64748b">' + centerSub + '</text></svg>';
+            var visRows = rows.slice(0, 8);
+            el.querySelectorAll('.chart-donut-seg').forEach(function (seg) {
+                var idx = parseInt(seg.getAttribute('data-idx'), 10);
+                var row = visRows[idx] || ['-', 0];
+                bindChartTip(seg, function () {
+                    return '<b>' + escapeHtml(String(row[0])) + '</b><span class="tt-sub">' + rNum(row[1]) + ' · ' + chartPct(row[1], total) + ' of total</span>';
+                });
+                seg.addEventListener('mouseenter', function () { highlightDonut(el, idx, true); });
+                seg.addEventListener('mouseleave', function () { highlightDonut(el, idx, false); });
+            });
         }
 
         function legendList(el, rows, total) {
             if (!el) return;
-            el.innerHTML = rows.slice(0, 8).map(function (r, i) {
-                var pct = total ? ' (' + (Math.round(r[1] / total * 1000) / 10) + '%)' : '';
-                return '<div class="flex items-center gap-2 min-w-0"><span class="w-2 h-2 rounded-full shrink-0" style="background:' + RCOLORS[i % RCOLORS.length] + '"></span>'
+            var visRows = rows.slice(0, 8);
+            el.setAttribute('role', 'list');
+            el.setAttribute('aria-label', 'Chart legend');
+            el.innerHTML = visRows.map(function (r, i) {
+                var pct = chartPct(r[1], total);
+                var tipText = String(r[0]) + ': ' + Number(r[1]).toLocaleString('en-US') + ' (' + pct + ')';
+                return '<div class="legend-item" role="listitem" data-idx="' + i + '" title="' + escapeHtml(tipText) + '" tabindex="0">'
+                    + '<span class="legend-dot" style="background:' + RCOLORS[i % RCOLORS.length] + '"></span>'
                     + '<span class="truncate text-slate-600">' + escapeHtml(r[0]) + '</span>'
-                    + '<span class="ml-auto font-bold text-slate-700 whitespace-nowrap">' + rNum(r[1]) + pct + '</span></div>';
+                    + '<span class="ml-auto font-bold text-slate-700 whitespace-nowrap">' + rNum(r[1]) + ' (' + pct + ')</span></div>';
             }).join('') || '<div class="text-slate-400">No data.</div>';
+            var donutId = (el.id || '').replace('legend-', 'donut-');
+            var donutEl = donutId ? document.getElementById(donutId) : null;
+            el.querySelectorAll('.legend-item').forEach(function (item) {
+                var idx = parseInt(item.getAttribute('data-idx'), 10);
+                var row = visRows[idx] || ['-', 0];
+                bindChartTip(item, function () {
+                    return '<b>' + escapeHtml(String(row[0])) + '</b><span class="tt-sub">' + rNum(row[1]) + ' · ' + chartPct(row[1], total) + ' of total</span>';
+                });
+                var on = function () { highlightDonut(donutEl, idx, true); };
+                var offFn = function () { highlightDonut(donutEl, idx, false); hideChartTip(); };
+                item.addEventListener('mouseenter', on);
+                item.addEventListener('mouseleave', offFn);
+                item.addEventListener('focus', on);
+                item.addEventListener('blur', offFn);
+            });
         }
 
-        function hbars(el, rows, barClass) {
+        function hbars(el, rows, barClass, limit, linkFn) {
             if (!el) return;
-            var max = Math.max.apply(null, rows.map(function (r) { return r[1]; }).concat([1]));
-            el.innerHTML = rows.slice(0, 9).map(function (r) {
+            var visRows = (rows || []).slice(0, limit || 10);
+            var max = Math.max.apply(null, visRows.map(function (r) { return r[1]; }).concat([1]));
+            var grand = visRows.reduce(function (a, r) { return a + (Number(r[1]) || 0); }, 0);
+            el.setAttribute('role', 'list');
+            el.setAttribute('aria-label', 'Bar chart');
+            el.innerHTML = visRows.map(function (r) {
                 var pct = max > 0 ? Math.round(r[1] / max * 100) : 0;
-                return '<div><div class="flex justify-between text-[11px] font-semibold text-slate-600"><span class="truncate pr-2">' + escapeHtml(r[0]) + '</span><span>' + rNum(r[1]) + '</span></div>'
-                    + '<div class="h-3 bg-slate-100 rounded-full overflow-hidden mt-0.5"><div class="h-full rounded-full ' + (barClass || 'bg-blue-600') + '" style="width:' + pct + '%"></div></div></div>';
+                var share = chartPct(r[1], grand);
+                var tipText = String(r[0]) + ': ' + Number(r[1]).toLocaleString('en-US') + ' (' + share + ' of shown)';
+                var href = (typeof linkFn === 'function') ? (linkFn(r) || '') : '';
+                var tag = href ? 'a' : 'div';
+                var extra = href ? ' href="' + escapeHtml(href) + '"' : '';
+                return '<' + tag + ' class="hbar-row' + (href ? ' block transition-all hover:opacity-80' : '') + '" role="listitem" title="' + escapeHtml(tipText) + '" tabindex="0"' + extra + '>'
+                    + '<div class="flex justify-between text-[11px] font-semibold text-slate-600"><span class="truncate pr-2">' + escapeHtml(r[0]) + '</span><span>' + rNum(r[1]) + '</span></div>'
+                    + '<div class="h-3 bg-slate-100 rounded-full overflow-hidden mt-0.5"><div class="hbar-fill h-full rounded-full ' + (barClass || 'bg-blue-600') + '" style="width:' + pct + '%"></div></div></' + tag + '>';
             }).join('') || '<div class="text-xs text-slate-400">No data.</div>';
+            el.querySelectorAll('.hbar-row').forEach(function (node, i) {
+                var row = visRows[i] || ['-', 0];
+                bindChartTip(node, function () {
+                    return '<b>' + escapeHtml(String(row[0])) + '</b><span class="tt-sub">' + rNum(row[1]) + ' · ' + chartPct(row[1], grand) + ' of shown</span>';
+                });
+            });
         }
 
-        function lineChart(el, rows, color) {
+        function niceCeil(v) {
+            v = Math.ceil(Number(v) || 0);
+            if (v <= 4) return Math.max(v, 1);
+            var mag = Math.pow(10, Math.floor(Math.log10(v)));
+            var norm = v / mag;
+            if (norm <= 1) return mag;
+            if (norm <= 2) return 2 * mag;
+            if (norm <= 5) return 5 * mag;
+            return 10 * mag;
+        }
+
+        function shortDate(s) {
+            s = String(s === null || s === undefined ? '' : s);
+            var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (m) return m[2] + '/' + m[3];
+            return s.length > 10 ? s.slice(0, 10) : s;
+        }
+
+        function lineChart(el, rows, color, opts) {
             if (!el) return;
             if (!rows.length) { el.innerHTML = '<div class="text-xs text-slate-400 py-8 text-center">No trend data.</div>'; return; }
-            var W = 560, H = 224, P = 28;
-            var vals = rows.map(function (r) { return r[1]; });
-            var max = Math.max.apply(null, vals.concat([1]));
-            var stepX = rows.length > 1 ? (W - P * 2) / (rows.length - 1) : 0;
+            var o = { xLabel: 'Date', yLabel: 'Borrowings', unit: 'borrowings' };
+            if (typeof opts === 'string') { o.yLabel = opts; o.unit = opts.toLowerCase(); }
+            else if (opts) { if (opts.xLabel) o.xLabel = opts.xLabel; if (opts.yLabel) o.yLabel = opts.yLabel; if (opts.unit) o.unit = opts.unit; }
+            var W = 600, H = 268, ML = 48, MR = 14, MT = 12, MB = 46;
+            var plotW = W - ML - MR, plotH = H - MT - MB;
+            var base = MT + plotH;
+            var vals = rows.map(function (r) { return Number(r[1]) || 0; });
+            var rawMax = Math.max.apply(null, vals.concat([1]));
+            var yMax = niceCeil(rawMax);
+            var n = rows.length;
+            var stepX = n > 1 ? plotW / (n - 1) : 0;
             var pts = rows.map(function (r, i) {
-                return [P + stepX * i, H - P - (r[1] / max) * (H - P * 2)];
+                return [ML + stepX * i, base - (vals[i] / yMax) * plotH];
             });
             var line = pts.map(function (p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' ');
             var win = Math.min(7, vals.length), avg = vals.slice(-win).reduce(function (a, b) { return a + b; }, 0) / win;
-            var fx = pts.length ? pts[pts.length - 1][0] : P, fy = H - P - (avg / max) * (H - P * 2);
-            el.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" class="w-full h-56">'
-                + '<line x1="' + P + '" y1="' + (H - P) + '" x2="' + (W - 8) + '" y2="' + (H - P) + '" stroke="#e2e8f0"/>'
-                + '<path d="' + line + ' L' + (W - P) + ' ' + (H - P) + ' L' + P + ' ' + (H - P) + ' Z" fill="' + color + '18"/>'
+            var fx = pts.length ? pts[pts.length - 1][0] : ML, fy = base - (avg / yMax) * plotH;
+            var dots = pts.map(function (p, i) {
+                var tip = escapeHtml(String(rows[i][0])) + ': ' + rNum(rows[i][1]) + ' ' + escapeHtml(o.unit);
+                return '<circle class="line-dot" data-idx="' + i + '" cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="4.5" fill="' + color + '" stroke="#fff" stroke-width="1.5"><title>' + tip + '</title></circle>';
+            }).join('');
+            // Y gridlines + tick labels (Borrowings / count axis)
+            var yTicks = '', ticks = 4, ti;
+            for (ti = 0; ti <= ticks; ti++) {
+                var tv = Math.round(yMax * ti / ticks);
+                var ty = base - (tv / yMax) * plotH;
+                yTicks += '<line x1="' + ML + '" y1="' + ty.toFixed(1) + '" x2="' + (W - MR) + '" y2="' + ty.toFixed(1) + '" stroke="' + (ti === 0 ? '#cbd5e1' : '#eef2f7') + '"/>'
+                    + '<text x="' + (ML - 7) + '" y="' + (ty + 3.5).toFixed(1) + '" text-anchor="end" font-size="10" fill="#94a3b8">' + rNum(tv) + '</text>';
+            }
+            // X ticks (Date axis) — up to 5 evenly spaced dates
+            var xTicks = '', xCount = Math.min(5, n), xi;
+            for (xi = 0; xi < xCount; xi++) {
+                var di = xCount === 1 ? 0 : Math.round(xi * (n - 1) / (xCount - 1));
+                var dx = ML + stepX * di;
+                var anchor = xi === 0 ? 'start' : (xi === xCount - 1 ? 'end' : 'middle');
+                var ax = xi === 0 ? Math.max(dx, ML) : (xi === xCount - 1 ? Math.min(dx, W - MR) : dx);
+                xTicks += '<line x1="' + dx.toFixed(1) + '" y1="' + base + '" x2="' + dx.toFixed(1) + '" y2="' + (base + 5) + '" stroke="#cbd5e1"/>'
+                    + '<text x="' + ax.toFixed(1) + '" y="' + (base + 18) + '" text-anchor="' + anchor + '" font-size="10" fill="#94a3b8"><title>' + escapeHtml(String(rows[di][0])) + '</title>' + escapeHtml(shortDate(rows[di][0])) + '</text>';
+            }
+            var fcX = Math.min(fx - 6, W - MR - 2);
+            el.innerHTML = '<div class="chart-legend mb-2"><span><span class="lg-swatch" style="background:' + color + '"></span>Actual</span>'
+                + '<span><span class="lg-swatch dashed"></span>30-day forecast avg</span></div>'
+                + '<svg viewBox="0 0 ' + W + ' ' + H + '" class="w-full h-60" role="img" aria-label="Trend line chart. X axis: ' + escapeHtml(o.xLabel) + '. Y axis: ' + escapeHtml(o.yLabel) + '.">'
+                + yTicks
+                + '<path d="' + line + ' L' + pts[pts.length - 1][0].toFixed(1) + ' ' + base + ' L' + pts[0][0].toFixed(1) + ' ' + base + ' Z" fill="' + color + '18"/>'
                 + '<path d="' + line + '" fill="none" stroke="' + color + '" stroke-width="2.5"/>'
-                + '<line x1="' + fx + '" y1="' + P + '" x2="' + fx + '" y2="' + (H - P) + '" stroke="#94a3b8" stroke-dasharray="4 4"/>'
-                + '<line x1="' + fx + '" y1="' + fy + '" x2="' + (W - 8) + '" y2="' + fy + '" stroke="' + color + '" stroke-dasharray="4 4"/>'
-                + '<text x="' + (fx + 4) + '" y="' + (P + 10) + '" font-size="10" fill="#64748b">Forecast</text></svg>'
-                + '<div class="flex justify-between text-[10px] text-slate-400"><span>' + escapeHtml(rows[0][0]) + '</span><span>' + escapeHtml(rows[rows.length - 1][0]) + '</span></div>';
+                + '<line x1="' + ML + '" y1="' + MT + '" x2="' + ML + '" y2="' + base + '" stroke="#cbd5e1"/>'
+                + '<line x1="' + ML + '" y1="' + base + '" x2="' + (W - MR) + '" y2="' + base + '" stroke="#cbd5e1"/>'
+                + xTicks
+                + '<line x1="' + fx.toFixed(1) + '" y1="' + MT + '" x2="' + fx.toFixed(1) + '" y2="' + base + '" stroke="#94a3b8" stroke-dasharray="4 4"/>'
+                + '<line x1="' + fx.toFixed(1) + '" y1="' + fy.toFixed(1) + '" x2="' + (W - MR) + '" y2="' + fy.toFixed(1) + '" stroke="' + color + '" stroke-dasharray="4 4"/>'
+                + '<circle cx="' + (W - MR - 4).toFixed(1) + '" cy="' + fy.toFixed(1) + '" r="4" fill="#fff" stroke="' + color + '" stroke-width="2"><title>Forecast average: ' + rNum(Math.round(avg * 10) / 10) + ' ' + escapeHtml(o.unit) + '</title></circle>'
+                + dots
+                + '<text x="' + fcX.toFixed(1) + '" y="' + (MT + 10) + '" text-anchor="end" font-size="10" fill="#64748b">Forecast</text>'
+                + '<text x="14" y="' + (MT + plotH / 2).toFixed(1) + '" text-anchor="middle" font-size="11" font-weight="700" fill="#64748b" transform="rotate(-90 14 ' + (MT + plotH / 2).toFixed(1) + ')">' + escapeHtml(o.yLabel) + '</text>'
+                + '<text x="' + (ML + plotW / 2).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="11" font-weight="700" fill="#64748b">' + escapeHtml(o.xLabel) + '</text></svg>'
+                + '<div class="flex justify-between text-[10px] text-slate-400"><span>X: ' + escapeHtml(o.xLabel) + ' (' + escapeHtml(String(rows[0][0])) + ' → ' + escapeHtml(String(rows[rows.length - 1][0])) + ')</span><span>Y: ' + escapeHtml(o.yLabel) + '</span></div>';
+            el.querySelectorAll('.line-dot').forEach(function (dot) {
+                var idx = parseInt(dot.getAttribute('data-idx'), 10);
+                var row = rows[idx] || ['-', 0];
+                bindChartTip(dot, function () {
+                    return '<b>' + escapeHtml(String(row[0])) + '</b><span class="tt-sub">' + escapeHtml(o.xLabel) + ': ' + escapeHtml(String(row[0])) + ' · ' + escapeHtml(o.yLabel) + ': ' + rNum(row[1]) + '</span>';
+                });
+            });
         }
 
         function pill(text, kind) {
@@ -735,12 +1229,12 @@ function syncGlobalFilterCustomDates() {
         }
 
         function paintTrendCharts(rows) {
-            lineChart(document.getElementById('trend-line'), rows, '#2563eb');
+            lineChart(document.getElementById('trend-line'), rows, '#2563eb', { xLabel: 'Date', yLabel: 'Borrowings', unit: 'borrowings' });
             hbars(document.getElementById('peak-bars'), rows.slice(-7).map(function (r) { return [String(r[0]).slice(5), r[1]]; }), 'bg-blue-600');
         }
 
         function paintOverdueTrend(rows) {
-            lineChart(document.getElementById('overdue-line'), rows, '#dc2626');
+            lineChart(document.getElementById('overdue-line'), rows, '#dc2626', { xLabel: 'Date', yLabel: 'Overdue items', unit: 'overdue items' });
         }
 
         function paintTopCats(rows, centerTotal) {
@@ -756,9 +1250,21 @@ function syncGlobalFilterCustomDates() {
             }).join('') || '<tr><td colspan="4" class="py-6 text-center text-slate-400">No active demand.</td></tr>';
         }
 
-        function paintDeptCharts(rows) {
+        function paintDeptCharts(rows, overdueRows, borrowerRows) {
             hbars(document.getElementById('dept-bars'), rows || [], 'bg-blue-600');
-            hbars(document.getElementById('overdue-dept-bars'), (rows || []).slice(0, 6), 'bg-red-500');
+            hbars(document.getElementById('overdue-dept-bars'), overdueRows || [], 'bg-red-500');
+            hbars(document.getElementById('borrowers-dept-bars'), borrowerRows || [], 'bg-green-600');
+        }
+
+        function paintDeptLeaderboard(rows) {
+            var tb = document.getElementById('dept-leaderboard-body');
+            if (!tb) return;
+            tb.innerHTML = (rows || []).map(function (r) {
+                return '<tr class="border-b last:border-0"><td class="py-2 pr-2 font-bold truncate" title="' + escapeHtml(r[0]) + '">' + escapeHtml(r[0]) + '</td>'
+                    + '<td class="py-2 pr-2 text-right">' + rNum(r[1]) + '</td>'
+                    + '<td class="py-2 pr-2 text-right">' + rNum(r[2]) + '</td>'
+                    + '<td class="py-2 text-right font-bold ' + ((+r[3] || 0) ? 'text-red-600' : '') + '">' + rNum(r[3]) + '</td></tr>';
+            }).join('') || '<tr><td colspan="4" class="text-xs text-slate-400 py-4 text-center">No department activity yet.</td></tr>';
         }
 
         function paintTopBooks(rows) {
@@ -779,12 +1285,73 @@ function syncGlobalFilterCustomDates() {
             if (name === 'collection_by_category') paintCategoryChart(rows, centerTotal);
             else if (name === 'copies_by_status') paintStatusChart(rows, centerTotal || 1, centerTotal);
             else if (name === 'borrowings_by_department') paintDeptCharts(rows);
+            else if (name === 'borrowers_by_department') hbars(document.getElementById('borrowers-dept-bars'), rows, 'bg-green-600');
+            else if (name === 'overdue_by_department') hbars(document.getElementById('overdue-dept-bars'), rows, 'bg-red-500');
             else if (name === 'borrowings_by_user_type') paintUserType(rows, centerTotal);
             else if (name === 'borrowings_trend') paintTrendCharts(rows);
             else if (name === 'overdue_trend') paintOverdueTrend(rows);
             else if (name === 'top_categories') paintTopCats(rows, centerTotal);
             else if (name === 'top_books') paintTopBooks(rows);
             else if (name === 'high_demand') paintHighDemand(rows);
+            else if (name === 'top_requested_titles') hbars(document.getElementById('req-top-titles'), rows, 'bg-blue-600', 10, reqTitleSearchLink);
+            else if (name === 'requests_by_role') paintReqRoleSplitInto(document.getElementById('req-role-split'), rows);
+            else if (name === 'requests_trend') lineChart(document.getElementById('req-trend-line'), rows, '#1d4ed8', { xLabel: 'Date', yLabel: 'Requests', unit: 'requests' });
+            else if (name === 'requests_by_program') hbars(document.getElementById('req-by-program'), rows, 'bg-violet-600');
+        }
+
+        /* Collection condition bars + recent tables, reusable with a row
+           limit so cards show a preview while the expanded modal shows all. */
+        function renderConditionBarsInto(el, rows, condTotal, limit) {
+            if (!el) return;
+            var greens = ['bg-green-500', 'bg-green-300', 'bg-amber-400', 'bg-orange-500', 'bg-red-500'];
+            var condRows = (rows || []).slice(0, limit || 9);
+            el.setAttribute('role', 'list');
+            el.setAttribute('aria-label', 'Collection condition chart legend');
+            el.innerHTML = condRows.map(function (r, i) {
+                var pct = condTotal ? Math.round(r[1] / condTotal * 100) : 0;
+                var tipText = String(r[0]) + ': ' + Number(r[1]).toLocaleString('en-US') + ' (' + pct + '% of copies)';
+                return '<div class="hbar-row" role="listitem" title="' + escapeHtml(tipText) + '" tabindex="0"><div class="flex justify-between text-[11px] font-semibold text-slate-600"><span>' + escapeHtml(r[0]) + '</span><span>' + rNum(r[1]) + ' (' + pct + '%)</span></div>'
+                    + '<div class="h-3 bg-slate-100 rounded-full overflow-hidden mt-0.5"><div class="hbar-fill h-full rounded-full ' + greens[i % greens.length] + '" style="width:' + pct + '%"></div></div></div>';
+            }).join('') || '<div class="text-xs text-slate-400">No data.</div>';
+            el.querySelectorAll('.hbar-row').forEach(function (node, i) {
+                var row = condRows[i] || ['-', 0];
+                var pct = condTotal ? Math.round(row[1] / condTotal * 100) : 0;
+                bindChartTip(node, function () {
+                    return '<b>' + escapeHtml(String(row[0])) + '</b><span class="tt-sub">' + rNum(row[1]) + ' · ' + pct + '% of copies</span>';
+                });
+            });
+        }
+
+        function renderConditionBars(limit) {
+            var C = (DASHBOARD && DASHBOARD.collection) || {};
+            renderConditionBarsInto(document.getElementById('condition-bars'), C.condition || [], C.cond_total || 0, limit);
+        }
+
+        function recentCollectionHTML(rows) {
+            return (rows || []).map(function (r) {
+                var avail = /avail/i.test(r[3] || '') ? pill('Available', 'green') : /borrow/i.test(r[3] || '') ? pill('Borrowed', 'blue') : /lost|damag/i.test(r[3] || '') ? pill('Lost / Damaged', 'red') : pill(r[3] || '-', 'gray');
+                return '<tr class="border-b last:border-0"><td class="py-2 pr-2 font-semibold">' + escapeHtml(r[0]) + '</td><td class="py-2 pr-2">' + escapeHtml(r[1]) + '</td><td class="py-2 pr-2 text-slate-500">' + escapeHtml(r[2]) + '</td><td class="py-2 pr-2">' + avail + '</td><td class="py-2 pr-2 text-slate-500">' + escapeHtml(r[5] || '-') + '</td><td class="py-2 text-slate-500">' + escapeHtml(r[6] || '-') + '</td></tr>';
+            }).join('') || '<tr class="rcb-empty"><td colspan="6" class="py-6 text-center text-slate-400">No copies found.</td></tr>';
+        }
+
+        function renderRecentCollection(limit) {
+            var C = (DASHBOARD && DASHBOARD.collection) || {};
+            var rcb = document.getElementById('recent-collection-body');
+            if (rcb) rcb.innerHTML = recentCollectionHTML((C.recent || []).slice(0, limit || 10));
+            filterCollectionTable();
+        }
+
+        function recentCircHTML(rows) {
+            return (rows || []).map(function (r) {
+                var st = /overdue/i.test(r[8] || '') ? pill('Overdue', 'red') : /return/i.test(r[6] || '') ? pill('Returned', 'green') : pill('Active', 'green');
+                return '<tr class="border-b last:border-0"><td class="py-2 pr-2">' + escapeHtml(r[0]) + '</td><td class="py-2 pr-2">' + escapeHtml(r[2]) + '</td><td class="py-2 pr-2">' + escapeHtml(r[4]) + '</td><td class="py-2 pr-2">' + pill(escapeHtml(r[6] || ''), 'blue') + '</td><td class="py-2 pr-2 text-slate-500">' + escapeHtml(r[7] || '-') + '</td><td class="py-2">' + st + '</td></tr>';
+            }).join('') || '<tr><td colspan="6" class="py-6 text-center text-slate-400">No circulation yet.</td></tr>';
+        }
+
+        function renderRecentCirc(limit) {
+            var L = (DASHBOARD && DASHBOARD.circulation) || {};
+            var rcc = document.getElementById('recent-circ-body');
+            if (rcc) rcc.innerHTML = recentCircHTML((L.recent || []).slice(0, limit || 8));
         }
 
         function renderRiverside() {
@@ -806,21 +1373,8 @@ function syncGlobalFilterCustomDates() {
             paintCategoryChart(C.by_category || [], C.total_titles);
             var statusRows = [['Available', C.available || 0], ['Borrowed', C.borrowed || 0], ['Reserved', C.reserved || 0], ['Overdue', C.overdue || 0], ['Lost / Damaged', C.lost_damaged || 0], ['Under Maintenance', C.maintenance || 0]];
             paintStatusChart(statusRows, C.total_copies || 1, C.total_copies || 0);
-            var cb = document.getElementById('condition-bars');
-            if (cb) {
-                var greens = ['bg-green-500', 'bg-green-300', 'bg-amber-400', 'bg-orange-500', 'bg-red-500'];
-                cb.innerHTML = (C.condition || []).map(function (r, i) {
-                    var pct = C.cond_total ? Math.round(r[1] / C.cond_total * 100) : 0;
-                    return '<div><div class="flex justify-between text-[11px] font-semibold text-slate-600"><span>' + escapeHtml(r[0]) + '</span><span>' + rNum(r[1]) + ' (' + pct + '%)</span></div>'
-                        + '<div class="h-3 bg-slate-100 rounded-full overflow-hidden mt-0.5"><div class="h-full rounded-full ' + greens[i % greens.length] + '" style="width:' + pct + '%"></div></div></div>';
-                }).join('');
-            }
-            var rcb = document.getElementById('recent-collection-body');
-            if (rcb) rcb.innerHTML = (C.recent || []).slice(0, 10).map(function (r) {
-                var avail = /avail/i.test(r[3] || '') ? pill('Available', 'green') : /borrow/i.test(r[3] || '') ? pill('Borrowed', 'blue') : /lost|damag/i.test(r[3] || '') ? pill('Lost / Damaged', 'red') : pill(r[3] || '-', 'gray');
-                return '<tr class="border-b last:border-0"><td class="py-2 pr-2 font-semibold">' + escapeHtml(r[0]) + '</td><td class="py-2 pr-2">' + escapeHtml(r[1]) + '</td><td class="py-2 pr-2 text-slate-500">' + escapeHtml(r[2]) + '</td><td class="py-2 pr-2">' + avail + '</td><td class="py-2 pr-2 text-slate-500">' + escapeHtml(r[5] || '-') + '</td><td class="py-2 text-slate-500">' + escapeHtml(r[6] || '-') + '</td></tr>';
-            }).join('') || '<tr class="rcb-empty"><td colspan="6" class="py-6 text-center text-slate-400">No copies found.</td></tr>';
-            filterCollectionTable();
+            renderConditionBars();
+            renderRecentCollection();
             var att = document.getElementById('attention-list');
             if (att) att.innerHTML =
                 '<a href="{{ url_for('cataloging.cataloging_page', copy_status='overdue') }}" class="flex items-center gap-2 border rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors"><span class="material-symbols-outlined text-red-500">schedule</span><span class="flex-1"><b>Overdue Copies</b><br><span class="text-slate-500">Require immediate follow-up</span></span><b class="text-red-600">' + rNum(C.overdue) + '</b></a>'
@@ -845,13 +1399,10 @@ function syncGlobalFilterCustomDates() {
                 + '<div class="flex gap-2"><span class="material-symbols-outlined text-green-600">menu_book</span><span>Top category: <b>' + escapeHtml((((L.top_categories || [])[0]) || ['-'])[0]) + '</b>. Consider short-term acquisition boosts.</span></div>'
                 + '<div class="flex gap-2"><span class="material-symbols-outlined text-amber-600">schedule</span><span><b>' + rNum(L.overdue) + ' overdue items</b>. Continue reminder campaigns.</span></div>'
                 + '<div class="flex gap-2"><span class="material-symbols-outlined text-violet-600">pace</span><span>Average loan duration is <b>' + (L.avg_loan_days || 0) + ' days</b>.</span></div>';
-            var rcc = document.getElementById('recent-circ-body');
-            if (rcc) rcc.innerHTML = (L.recent || []).slice(0, 8).map(function (r) {
-                var st = /overdue/i.test(r[8] || '') ? pill('Overdue', 'red') : /return/i.test(r[6] || '') ? pill('Returned', 'green') : pill('Active', 'green');
-                return '<tr class="border-b last:border-0"><td class="py-2 pr-2">' + escapeHtml(r[0]) + '</td><td class="py-2 pr-2 font-semibold">TXN-' + escapeHtml(String(r[1])) + '</td><td class="py-2 pr-2">' + escapeHtml(r[2]) + '</td><td class="py-2 pr-2">' + escapeHtml(r[4]) + '</td><td class="py-2 pr-2">' + pill(escapeHtml(r[6] || ''), 'blue') + '</td><td class="py-2 pr-2 text-slate-500">' + escapeHtml(r[7] || '-') + '</td><td class="py-2">' + st + '</td></tr>';
-            }).join('') || '<tr><td colspan="7" class="py-6 text-center text-slate-400">No circulation yet.</td></tr>';
+            renderRecentCirc();
 
             paintUsage(U);
+            paintRequests((DASHBOARD && DASHBOARD.requests) || {});
         }
 
         function usageScopeLabel() {
@@ -863,17 +1414,54 @@ function syncGlobalFilterCustomDates() {
         function paintUsage(U) {
             U = U || {};
             var scope = usageScopeLabel();
+            var top = (U.by_department && U.by_department[0]) || null;
             var uk = document.getElementById('usage-kpis');
             if (uk) uk.innerHTML =
-                kpiCard('book', 'Total Borrowings' + scope, rNum(U.total), '', 'bg-blue-50')
-                + kpiCard('group', 'Unique Borrowers' + scope, rNum(U.unique_borrowers), '', 'bg-green-50')
-                + kpiCard('layers', 'Avg. Books per Borrower', (U.avg_per_borrower || 0), '', 'bg-violet-50')
-                + kpiCard('schedule', 'Overdue Items' + scope, rNum(U.overdue), 'items', 'bg-red-50')
-                + kpiCard('check_circle', 'Return Rate (On-time)', (U.return_rate || 0) + '%', '', 'bg-blue-50')
-                + kpiCard('account_balance', 'Active Departments', rNum(U.active_departments), '', 'bg-amber-50');
-            paintDeptCharts(U.by_department || []);
+                kpiCard('book', 'Department Borrowings' + scope, rNum(U.total), '', 'bg-blue-50')
+                + kpiCard('group', 'Active Borrowers' + scope, rNum(U.unique_borrowers), '', 'bg-green-50')
+                + kpiCard('account_balance', 'Departments Active', rNum(U.active_departments), '', 'bg-amber-50')
+                + kpiCard('emoji_events', 'Top Department', top ? escapeHtml(top[0]) : '—', top ? rNum(top[1]) + ' borrows' : '', 'bg-violet-50')
+                + kpiCard('schedule', 'Overdue in Departments' + scope, rNum(U.overdue), 'items', 'bg-red-50')
+                + kpiCard('layers', 'Avg. Books per Borrower', (U.avg_per_borrower || 0), '', 'bg-blue-50');
+            paintDeptCharts(U.by_department || [], U.overdue_by_department || [], U.borrowers_by_department || []);
+            paintDeptLeaderboard(U.dept_summary || []);
             paintTopBooks(U.top_books || []);
             paintUserType(U.by_user_type || [], U.total);
+        }
+
+        function paintReqRoleSplitInto(el, rows) {
+            if (!el) return;
+            var visRows = (rows || []).slice(0, 10);
+            if (!visRows.length) { el.innerHTML = '<div class="text-xs text-slate-400">No requests yet.</div>'; return; }
+            el.innerHTML = visRows.map(function (r) {
+                var title = String(r[0]), s = Number(r[1]) || 0, f = Number(r[2]) || 0,
+                    o = Number(r[3]) || 0, total = Number(r[4]) || (s + f + o);
+                var sp = total ? (s / total * 100) : 0, fp = total ? (f / total * 100) : 0,
+                    op = total ? Math.max(o / total * 100, 0) : 0;
+                var tip = title + ': Student ' + s + ' · Faculty ' + f + (o ? ' · Other ' + o : '') + ' (' + total + ' total)';
+                return '<div role="listitem" title="' + escapeHtml(tip) + '" tabindex="0">'
+                    + '<div class="flex justify-between text-[11px] font-semibold text-slate-600"><span class="truncate pr-2">' + escapeHtml(title) + '</span><span>' + rNum(total) + '</span></div>'
+                    + '<div class="flex h-3 bg-slate-100 rounded-full overflow-hidden mt-0.5">'
+                    + (s ? '<div class="h-full" style="width:' + sp.toFixed(1) + '%;background:#1d4ed8" title="Student: ' + s + '"></div>' : '')
+                    + (f ? '<div class="h-full" style="width:' + fp.toFixed(1) + '%;background:#0ea5e9" title="Faculty: ' + f + '"></div>' : '')
+                    + (o ? '<div class="h-full" style="width:' + op.toFixed(1) + '%;background:#94a3b8" title="Other staff: ' + o + '"></div>' : '')
+                    + '</div>'
+                    + '<div class="text-[10px] text-slate-400 mt-0.5">Student ' + s + ' · Faculty ' + f + (o ? ' · Other ' + o : '') + '</div></div>';
+            }).join('');
+            el.querySelectorAll('[role="listitem"]').forEach(function (node, i) {
+                var row = visRows[i] || ['-', 0, 0, 0, 0];
+                bindChartTip(node, function () {
+                    return '<b>' + escapeHtml(String(row[0])) + '</b><span class="tt-sub">Student ' + rNum(row[1]) + ' · Faculty ' + rNum(row[2]) + ' · Other ' + rNum(row[3]) + '</span>';
+                });
+            });
+        }
+
+        function paintRequests(R) {
+            R = R || {};
+            hbars(document.getElementById('req-top-titles'), R.top_titles || [], 'bg-blue-600', 10, reqTitleSearchLink);
+            paintReqRoleSplitInto(document.getElementById('req-role-split'), R.by_role || []);
+            lineChart(document.getElementById('req-trend-line'), R.trend || [], '#1d4ed8', { xLabel: 'Date', yLabel: 'Requests', unit: 'requests' });
+            hbars(document.getElementById('req-by-program'), R.by_program || [], 'bg-violet-600');
         }
 
         function updateUsageDeptLabel() {
@@ -1012,8 +1600,427 @@ function syncGlobalFilterCustomDates() {
             if (e.key === 'Escape') closeUsageDeptDropdown();
         });
 
+        /* ================= Book Analytics tab =================
+           Server-rendered picker + KPI/tables; only the bar rows and live
+           suggestions render client-side from the embedded traffic payload
+           and the book search endpoint. Empty until a book is picked. */
+        function paintBookBars(elId, rows) {
+            var el = document.getElementById(elId);
+            if (!el) return;
+            if (!rows || !rows.length) {
+                el.innerHTML = '<p class="text-[11px] text-slate-400">No records in the selected period.</p>';
+                return;
+            }
+            var max = Math.max.apply(null, rows.map(function (r) { return r[1]; }).concat([1]));
+            el.innerHTML = rows.map(function (r) {
+                var pct = Math.max(r[1] / max * 100, 2);
+                return '<div class="hbar-row" title="' + escapeHtml(String(r[0])) + ': ' + r[1] + '">'
+                    + '<div class="flex items-center justify-between text-[11px] font-bold text-slate-600"><span class="truncate mr-2">' + escapeHtml(String(r[0])) + '</span><span>' + r[1] + '</span></div>'
+                    + '<div class="h-2 rounded-full bg-slate-100 mt-0.5"><div class="hbar-fill h-2 rounded-full bg-blue-600" style="width:' + pct + '%"></div></div></div>';
+            }).join('');
+        }
+
+        function renderBookTraffic() {
+            var t = null;
+            try { t = JSON.parse(document.getElementById('book-traffic-data').textContent); } catch (e) { t = null; }
+            if (!t) return;
+            paintBookBars('book-trend', t.trend || []);
+            paintBookBars('book-program', t.by_program || []);
+            paintBookBars('book-usertype', t.by_user_type || []);
+            renderBookStatusLines(t.status_trends || null);
+        }
+
+        /* Status Trends line filter: toggle which statuses draw. Null =
+           all; kept in-memory per page load. */
+        var BOOK_STATUS_SELECTION = null;
+        var _bookStatusPayload = null;
+
+        function bookStatusKeys(payload) {
+            var out = [];
+            ((payload && payload.series) || []).forEach(function (s) {
+                if (s && s.key && out.indexOf(s.key) === -1) out.push(s.key);
+            });
+            return out;
+        }
+
+        function toggleBookStatus(key) {
+            var keys = bookStatusKeys(_bookStatusPayload);
+            if (BOOK_STATUS_SELECTION === null) BOOK_STATUS_SELECTION = keys.slice();
+            var i = BOOK_STATUS_SELECTION.indexOf(key);
+            if (i === -1) BOOK_STATUS_SELECTION.push(key);
+            else BOOK_STATUS_SELECTION.splice(i, 1);
+            refreshStatusViews();
+        }
+
+        function selectAllStatuses() {
+            BOOK_STATUS_SELECTION = bookStatusKeys(_bookStatusPayload);
+            refreshStatusViews();
+        }
+
+        function clearStatuses() {
+            BOOK_STATUS_SELECTION = [];
+            refreshStatusViews();
+        }
+
+        function refreshStatusViews() {
+            renderBookStatusLines(_bookStatusPayload);
+            renderStatusFilterList();
+            // Keep an open expanded copy in sync.
+            try {
+                var mBox = document.querySelector('#chartExpandBody [data-expand-key="book-status-lines"]');
+                if (mBox && _bookStatusPayload) {
+                    var mCard = mBox.parentElement;
+                    var mLegend = mCard ? mCard.querySelector('.chart-legend') : null;
+                    drawStatusLines(mBox, mLegend, _bookStatusPayload, true);
+                }
+            } catch (e) { /* modal not open — nothing to sync */ }
+        }
+
+        function updateStatusFilterLabel() {
+            var keys = bookStatusKeys(_bookStatusPayload);
+            var sel = BOOK_STATUS_SELECTION === null ? keys : BOOK_STATUS_SELECTION;
+            var text = sel.length >= keys.length ? 'All statuses'
+                : (sel.length === 0 ? 'No statuses' : sel.length + ' of ' + keys.length + ' selected');
+            document.querySelectorAll('[data-status-filter-label]').forEach(function (n) { n.textContent = text; });
+        }
+
+        function renderStatusFilterList() {
+            var list = document.getElementById('status-filter-list');
+            if (!list) return;
+            var dates = (_bookStatusPayload && _bookStatusPayload.dates) || [];
+            var allSeries = ((_bookStatusPayload && _bookStatusPayload.series) || []).filter(function (s) {
+                return s && s.key && s.values && s.values.length === dates.length;
+            });
+            if (BOOK_STATUS_SELECTION === null) BOOK_STATUS_SELECTION = bookStatusKeys(_bookStatusPayload);
+            if (!allSeries.length) {
+                list.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">No status data for this book.</p>';
+                return;
+            }
+            list.innerHTML = allSeries.map(function (s) {
+                var on = BOOK_STATUS_SELECTION.indexOf(s.key) !== -1;
+                var total = s.values.reduce(function (a, b) { return a + (Number(b) || 0); }, 0);
+                return '<label class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer">'
+                    + '<input type="checkbox"' + (on ? ' checked' : '') + ' onchange="toggleBookStatus(\'' + s.key + '\')" class="w-4 h-4 rounded accent-blue-700 shrink-0">'
+                    + '<span class="inline-block w-2.5 h-2.5 rounded-full shrink-0" style="background:' + s.color + '"></span>'
+                    + '<span class="text-xs font-bold text-slate-700 flex-1">' + escapeHtml(s.label) + '</span>'
+                    + '<span class="text-[11px] font-bold text-slate-400">' + rNum(total) + '</span></label>';
+            }).join('');
+        }
+
+        function openStatusFilterModal() {
+            renderStatusFilterList();
+            var m = document.getElementById('statusFilterModal');
+            if (!m) return;
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+        }
+
+        function closeStatusFilterModal() {
+            var m = document.getElementById('statusFilterModal');
+            if (!m) return;
+            m.classList.add('hidden');
+            m.classList.remove('flex');
+        }
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                var m = document.getElementById('statusFilterModal');
+                if (m && !m.classList.contains('hidden')) closeStatusFilterModal();
+            }
+        });
+
+        function renderBookStatusLines(payload) {
+            _bookStatusPayload = payload || null;
+            drawStatusLines(
+                document.getElementById('book-status-lines'),
+                document.getElementById('book-status-legend'),
+                _bookStatusPayload, true);
+        }
+
+        /* Multi-line status graph: one line per circulation/reservation
+           status over the selected period. Same axes/legend language as
+           the dashboard trend charts. */
+        function drawStatusLines(el, legend, payload, withFilter) {
+            if (!el) return;
+            var dates = (payload && payload.dates) || [];
+            var allSeries = ((payload && payload.series) || []).filter(function (s) {
+                return s && s.key && s.values && s.values.length === dates.length;
+            });
+            if (BOOK_STATUS_SELECTION === null) BOOK_STATUS_SELECTION = bookStatusKeys(payload);
+            var selection = BOOK_STATUS_SELECTION;
+            var series = allSeries.filter(function (s) { return selection.indexOf(s.key) !== -1; });
+            updateStatusFilterLabel();
+            if (legend) {
+                legend.innerHTML = series.map(function (s) {
+                    var total = s.values.reduce(function (a, b) { return a + (Number(b) || 0); }, 0);
+                    return '<span title="' + escapeHtml(s.label) + ': ' + rNum(total) + ' in period"><span class="lg-dot" style="background:' + s.color + '"></span>' + escapeHtml(s.label) + '</span>';
+                }).join('');
+            }
+            if (!series.length) { el.innerHTML = '<div class="text-xs text-slate-400 py-8 text-center">No statuses selected — enable at least one status above.</div>'; return; }
+            if (!dates.length) { el.innerHTML = '<div class="text-xs text-slate-400 py-8 text-center">No status activity in the selected period.</div>'; return; }
+            // Single active day: lines are just dots, so say so and suggest widening the range.
+            var sparseNote = dates.length < 2
+                ? '<p class="text-[10px] text-amber-600 font-semibold mb-1">Only one day with activity in this period — widen the time filter to see trends.</p>'
+                : '';
+            // Stride long ranges so lines stay readable (at most ~45 points).
+            var idx = dates.map(function (_, i) { return i; });
+            if (idx.length > 45) {
+                var stride = Math.ceil(idx.length / 45);
+                idx = idx.filter(function (_, i) { return i % stride === 0; });
+                if (idx[idx.length - 1] !== dates.length - 1) idx.push(dates.length - 1);
+            }
+            var W = 600, H = 268, ML = 48, MR = 14, MT = 12, MB = 46;
+            var plotW = W - ML - MR, plotH = H - MT - MB;
+            var base = MT + plotH;
+            var rawMax = 1;
+            series.forEach(function (s) {
+                s.values.forEach(function (v) { rawMax = Math.max(rawMax, Number(v) || 0); });
+            });
+            var yMax = niceCeil(rawMax);
+            var n = idx.length;
+            var stepX = n > 1 ? plotW / (n - 1) : 0;
+            function X(i) { return ML + stepX * i; }
+            function Y(v) { return base - ((Number(v) || 0) / yMax) * plotH; }
+            var paths = '', dots = '';
+            series.forEach(function (s) {
+                var line = idx.map(function (di, i) {
+                    return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(s.values[di]).toFixed(1);
+                }).join(' ');
+                paths += '<path d="' + line + '" fill="none" stroke="' + s.color + '" stroke-width="2.5"/>';
+                idx.forEach(function (di, i) {
+                    dots += '<circle class="line-dot" data-series="' + escapeHtml(s.label) + '" data-idx="' + di + '" cx="' + X(i).toFixed(1) + '" cy="' + Y(s.values[di]).toFixed(1) + '" r="4" fill="' + s.color + '" stroke="#fff" stroke-width="1.5"><title>' + escapeHtml(dates[di]) + ' · ' + escapeHtml(s.label) + ': ' + rNum(s.values[di]) + '</title></circle>';
+                });
+            });
+            var yTicks = '', ti;
+            for (ti = 0; ti <= 4; ti++) {
+                var tv = Math.round(yMax * ti / 4);
+                var ty = base - (tv / yMax) * plotH;
+                yTicks += '<line x1="' + ML + '" y1="' + ty.toFixed(1) + '" x2="' + (W - MR) + '" y2="' + ty.toFixed(1) + '" stroke="' + (ti === 0 ? '#cbd5e1' : '#eef2f7') + '"/>'
+                    + '<text x="' + (ML - 7) + '" y="' + (ty + 3.5).toFixed(1) + '" text-anchor="end" font-size="10" fill="#94a3b8">' + rNum(tv) + '</text>';
+            }
+            var xTicks = '', xCount = Math.min(5, n), xi;
+            for (xi = 0; xi < xCount; xi++) {
+                var pi = xCount === 1 ? 0 : Math.round(xi * (n - 1) / (xCount - 1));
+                var dx = X(pi);
+                var anchor = xi === 0 ? 'start' : (xi === xCount - 1 ? 'end' : 'middle');
+                var ax = xi === 0 ? Math.max(dx, ML) : (xi === xCount - 1 ? Math.min(dx, W - MR) : dx);
+                xTicks += '<line x1="' + dx.toFixed(1) + '" y1="' + base + '" x2="' + dx.toFixed(1) + '" y2="' + (base + 5) + '" stroke="#cbd5e1"/>'
+                    + '<text x="' + ax.toFixed(1) + '" y="' + (base + 18) + '" text-anchor="' + anchor + '" font-size="10" fill="#94a3b8"><title>' + escapeHtml(String(dates[idx[pi]])) + '</title>' + escapeHtml(shortDate(dates[idx[pi]])) + '</text>';
+            }
+            el.innerHTML = sparseNote + '<svg viewBox="0 0 ' + W + ' ' + H + '" class="w-full h-60" role="img" aria-label="Multi-line status trend chart. X axis: Date. Y axis: Items per day.">'
+                + yTicks
+                + paths
+                + '<line x1="' + ML + '" y1="' + MT + '" x2="' + ML + '" y2="' + base + '" stroke="#cbd5e1"/>'
+                + '<line x1="' + ML + '" y1="' + base + '" x2="' + (W - MR) + '" y2="' + base + '" stroke="#cbd5e1"/>'
+                + xTicks
+                + dots
+                + '<text x="14" y="' + (MT + plotH / 2).toFixed(1) + '" text-anchor="middle" font-size="11" font-weight="700" fill="#64748b" transform="rotate(-90 14 ' + (MT + plotH / 2).toFixed(1) + ')">Items per day</text>'
+                + '<text x="' + (ML + plotW / 2).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="11" font-weight="700" fill="#64748b">Date</text></svg>'
+                + '<div class="flex justify-between text-[10px] text-slate-400"><span>X: Date (' + escapeHtml(String(dates[0])) + ' → ' + escapeHtml(String(dates[dates.length - 1])) + ')</span><span>Y: Items per day</span></div>';
+            el.querySelectorAll('.line-dot').forEach(function (dot) {
+                var label = dot.getAttribute('data-series');
+                var di = parseInt(dot.getAttribute('data-idx'), 10);
+                var s = null;
+                series.forEach(function (cand) { if (cand.label === label) s = cand; });
+                var val = (s && s.values[di]) || 0;
+                bindChartTip(dot, function () {
+                    return '<b>' + escapeHtml(String(dates[di])) + ' · ' + escapeHtml(label) + '</b><span class="tt-sub">' + rNum(val) + ' items</span>';
+                });
+            });
+        }
+
+        function activateRtab(name) {
+            var btn = document.querySelector('.rtab-btn[data-rtab="' + name + '"]');
+            if (btn) btn.click();
+        }
+
+        // Live suggestions for the book picker (progressive enhancement).
+        (function () {
+            var input = document.getElementById('book-search');
+            var box = document.getElementById('book-suggest');
+            if (!input || !box) return;
+            var timer = null;
+            function hide() { box.classList.add('hidden'); box.innerHTML = ''; }
+            input.addEventListener('input', function () {
+                clearTimeout(timer);
+                var val = input.value.trim();
+                if (val.length < 2) { hide(); return; }
+                timer = setTimeout(function () {
+                    fetch(BOOK_SEARCH_URL + '?q=' + encodeURIComponent(val))
+                        .then(function (r) { return r.json(); })
+                        .then(function (body) {
+                            var rows = (body && body.results) || [];
+                            if (!rows.length) { hide(); return; }
+                            box.innerHTML = rows.map(function (r) {
+                                var url = new URL(window.location.href);
+                                url.searchParams.set('book_id', r.book_id);
+                                url.searchParams.set('q', input.value.trim());
+                                url.searchParams.set('tab', 'book');
+                                return '<a href="' + url.toString() + '" class="flex items-center gap-2 px-3 py-2 hover:bg-blue-50/60">'
+                                    + '<span class="text-[13px] font-bold text-slate-700 truncate">' + escapeHtml(r.title) + '</span>'
+                                    + '<span class="text-[11px] text-slate-400 truncate ml-auto">' + escapeHtml(r.author || '') + '</span></a>';
+                            }).join('');
+                            box.classList.remove('hidden');
+                        })
+                        .catch(hide);
+                }, 200);
+            });
+            document.addEventListener('click', function (e) {
+                if (!box.contains(e.target) && e.target !== input) hide();
+            });
+        })();
+
+        /* ================= Expand-to-modal (all tabs, pie/donut cards out) ===
+           Every non-pie graph/table card gets an expand (open_in_full)
+           button that pops the whole card + its data into #chartExpandModal.
+           Cards show a truncated preview; the modal re-renders the full
+           dataset (scrollable) via renderExpandFull. */
+        var EXPAND_FULL_CAP = 200;
+
+        function expandAnalyticsCard(btn, cid) {
+            var card = btn.closest('div.bg-white');
+            if (!card) return;
+            var titleEl = card.querySelector('h3');
+            document.getElementById('chartExpandTitle').textContent =
+                titleEl ? titleEl.textContent.trim() : 'Details';
+            var body = document.getElementById('chartExpandBody');
+            body.innerHTML = '';
+            var clone = card.cloneNode(true);
+            clone.querySelectorAll('.chart-expand-btn').forEach(function (b) { b.remove(); });
+            // Grab the chart/table container before ids are stripped so the
+            // modal can re-render it with the full dataset.
+            var cloneBox = null;
+            try { cloneBox = cid ? clone.querySelector('#' + cid) : null; } catch (e) { cloneBox = null; }
+            clone.querySelectorAll('[id]').forEach(function (n) { n.removeAttribute('id'); });
+            clone.querySelectorAll('[oninput],[onchange]').forEach(function (n) {
+                n.removeAttribute('oninput');
+                n.removeAttribute('onchange');
+            });
+            // Title already shows in the modal header — drop the clone's
+            // redundant h3 (and its wrapper if nothing else is left in it).
+            var cloneTitle = clone.querySelector('h3');
+            if (cloneTitle) {
+                var titleWrap = cloneTitle.parentElement;
+                cloneTitle.remove();
+                if (titleWrap && titleWrap !== clone &&
+                    titleWrap.textContent.trim() === '' &&
+                    titleWrap.querySelectorAll('p,div,table,svg,canvas,input,select,a,button').length === 0) {
+                    titleWrap.remove();
+                }
+            }
+            body.appendChild(clone);
+            // Full data + scrollable bars/tables inside the modal.
+            try { renderExpandFull(cid, clone, cloneBox); } catch (e) { /* keep the cloned preview */ }
+            clone.querySelectorAll('.overflow-x-auto').forEach(function (w) { w.classList.add('expand-scroll'); });
+            try {
+                clone.querySelectorAll('.space-y-1\\.5').forEach(function (n) {
+                    if (n.querySelector('.hbar-row')) n.classList.add('expand-scroll');
+                });
+            } catch (e) { /* selector unsupported — bars stay unscrollable */ }
+            var modal = document.getElementById('chartExpandModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+        }
+
+        /* Re-render the expanded container with the full dataset (cards
+           show a truncated preview). Bar lists and table wrappers also get
+           .expand-scroll so long content scrolls inside the modal. */
+        function renderExpandFull(cid, clone, box) {
+            if (!cid || !box) return;
+            var C = (DASHBOARD && DASHBOARD.collection) || {};
+            var L = (DASHBOARD && DASHBOARD.circulation) || {};
+            var U = (DASHBOARD && DASHBOARD.usage) || {};
+            var R = (DASHBOARD && DASHBOARD.requests) || {};
+            function cap(rows) { return (rows || []).slice(0, EXPAND_FULL_CAP); }
+            if (cid === 'dept-bars') hbars(box, cap(U.by_department), 'bg-blue-600', EXPAND_FULL_CAP);
+            else if (cid === 'overdue-dept-bars') hbars(box, cap(U.overdue_by_department), 'bg-red-500', EXPAND_FULL_CAP);
+            else if (cid === 'borrowers-dept-bars') hbars(box, cap(U.borrowers_by_department), 'bg-green-600', EXPAND_FULL_CAP);
+            else if (cid === 'peak-bars') hbars(box, cap(L.trend || []).map(function (r) { return [String(r[0]).slice(5), r[1]]; }), 'bg-blue-600', EXPAND_FULL_CAP);
+            else if (cid === 'req-top-titles') hbars(box, cap(R.top_titles), 'bg-blue-600', EXPAND_FULL_CAP, reqTitleSearchLink);
+            else if (cid === 'req-by-program') hbars(box, cap(R.by_program), 'bg-violet-600', EXPAND_FULL_CAP);
+            else if (cid === 'req-role-split') paintReqRoleSplitInto(box, cap(R.by_role));
+            else if (cid === 'req-trend-line') lineChart(box, cap(R.trend), '#1d4ed8', { xLabel: 'Date', yLabel: 'Requests', unit: 'requests' });
+            else if (cid === 'condition-bars') renderConditionBarsInto(box, cap(C.condition), C.cond_total || 0, EXPAND_FULL_CAP);
+            else if (cid === 'recent-collection-body') box.innerHTML = recentCollectionHTML(cap(C.recent));
+            else if (cid === 'recent-circ-body') box.innerHTML = recentCircHTML(cap(L.recent));
+            else if (cid === 'book-status-lines') {
+                try {
+                    var t = JSON.parse(document.getElementById('book-traffic-data').textContent);
+                    var legend = clone ? clone.querySelector('.chart-legend') : null;
+                    box.setAttribute('data-expand-key', 'book-status-lines');
+                    drawStatusLines(box, legend, (t && t.status_trends) || null, true);
+                } catch (e) { /* keep the cloned preview */ }
+            }
+            box.classList.add('expand-scroll');
+        }
+
+        function closeChartExpand() {
+            var modal = document.getElementById('chartExpandModal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            if (document.getElementById('mobile-sidebar') &&
+                document.getElementById('mobile-sidebar').classList.contains('hidden')) {
+                document.body.style.overflow = '';
+            }
+        }
+
+        function initChartExpand() {
+            // Chart/table containers whose cards become expandable. Donut
+            // (pie) containers are intentionally absent from this list.
+            var ids = ['condition-bars',
+                'trend-line', 'peak-bars', 'high-demand-body', 'overdue-line',
+                'recent-circ-body', 'dept-bars', 'borrowers-dept-bars',
+                'overdue-dept-bars', 'dept-leaderboard-body', 'top-books-list',
+                'req-top-titles', 'req-role-split', 'req-trend-line', 'req-by-program',
+                'book-status-lines', 'book-trend', 'book-program', 'book-usertype',
+                'book-recent-body',
+                'book-top-under-body'];
+            ids.forEach(function (cid) {
+                var container = document.getElementById(cid);
+                if (!container) return;
+                var card = container.closest('div.bg-white');
+                if (!card || card.querySelector('.chart-expand-btn')) return;
+                var h3 = card.querySelector('h3');
+                if (!h3) return;
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'chart-expand-btn';
+                btn.title = 'Expand';
+                btn.setAttribute('aria-label', 'Expand chart');
+                btn.setAttribute('onclick', "expandAnalyticsCard(this, '" + cid + "')");
+                btn.innerHTML = '<span class="material-symbols-outlined">open_in_full</span>';
+                if (h3.parentElement === card) {
+                    // Bare h3 header: wrap it with the button in a flex row.
+                    var wrap = document.createElement('div');
+                    wrap.className = 'flex items-center justify-between gap-2 mb-2';
+                    h3.classList.remove('mb-1', 'mb-2');
+                    h3.classList.add('mr-auto');
+                    card.insertBefore(wrap, h3);
+                    wrap.appendChild(h3);
+                    wrap.appendChild(btn);
+                } else {
+                    h3.parentElement.appendChild(btn);
+                }
+                card.setAttribute('data-expandable', 'true');
+            });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') {
+                    var modal = document.getElementById('chartExpandModal');
+                    if (modal && !modal.classList.contains('hidden')) closeChartExpand();
+                }
+            });
+        }
+
         renderRiverside();
         updateUsageDeptLabel();
+        renderBookTraffic();
+        initChartExpand();
+        // Deep-link: ?tab=book (picker search/select round-trips) reopens the tab.
+        try {
+            if (new URLSearchParams(window.location.search).get('tab') === 'book') activateRtab('book');
+        } catch (e) { /* URLSearchParams unsupported — stay on first tab */ }
     </script>
 </body>
 

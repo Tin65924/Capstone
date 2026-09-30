@@ -12,7 +12,9 @@ CREATE TABLE IF NOT EXISTS user_accounts (
     role_id        INT NOT NULL REFERENCES roles(role_id),
     account_status VARCHAR(20) NOT NULL DEFAULT 'active'
                    CHECK (account_status IN ('active', 'disabled', 'pending', 'archived')),
-    created_at     TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at     TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMP,
+    updated_by     INT REFERENCES user_accounts(user_id)
 );
 
 CREATE TABLE IF NOT EXISTS audit_trail (
@@ -30,7 +32,9 @@ CREATE TABLE IF NOT EXISTS borrowers (
     department      VARCHAR(100),
     phone_number    VARCHAR(30),
     borrower_status VARCHAR(20) NOT NULL DEFAULT 'active'
-                    CHECK (borrower_status IN ('active', 'blocked'))
+                    CHECK (borrower_status IN ('active', 'blocked')),
+    updated_at      TIMESTAMP,
+    updated_by      INT REFERENCES user_accounts(user_id)
 );
 
 ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS phone_number VARCHAR(30);
@@ -51,7 +55,9 @@ CREATE TABLE IF NOT EXISTS book_catalog (
     description           TEXT,
     catalog_status        VARCHAR(20) NOT NULL DEFAULT 'active'
                           CHECK (catalog_status IN ('active', 'archived')),
-    date_added            DATE NOT NULL DEFAULT CURRENT_DATE
+    date_added            DATE NOT NULL DEFAULT CURRENT_DATE,
+    updated_at            TIMESTAMP,
+    updated_by            INT REFERENCES user_accounts(user_id)
 );
 
 CREATE TABLE IF NOT EXISTS accession_log (
@@ -60,7 +66,9 @@ CREATE TABLE IF NOT EXISTS accession_log (
     book_id          INT NOT NULL REFERENCES book_catalog(book_id),
     librarian_id     INT NOT NULL REFERENCES user_accounts(user_id),
     date_accessioned DATE NOT NULL DEFAULT CURRENT_DATE,
-    source           VARCHAR(20) CHECK (source IN ('purchase', 'donation', 'others'))
+    source           VARCHAR(20) CHECK (source IN ('purchase', 'donation', 'others')),
+    updated_at       TIMESTAMP,
+    updated_by       INT REFERENCES user_accounts(user_id)
 );
 
 CREATE TABLE IF NOT EXISTS request_records (
@@ -77,7 +85,9 @@ CREATE TABLE IF NOT EXISTS request_records (
     request_date   TIMESTAMP NOT NULL DEFAULT NOW(),
     reviewed_by    INT REFERENCES user_accounts(user_id),
     review_date    TIMESTAMP,
-    remarks        VARCHAR(255)
+    remarks        VARCHAR(255),
+    updated_at     TIMESTAMP,
+    updated_by     INT REFERENCES user_accounts(user_id)
 );
 
 ALTER TABLE request_records ADD COLUMN IF NOT EXISTS remarks VARCHAR(255);
@@ -93,7 +103,9 @@ CREATE TABLE IF NOT EXISTS procurement_log (
     order_date     DATE NOT NULL,
     date_received  DATE,
     book_id        INT REFERENCES book_catalog(book_id),
-    remarks        VARCHAR(255)
+    remarks        VARCHAR(255),
+    updated_at     TIMESTAMP,
+    updated_by     INT REFERENCES user_accounts(user_id)
 );
 
 CREATE TABLE IF NOT EXISTS circulation_records (
@@ -114,7 +126,9 @@ CREATE TABLE IF NOT EXISTS circulation_records (
     damage_notes       TEXT,
     lost_flag          BOOLEAN NOT NULL DEFAULT FALSE,
     transaction_status VARCHAR(20) NOT NULL
-                       CHECK (transaction_status IN ('active', 'returned', 'overdue'))
+                       CHECK (transaction_status IN ('active', 'returned', 'overdue')),
+    updated_at         TIMESTAMP,
+    updated_by         INT REFERENCES user_accounts(user_id)
 );
 
 CREATE TABLE IF NOT EXISTS inventory_status (
@@ -136,7 +150,9 @@ CREATE TABLE IF NOT EXISTS inventory_sessions (
     session_status VARCHAR(20) NOT NULL DEFAULT 'active'
                    CHECK (session_status IN ('active', 'completed', 'cancelled')),
     started_at     TIMESTAMP NOT NULL DEFAULT NOW(),
-    ended_at       TIMESTAMP
+    ended_at       TIMESTAMP,
+    updated_at     TIMESTAMP,
+    updated_by     INT REFERENCES user_accounts(user_id)
 );
 
 ALTER TABLE inventory_status ADD COLUMN IF NOT EXISTS session_id INT REFERENCES inventory_sessions(session_id);
@@ -150,7 +166,9 @@ CREATE TABLE IF NOT EXISTS reservation_queue (
     request_date       TIMESTAMP NOT NULL DEFAULT NOW(),
     reservation_status VARCHAR(20) NOT NULL
                        CHECK (reservation_status IN ('waiting', 'allocated', 'claimed', 'expired')),
-    claim_deadline     TIMESTAMP
+    claim_deadline     TIMESTAMP,
+    updated_at         TIMESTAMP,
+    updated_by         INT REFERENCES user_accounts(user_id)
 );
 
 CREATE TABLE IF NOT EXISTS notification_log (
@@ -163,7 +181,9 @@ CREATE TABLE IF NOT EXISTS notification_log (
                                          'due_soon', 'reservation')),
     related_reference VARCHAR(50),
     is_read         BOOLEAN NOT NULL DEFAULT FALSE,
-    date_sent       TIMESTAMP NOT NULL DEFAULT NOW()
+    date_sent       TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMP,
+    updated_by      INT REFERENCES user_accounts(user_id)
 );
 
 ALTER TABLE notification_log ADD COLUMN IF NOT EXISTS is_read BOOLEAN NOT NULL DEFAULT FALSE;
@@ -230,7 +250,8 @@ INSERT INTO library_settings (setting_key, setting_value, description) VALUES
     ('DAILY_CIRCULATION_DUE_DAYS', '0', 'Daily circulation due days (0 = same day)'),
     ('OVERDUE_FINE_PER_DAY', '5.0', 'Overdue fine in pesos per day'),
     ('OVERDUE_GRACE_DAYS', '0', 'Grace days before fines accrue'),
-    ('RESERVATION_CLAIM_DAYS', '2', 'Days to claim an allocated reservation'),
+    ('RESERVATION_CLAIM_DAYS', '2', 'Days to claim an allocated reservation (legacy fallback)'),
+    ('RESERVATION_CLAIM_HOURS', '2', 'Hours to claim an allocated reservation (2-hour pickup window)'),
     ('DUE_SOON_NOTIFY_DAYS', '2', 'Days before due date to send due-soon reminders')
 ON CONFLICT (setting_key) DO NOTHING;
 
@@ -250,3 +271,29 @@ INSERT INTO departments (name, dept_type) VALUES
     ('BSN', 'program'),
     ('BACOMM', 'program')
 ON CONFLICT DO NOTHING;
+
+-- Audit columns (Updated By / Updated Date) for every table editable via
+-- the frontend. inventory_status already audits via checked_by /
+-- last_checked_date and library_settings via updated_at / updated_by,
+-- so they are intentionally excluded here. IF NOT EXISTS keeps this
+-- idempotent for existing databases (run_schema re-applies this file).
+ALTER TABLE user_accounts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
+ALTER TABLE user_accounts ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
+ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
+ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
+ALTER TABLE book_catalog ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
+ALTER TABLE book_catalog ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
+ALTER TABLE accession_log ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
+ALTER TABLE accession_log ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
+ALTER TABLE request_records ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
+ALTER TABLE request_records ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
+ALTER TABLE procurement_log ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
+ALTER TABLE procurement_log ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
+ALTER TABLE circulation_records ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
+ALTER TABLE circulation_records ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
+ALTER TABLE reservation_queue ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
+ALTER TABLE reservation_queue ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
+ALTER TABLE inventory_sessions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
+ALTER TABLE inventory_sessions ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
+ALTER TABLE notification_log ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
+ALTER TABLE notification_log ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);

@@ -5,7 +5,7 @@ import threading
 import uuid
 import time
 from datetime import datetime, timedelta
-from flask import Response, render_template, request, redirect, url_for, flash, jsonify
+from flask import Response, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_login import login_required, current_user
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -120,22 +120,24 @@ _BOOK_EXPORT_HEADERS = [
 ]
 
 
-# book_catalog.* is 13 cols (0 book_id … 12 date_added) + accession_numbers at 13
-# Both get_all_books() and get_books_by_status() use ACCESSION_SUBQUERY ("...") AS accession_numbers
-# Keep _BOOK_EXPORT_HEADERS width in sync with these 14 positions.
+# book_catalog.* is 15 cols on current schema (0 book_id … 12 date_added,
+# 13 updated_at, 14 updated_by) with accession_numbers appended last by
+# get_all_books()/get_books_by_status(). Tail positions use negative
+# indices so exports stay correct even if columns are added later.
+# Keep _BOOK_EXPORT_HEADERS width in sync with these positions.
 _BOOK_COL = {
     'book_id': 0, 'title': 1, 'author': 2, 'edition': 3, 'publisher': 4,
     'year': 5, 'subject': 6, 'call_number': 7, 'isbn': 8, 'material': 9,
-    'description': 10, 'status': 11, 'date_added': 12, 'accessions': 13,
+    'description': 10, 'status': 11, 'date_added': 12, 'accessions': -1,
 }
 
 
 def _book_row_to_export(row):
     def _str(v):
         return '' if v is None else str(v)
-    # accession_numbers is always at 13 when present; date_added at 12
+    # accession_numbers is appended last by the catalog queries; date_added at 12
     date_added = row[_BOOK_COL['date_added']] if len(row) > _BOOK_COL['date_added'] else ''
-    acc = row[_BOOK_COL['accessions']] if len(row) > _BOOK_COL['accessions'] else ''
+    acc = row[_BOOK_COL['accessions']] if len(row) > 0 else ''
     return [
         _str(row[_BOOK_COL['book_id']] if len(row) > _BOOK_COL['book_id'] else ''),
         _str(row[_BOOK_COL['title']] if len(row) > _BOOK_COL['title'] else ''),
@@ -340,9 +342,15 @@ def edit_book(book_id):
         isbn=request.form.get('isbn', '').strip() or None,
         material_type=request.form.get('material_type', 'Book'),
         description=request.form.get('description', '').strip() or None,
+        updated_by=current_user.id,
     )
     bloom_registry.mark_dirty()
-    log_activity(current_user.id, f'cataloging:edit_book:{book_id}')
+    from app.auth.models import audit_text
+    old_title = (book[1] or '') if len(book) > 1 else ''
+    detail = ''
+    if title != old_title:
+        detail = f":title:{audit_text(old_title)}~>{audit_text(title)}"
+    log_activity(current_user.id, f'cataloging:edit_book:{book_id}{detail}')
     flash('Book updated.', 'success')
     return redirect(url_for('cataloging.cataloging_page', modal='editBookModal', book_id=book_id, mstatus='success'))
 
@@ -375,7 +383,7 @@ def toggle_book_status(book_id):
         return redirect(url_for('cataloging.cataloging_page'))
 
     new_status = 'archived' if book[11] == 'active' else 'active'
-    update_book_status(book_id, new_status)
+    update_book_status(book_id, new_status, updated_by=current_user.id)
     log_activity(current_user.id, f'cataloging:toggle_status:{book_id}:{new_status}')
     flash(f'Book {new_status}.', 'success')
     return redirect(url_for('cataloging.cataloging_page'))
@@ -435,7 +443,7 @@ def edit_accession(accession_id):
         flash(f'Accession number {accession_number} already exists.', 'error')
         return redirect(url_for('cataloging.cataloging_page', modal='editAccessionModal', mstatus='error'))
 
-    update_accession(accession_id, accession_number, source)
+    update_accession(accession_id, accession_number, source, updated_by=current_user.id)
     log_activity(current_user.id, f'cataloging:edit_accession:{accession_id}')
     flash(f'Accession {accession_number} updated.', 'success')
     return redirect(url_for('cataloging.cataloging_page', modal='editAccessionModal', mstatus='success'))
@@ -508,12 +516,17 @@ def bulk_import():
     }
 
     app = _get_current_app()
-    t = threading.Thread(
-        target=_bulk_import_worker,
-        args=(app, job_id, rows, column_map, current_user.id),
-        daemon=True,
-    )
-    t.start()
+    if current_app.config.get('TESTING'):
+        # Run inline under TESTING so no worker thread outlives the mocked
+        # database (stray threads crash post-teardown and spam warnings).
+        _bulk_import_worker(app, job_id, rows, column_map, current_user.id)
+    else:
+        t = threading.Thread(
+            target=_bulk_import_worker,
+            args=(app, job_id, rows, column_map, current_user.id),
+            daemon=True,
+        )
+        t.start()
 
     return jsonify({'job_id': job_id, 'redirect': url_for('cataloging.cataloging_page')})
 

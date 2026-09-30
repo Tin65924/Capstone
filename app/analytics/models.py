@@ -93,6 +93,76 @@ def books_borrowed_per_program(start_date=None, end_date=None, departments=None,
     )
 
 
+# Program label shared by the department analytics below: the borrower's
+# department, or the staff role / 'No program' fallback for blank ones.
+_PROGRAM_LABEL = """COALESCE(NULLIF(b.department, ''),
+    CASE WHEN r.role_name IN ('Admin', 'Librarian') THEN r.role_name
+         ELSE 'No program' END)"""
+
+
+def _program_joins():
+    return (' JOIN borrowers b ON b.borrower_id = c.borrower_id'
+            ' JOIN user_accounts u ON b.user_id = u.user_id'
+            ' JOIN roles r ON u.role_id = r.role_id')
+
+
+def overdue_by_department(start_date=None, end_date=None, departments=None):
+    """Overdue loans grouped by department (real split, not a mix reuse)."""
+    parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    parts.append("c.transaction_status = 'overdue'")
+    clause, cparams = _department_clause(departments, 'b', 'r')
+    if clause:
+        parts.append(clause)
+        params.extend(cparams)
+    where = 'WHERE ' + ' AND '.join(parts) if parts else ''
+    return db.fetch_all(
+        '''SELECT {}, COUNT(c.circulation_id) as total
+           FROM circulation_records c{} {} GROUP BY 1 ORDER BY total DESC'''.format(
+            _PROGRAM_LABEL, _program_joins(), where),
+        tuple(params) if params else None
+    )
+
+
+def borrowers_by_department(start_date=None, end_date=None, departments=None):
+    """Distinct active borrowers grouped by department."""
+    parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    clause, cparams = _department_clause(departments, 'b', 'r')
+    if clause:
+        parts.append(clause)
+        params.extend(cparams)
+    where = 'WHERE ' + ' AND '.join(parts) if parts else ''
+    return db.fetch_all(
+        '''SELECT {}, COUNT(DISTINCT c.borrower_id) as total
+           FROM circulation_records c{} {} GROUP BY 1 ORDER BY total DESC'''.format(
+            _PROGRAM_LABEL, _program_joins(), where),
+        tuple(params) if params else None
+    )
+
+
+def department_summary(start_date=None, end_date=None, departments=None):
+    """One row per department: (program, borrowings, borrowers, overdue).
+
+    Powers the Department Leaderboard: every leaderboard column comes
+    from this single query.
+    """
+    parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    clause, cparams = _department_clause(departments, 'b', 'r')
+    if clause:
+        parts.append(clause)
+        params.extend(cparams)
+    where = 'WHERE ' + ' AND '.join(parts) if parts else ''
+    return db.fetch_all(
+        '''SELECT {},
+                  COUNT(c.circulation_id) as borrowings,
+                  COUNT(DISTINCT c.borrower_id) as borrowers,
+                  SUM(CASE WHEN c.transaction_status = 'overdue'
+                           THEN 1 ELSE 0 END) as overdue
+           FROM circulation_records c{} {} GROUP BY 1 ORDER BY borrowings DESC'''.format(
+            _PROGRAM_LABEL, _program_joins(), where),
+        tuple(params) if params else None
+    )
+
+
 def utilization_rate(start_date=None, end_date=None):
     total = db.fetch_one("SELECT COUNT(*) FROM book_catalog WHERE catalog_status = 'active'")
     parts, params = _date_filter({'start': start_date, 'end': end_date}, 'borrow_date')
@@ -120,14 +190,21 @@ def most_borrowed_titles(start_date=None, end_date=None, limit=10):
     )
 
 
-def underutilized_titles(start_date=None, end_date=None):
+def underutilized_titles(start_date=None, end_date=None, limit=10):
     parts, params = _date_filter({'start': start_date, 'end': end_date}, 'c.borrow_date')
     on_cond = ' AND ' + ' AND '.join(parts) if parts else ''
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 10
+    limit = max(1, min(limit, 50))
+    params = list(params) + [limit]
     return db.fetch_all(
         '''SELECT bc.title FROM book_catalog bc
            LEFT JOIN circulation_records c ON bc.book_id = c.book_id{}
-           GROUP BY bc.book_id, bc.title HAVING COUNT(c.circulation_id) = 0'''.format(on_cond),
-        tuple(params) if params else None
+           GROUP BY bc.book_id, bc.title HAVING COUNT(c.circulation_id) = 0
+           ORDER BY bc.title ASC LIMIT %s'''.format(on_cond),
+        tuple(params)
     )
 
 
@@ -317,8 +394,10 @@ def borrowings_trend(start_date=None, end_date=None, borrow_type=None,
 
 
 def overdue_trend(start_date=None, end_date=None, borrow_type=None,
-                  departments=None):
-    parts, params = _range_clause('c.borrow_date', start_date, end_date)
+                     departments=None):
+    # Group by due_date (not borrow_date): "daily overdue counts" means
+    # when items became overdue. COALESCE covers legacy rows with NULL due.
+    parts, params = _range_clause('COALESCE(c.due_date, c.borrow_date)', start_date, end_date)
     joins = ''
     if borrow_type:
         parts.append('c.borrow_type = %s')
@@ -332,8 +411,8 @@ def overdue_trend(start_date=None, end_date=None, borrow_type=None,
         params.extend(dept_params)
     parts.append("c.transaction_status = 'overdue'")
     return db.fetch_all(
-        '''SELECT c.borrow_date, COUNT(*) FROM circulation_records c{}
-           WHERE {} GROUP BY c.borrow_date ORDER BY c.borrow_date'''.format(joins, ' AND '.join(parts)),
+        '''SELECT COALESCE(c.due_date, c.borrow_date)::date, COUNT(*) FROM circulation_records c{}
+           WHERE {} GROUP BY 1 ORDER BY 1'''.format(joins, ' AND '.join(parts)),
         tuple(params)
     )
 
@@ -562,10 +641,11 @@ def recent_circulation(limit=10, departments=None, start_date=None, end_date=Non
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     params.append(limit)
     return db.fetch_all(
-        '''SELECT c.borrow_date, c.circulation_id, u.full_name, r.role_name,
-                  b.title, b.author, c.transaction_type, c.due_date, c.transaction_status
-           FROM circulation_records c
-           JOIN book_catalog b ON c.book_id = b.book_id
+        '''SELECT c.borrow_date, a.accession_number, u.full_name, r.role_name,
+                   b.title, b.author, c.transaction_type, c.due_date, c.transaction_status
+            FROM circulation_records c
+            JOIN accession_log a ON a.accession_id = c.accession_id
+            JOIN book_catalog b ON c.book_id = b.book_id
            JOIN borrowers br ON c.borrower_id = br.borrower_id
            JOIN user_accounts u ON br.user_id = u.user_id
            JOIN roles r ON u.role_id = r.role_id
@@ -590,4 +670,392 @@ def recent_collection_status(limit=10):
            WHERE b.catalog_status = 'active'
            ORDER BY a.accession_id DESC LIMIT %s''',
         (limit,)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Book Analytics (per-title traffic).
+#
+# One page shows the traffic of a specific book: headline totals, daily
+# trend, breakdowns by program/user-type, copy states, and recent
+# transactions.  All functions filter on book_catalog.book_id with %s
+# placeholders and return positional tuples (SELECT order is the contract).
+# ---------------------------------------------------------------------------
+
+def search_books_for_analytics(query, limit=10):
+    """Return [(book_id, title, author, category, year_published)].
+
+    Matches book title, category (subject_classification), or accession
+    number (via accession_log), plus author/ISBN for convenience.
+
+    Only active titles; empty/blank queries return [] so the Book Analytics
+    page shows nothing until the librarian searches or picks a book.
+    """
+    query = (query or '').strip()
+    if not query:
+        return []
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 10
+    limit = max(1, min(limit, 50))
+    pattern = '%' + query + '%'
+    return db.fetch_all(
+        '''SELECT DISTINCT b.book_id, b.title, b.author,
+                  COALESCE(NULLIF(b.subject_classification, ''), 'Others'),
+                  b.year_published
+           FROM book_catalog b
+           LEFT JOIN accession_log a ON a.book_id = b.book_id
+           WHERE b.catalog_status = 'active'
+             AND (b.title ILIKE %s OR b.author ILIKE %s OR b.isbn ILIKE %s
+                  OR b.subject_classification ILIKE %s
+                  OR a.accession_number ILIKE %s)
+           ORDER BY b.title ASC LIMIT %s''',
+        (pattern, pattern, pattern, pattern, pattern, limit)
+    )
+
+
+def get_book_for_analytics(book_id):
+    """Return full catalog details for one active title.
+
+    Positional tuple (contract — new columns are appended, never reordered):
+    (book_id, title, author, category, year, copies,
+     publisher, edition, isbn, call_number, material_type, description).
+
+    ``year`` is ``year_published`` (the copyright date shown on book cards).
+    """
+    try:
+        book_id = int(book_id)
+    except (TypeError, ValueError):
+        return None
+    return db.fetch_one(
+        '''SELECT b.book_id, b.title, b.author,
+                  COALESCE(NULLIF(b.subject_classification, ''), 'Others'),
+                  b.year_published,
+                  (SELECT COUNT(*) FROM accession_log a WHERE a.book_id = b.book_id),
+                  b.publisher, b.edition, b.isbn, b.call_number,
+                  b.material_type, b.description
+           FROM book_catalog b
+           WHERE b.book_id = %s AND b.catalog_status = 'active' ''',
+        (book_id,)
+    )
+
+
+def book_traffic_overview(book_id, start_date=None, end_date=None):
+    """Return (total, active, overdue, returned, borrowers, avg_days, return_rate).
+
+    Positional tuple; scoped to one book_id with an optional borrow_date
+    range.  New-accession counts are intentionally excluded here.
+    """
+    try:
+        book_id = int(book_id)
+    except (TypeError, ValueError):
+        return (0, 0, 0, 0, 0, 0.0, 0.0)
+    parts, params = _range_clause('borrow_date', start_date, end_date)
+    parts = ['book_id = %s'] + parts
+    params = [book_id] + params
+    where = 'WHERE ' + ' AND '.join(parts)
+    p = tuple(params)
+
+    def _and(cond):
+        return where + ' AND ' + cond
+
+    total = db.fetch_one(
+        'SELECT COUNT(*) FROM circulation_records {}'.format(where), p)
+    active = db.fetch_one(
+        'SELECT COUNT(*) FROM circulation_records {}'.format(
+            _and("transaction_status = 'active'")), p)
+    overdue = db.fetch_one(
+        'SELECT COUNT(*) FROM circulation_records {}'.format(
+            _and("transaction_status = 'overdue'")), p)
+    returned = db.fetch_one(
+        'SELECT COUNT(*) FROM circulation_records {}'.format(
+            _and("transaction_status = 'returned'")), p)
+    borrowers = db.fetch_one(
+        'SELECT COUNT(DISTINCT borrower_id) FROM circulation_records {}'.format(where), p)
+    avg_loan = db.fetch_one(
+        'SELECT AVG(return_date - borrow_date) FROM circulation_records {}'.format(
+            _and('return_date IS NOT NULL')), p)
+    t = total[0] if total else 0
+    r = returned[0] if returned else 0
+    rate = round(r / t * 100, 1) if t else 0.0
+    try:
+        raw_avg = avg_loan[0] if avg_loan and avg_loan[0] is not None else 0.0
+        if hasattr(raw_avg, 'total_seconds'):
+            avg_days = raw_avg.total_seconds() / 86400
+        else:
+            avg_days = float(raw_avg)
+    except (TypeError, ValueError):
+        avg_days = 0.0
+    return (
+        t,
+        active[0] if active else 0,
+        overdue[0] if overdue else 0,
+        r,
+        borrowers[0] if borrowers else 0,
+        round(avg_days, 1),
+        rate,
+    )
+
+
+def book_borrowings_trend(book_id, start_date=None, end_date=None):
+    """Return [(borrow_date, count)] daily trend for one book."""
+    try:
+        book_id = int(book_id)
+    except (TypeError, ValueError):
+        return []
+    parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    parts = ['c.book_id = %s'] + parts
+    params = [book_id] + params
+    return db.fetch_all(
+        '''SELECT c.borrow_date, COUNT(*)
+           FROM circulation_records c
+           WHERE {} GROUP BY c.borrow_date ORDER BY c.borrow_date'''.format(
+            ' AND '.join(parts)),
+        tuple(params)
+    )
+
+
+def book_borrowed_per_program(book_id, start_date=None, end_date=None):
+    """Return [(program, borrows)] for one book (program_label logic)."""
+    try:
+        book_id = int(book_id)
+    except (TypeError, ValueError):
+        return []
+    parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    parts = ['c.book_id = %s'] + parts
+    params = [book_id] + params
+    return db.fetch_all(
+        '''SELECT {}, COUNT(c.circulation_id) as total
+           FROM circulation_records c{} WHERE {} GROUP BY 1 ORDER BY total DESC'''.format(
+            _PROGRAM_LABEL, _program_joins(), ' AND '.join(parts)),
+        tuple(params)
+    )
+
+
+def book_borrowings_by_user_type(book_id, start_date=None, end_date=None):
+    """Return [(role_name, borrows)] for one book."""
+    try:
+        book_id = int(book_id)
+    except (TypeError, ValueError):
+        return []
+    parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    parts = ['c.book_id = %s'] + parts
+    params = [book_id] + params
+    return db.fetch_all(
+        '''SELECT r.role_name, COUNT(c.circulation_id)
+           FROM circulation_records c
+           JOIN borrowers b ON c.borrower_id = b.borrower_id
+           JOIN user_accounts u ON b.user_id = u.user_id
+           JOIN roles r ON u.role_id = r.role_id
+           WHERE {} GROUP BY r.role_name ORDER BY 2 DESC'''.format(' AND '.join(parts)),
+        tuple(params)
+    )
+
+
+def book_recent_circulation(book_id, limit=10, start_date=None, end_date=None):
+    """Return recent [(date, accession_number, user, role, action, due, status)] for one book."""
+    try:
+        book_id = int(book_id)
+    except (TypeError, ValueError):
+        return []
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 10
+    limit = max(1, min(limit, 50))
+    parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    parts = ['c.book_id = %s'] + parts
+    params = [book_id] + params
+    params.append(limit)
+    return db.fetch_all(
+        '''SELECT c.borrow_date, a.accession_number, u.full_name, r.role_name,
+                   c.transaction_type, c.due_date, c.transaction_status
+            FROM circulation_records c
+            JOIN accession_log a ON a.accession_id = c.accession_id
+            JOIN borrowers br ON c.borrower_id = br.borrower_id
+            JOIN user_accounts u ON br.user_id = u.user_id
+            JOIN roles r ON u.role_id = r.role_id
+            WHERE {} ORDER BY c.borrow_date DESC LIMIT %s'''.format(' AND '.join(parts)),
+        tuple(params)
+    )
+
+
+def book_copy_states(book_id):
+    """Return [(accession_number, inventory_state, loan, borrower, due)] per copy."""
+    try:
+        book_id = int(book_id)
+    except (TypeError, ValueError):
+        return []
+    return db.fetch_all(
+        '''SELECT a.accession_number,
+                  COALESCE(i.inventory_state, 'available'),
+                  c.transaction_status, u.full_name, c.due_date
+           FROM accession_log a
+           LEFT JOIN inventory_status i ON i.accession_id = a.accession_id
+           LEFT JOIN circulation_records c ON c.accession_id = a.accession_id
+               AND c.transaction_status IN ('active', 'overdue')
+           LEFT JOIN borrowers br ON c.borrower_id = br.borrower_id
+           LEFT JOIN user_accounts u ON br.user_id = u.user_id
+           WHERE a.book_id = %s
+           ORDER BY a.accession_number ASC''',
+        (book_id,)
+    )
+
+
+def book_reservation_count(book_id):
+    """Return waiting/allocated reservation count for one book."""
+    try:
+        book_id = int(book_id)
+    except (TypeError, ValueError):
+        return 0
+    row = db.fetch_one(
+        """SELECT COUNT(*) FROM reservation_queue
+           WHERE book_id = %s AND reservation_status IN ('waiting', 'allocated')""",
+        (book_id,)
+    )
+    return row[0] if row else 0
+
+
+# Status keys for the per-book multi-line trend (circulation actions +
+# reservation-queue states, mirroring Reservation Management).
+BOOK_STATUS_KEYS = (
+    'borrowed', 'returned', 'overdue',
+    'waiting', 'allocated', 'claimed', 'expired',
+)
+
+
+def book_status_trends(book_id, start_date=None, end_date=None):
+    """Return [(day, status, count)] daily per-status traffic for one book.
+
+    Circulation rows group borrow_date by action/state (borrowed, returned,
+    overdue); reservation rows group request_date by queue state (waiting,
+    allocated, claimed, expired — the Reservation Management states).
+    Reservation rows are dated by request_date (the only per-row date on
+    reservation_queue), so claimed/expired lines show when the request was
+    made, not when it changed state.
+    """
+    try:
+        book_id = int(book_id)
+    except (TypeError, ValueError):
+        return []
+    cparts, cparams = _range_clause('c.borrow_date', start_date, end_date)
+    cparts = ['c.book_id = %s'] + cparts
+    cparams = [book_id] + cparams
+    cwhere = ' AND '.join(cparts)
+    rparts, rparams = _range_clause('r.request_date::date', start_date, end_date)
+    rparts = ['r.book_id = %s'] + rparts
+    rparams = [book_id] + rparams
+    rwhere = ' AND '.join(rparts)
+    return db.fetch_all(
+        '''SELECT c.borrow_date AS day, 'borrowed' AS status, COUNT(*)
+           FROM circulation_records c WHERE {} AND c.transaction_type = 'borrow'
+           GROUP BY day
+           UNION ALL
+           SELECT c.borrow_date AS day, 'returned' AS status, COUNT(*)
+           FROM circulation_records c WHERE {} AND c.transaction_type = 'return'
+           GROUP BY day
+           UNION ALL
+           SELECT c.borrow_date AS day, 'overdue' AS status, COUNT(*)
+           FROM circulation_records c WHERE {} AND c.transaction_status = 'overdue'
+           GROUP BY day
+           UNION ALL
+           SELECT r.request_date::date AS day, r.reservation_status AS status, COUNT(*)
+           FROM reservation_queue r WHERE {}
+           GROUP BY day, r.reservation_status
+           ORDER BY day'''.format(cwhere, cwhere, cwhere, rwhere),
+        tuple(cparams + cparams + cparams + rparams)
+    )
+
+
+def top_requested_titles(start_date=None, end_date=None, limit=10):
+    """Return [(book_title, request_count)] most-requested books first."""
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 10
+    parts, params = _range_clause('rr.request_date', start_date, end_date)
+    where = 'WHERE ' + ' AND '.join(parts) if parts else ''
+    return db.fetch_all(
+        '''SELECT rr.book_title, COUNT(*) AS total
+           FROM request_records rr {}
+           GROUP BY rr.book_title ORDER BY total DESC, rr.book_title ASC
+           LIMIT %s'''.format(where),
+        tuple(params + [limit])
+    )
+
+
+def requests_by_role_split(start_date=None, end_date=None, limit=10):
+    """Return [(book_title, student, faculty, other, total)] for top titles.
+
+    One row per requested title with the Student / Faculty / Other-staff
+    split, so the Analytics tab can render a stacked demand bar per title.
+    """
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 10
+    parts, params = _range_clause('rr.request_date', start_date, end_date)
+    where = 'WHERE ' + ' AND '.join(parts) if parts else ''
+    return db.fetch_all(
+        '''SELECT rr.book_title,
+                  COUNT(*) FILTER (WHERE r.role_name = 'Student') AS student,
+                  COUNT(*) FILTER (WHERE r.role_name = 'Faculty') AS faculty,
+                  COUNT(*) FILTER (WHERE r.role_name NOT IN ('Student', 'Faculty')) AS other,
+                  COUNT(*) AS total
+           FROM request_records rr
+           JOIN borrowers b ON rr.requester_id = b.borrower_id
+           JOIN user_accounts u ON b.user_id = u.user_id
+           JOIN roles r ON u.role_id = r.role_id
+           {} GROUP BY rr.book_title ORDER BY total DESC, rr.book_title ASC
+           LIMIT %s'''.format(where),
+        tuple(params + [limit])
+    )
+
+
+def requests_trend(start_date=None, end_date=None):
+    """Return [(day, request_count)] daily book-request volume."""
+    parts, params = _range_clause('rr.request_date', start_date, end_date)
+    where = 'WHERE ' + ' AND '.join(parts) if parts else ''
+    return db.fetch_all(
+        '''SELECT rr.request_date::date AS day, COUNT(*)
+           FROM request_records rr {} GROUP BY day ORDER BY day'''.format(where),
+        tuple(params) if params else None
+    )
+
+
+def requests_by_program(start_date=None, end_date=None, departments=None):
+    """Return [(program_label, request_count)] using the shared program label.
+
+    program_label matches books_borrowed_per_program: the borrower's
+    department, falling back to Admin/Librarian role or 'No program'.
+    """
+    parts, params = _range_clause('rr.request_date', start_date, end_date)
+    dept_clause, dept_params = _department_clause(departments, 'b', 'r')
+    if dept_clause:
+        parts.append(dept_clause)
+        params.extend(dept_params)
+    where = 'WHERE ' + ' AND '.join(parts) if parts else ''
+    return db.fetch_all(
+        '''SELECT COALESCE(NULLIF(b.department, ''),
+                          CASE WHEN r.role_name IN ('Admin', 'Librarian') THEN r.role_name
+                               ELSE 'No program' END) as program_label,
+                  COUNT(rr.request_id) as total
+           FROM request_records rr
+           JOIN borrowers b ON rr.requester_id = b.borrower_id
+           JOIN user_accounts u ON b.user_id = u.user_id
+           JOIN roles r ON u.role_id = r.role_id
+           {} GROUP BY program_label ORDER BY total DESC'''.format(where),
+        tuple(params) if params else None
+    )
+
+
+def requests_by_status(start_date=None, end_date=None):
+    """Return [(request_status, count)] headline counts for KPI cards."""
+    parts, params = _range_clause('rr.request_date', start_date, end_date)
+    where = 'WHERE ' + ' AND '.join(parts) if parts else ''
+    return db.fetch_all(
+        '''SELECT rr.request_status, COUNT(*)
+           FROM request_records rr {} GROUP BY rr.request_status'''.format(where),
+        tuple(params) if params else None
     )

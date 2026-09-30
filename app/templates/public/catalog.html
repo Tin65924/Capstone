@@ -334,8 +334,8 @@
                 {% elif books %}
                     {% for book in books %}
                     {% set is_ebook = book[9] == 'E-Book' %}
-                    {% set avail_status = book[13] if book|length > 14 else 'available' %}
-                    {% set avail_count = book[14] if book|length > 14 else 1 %}
+                    {% set avail_status = book[-2] if book|length > 14 else 'available' %}
+                    {% set avail_count = book[-1] if book|length > 14 else 1 %}
                     {% if is_ebook %}
                         {% set has_available = true %}
                     {% elif book|length > 14 %}
@@ -392,8 +392,8 @@
                 {% elif books %}
                     {% for book in books %}
                     {% set is_ebook = book[9] == 'E-Book' %}
-                    {% set avail_status = book[13] if book|length > 14 else 'available' %}
-                    {% set avail_count = book[14] if book|length > 14 else 1 %}
+                    {% set avail_status = book[-2] if book|length > 14 else 'available' %}
+                    {% set avail_count = book[-1] if book|length > 14 else 1 %}
                     {% if is_ebook %}
                         {% set has_available = true %}
                     {% elif book|length > 14 %}

@@ -20,6 +20,7 @@ from .models import (
     log_activity, log_system_event, get_all_users, get_pending_users,
     approve_user, update_user_role, toggle_user_status,
     update_user_details, archive_user, unarchive_user, delete_user, get_admin_count, get_user_by_id,
+    get_user_record, audit_text,
     get_departments, is_valid_department, create_department,
     get_department_by_id, delete_department, count_borrowers_in_department,
     get_profile_by_user, DEPT_TYPES, is_valid_any_department
@@ -34,6 +35,30 @@ SESSION_OAUTH_KEY = '_google_oauth_data'
 
 def _allowed_email(email):
     return email.lower().endswith(f'@{ALLOWED_DOMAIN}')
+
+
+def _safe_next_url(fallback_endpoint='main.user_profile'):
+    """Pop a validated post-login redirect from the session.
+
+    Only same-origin relative paths (single leading `/`, no scheme or
+    host) are honored; anything else (including the `next` values an
+    attacker plants via /login?next=...) falls back to `fallback_endpoint`.
+    """
+    from urllib.parse import urlparse
+    fallback = url_for(fallback_endpoint)
+    nxt = session.pop('next', fallback)
+    if not nxt or not isinstance(nxt, str):
+        return fallback
+    parsed = urlparse(nxt)
+    if parsed.scheme or parsed.netloc:
+        return fallback
+    # Backslashes are treated as slashes by browsers (open-redirect
+    # bypass like /\\evil.com), so reject them outright.
+    if '\\' in nxt:
+        return fallback
+    if not nxt.startswith('/') or nxt.startswith('//'):
+        return fallback
+    return nxt
 
 
 def _build_flow(redirect_uri=None):
@@ -153,7 +178,7 @@ def google_callback():
         user = User(*existing_user)
         login_user(user)
         log_activity(user.id, 'login', None)
-        next_page = session.pop('next', url_for('main.user_profile'))
+        next_page = _safe_next_url()
         return redirect(next_page)
 
     existing_email = get_user_by_email(email)
@@ -254,7 +279,7 @@ def role_select():
         user = User(user_id, email, role_name, full_name)
         login_user(user)
         log_activity(user_id, 'first_login')
-        next_page = session.pop('next', url_for('main.user_profile'))
+        next_page = _safe_next_url()
         return redirect(next_page)
 
     return render_template('auth/role_select.html',
@@ -271,39 +296,68 @@ def admin_users():
     status_filter = request.args.get('status', '')
     role_filter = request.args.get('role', '')
     scope = (request.args.get('scope', '') or '').strip().lower()
-    if scope not in ('', 'staff', 'members'):
+    if scope not in ('', 'staff', 'members', 'all'):
         scope = ''
     is_admin_view = current_user.role == 'Admin'
-    # Librarians manage members only (Student + Faculty). Admins default
-    # to all accounts but can scope to staff (Librarian/Faculty/Admin)
-    # or members (Student/Faculty) via ?scope=.
+    # User Management visibility rules:
+    # - Librarians always see members (Student + Faculty).
+    # - Admins default to members (like a librarian); explicit
+    #   ?scope=staff shows Librarian + Faculty only (never students),
+    #   ?scope=all shows every account.
+    # - The sidebar follows the scope (staff -> admin sidebar,
+    #   otherwise librarian sidebar), so entering from the librarian
+    #   dashboard never bounces into admin space. Nothing here redirects
+    #   to either dashboard; actions return to this same page.
     if not is_admin_view:
         scope = 'members'
+    elif not scope:
+        scope = 'members'
     if scope == 'staff':
-        users = [u for u in users if u[3] in ('Librarian', 'Faculty', 'Admin')]
-        pending = [p for p in pending if p[3] in ('Librarian', 'Faculty', 'Admin')]
+        users = [u for u in users if u[3] in ('Librarian', 'Faculty')]
+        pending = [p for p in pending if p[3] in ('Librarian', 'Faculty')]
     elif scope == 'members':
         users = [u for u in users if u[3] in ('Student', 'Faculty')]
         pending = [p for p in pending if p[3] in ('Student', 'Faculty')]
+    # KPIs reflect the current scope, not the table filters — compute
+    # before applying status/role filters so clicking a card doesn't zero
+    # the other cards.
+    total = len(users)
+    active = sum(1 for u in users if u[4] == 'active')
+    students = sum(1 for u in users if u[3] == 'Student')
+    faculty = sum(1 for u in users if u[3] == 'Faculty')
+    inactive = sum(1 for u in users if u[4] == 'disabled')
+    archived = sum(1 for u in users if u[4] == 'archived')
     if status_filter:
         users = [u for u in users if u[4] == status_filter]
     if role_filter:
         users = [u for u in users if u[3] == role_filter]
-    total = len(users)
-    active = sum(1 for u in users if u[4] == 'active')
-    students = sum(1 for u in users if u[3] == 'Student')
-    inactive = sum(1 for u in users if u[4] == 'disabled')
-    archived = sum(1 for u in users if u[4] == 'archived')
-    sidebar = ('components/admin_sidebar_nav.html' if is_admin_view
+    # Server-side pagination (20/page). KPI counts above stay
+    # scope-wide; only the table page is sliced. The pager renders
+    # only when there is more than one page.
+    page = request.args.get('page', 1, type=int)
+    if not page or page < 1:
+        page = 1
+    per_page = 20
+    total_pages = max(1, (len(users) + per_page - 1) // per_page)
+    if page > total_pages:
+        page = total_pages
+    users = users[(page - 1) * per_page:page * per_page]
+    # The sidebar follows the view scope (not just the role), so an
+    # admin entering from the librarian dashboard stays in librarian
+    # space instead of bouncing into admin space.
+    sidebar = ('components/admin_sidebar_nav.html' if scope == 'staff'
                else 'components/librarian_sidebar_nav.html')
     return render_template('users/users.html',
-                           users=users, roles=get_roles(),
-                           pending=pending, total=total,
-                           active=active, students=students,
-                           inactive=inactive, archived=archived,
+                               users=users, roles=get_roles(),
+                               pending=pending, total=total,
+                               active=active, students=students,
+                               faculty=faculty,
+                               inactive=inactive, archived=archived,
                            status_filter=status_filter,
                            role_filter=role_filter,
                            scope=scope,
+                           current_page=page,
+                           total_pages=total_pages,
                            is_staff_view=(scope == 'staff'),
                            is_admin_view=is_admin_view,
                            sidebar=sidebar,
@@ -400,14 +454,18 @@ def export_users():
 
     users = get_all_users() or []
     scope = (request.args.get('scope', '') or '').strip().lower()
-    if scope not in ('', 'staff', 'members'):
+    if scope not in ('', 'staff', 'members', 'all'):
         scope = ''
-    # Librarians may only export members; admins may scope to staff.
+    # Same visibility rules as the manage page: librarians export
+    # members only; admins default to members; explicit staff/all
+    # honored; the staff scope never leaks students.
     if current_user.role != 'Admin':
+        scope = 'members'
+    elif not scope:
         scope = 'members'
     if scope == 'staff':
         users = [u for u in users
-                 if u[_USER_COL['role']] in ('Librarian', 'Faculty', 'Admin')]
+                 if u[_USER_COL['role']] in ('Librarian', 'Faculty')]
     elif scope == 'members':
         users = [u for u in users
                  if u[_USER_COL['role']] in ('Student', 'Faculty')]
@@ -474,18 +532,36 @@ def export_users():
 @login_required
 @librarian_required
 def approve_user_route(user_id):
-    approve_user(user_id)
-    log_activity(current_user.id, f'approved_user:{user_id}')
+    if not get_user_by_id(user_id):
+        flash('User not found.', 'error')
+        return redirect(url_for('auth.admin_users'))
+    approve_user(user_id, updated_by=current_user.id)
+    log_activity(current_user.id, f'approved_user:{user_id}:{_target_name(user_id)}')
     flash('User approved.', 'success')
     return redirect(url_for('auth.admin_users'))
+
+
+def _target_name(user_id):
+    """Display name of the acted-upon user for audit codes (id fallback).
+
+    Lenient by design: audit enrichment must never break the action on
+    an unexpected row shape.
+    """
+    target = get_user_record(user_id)
+    if target and len(target) > 3 and target[3]:
+        return audit_text(target[3], 40)
+    return f'#{user_id}'
 
 
 @auth_bp.route('/admin/users/<int:user_id>/toggle-status', methods=['POST'])
 @login_required
 @admin_required
 def toggle_user_status_route(user_id):
-    toggle_user_status(user_id)
-    log_activity(current_user.id, f'toggled_user_status:{user_id}')
+    if not get_user_by_id(user_id):
+        flash('User not found.', 'error')
+        return redirect(url_for('auth.admin_users'))
+    toggle_user_status(user_id, updated_by=current_user.id)
+    log_activity(current_user.id, f'toggled_user_status:{user_id}:{_target_name(user_id)}')
     flash('User status updated.', 'success')
     return redirect(url_for('auth.admin_users'))
 
@@ -494,8 +570,11 @@ def toggle_user_status_route(user_id):
 @login_required
 @admin_required
 def archive_user_route(user_id):
-    archive_user(user_id)
-    log_activity(current_user.id, f'archived_user:{user_id}')
+    if not get_user_by_id(user_id):
+        flash('User not found.', 'error')
+        return redirect(url_for('auth.admin_users'))
+    archive_user(user_id, updated_by=current_user.id)
+    log_activity(current_user.id, f'archived_user:{user_id}:{_target_name(user_id)}')
     flash('User archived.', 'success')
     return redirect(url_for('auth.admin_users'))
 
@@ -504,8 +583,11 @@ def archive_user_route(user_id):
 @login_required
 @admin_required
 def unarchive_user_route(user_id):
-    unarchive_user(user_id)
-    log_activity(current_user.id, f'unarchived_user:{user_id}')
+    if not get_user_by_id(user_id):
+        flash('User not found.', 'error')
+        return redirect(url_for('auth.admin_users'))
+    unarchive_user(user_id, updated_by=current_user.id)
+    log_activity(current_user.id, f'unarchived_user:{user_id}:{_target_name(user_id)}')
     flash('User restored.', 'success')
     return redirect(url_for('auth.admin_users'))
 
@@ -514,6 +596,8 @@ def unarchive_user_route(user_id):
 @login_required
 @admin_required
 def delete_user_route(user_id):
+    # Name first: the row is gone after delete_user().
+    target_name = _target_name(user_id)
     user = get_user_by_id(user_id)
     if not user:
         flash('User not found.', 'error')
@@ -526,7 +610,7 @@ def delete_user_route(user_id):
         flash('User must be archived before deletion.', 'error')
         return redirect(url_for('auth.admin_users'))
     delete_user(user_id)
-    log_activity(current_user.id, f'deleted_user:{user_id}')
+    log_activity(current_user.id, f'deleted_user:{user_id}:{target_name}')
     flash('User permanently deleted.', 'success')
     return redirect(url_for('auth.admin_users'))
 
@@ -537,16 +621,44 @@ def delete_user_route(user_id):
 def change_user_role(user_id):
     role_id = request.form.get('role_id')
     if role_id:
-        update_user_role(user_id, role_id)
-        log_activity(current_user.id, f'changed_role:{user_id}_to_{role_id}')
+        target = get_user_record(user_id)
+        old_role = target[2] if target and len(target) > 2 else None
+        new_role = next((r[1] for r in get_roles() or []
+                         if len(r) > 1 and str(r[0]) == str(role_id)), None)
+        if not target:
+            flash('User not found.', 'error')
+            return redirect(url_for('auth.admin_users'))
+        if new_role is None:
+            flash('Invalid role selected.', 'error')
+            return redirect(url_for('auth.admin_users'))
+        update_user_role(user_id, role_id, updated_by=current_user.id)
+        if old_role and new_role:
+            detail = (f':{audit_text(old_role, 30)}~>'
+                      f'{audit_text(new_role, 30)}')
+        else:
+            detail = f'_to_{role_id}'
+        if target and len(target) > 3 and target[3]:
+            name = audit_text(target[3], 40)
+        else:
+            name = f'#{user_id}'
+        log_activity(current_user.id,
+                     f'changed_role:{user_id}{detail}:{name}')
         flash('User role updated.', 'success')
     return redirect(url_for('auth.admin_users'))
 
 
 @auth_bp.route('/admin/users/<int:user_id>/edit', methods=['POST'])
 @login_required
-@admin_required
+@librarian_required
 def edit_user_route(user_id):
+    # Librarians may modify student/faculty information only — never
+    # staff accounts. Admins may edit anyone.
+    if current_user.role != 'Admin':
+        profile = get_profile_by_user(user_id)
+        role_name = profile[2] if profile and len(profile) > 2 else None
+        if role_name not in ('Student', 'Faculty'):
+            flash('Librarians can only edit student and faculty accounts.', 'error')
+            return redirect(url_for('auth.admin_users'))
     full_name = request.form.get('full_name', '').strip()
     id_number = request.form.get('id_number', '').strip()
     department = request.form.get('department', '').strip()
@@ -566,9 +678,11 @@ def edit_user_route(user_id):
                 flash('Please select a valid program/department from the list.', 'error')
                 return redirect(url_for('auth.admin_users', modal='editModal',
                                         user_id=user_id, mstatus='error'))
-        update_user_details(user_id, full_name, id_number or None, department or None)
+        update_user_details(user_id, full_name, id_number or None, department or None,
+                            updated_by=current_user.id)
         bloom_registry.mark_dirty()
-        log_activity(current_user.id, f'edited_user:{user_id}')
+        log_activity(current_user.id,
+                     f'edited_user:{user_id}:{_target_name(user_id)}')
         flash('User details updated.', 'success')
     return redirect(url_for('auth.admin_users', modal='editModal', user_id=user_id, mstatus='success'))
 

@@ -352,11 +352,11 @@
                         </form>
                         <div class="hidden sm:block h-6 w-[1px] bg-gray-200"></div>
                         <div class="text-xs sm:text-sm text-gray-500 w-full sm:w-auto mt-1 sm:mt-0">
-                            <strong>Session:</strong> Started {{ session[5].strftime('%b %d, %I:%M %p') }} • <strong>Librarian:</strong> {{ current_user.full_name }}
+                                                            <strong>Session:</strong> Started {{ session[5].strftime('%b %d, %I:%M %p') if session[5] and session[5].strftime is defined else (session[5] or '') }} • <strong>Librarian:</strong> {{ current_user.full_name }}
                         </div>
                         {% else %}
                         <div class="text-xs sm:text-sm text-gray-500 w-full sm:w-auto">
-                            <strong>Session:</strong> {{ session[4].title() }} • Started {{ session[5].strftime('%b %d, %I:%M %p') }}
+                                                            <strong>Session:</strong> {{ session[4].title() }} • Started {{ session[5].strftime('%b %d, %I:%M %p') if session[5] and session[5].strftime is defined else (session[5] or '') }}
                         </div>
                         <a href="{{ url_for('inventory.export_session', session_id=session[0]) }}" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all">
                             Export CSV
@@ -454,7 +454,7 @@
                                             {{ row[4].title() }}
                                         </span>
                                     </td>
-                                    <td class="text-gray-500">{{ row[5].strftime('%b %d, %I:%M %p') }}</td>
+                                        <td class="text-gray-500">{{ row[5].strftime('%b %d, %I:%M %p') if row[5] and row[5].strftime is defined else (row[5] or '') }}</td>
                                     <td class="flex gap-2">
                                         <form method="POST" action="{{ url_for('inventory.damage_accession', accession_id=row[1]) }}">
                                             {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
@@ -488,7 +488,7 @@
                                 </span>
                             </div>
                             <p class="text-xs text-gray-700 truncate mb-1">{{ row[3] }}</p>
-                            <p class="text-[11px] text-gray-500 mb-3">{{ row[5].strftime('%b %d, %I:%M %p') }}</p>
+                                <p class="text-[11px] text-gray-500 mb-3">{{ row[5].strftime('%b %d, %I:%M %p') if row[5] and row[5].strftime is defined else (row[5] or '') }}</p>
                             <div class="flex gap-2">
                                 <form method="POST" action="{{ url_for('inventory.damage_accession', accession_id=row[1]) }}" class="flex-1">
                                     {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}

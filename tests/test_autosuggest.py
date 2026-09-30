@@ -95,3 +95,90 @@ class TestStudentExists:
         resp = client.get('/api/student-exists?id_number=')
         assert resp.get_json() == {'exists': False}
         mock_db['fetch_one'].assert_not_called()
+
+
+class TestCatalogEditModal:
+    def test_edit_fields_have_suggest(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        body = librarian_client.get('/librarian/cataloging').data.decode()
+        for field in ('book_title', 'book_author', 'book_publisher',
+                      'book_isbn', 'book_subject'):
+            assert f'data-suggest="{field}"' in body, field
+        assert 'js/autosuggest.js' in body
+
+
+class TestRequestsSearch:
+    def test_librarian_search_has_suggest(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        body = librarian_client.get('/librarian/requests').data.decode()
+        assert 'data-suggest="book_search"' in body
+        assert 'js/autosuggest.js' in body
+
+    def test_user_request_fields_have_suggest(self, student_client, mock_db):
+        mock_db['fetch_one'].return_value = (5,)
+        mock_db['fetch_all'].return_value = []
+        body = student_client.get('/user/request-book').data.decode()
+        assert 'data-suggest="book_title"' in body
+        assert 'data-suggest="book_author"' in body
+        assert 'js/autosuggest.js' in body
+
+
+class TestCirculationSearch:
+    def test_loan_search_has_suggest(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        body = librarian_client.get('/librarian/circulation').data.decode()
+        assert 'data-suggest="book_search"' in body
+        assert 'js/autosuggest.js' in body
+
+
+class TestSuggestionsApi:
+    def test_returns_matches(self, client, mock_db):
+        mock_db['fetch_all'].return_value = [('Clean Code',)]
+        resp = client.get('/api/suggestions?field=book_title&q=clean')
+        assert resp.status_code == 200
+        assert resp.get_json() == {'suggestions': ['Clean Code']}
+
+    def test_rejects_short_and_unknown(self, client, mock_db):
+        for url in ('/api/suggestions?field=book_title&q=x',
+                    '/api/suggestions?field=drop_table&q=clean',
+                    '/api/suggestions'):
+            resp = client.get(url)
+            assert resp.status_code == 200
+            assert resp.get_json() == {'suggestions': []}, url
+
+    def test_xss_neutralized_client_side(self, client, mock_db):
+        # Server returns raw strings; the shared component HTML-escapes
+        # before injecting (escHtml). Assert transport shape only.
+        mock_db['fetch_all'].return_value = [('<script>alert(1)</script>',)]
+        resp = client.get('/api/suggestions?field=book_title&q=script')
+        assert resp.status_code == 200
+        assert resp.get_json()['suggestions'] == ['<script>alert(1)</script>']
+
+
+class TestBookAnalyticsIntact:
+    def test_picker_markup_and_logic_present(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        body = librarian_client.get('/librarian/analytics').data.decode()
+        assert 'id="book-search"' in body
+        assert 'id="book-suggest"' in body
+        assert 'BOOK_SEARCH_URL' in body
+        assert 'book_id' in body
+
+    def test_search_endpoint_works(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [
+            (1, 'Clean Code', 'R. Martin', 'SE', 2008)]
+        resp = librarian_client.get('/librarian/analytics/book/search?q=clean')
+        assert resp.status_code == 200
+        results = resp.get_json()['results']
+        assert results[0]['title'] == 'Clean Code'
+
+    def test_intentionally_unchanged_pages(self, librarian_client, mock_db):
+        """Pages with no suggestible backend field stay as-is."""
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        body = librarian_client.get('/librarian/inventory').data.decode()
+        assert 'data-suggest' not in body

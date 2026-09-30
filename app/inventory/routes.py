@@ -11,7 +11,7 @@ from .models import (
     mark_copy_lost, update_session_scan, get_session_export_rows, get_scan_history,
     count_scan_history
 )
-from app.cataloging.models import get_accession_by_number
+from app.cataloging.models import get_accession_by_number, get_accession_by_id
 from app.circulation.models import get_active_loan_by_accession
 from app.auth.decorators import librarian_required
 from app.auth.models import log_activity
@@ -26,9 +26,16 @@ VALID_STATES = ['available', 'borrowed', 'lost', 'damaged', 'missing']
 def inventory_page():
     session_id = request.args.get('session_id', type=int)
     session = get_session(session_id) if session_id else get_active_session(current_user.id)
+    if session is not None and len(session) < 6:
+        session = None
 
-    status_summary = get_status_summary()
-    status_counts = {state: count for state, count in status_summary}
+    status_summary = get_status_summary() or []
+    status_counts = {}
+    for _state, _count in status_summary:
+        try:
+            status_counts[_state] = int(_count or 0)
+        except (IndexError, TypeError, ValueError):
+            continue
 
     status_filter = request.args.get('status')
     if status_filter not in VALID_STATES:
@@ -38,8 +45,8 @@ def inventory_page():
     if page < 1:
         page = 1
 
-    scan_rows = get_scan_history(page=page, per_page=10, status_filter=status_filter)
-    total_scans = count_scan_history(status_filter=status_filter)
+    scan_rows = get_scan_history(page=page, per_page=10, status_filter=status_filter) or []
+    total_scans = count_scan_history(status_filter=status_filter) or 0
     total_pages = max(1, (total_scans + 9) // 10)
 
     return render_template(
@@ -75,7 +82,7 @@ def start_session():
 @librarian_required
 def complete_session(session_id):
     session = get_session(session_id)
-    if not session or session[1] != int(current_user.id):
+    if not session or len(session) < 6 or session[1] != int(current_user.id):
         flash('Session not found.', 'error')
         return redirect(url_for('inventory.inventory_page'))
 
@@ -83,9 +90,9 @@ def complete_session(session_id):
         flash('This session is not active.', 'error')
         return redirect(url_for('inventory.inventory_page'))
 
-    scanned_rows = get_scanned_in_session(session_id)
+    scanned_rows = get_scanned_in_session(session_id) or []
     scanned_ids = {r[0] for r in scanned_rows}
-    discrepancies = reconcile_inventory(session_id, scanned_ids)
+    discrepancies = reconcile_inventory(session_id, scanned_ids, checked_by=current_user.id)
 
     log_activity(current_user.id, f'inventory:complete_session:{session_id}')
     flash(f'Session completed — {len(discrepancies)} discrepancies found.', 'success')
@@ -97,7 +104,7 @@ def complete_session(session_id):
 @librarian_required
 def cancel_session(session_id):
     session = get_session(session_id)
-    if not session or session[1] != int(current_user.id):
+    if not session or len(session) < 6 or session[1] != int(current_user.id):
         flash('Session not found.', 'error')
         return redirect(url_for('inventory.inventory_page'))
 
@@ -105,7 +112,7 @@ def cancel_session(session_id):
         flash('This session is not active.', 'error')
         return redirect(url_for('inventory.inventory_page'))
 
-    cancel_inventory_session(session_id)
+    cancel_inventory_session(session_id, updated_by=current_user.id)
     log_activity(current_user.id, f'inventory:cancel_session:{session_id}')
     flash('Session cancelled.', 'success')
     return redirect(url_for('inventory.inventory_page'))
@@ -119,7 +126,7 @@ def scan_accession():
 
     if session_id:
         session = get_session(session_id)
-        if not session or session[1] != int(current_user.id) or session[4] != 'active':
+        if not session or len(session) < 6 or session[1] != int(current_user.id) or session[4] != 'active':
             flash('Session not found or not active.', 'error')
             return redirect(url_for('inventory.inventory_page'))
 
@@ -138,7 +145,7 @@ def scan_accession():
     inventory_type = 'annual_physical' if session_id else 'realtime_scan'
 
     if session_id:
-        update_session_scan(session_id, accession_id)
+        update_session_scan(session_id, accession_id, updated_by=current_user.id)
 
     upsert_inventory_record(accession_id, state, inventory_type, current_user.id, session_id=session_id)
 
@@ -160,6 +167,9 @@ def check_accession():
         return redirect(url_for('inventory.inventory_page', session_id=session_id))
 
     status = get_accession_status(accession[0])
+    if not status or len(status) < 3:
+        flash('Accession status unavailable.', 'error')
+        return redirect(url_for('inventory.inventory_page', session_id=session_id))
     state_text = status[2] if status[2] else 'never scanned'
     flash(f'{status[0]} — {status[1]}: currently {state_text}.', 'info')
     return redirect(url_for('inventory.inventory_page', session_id=session_id))
@@ -172,13 +182,17 @@ def damage_accession(accession_id):
     notes = request.form.get('notes', '').strip() or None
     session_id = request.form.get('session_id', type=int)
 
+    if not get_accession_by_id(accession_id):
+        flash('Accession copy not found.', 'error')
+        return redirect(url_for('inventory.inventory_page'))
+
     if session_id:
         session = get_session(session_id)
-        if not session or session[1] != int(current_user.id):
+        if not session or len(session) < 6 or session[1] != int(current_user.id):
             flash('Session not found.', 'error')
             return redirect(url_for('inventory.inventory_page'))
 
-    mark_copy_damaged(accession_id, notes, session_id=session_id)
+    mark_copy_damaged(accession_id, notes, session_id=session_id, checked_by=current_user.id)
     log_activity(current_user.id, f'inventory:mark_damaged:{accession_id}')
     flash('Marked as damaged.', 'success')
     return redirect(url_for('inventory.inventory_page', session_id=session_id))
@@ -190,13 +204,17 @@ def damage_accession(accession_id):
 def lost_accession(accession_id):
     session_id = request.form.get('session_id', type=int)
 
+    if not get_accession_by_id(accession_id):
+        flash('Accession copy not found.', 'error')
+        return redirect(url_for('inventory.inventory_page'))
+
     if session_id:
         session = get_session(session_id)
-        if not session or session[1] != int(current_user.id):
+        if not session or len(session) < 6 or session[1] != int(current_user.id):
             flash('Session not found.', 'error')
             return redirect(url_for('inventory.inventory_page'))
 
-    mark_copy_lost(accession_id, session_id=session_id)
+    mark_copy_lost(accession_id, session_id=session_id, checked_by=current_user.id)
     log_activity(current_user.id, f'inventory:mark_lost:{accession_id}')
     flash('Marked as lost.', 'success')
     return redirect(url_for('inventory.inventory_page', session_id=session_id))
@@ -208,7 +226,7 @@ def lost_accession(accession_id):
 @librarian_required
 def export_session(session_id):
     session = get_session(session_id)
-    if not session or session[1] != int(current_user.id):
+    if not session or len(session) < 6 or session[1] != int(current_user.id):
         flash('Session not found.', 'error')
         return redirect(url_for('inventory.inventory_page'))
 
@@ -216,7 +234,7 @@ def export_session(session_id):
         flash('Only completed sessions can be exported.', 'error')
         return redirect(url_for('inventory.inventory_page', session_id=session_id))
 
-    rows = get_session_export_rows(session_id)
+    rows = get_session_export_rows(session_id) or []
 
     output = io.StringIO()
     writer = csv.writer(output)

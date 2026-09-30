@@ -158,9 +158,9 @@
                             <td class="font-mono text-gray-500">{{ f[6] }}</td>
                             <td class="text-gray-500">{{ f[2] }}</td>
                             <td class="text-gray-500">{{ f[3] or '—' }}</td>
-                            <td class="text-right font-bold text-red-600">₱{{ '%.2f'|format(f[4]|float) }}</td>
+                            <td class="text-right font-bold text-red-600">₱{{ '%.2f'|format(f[4]|float) if f and f|length > 4 else '—' }}</td>
                             <td class="text-right">
-                                <form method="POST" action="{{ url_for('circulation.pay_fine', user_id=user_data[0], circulation_id=f[0]) }}" onsubmit="return confirm('Mark this ₱{{ '%.2f'|format(f[4]|float) }} fine as paid?');">
+                                <form method="POST" action="{{ url_for('circulation.pay_fine', user_id=user_data[0], circulation_id=f[0]) }}" onsubmit="return confirm('Mark this ₱{{ '%.2f'|format(f[4]|float) if f and f|length > 4 else '—' }} fine as paid?');">
                                     <button type="submit" class="text-xs font-bold text-emerald-700 hover:underline">Mark paid</button>
                                 </form>
                             </td>

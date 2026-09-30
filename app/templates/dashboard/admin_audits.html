@@ -24,6 +24,28 @@
         tr:last-child td { border-bottom: none; }
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cfd7e7; border-radius: 10px; }
+        /* ---- Audit chart hover + axes ---- */
+        #audit-chart-tip {
+            position: fixed; z-index: 200; pointer-events: none;
+            background: #0f172a; color: #fff;
+            font-size: 11px; font-weight: 600; line-height: 1.4;
+            padding: 6px 10px; border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, .25);
+            opacity: 0; transform: translate(-50%, calc(-100% - 12px));
+            transition: opacity .12s ease; white-space: nowrap; max-width: 260px;
+        }
+        #audit-chart-tip.show { opacity: 1; }
+        #audit-chart-tip .tt-sub { display: block; font-weight: 500; color: #cbd5e1; font-size: 10px; }
+        .audit-seg { cursor: pointer; transition: opacity .15s ease, stroke-width .15s ease; }
+        .audit-seg:hover, .audit-seg.active { stroke-width: 22; }
+        .audit-dim .audit-seg { opacity: .35; }
+        .audit-dim .audit-seg.active { opacity: 1; }
+        .audit-legend-item { display: flex; align-items: center; gap: 8px; padding: 3px 6px; margin: 0 -6px; border-radius: 6px; cursor: default; transition: background .12s ease; }
+        .audit-legend-item:hover { background: #f1f5f9; }
+        .audit-hbar-row { border-radius: 8px; padding: 2px 4px; margin: 0 -4px; cursor: default; transition: background .12s ease; }
+        .audit-hbar-row:hover { background: #f8fafc; }
+        .audit-dot { cursor: pointer; }
+        .audit-dot:hover { stroke: #fff; stroke-width: 2; }
     </style>
 </head>
 <body>
@@ -77,8 +99,73 @@
         {% include 'components/flash_messages.html' %}
         <div class="mb-6">
             <h1 class="text-2xl sm:text-3xl font-extrabold">Audit Logs</h1>
-            <p class="text-sm text-gray-500 mt-1">Who did what, and when. Newest first.</p>
+            <p class="text-sm text-gray-500 mt-1">Who did what, and when. Newest first.{% if stats %} Analytics cover the last {{ stats.window_days }} days · all activity.{% endif %}</p>
         </div>
+        {% if stats %}
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-6">
+            <div class="card !rounded-xl p-3 sm:p-4" id="kpi-logins-today">
+                <div class="text-[11px] font-bold uppercase tracking-wider text-gray-400">Logins today</div>
+                <div class="text-xl sm:text-2xl font-extrabold mt-1">{{ stats.logins_today }}</div>
+                <div class="text-[11px] text-gray-400 mt-1">sign-ins</div>
+            </div>
+            <div class="card !rounded-xl p-3 sm:p-4" id="kpi-logins-7d">
+                <div class="text-[11px] font-bold uppercase tracking-wider text-gray-400">Logins · 7 days</div>
+                <div class="text-xl sm:text-2xl font-extrabold mt-1">{{ stats.logins_7d }}</div>
+                <div class="text-[11px] text-gray-400 mt-1">sign-ins</div>
+            </div>
+            <div class="card !rounded-xl p-3 sm:p-4" id="kpi-active-now">
+                <div class="text-[11px] font-bold uppercase tracking-wider text-gray-400">Active now</div>
+                <div class="text-xl sm:text-2xl font-extrabold mt-1">{{ stats.active_now }}</div>
+                <div class="text-[11px] text-gray-400 mt-1 truncate" title="{% for u in stats.active_users %}{{ u[0] }} ({{ u[1] }}){% if not loop.last %}, {% endif %}{% endfor %}">{% if stats.active_users %}{% for u in stats.active_users[:3] %}{{ u[0] }}{% if not loop.last %}, {% endif %}{% endfor %}{% if stats.active_users|length > 3 %} +{{ stats.active_users|length - 3 }} more{% endif %}{% else %}no recent sessions{% endif %}</div>
+            </div>
+            <div class="card !rounded-xl p-3 sm:p-4" id="kpi-failed-logins">
+                <div class="text-[11px] font-bold uppercase tracking-wider text-gray-400">Failed sign-ins</div>
+                <div class="text-xl sm:text-2xl font-extrabold mt-1 text-amber-600">{{ stats.failed_logins }}</div>
+                <div class="text-[11px] text-gray-400 mt-1">last {{ stats.window_days }} days</div>
+            </div>
+            <div class="card !rounded-xl p-3 sm:p-4" id="kpi-denials">
+                <div class="text-[11px] font-bold uppercase tracking-wider text-gray-400">Access denials</div>
+                <div class="text-xl sm:text-2xl font-extrabold mt-1 text-amber-600">{{ stats.denials }}</div>
+                <div class="text-[11px] text-gray-400 mt-1">last {{ stats.window_days }} days</div>
+            </div>
+            <div class="card !rounded-xl p-3 sm:p-4" id="kpi-server-errors">
+                <div class="text-[11px] font-bold uppercase tracking-wider text-gray-400">Server errors</div>
+                <div class="text-xl sm:text-2xl font-extrabold mt-1 text-rose-600">{{ stats.server_errors }}</div>
+                <div class="text-[11px] text-gray-400 mt-1">500s · last {{ stats.window_days }} days</div>
+            </div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+            <div class="card !rounded-xl p-4">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">Sign-ins per day · last 14 days</h3>
+                <div id="chart-logins-day"></div>
+            </div>
+            <div class="card !rounded-xl p-4">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">Errors per day · last 14 days</h3>
+                <div id="chart-errors-day"></div>
+            </div>
+            <div class="card !rounded-xl p-4">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">Activity by category</h3>
+                <div id="chart-categories"></div>
+            </div>
+            <div class="card !rounded-xl p-4">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">Sign-ins by role</h3>
+                <div id="chart-roles"></div>
+            </div>
+        </div>
+        <div class="card !rounded-xl p-4 mb-6" id="top-error-paths">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">Top pages causing server errors</h3>
+            {% if stats.top_error_paths %}
+            <ul class="space-y-1.5">
+                {% for path, count in stats.top_error_paths %}
+                <li class="flex items-center gap-2 text-xs"><span class="font-mono bg-rose-50 text-rose-700 px-2 py-1 rounded truncate flex-1" title="{{ path }}">{{ path }}</span><span class="font-bold shrink-0">{{ count }}×</span></li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-xs text-gray-400">No server errors in the last {{ stats.window_days }} days.</p>
+            {% endif %}
+        </div>
+        <script id="audit-stats" type="application/json">{{ stats|tojson }}</script>
+        {% endif %}
         <div class="flex gap-2 mb-4 overflow-x-auto">
             {% for t, label in (('all', 'All'), ('staff', 'Staff'), ('members', 'Members'), ('system', 'System')) %}
             <a href="{{ url_for('main.admin_audits', tab=t, q=search, limit=limit) }}" class="px-3 py-1.5 text-xs font-bold rounded-lg border whitespace-nowrap transition-colors {% if tab == t %}bg-primary text-white border-primary{% else %}bg-white text-gray-600 border-gray-200 hover:border-primary{% endif %}">{{ label }}</a>
@@ -109,7 +196,7 @@
                 <tr>
                     <td><div class="font-bold text-sm">{{ log[1] or 'System' }}</div><div class="text-[11px] text-gray-400">{{ log[2] or '' }}</div></td>
                     <td class="text-gray-500">{{ log[3] or '—' }}</td>
-                    <td class="font-mono text-xs break-all">{{ log[4] }}</td>
+                    <td><div class="text-sm text-slate-800">{{ describe_activity(log[1], log[4]) }}</div><div class="font-mono text-[11px] text-gray-400 break-all">{{ log[4] }}</div></td>
                     <td class="text-gray-500 text-xs whitespace-nowrap">{% if log[5] and log[5].strftime is defined %}{{ log[5].strftime('%b %d, %Y %H:%M') }}{% else %}{{ log[5] or '—' }}{% endif %}</td>
                 </tr>
                 {% else %}
@@ -120,6 +207,30 @@
             </div>
         </div>
     </main>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+(function() {
+    var el = document.getElementById('audit-stats');
+    if (!el || !window.AuditCharts) return;
+    var stats;
+    try {
+        stats = JSON.parse(el.textContent);
+    } catch (e) {
+        return;
+    }
+    function paint(id, fn, data, extra, opts) {
+        var node = document.getElementById(id);
+        if (node) fn(node, data, extra, opts);
+    }
+    paint('chart-logins-day', AuditCharts.line, stats.logins_per_day, '#1e3a8a',
+        { xLabel: 'Date', yLabel: 'Sign-ins', unit: 'sign-ins' });
+    paint('chart-errors-day', AuditCharts.hbars, stats.errors_per_day, 'bg-rose-500', 'errors');
+    paint('chart-categories', AuditCharts.donut, stats.by_category,
+        { centerSub: 'events', unit: 'events' });
+    paint('chart-roles', AuditCharts.donut, stats.logins_by_role,
+        { centerSub: 'sign-ins', unit: 'sign-ins' });
+})();
+</script>
 <script>
 (function() {
     var openBtn = document.getElementById('mobile-sidebar-open');

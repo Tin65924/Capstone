@@ -13,14 +13,30 @@ def borrow_book(book_id, accession_id, borrower_id, processed_by, borrow_type, d
     )
 
 
-def return_book(circulation_id, fine_amount=0, damage_notes=None, lost_flag=False):
+def return_book(circulation_id, fine_amount=0, damage_notes=None, lost_flag=False, updated_by=None):
     return db.execute(
         '''UPDATE circulation_records
            SET transaction_status = %s, return_date = %s, fine_amount = %s,
-               damage_notes = %s, lost_flag = %s
-           WHERE circulation_id = %s''',
-        ('returned', date.today(), fine_amount, damage_notes, lost_flag, circulation_id)
+               damage_notes = %s, lost_flag = %s,
+               updated_at = NOW(), updated_by = %s
+           WHERE circulation_id = %s
+             AND transaction_status IN ('active', 'overdue')''',
+        ('returned', date.today(), fine_amount, damage_notes, lost_flag, updated_by, circulation_id)
     )
+
+
+def is_accession_lost(accession_id):
+    """True when the latest circulation record for this copy is marked lost.
+
+    Lost copies must not re-circulate: availability queries exclude them.
+    """
+    row = db.fetch_one(
+        '''SELECT lost_flag FROM circulation_records
+           WHERE accession_id = %s
+           ORDER BY circulation_id DESC LIMIT 1''',
+        (accession_id,)
+    )
+    return bool(row and row[0])
 
 
 def get_active_loans_by_borrower(borrower_id):
@@ -52,7 +68,7 @@ def get_active_loan_accession_ids_by_book(book_id):
     rows = db.fetch_all(
         "SELECT accession_id FROM circulation_records WHERE book_id = %s AND transaction_status IN ('active', 'overdue')",
         (book_id,)
-    )
+    ) or []
     return {row[0] for row in rows}
 
 
@@ -64,7 +80,7 @@ def get_active_loan_borrower_user_ids_by_book(book_id):
            JOIN user_accounts u ON br.user_id = u.user_id
            WHERE c.book_id = %s AND c.transaction_status IN ('active', 'overdue')''',
         (book_id,)
-    )
+    ) or []
     return {row[0]: row[1] for row in rows}
 
 
@@ -128,6 +144,11 @@ def get_available_accession_by_book(book_id):
                AND EXISTS (SELECT 1 FROM reservation_queue r
                            WHERE r.book_id = a.book_id AND r.reservation_status = 'allocated')
              )
+             AND COALESCE((
+                   SELECT c3.lost_flag FROM circulation_records c3
+                   WHERE c3.accession_id = a.accession_id
+                   ORDER BY c3.circulation_id DESC LIMIT 1
+               ), FALSE) = FALSE
            ORDER BY a.accession_id
            LIMIT 1''',
         (book_id,)
@@ -154,8 +175,25 @@ def calculate_fine(circulation_id, overdue_rate=5.0, grace_days=0):
     due_date, return_date, borrow_type = record
     if borrow_type != 'overnight':
         return 0
+    if not due_date:
+        return 0
+    # psycopg2 returns date objects, but be defensive against ISO strings
+    # (mocks, sqlite, manual edits).
+    if isinstance(due_date, str):
+        try:
+            due_date = date.fromisoformat(due_date[:10])
+        except ValueError:
+            return 0
+    if isinstance(return_date, str):
+        try:
+            return_date = date.fromisoformat(return_date[:10])
+        except ValueError:
+            return_date = None
     returned = return_date if return_date else date.today()
-    overdue_days = (returned - due_date).days - (grace_days or 0)
+    try:
+        overdue_days = (returned - due_date).days - (grace_days or 0)
+    except TypeError:
+        return 0
     return max(0, overdue_days * overdue_rate)
 
 
@@ -351,17 +389,17 @@ def get_notification_by_id(notification_id, borrower_id):
     )
 
 
-def mark_notification_read(notification_id, borrower_id):
+def mark_notification_read(notification_id, borrower_id, updated_by=None):
     return db.execute(
-        'UPDATE notification_log SET is_read = TRUE WHERE notification_id = %s AND recipient_id = %s',
-        (notification_id, borrower_id)
+        'UPDATE notification_log SET is_read = TRUE, updated_at = NOW(), updated_by = %s WHERE notification_id = %s AND recipient_id = %s',
+        (updated_by, notification_id, borrower_id)
     )
 
 
-def mark_all_notifications_read(borrower_id):
+def mark_all_notifications_read(borrower_id, updated_by=None):
     return db.execute(
-        'UPDATE notification_log SET is_read = TRUE WHERE recipient_id = %s AND COALESCE(is_read, FALSE) = FALSE',
-        (borrower_id,)
+        'UPDATE notification_log SET is_read = TRUE, updated_at = NOW(), updated_by = %s WHERE recipient_id = %s AND COALESCE(is_read, FALSE) = FALSE',
+        (updated_by, borrower_id)
     )
 
 
@@ -403,7 +441,7 @@ def get_full_reservation_history_by_borrower(borrower_id):
 
 def expire_overdue_reservations():
     return db.execute(
-        """UPDATE reservation_queue SET reservation_status = 'expired'
+        """UPDATE reservation_queue SET reservation_status = 'expired', updated_at = NOW()
            WHERE reservation_status = 'allocated'
              AND claim_deadline IS NOT NULL
              AND claim_deadline < NOW()"""
@@ -459,19 +497,28 @@ def get_fine_record(circulation_id):
     )
 
 
-def mark_fine_paid(circulation_id):
+def mark_fine_paid(circulation_id, updated_by=None):
     db.execute(
-        'UPDATE circulation_records SET fine_paid = TRUE WHERE circulation_id = %s',
-        (circulation_id,)
+        'UPDATE circulation_records SET fine_paid = TRUE, updated_at = NOW(), updated_by = %s WHERE circulation_id = %s',
+        (updated_by, circulation_id)
     )
 
 
 def get_borrower_by_user(user_id):
-    return db.fetch_one('SELECT * FROM borrowers WHERE user_id = %s', (user_id,))
+    # Explicit column order (never SELECT *): older databases have
+    # phone_number physically last (added by ALTER TABLE), which would
+    # shift borrower_status and break every positional reader.
+    return db.fetch_one(
+        'SELECT borrower_id, user_id, id_number, department, phone_number,'
+        ' borrower_status, updated_at, updated_by'
+        ' FROM borrowers WHERE user_id = %s', (user_id,))
 
 
 def get_borrower_by_id_number(id_number):
-    return db.fetch_one('SELECT * FROM borrowers WHERE id_number = %s', (id_number,))
+    return db.fetch_one(
+        'SELECT borrower_id, user_id, id_number, department, phone_number,'
+        ' borrower_status, updated_at, updated_by'
+        ' FROM borrowers WHERE id_number = %s', (id_number,))
 
 
 def get_borrower_details(borrower_id):
@@ -556,24 +603,24 @@ def get_reservations_by_borrower(borrower_id):
     )
 
 
-def allocate_reservation(reservation_id, claim_deadline):
+def allocate_reservation(reservation_id, claim_deadline, updated_by=None):
     return db.execute(
-        "UPDATE reservation_queue SET reservation_status = 'allocated', claim_deadline = %s WHERE reservation_id = %s",
-        (claim_deadline, reservation_id)
+        "UPDATE reservation_queue SET reservation_status = 'allocated', claim_deadline = %s, updated_at = NOW(), updated_by = %s WHERE reservation_id = %s",
+        (claim_deadline, updated_by, reservation_id)
     )
 
 
-def claim_reservation(reservation_id):
+def claim_reservation(reservation_id, updated_by=None):
     return db.execute(
-        "UPDATE reservation_queue SET reservation_status = 'claimed' WHERE reservation_id = %s",
-        (reservation_id,)
+        "UPDATE reservation_queue SET reservation_status = 'claimed', updated_at = NOW(), updated_by = %s WHERE reservation_id = %s",
+        (updated_by, reservation_id)
     )
 
 
-def expire_reservation(reservation_id):
+def expire_reservation(reservation_id, updated_by=None):
     return db.execute(
-        "UPDATE reservation_queue SET reservation_status = 'expired' WHERE reservation_id = %s",
-        (reservation_id,)
+        "UPDATE reservation_queue SET reservation_status = 'expired', updated_at = NOW(), updated_by = %s WHERE reservation_id = %s",
+        (updated_by, reservation_id)
     )
 
 

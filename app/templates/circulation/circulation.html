@@ -280,6 +280,19 @@
         .animate-slide-up {
             animation: slideUp 0.4s ease forwards;
         }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            padding: 1rem;
+        }
+
+        .modal-overlay.open { display: flex; }
     </style>
 </head>
 <body>
@@ -356,21 +369,21 @@
 
         <!-- Quick Stats Row — stays in a row on mobile, scaled down -->
         <div class="grid grid-cols-3 gap-1.5 sm:gap-4 lg:gap-6 mb-6 sm:mb-10 animate-slide-up" style="animation-delay: 0.1s;">
-            <a href="#all-borrowings" class="stat-card" title="View all borrowings">
+            <a href="{{ url_for('circulation.circulation_page', search=search, q=table_search, loan_status='all') }}#all-borrowings" class="stat-card" title="View all borrowings">
                 <div class="icon-box bg-blue-100 text-blue-600">
                     <span class="material-symbols-outlined text-[18px] sm:text-[24px]">import_export</span>
                 </div>
                 <div class="stat-value">{{ stats.active_loans }}</div>
                 <div class="stat-label leading-tight">Total Active Loans</div>
             </a>
-            <a href="#overdue-books" class="stat-card" title="View overdue books">
+            <a href="{{ url_for('circulation.circulation_page', search=search, q=table_search, loan_status='overdue') }}#all-borrowings" class="stat-card" title="View overdue books">
                 <div class="icon-box bg-red-100 text-red-600">
                     <span class="material-symbols-outlined text-[18px] sm:text-[24px]">alarm_on</span>
                 </div>
                 <div class="stat-value">{{ stats.overdue_items }}</div>
                 <div class="stat-label leading-tight">Overdue Items</div>
             </a>
-            <a href="#due-soon" class="stat-card" title="View loans due soon">
+            <a href="{{ url_for('circulation.circulation_page', search=search, q=table_search, loan_status='due_soon') }}#all-borrowings" class="stat-card" title="View loans due soon">
                 <div class="icon-box bg-amber-100 text-amber-600">
                     <span class="material-symbols-outlined text-[18px] sm:text-[24px]">event_note</span>
                 </div>
@@ -391,6 +404,10 @@
                 </div>
                 <div class="p-6 space-y-6">
                     <form method="GET" action="{{ url_for('circulation.circulation_page') }}" class="flex gap-3">
+                        <input type="hidden" name="loan_type" value="{{ loan_type }}">
+                        <input type="hidden" name="loan_status" value="{{ loan_status }}">
+                        <input type="hidden" name="borrow_date" value="{{ borrow_date }}">
+                        <input type="hidden" name="q" value="{{ table_search }}">
                         <input type="text" name="search" value="{{ search }}" placeholder="Enter ID number (e.g. 2024-1234)" class="form-input">
                         <button type="submit" class="btn-primary shrink-0">Search</button>
                     </form>
@@ -514,9 +531,33 @@
             <div class="card-header">
                 <h3 class="card-title">
                     <span class="material-symbols-outlined text-primary">library_books</span>
-                    All Borrowings ({{ active_loans|length }})
+                    All Borrowings ({{ active_loans|length }}{% if filters_active %} of {{ total_loans }}{% endif %})
                 </h3>
             </div>
+            <!-- Loan Search + Filters -->
+            <form method="GET" action="{{ url_for('circulation.circulation_page') }}#all-borrowings" id="loan-filters" class="p-4 border-b border-gray-100 bg-gray-50/50 space-y-3">
+                <input type="hidden" name="search" value="{{ search }}">
+                <input type="hidden" name="loan_status" value="{{ loan_status }}">
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="relative flex-1 min-w-[200px]">
+                        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[20px] pointer-events-none">search</span>
+                        <input type="text" name="q" value="{{ table_search }}" placeholder="Search borrower, book title, or accession…" class="form-input !pl-10" aria-label="Search borrowings" data-suggest="book_search">
+                    </div>
+                    <button type="submit" class="btn-primary !py-2">Search</button>
+                    <button type="button" id="loan-filter-btn" class="btn-ghost !py-2 flex items-center gap-1.5" aria-haspopup="dialog">
+                        <span class="material-symbols-outlined text-[20px]">tune</span>
+                        Filter{% if modal_filter_count %} ({{ modal_filter_count }}){% endif %}
+                    </button>
+                    {% if filters_active %}
+                    <a href="{{ url_for('circulation.circulation_page', search=search) }}#all-borrowings" class="btn-ghost !py-2">Clear</a>
+                    {% endif %}
+                </div>
+                <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Loan status filter">
+                    <a href="{{ url_for('circulation.circulation_page', search=search, q=table_search, loan_type=loan_type, loan_status='all', borrow_date=borrow_date) }}#all-borrowings" class="badge {% if loan_status == 'all' %}badge-borrowed{% else %}bg-gray-100 text-gray-600{% endif %}">All ({{ total_loans }})</a>
+                    <a href="{{ url_for('circulation.circulation_page', search=search, q=table_search, loan_type=loan_type, loan_status='overdue', borrow_date=borrow_date) }}#all-borrowings" id="filter-overdue" class="badge {% if loan_status == 'overdue' %}badge-danger{% else %}bg-gray-100 text-gray-600{% endif %}">Overdue ({{ overdue_count }})</a>
+                    <a href="{{ url_for('circulation.circulation_page', search=search, q=table_search, loan_type=loan_type, loan_status='due_soon', borrow_date=borrow_date) }}#all-borrowings" id="filter-due-soon" class="badge {% if loan_status == 'due_soon' %}badge-warning{% else %}bg-gray-100 text-gray-600{% endif %}">Due Soon ({{ due_soon_count }})</a>
+                </div>
+            </form>
             <div class="overflow-x-auto">
                 <table>
                     <thead>
@@ -538,17 +579,23 @@
                             <td class="font-mono text-gray-500">{{ loan[8] }}</td>
                             <td>{{ 'Overnight' if loan[3] == 'overnight' else 'In-Library' }}</td>
                             <td class="text-gray-500">{{ loan[1] }}</td>
-                            <td class="{% if loan[4] == 'overdue' or loan[2] < today %}text-red-600 font-bold{% endif %}">{{ loan[2] }}</td>
+                            <td class="{% if loan_flags.get(loan[0]) == 'overdue' %}text-red-600 font-bold{% endif %}">{{ loan[2] }}</td>
                             <td>
-                                {% if loan[4] == 'overdue' or (loan[4] == 'active' and loan[2] < today) %}
+                                {% if loan_flags.get(loan[0]) == 'overdue' %}
                                 <span class="badge badge-danger">Overdue</span>
+                                {% elif loan_flags.get(loan[0]) == 'due_soon' %}
+                                <span class="badge badge-warning">Due Soon</span>
                                 {% else %}
                                 <span class="badge badge-borrowed">Borrowed</span>
                                 {% endif %}
                             </td>
                         </tr>
                         {% else %}
+                        {% if filters_active %}
+                        <tr><td colspan="7" class="text-center text-gray-400 py-6">No borrowings match the selected filters. <a href="{{ url_for('circulation.circulation_page', search=search) }}#all-borrowings" class="text-primary font-semibold underline">Clear filters</a></td></tr>
+                        {% else %}
                         <tr><td colspan="7" class="text-center text-gray-400 py-6">No active loans.</td></tr>
+                        {% endif %}
                         {% endfor %}
                     </tbody>
                 </table>
@@ -591,7 +638,7 @@
                             </td>
                             <td class="text-gray-500">{{ tx[1] }}</td>
                             <td class="text-gray-500">{{ tx[4] if tx[0] == 'return' else tx[3] }}</td>
-                            <td class="{% if tx[5] > 0 %}text-red-600 font-bold{% else %}text-gray-400{% endif %}">{{ '₱%.2f'|format(tx[5]) if tx[5] > 0 else '—' }}</td>
+                            <td class="{% if tx[5]|float(0) > 0 %}text-red-600 font-bold{% else %}text-gray-400{% endif %}">{{ '₱%.2f'|format(tx[5]|float(0)) if tx[5]|float(0) > 0 else '—' }}</td>
                         </tr>
                         {% else %}
                         <tr><td colspan="7" class="text-center text-gray-400 py-6">No transactions yet.</td></tr>
@@ -601,77 +648,58 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
-            <!-- Overdue Books -->
-            <div id="overdue-books" class="card animate-slide-up scroll-mt-20" style="animation-delay: 0.3s;">
-                <div class="card-header border-b border-red-100 bg-red-50/30">
-                    <h3 class="card-title text-red-700">
-                        <span class="material-symbols-outlined">warning</span>
-                        Overdue Books
-                    </h3>
-                    <span class="px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded">Needs Attention</span>
+    </main>
+
+    <!-- Filter modal: body-level like every other modal so the fixed
+         overlay covers the whole screen (an animated card ancestor would
+         otherwise become its containing block and clip it to the card).
+         Fields join the table search form via form="loan-filters". -->
+    <div id="loan-filter-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="loan-filter-title">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-full bg-blue-100 text-primary flex items-center justify-center shrink-0">
+                    <span class="material-symbols-outlined">tune</span>
                 </div>
-                <div class="overflow-x-auto">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Borrower Name</th>
-                                <th>Book Title</th>
-                                <th>Accession</th>
-                                <th>Due Date</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for row in overdue %}
-                            <tr>
-                                <td class="font-semibold">{{ row[2] }}</td>
-                                <td class="text-gray-600 italic">{{ row[3] }}</td>
-                                <td class="font-mono text-gray-500">{{ row[4] }}</td>
-                                <td><span class="text-red-600 font-bold">{{ row[1] }}</span></td>
-                            </tr>
-                            {% else %}
-                            <tr><td colspan="4" class="text-center text-gray-400 py-6">Nothing overdue. Great job!</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                <h3 id="loan-filter-title" class="text-lg font-extrabold">Filter Borrowings</h3>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label for="loan-type-filter" class="text-xs font-bold text-gray-500 uppercase tracking-wider">Borrow Type</label>
+                    <select name="loan_type" id="loan-type-filter" form="loan-filters" class="form-select mt-1">
+                        <option value="all" {% if loan_type == 'all' %}selected{% endif %}>All types</option>
+                        <option value="overnight" {% if loan_type == 'overnight' %}selected{% endif %}>Overnight</option>
+                        <option value="daily_circulation" {% if loan_type == 'daily_circulation' %}selected{% endif %}>Daily Circulation</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="borrow-date-filter" class="text-xs font-bold text-gray-500 uppercase tracking-wider">Date of Borrowing</label>
+                    <input type="date" name="borrow_date" id="borrow-date-filter" form="loan-filters" value="{{ borrow_date }}" class="form-input mt-1">
                 </div>
             </div>
-
-            <!-- Due Soon -->
-            <div id="due-soon" class="card animate-slide-up scroll-mt-20" style="animation-delay: 0.4s;">
-                <div class="card-header border-b border-amber-100 bg-amber-50/30">
-                    <h3 class="card-title text-amber-700">
-                        <span class="material-symbols-outlined">notification_important</span>
-                        Due Soon (Next 1–2 Days)
-                    </h3>
-                </div>
-                <div class="overflow-x-auto">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Borrower Name</th>
-                                <th>Due Date</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for row in due_soon %}
-                            <tr>
-                                <td class="font-semibold">{{ row[2] }}</td>
-                                <td class="font-medium">{{ row[1] }}</td>
-                            </tr>
-                            {% else %}
-                            <tr><td colspan="2" class="text-center text-gray-400 py-6">No loans due in the next 2 days.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                <div class="p-4 bg-amber-50/30 border-t border-amber-100 italic text-xs text-amber-800">
-                    💡 Tip: Send rent reminders to these borrowers before their due dates.
-                </div>
+            <div class="flex gap-2 justify-end mt-6">
+                <a href="{{ url_for('circulation.circulation_page', search=search) }}#all-borrowings" class="btn-ghost">Clear</a>
+                <button type="button" id="loan-filter-close" class="btn-ghost">Cancel</button>
+                <button type="submit" form="loan-filters" class="btn-primary">Apply Filters</button>
             </div>
         </div>
-    </main>
+    </div>
 <script>
+// Loan filter modal — fields join the table search form via
+// form="loan-filters", so Apply submits every filter together.
+(function() {
+    var btn = document.getElementById('loan-filter-btn');
+    var modal = document.getElementById('loan-filter-modal');
+    var closeBtn = document.getElementById('loan-filter-close');
+    if (!btn || !modal) return;
+    function open() { modal.classList.add('open'); }
+    function close() { modal.classList.remove('open'); }
+    btn.addEventListener('click', open);
+    if (closeBtn) closeBtn.addEventListener('click', close);
+    modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal.classList.contains('open')) close();
+    });
+})();
 (function() {
     var openBtn = document.getElementById('mobile-sidebar-open');
     var closeBtn = document.getElementById('mobile-sidebar-close');
@@ -773,5 +801,6 @@
     });
 })();
 </script>
+    <script src="{{ url_for('static', filename='js/autosuggest.js') }}"></script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 import io
 from datetime import date, datetime, timedelta
+from xml.sax.saxutils import escape as _xml_escape
 
 from flask import render_template, request, Response, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
@@ -53,6 +54,7 @@ DASHBOARD_LABELS = {
     'trend_borrowings': 'Borrowings Trend',
     'trend_overdue': 'Overdue Trend',
     'top_categories': 'Top Borrowed Categories',
+    'peak_periods': 'Peak Borrowing Periods',
     'top_books': 'Top Borrowed Books',
     'high_demand': 'Likely High-Demand Titles',
     'by_user_type': 'Borrowings by User Type',
@@ -61,12 +63,20 @@ DASHBOARD_LABELS = {
     'recent_circulation': 'Recent Circulation Activity',
     'recent_collection': 'Recent Collection Status',
     'circulation_summary': 'Circulation Summary',
+    'borrowers_by_department': 'Active Borrowers by Department',
+    'overdue_by_department': 'Overdue Items by Department',
+    'department_leaderboard': 'Department Leaderboard',
+    'top_requested_titles': 'Top Requested Titles',
+    'requests_by_role': 'Book Requests by Role (Student vs Faculty)',
+    'requests_trend': 'Book Requests Trend',
+    'requests_by_program': 'Book Requests by Program',
 }
 
 DASHBOARD_DESCRIPTIONS = {
     'trend_borrowings': 'Daily borrow counts in the selected period.',
-    'trend_overdue': 'Daily overdue counts in the selected period.',
+    'trend_overdue': 'Daily overdue items by due date in the selected period (missing days are zero).',
     'top_categories': 'Borrows grouped by subject classification.',
+    'peak_periods': 'Borrowings grouped by day to show peak days.',
     'top_books': 'Most borrowed books with authors.',
     'high_demand': 'Active loans ranked by current demand.',
     'by_user_type': 'Borrows grouped by account role.',
@@ -75,6 +85,13 @@ DASHBOARD_DESCRIPTIONS = {
     'recent_circulation': 'Latest circulation transactions.',
     'recent_collection': 'Latest accessioned copies with status.',
     'circulation_summary': 'Headline circulation totals for the period.',
+    'borrowers_by_department': 'Distinct active borrowers grouped by program/department.',
+    'overdue_by_department': 'Overdue loans grouped by program/department.',
+    'department_leaderboard': 'Borrowings, borrowers, and overdue per program/department.',
+    'top_requested_titles': 'Most-requested books not yet in the collection.',
+    'requests_by_role': 'Top requested titles split into Student / Faculty / Other staff.',
+    'requests_trend': 'Daily book-request counts in the selected period.',
+    'requests_by_program': 'Book requests grouped by borrower program/department.',
 }
 
 EXPORTABLE_KPIS = set(VALID_KPIS) | set(DASHBOARD_LABELS)
@@ -171,6 +188,30 @@ def compute_dashboard(start_date, end_date, departments=None):
                 continue
         return out
 
+    def _dept_summary_rows(rows):
+        """Leaderboard rows: [program, borrowings, borrowers, overdue]."""
+        out = []
+        for r in rows or []:
+            try:
+                out.append([r[0], int(r[1] or 0), int(r[2] or 0) if len(r) > 2 else 0,
+                            int(r[3] or 0) if len(r) > 3 else 0])
+            except (IndexError, TypeError, ValueError):
+                continue
+        return out
+
+    def _quint(rows):
+        """Role-split rows: [title, student, faculty, other, total]."""
+        out = []
+        for r in rows or []:
+            try:
+                out.append([r[0], int(r[1] or 0) if len(r) > 1 else 0,
+                            int(r[2] or 0) if len(r) > 2 else 0,
+                            int(r[3] or 0) if len(r) > 3 else 0,
+                            int(r[4] or 0) if len(r) > 4 else 0])
+            except (IndexError, TypeError, ValueError):
+                continue
+        return out
+
     total_titles = _safe(models.count_active_titles) or 0
     total_copies = _safe(models.count_total_copies) or 0
     status_rows = _safe(models.count_circulation_status, start_date, end_date) or []
@@ -215,6 +256,19 @@ def compute_dashboard(start_date, end_date, departments=None):
     overview = _safe(models.circulation_overview, start_date, end_date)
     if not overview:
         overview = (0, 0, 0, 0.0, 0.0, 0)
+    # Book Requests tab (read-only acquisition demand). by_program honors
+    # the same program filter as the usage tab; the rest is period-scoped.
+    req_status_rows = _safe(models.requests_by_status, start_date, end_date) or []
+    req_status = {}
+    for r in req_status_rows:
+        try:
+            req_status[str(r[0])] = int(r[1] or 0)
+        except (IndexError, TypeError, ValueError):
+            continue
+    req_top = _pair(_safe(models.top_requested_titles, start_date, end_date, 10))
+    req_split = _quint(_safe(models.requests_by_role_split, start_date, end_date, 10))
+    req_trend = _pair(_safe(models.requests_trend, start_date, end_date))
+    req_by_program = _pair(_safe(models.requests_by_program, start_date, end_date, dept_list))
     # Usage-tab scoped queries (whole-tab program filter).
     if dept_list:
         overview_u = _safe(models.circulation_overview, start_date, end_date, dept_list)
@@ -225,6 +279,12 @@ def compute_dashboard(start_date, end_date, departments=None):
             models.borrowings_by_user_type, start_date, end_date, None, None, dept_list))
         by_program_u = _pair(_safe(
             models.books_borrowed_per_program, start_date, end_date, dept_list))
+        overdue_dept_u = _pair(_safe(
+            models.overdue_by_department, start_date, end_date, dept_list))
+        borrowers_dept_u = _pair(_safe(
+            models.borrowers_by_department, start_date, end_date, dept_list))
+        dept_summary_u = _dept_summary_rows(_safe(
+            models.department_summary, start_date, end_date, dept_list))
         recent_u_raw = _safe(
             models.recent_circulation, 10, dept_list, start_date, end_date) or []
     else:
@@ -233,6 +293,9 @@ def compute_dashboard(start_date, end_date, departments=None):
         top_books_u = _triple(_safe(models.top_borrowed_books_detailed, start_date, end_date))
         by_user_type_u = _pair(_safe(models.borrowings_by_user_type, start_date, end_date))
         by_program_u = by_program_all
+        overdue_dept_u = _pair(_safe(models.overdue_by_department, start_date, end_date))
+        borrowers_dept_u = _pair(_safe(models.borrowers_by_department, start_date, end_date))
+        dept_summary_u = _dept_summary_rows(_safe(models.department_summary, start_date, end_date))
         recent_u_raw = _safe(models.recent_circulation) or []
     if not overview_u:
         overview_u = (0, 0, 0, 0.0, 0.0, 0)
@@ -315,6 +378,19 @@ def compute_dashboard(start_date, end_date, departments=None):
             'high_demand': high_demand,
             'recent': recent_circ,
         },
+        'requests': {
+            'total': (req_status.get('pending_review', 0) + req_status.get('approved', 0)
+                      + req_status.get('rejected', 0) + req_status.get('procured', 0)
+                      + req_status.get('existing_in_collection', 0)),
+            'pending': req_status.get('pending_review', 0),
+            'approved': req_status.get('approved', 0),
+            'rejected': req_status.get('rejected', 0),
+            'procured': req_status.get('procured', 0),
+            'top_titles': req_top,
+            'by_role': req_split,
+            'trend': req_trend,
+            'by_program': req_by_program,
+        },
         'usage': {
             'total': overview_u[0],
             'unique_borrowers': overview_u[1],
@@ -324,6 +400,9 @@ def compute_dashboard(start_date, end_date, departments=None):
             'active_departments': len(by_program_all),
             'by_department': by_program_u,
             'by_department_all': by_program_all,
+            'overdue_by_department': overdue_dept_u,
+            'borrowers_by_department': borrowers_dept_u,
+            'dept_summary': dept_summary_u,
             'trend': trend_u,
             'top_books': top_books_u,
             'by_user_type': by_user_type_u,
@@ -348,6 +427,26 @@ def analytics_page():
     start_date, end_date = resolve_dates(preset, from_str, to_str)
     dashboard = compute_dashboard(start_date, end_date, departments)
     period_label = _format_period(start_date, end_date, preset, from_str, to_str)
+    # Book Analytics tab: ``q`` searches active titles by title,
+    # category, or accession number; ``book_id`` selects one title whose
+    # single-book traffic renders in the tab.  Top-10 utilized /
+    # underutilized charts always render, even before any search.
+    # Without ``book_id`` no per-book queries run, so only the top-10
+    # sections show until a card's "Show Analytics" is clicked.
+    q = request.args.get('q', '').strip()
+    book_id = _parse_book_id(request.args.get('book_id', ''))
+    results = models.search_books_for_analytics(q, 10) if q else []
+    traffic = compute_book_traffic(book_id, start_date, end_date) if book_id else None
+    if book_id and traffic is None:
+        flash('Book not found.', 'error')
+    try:
+        top_utilized = models.most_borrowed_titles(start_date, end_date, 10) or []
+    except Exception:
+        top_utilized = []
+    try:
+        top_underutilized = models.underutilized_titles(start_date, end_date, 10) or []
+    except Exception:
+        top_underutilized = []
     return render_template(
         'analytics/analytics.html',
         preset=preset,
@@ -356,7 +455,219 @@ def analytics_page():
         period_label=period_label,
         departments=departments,
         dashboard=dashboard,
+        q=q,
+        results=results,
+        book_id=book_id,
+        traffic=traffic,
+        top_utilized=top_utilized,
+        top_underutilized=top_underutilized,
     )
+
+
+def _parse_book_id(value):
+    try:
+        book_id = int((value or '').strip())
+    except (AttributeError, TypeError, ValueError):
+        return None
+    return book_id if book_id > 0 else None
+
+
+# Multi-line status graph: one line per circulation/reservation status,
+# in the same key order as models.BOOK_STATUS_KEYS.
+BOOK_STATUS_META = (
+    ('borrowed', 'Borrowed', '#2563eb'),
+    ('returned', 'Returned', '#16a34a'),
+    ('overdue', 'Overdue', '#ef4444'),
+    ('waiting', 'Waiting', '#f59e0b'),
+    ('allocated', 'Allocated', '#8b5cf6'),
+    ('claimed', 'Claimed', '#0ea5e9'),
+    ('expired', 'Expired', '#64748b'),
+)
+
+
+def compute_book_traffic(book_id, start_date, end_date):
+    """Assemble per-book traffic payload (JSON-safe primitives only).
+
+    Returns None when the book does not exist; otherwise a dict with
+    headline totals, ISO-dated trend, program/user-type splits, copy
+    states, waiting reservations, and recent transactions.
+    """
+
+    def _safe(fn, *args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except Exception:
+            return None
+
+    def _pair(rows):
+        out = []
+        for r in rows or []:
+            try:
+                label = r[0]
+                if hasattr(label, 'isoformat'):
+                    label = label.isoformat()
+                out.append([label, int(r[1] or 0)])
+            except (IndexError, TypeError, ValueError):
+                continue
+        return out
+
+    book = _safe(models.get_book_for_analytics, book_id)
+    if not book or len(book) < 4:
+        return None
+    overview = _safe(models.book_traffic_overview, book_id, start_date, end_date)
+    if not overview:
+        overview = (0, 0, 0, 0, 0, 0.0, 0.0)
+    trend = _pair(_safe(models.book_borrowings_trend, book_id, start_date, end_date))
+    by_program = _pair(_safe(models.book_borrowed_per_program, book_id, start_date, end_date))
+    by_user_type = _pair(_safe(models.book_borrowings_by_user_type, book_id, start_date, end_date))
+    copies_raw = _safe(models.book_copy_states, book_id) or []
+    copies = []
+    for c in copies_raw:
+        try:
+            copies.append([
+                c[0] if len(c) > 0 else '', c[1] if len(c) > 1 else '',
+                c[2] if len(c) > 2 else '', c[3] if len(c) > 3 else '',
+                str(c[4]) if len(c) > 4 and c[4] else '',
+            ])
+        except (IndexError, TypeError):
+            continue
+    recent_raw = _safe(models.book_recent_circulation, book_id, 10, start_date, end_date) or []
+    recent = []
+    for c in recent_raw:
+        try:
+            recent.append([
+                str(c[0]) if len(c) > 0 and c[0] else '',
+                c[1] if len(c) > 1 else '', c[2] if len(c) > 2 else '',
+                c[3] if len(c) > 3 else '', c[4] if len(c) > 4 else '',
+                str(c[5]) if len(c) > 5 and c[5] else '',
+                c[6] if len(c) > 6 else '',
+            ])
+        except (IndexError, TypeError):
+            continue
+    waiting = _safe(models.book_reservation_count, book_id) or 0
+    try:
+        waiting = int(waiting)
+    except (TypeError, ValueError):
+        waiting = 0
+    # Pivot per-status daily rows into aligned series (zero-filled) for the
+    # multi-line status graph: one line per circulation/reservation status.
+    status_dates = []
+    status_series = []
+    status_rows = _safe(models.book_status_trends, book_id, start_date, end_date) or []
+    day_set = set()
+    day_values = {}
+    for r in status_rows:
+        try:
+            day = r[0].isoformat() if hasattr(r[0], 'isoformat') else str(r[0])
+            key = str(r[1])
+            count = int(r[2] or 0)
+        except (IndexError, TypeError, ValueError):
+            continue
+        if key not in models.BOOK_STATUS_KEYS:
+            continue
+        day_set.add(day)
+        day_values[(day, key)] = day_values.get((day, key), 0) + count
+    status_dates = sorted(day_set)
+    if start_date is not None and end_date is not None:
+        # Bounded period (semester/year/custom): show every day in the
+        # range so lone spikes render as spikes on a real timeline instead
+        # of collapsing the axis to the active days only. Cap the fill so
+        # absurd ranges fall back to observed dates.
+        span = (end_date - start_date).days
+        if 0 <= span <= 400:
+            day = start_date
+            full = []
+            while day <= end_date:
+                full.append(day.isoformat())
+                day += timedelta(days=1)
+            status_dates = full
+    for key, label, color in BOOK_STATUS_META:
+        status_series.append({
+            'key': key, 'label': label, 'color': color,
+            'values': [day_values.get((day, key), 0) for day in status_dates],
+        })
+    # get_book_for_analytics returns
+    # (book_id, title, author, category, year_published, copies,
+    #  publisher, edition, isbn, call_number, material_type, description);
+    # older callers/mocks may still pass the shorter 5/6-tuples.
+    if len(book) > 5:
+        year_published = book[4]
+        copy_count = book[5]
+    else:
+        year_published = None
+        copy_count = book[4] if len(book) > 4 else 0
+    try:
+        copy_count = int(copy_count or 0)
+    except (TypeError, ValueError):
+        copy_count = 0
+
+    def _col(i):
+        return book[i] if len(book) > i else None
+
+    return {
+        'book': {
+            'book_id': book[0], 'title': book[1], 'author': book[2],
+            'category': book[3] if len(book) > 3 else '',
+            'year_published': year_published,
+            'copyright_date': year_published,
+            'copies': copy_count,
+            'publisher': _col(6),
+            'edition': _col(7),
+            'isbn': _col(8),
+            'call_number': _col(9),
+            'material_type': _col(10),
+            'description': _col(11),
+        },
+        'overview': {
+            'total': overview[0], 'active': overview[1], 'overdue': overview[2],
+            'returned': overview[3], 'borrowers': overview[4],
+            'avg_loan_days': overview[5], 'return_rate': overview[6],
+            'waiting': waiting,
+        },
+        'trend': trend,
+        'by_program': by_program,
+        'by_user_type': by_user_type,
+        'status_trends': {'dates': status_dates, 'series': status_series},
+        'copies': copies,
+        'recent': recent,
+    }
+
+
+@analytics_bp.route('/librarian/analytics/book/search')
+@login_required
+@librarian_required
+def book_search_json():
+    """Live title/category/accession suggestions for the Book Analytics picker."""
+    q = request.args.get('q', '').strip()
+    rows = models.search_books_for_analytics(q, 10)
+    results = []
+    for r in (rows or []):
+        item = {'book_id': r[0], 'title': r[1], 'author': r[2],
+                'category': r[3] if len(r) > 3 else ''}
+        if len(r) > 4:
+            item['year_published'] = r[4]
+            item['copyright_date'] = r[4]
+        results.append(item)
+    return jsonify({'results': results})
+
+
+@analytics_bp.route('/librarian/analytics/book/data')
+@login_required
+@librarian_required
+def book_data_json():
+    """Traffic payload for one book in the requested range as JSON."""
+    book_id = _parse_book_id(request.args.get('book_id', ''))
+    if not book_id:
+        return jsonify({'error': 'invalid book_id'}), 400
+    preset = request.args.get('preset', 'all')
+    from_str = request.args.get('from', '').strip()
+    to_str = request.args.get('to', '').strip()
+    preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
+    start_date, end_date = resolve_dates(preset, from_str, to_str)
+    traffic = compute_book_traffic(book_id, start_date, end_date)
+    if traffic is None:
+        return jsonify({'error': 'book not found'}), 404
+    return jsonify(traffic)
 
 
 def _trend_direction(counts):
@@ -554,12 +865,18 @@ CHART_NAMES = frozenset({
     'collection_by_category',
     'copies_by_status',
     'borrowings_by_department',
+    'borrowers_by_department',
+    'overdue_by_department',
     'borrowings_by_user_type',
     'borrowings_trend',
     'overdue_trend',
     'top_categories',
     'top_books',
     'high_demand',
+    'top_requested_titles',
+    'requests_by_role',
+    'requests_trend',
+    'requests_by_program',
 })
 
 
@@ -599,6 +916,12 @@ def _run_chart(name, start_date, end_date, args):
         return models.books_borrowed_per_program(
             start_date, end_date, _clean_list(args.getlist('department')),
             borrow_type)
+    if name == 'borrowers_by_department':
+        return models.borrowers_by_department(
+            start_date, end_date, _clean_list(args.getlist('department')))
+    if name == 'overdue_by_department':
+        return models.overdue_by_department(
+            start_date, end_date, _clean_list(args.getlist('department')))
     if name == 'borrowings_by_user_type':
         return models.borrowings_by_user_type(
             start_date, end_date, _clean_list(args.getlist('role')), borrow_type)
@@ -614,6 +937,15 @@ def _run_chart(name, start_date, end_date, args):
                                                   borrow_type=borrow_type)
     if name == 'high_demand':
         return models.high_demand_titles(start_date, end_date, borrow_type=borrow_type)
+    if name == 'top_requested_titles':
+        return models.top_requested_titles(start_date, end_date)
+    if name == 'requests_by_role':
+        return models.requests_by_role_split(start_date, end_date)
+    if name == 'requests_trend':
+        return models.requests_trend(start_date, end_date)
+    if name == 'requests_by_program':
+        return models.requests_by_program(
+            start_date, end_date, _clean_list(args.getlist('department')))
     raise ValueError('Unknown chart: %s' % name)
 
 
@@ -685,6 +1017,8 @@ def _as_2d_rows(kpi_type, kpi_data):
         return [('Title',)] + [(r[0],) for r in kpi_data]
     if kpi_type == 'trend_borrowings':
         return [('Date', 'Borrowings')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'peak_periods':
+        return [('Date', 'Borrowings')] + [(r[0], r[1]) for r in (kpi_data or [])]
     if kpi_type == 'trend_overdue':
         return [('Date', 'Overdue Items')] + [(r[0], r[1]) for r in (kpi_data or [])]
     if kpi_type == 'top_categories':
@@ -700,20 +1034,37 @@ def _as_2d_rows(kpi_type, kpi_data):
     if kpi_type == 'copies_by_status':
         return [('Status', 'Copies')] + [(r[0], r[1]) for r in (kpi_data or [])]
     if kpi_type == 'recent_circulation':
-        return [('Date', 'TXN', 'User', 'Role', 'Title', 'Author', 'Action', 'Due', 'Status')] + \
+        return [('Date', 'Accession No.', 'User', 'Role', 'Title', 'Author', 'Action', 'Due', 'Status')] + \
             [tuple(r) for r in (kpi_data or [])]
     if kpi_type == 'recent_collection':
         return [('Accession', 'Title', 'Category', 'Inventory State', 'Loan', 'Borrower', 'Due')] + \
             [tuple(r) for r in (kpi_data or [])]
     if kpi_type == 'circulation_summary':
         return [('Metric', 'Value')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'borrowers_by_department':
+        return [('Department', 'Active Borrowers')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'overdue_by_department':
+        return [('Department', 'Overdue Items')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'department_leaderboard':
+        return [('Department', 'Borrowings', 'Borrowers', 'Overdue')] + \
+            [(r[0], r[1], r[2], r[3]) for r in (kpi_data or [])]
+    if kpi_type == 'top_requested_titles':
+        return [('Title', 'Requests')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'requests_by_role':
+        return [('Title', 'Student', 'Faculty', 'Other Staff', 'Total')] + \
+            [(r[0], r[1], r[2], r[3], r[4]) for r in (kpi_data or [])]
+    if kpi_type == 'requests_trend':
+        return [('Date', 'Requests')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'requests_by_program':
+        return [('Program', 'Requests')] + [(r[0], r[1]) for r in (kpi_data or [])]
     raise ValueError('Unknown KPI type: %s' % kpi_type)
 
 
 USAGE_SCOPED_KPIS = frozenset({
     'books_borrowed_per_program', 'trend_borrowings', 'trend_overdue',
     'top_books', 'high_demand', 'by_user_type', 'recent_circulation',
-    'circulation_summary',
+    'circulation_summary', 'borrowers_by_department', 'overdue_by_department',
+    'requests_by_program', 'department_leaderboard',
 })
 
 
@@ -726,11 +1077,17 @@ def _run_kpi(kpi_type, start_date, end_date, departments=None):
         return models.utilization_rate(start_date, end_date)
     if kpi_type == 'books_borrowed_per_program':
         return models.books_borrowed_per_program(start_date, end_date, scoped)
+    if kpi_type == 'borrowers_by_department':
+        return models.borrowers_by_department(start_date, end_date, scoped)
+    if kpi_type == 'overdue_by_department':
+        return models.overdue_by_department(start_date, end_date, scoped)
     if kpi_type == 'most_borrowed_titles':
         return models.most_borrowed_titles(start_date, end_date)
     if kpi_type == 'underutilized_titles':
         return models.underutilized_titles(start_date, end_date)
     if kpi_type == 'trend_borrowings':
+        return models.borrowings_trend(start_date, end_date, None, scoped)
+    if kpi_type == 'peak_periods':
         return models.borrowings_trend(start_date, end_date, None, scoped)
     if kpi_type == 'trend_overdue':
         return models.overdue_trend(start_date, end_date, None, scoped)
@@ -755,6 +1112,16 @@ def _run_kpi(kpi_type, start_date, end_date, departments=None):
         return [['Total borrowings', t], ['Active borrowers', b], ['Overdue items', o],
                 ['Avg. loan duration (days)', avg], ['On-time return rate (%)', rate],
                 ['New additions', new]]
+    if kpi_type == 'top_requested_titles':
+        return models.top_requested_titles(start_date, end_date)
+    if kpi_type == 'requests_by_role':
+        return models.requests_by_role_split(start_date, end_date)
+    if kpi_type == 'requests_trend':
+        return models.requests_trend(start_date, end_date)
+    if kpi_type == 'requests_by_program':
+        return models.requests_by_program(start_date, end_date, scoped)
+    if kpi_type == 'department_leaderboard':
+        return models.department_summary(start_date, end_date, scoped)
     raise ValueError('Unknown KPI type: %s' % kpi_type)
 
 
@@ -827,9 +1194,11 @@ _CHART_SLATE_300 = colors.HexColor('#cbd5e1')
 _PIE_SECTIONS = frozenset({
     'top_categories', 'collection_by_category', 'by_user_type', 'copies_by_status',
 })
-_LINE_SECTIONS = frozenset({'trend_borrowings', 'trend_overdue'})
+_LINE_SECTIONS = frozenset({'trend_borrowings', 'trend_overdue', 'requests_trend'})
 _BAR_SECTIONS = frozenset({
     'books_borrowed_per_program', 'most_borrowed_titles', 'top_books', 'high_demand',
+    'borrowers_by_department', 'overdue_by_department',
+    'top_requested_titles', 'requests_by_program', 'peak_periods',
 })
 
 
@@ -838,6 +1207,17 @@ def _chart_num(value):
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _pdf_text(value):
+    """Escape dynamic text for reportlab Paragraph (XML markup).
+
+    Titles, names, and departments may contain ``&``/``<``/``>`` which
+    would otherwise raise a parse error at build time and 500 the export.
+    """
+    if value is None:
+        return ''
+    return _xml_escape(str(value), {'"': '&quot;'})
 
 
 def _chart_short(label, limit=20):
@@ -911,8 +1291,44 @@ def _bar_drawing(pairs, width):
     return d
 
 
+def _fill_daily_gaps(pairs):
+    """Zero-fill missing days between first and last date.
+
+    Sparse trend rows (e.g. 13 days with count=1 over 4 months) would
+    otherwise render as a flat line. Returns filled [(iso_date, value)].
+    Non-date labels or huge spans (>730 days) are returned as-is.
+    """
+    if not pairs or len(pairs) < 2:
+        return list(pairs)
+    parsed = []
+    for label, value in pairs:
+        day = label.isoformat()[:10] if hasattr(label, 'isoformat') else str(label)[:10]
+        try:
+            dt = datetime.strptime(day, '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            return list(pairs)
+        try:
+            num = float(value)
+        except (TypeError, ValueError):
+            num = 0.0
+        parsed.append((dt, num))
+    parsed.sort(key=lambda r: r[0])
+    span = (parsed[-1][0] - parsed[0][0]).days
+    if span <= 0 or span > 730:
+        return [(d.isoformat(), v) for d, v in parsed]
+    by_day = {d: v for d, v in parsed}
+    filled = []
+    cur = parsed[0][0]
+    end = parsed[-1][0]
+    while cur <= end:
+        filled.append((cur.isoformat(), by_day.get(cur, 0.0)))
+        cur += timedelta(days=1)
+    return filled
+
+
 def _line_drawing(pairs, width, color):
     """Line chart for daily (date, count) rows, strided to at most 40 points."""
+    pairs = _fill_daily_gaps(pairs)
     if len(pairs) > 40:
         stride = -(-len(pairs) // 40)
         pairs = pairs[::stride]
@@ -1090,9 +1506,9 @@ def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
         [Paragraph('<font color="#64748b"><b>REPORT PERIOD</b></font>', s_meta_label),
          Paragraph('<font color="#64748b"><b>GENERATED ON</b></font>', s_meta_label),
          Paragraph('<font color="#64748b"><b>GENERATED BY</b></font>', s_meta_label)],
-        [Paragraph(period_label, s_meta_value),
+        [Paragraph(_pdf_text(period_label), s_meta_value),
          Paragraph(now.strftime('%B %d, %Y  •  %I:%M %p'), s_meta_value),
-         Paragraph(f"{gen_name}<br/><font color=\"#64748b\" size=\"7\">{gen_role}</font>" if gen_role else gen_name, s_meta_value)],
+         Paragraph(f"{_pdf_text(gen_name)}<br/><font color=\"#64748b\" size=\"7\">{_pdf_text(gen_role)}</font>" if gen_role else _pdf_text(gen_name), s_meta_value)],
     ]
     t_meta = Table(meta_data, colWidths=[doc.width * 0.34, doc.width * 0.33, doc.width * 0.33],
                    hAlign='LEFT')
@@ -1183,151 +1599,157 @@ def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
         # Period chip row for this card
         story.append(Table(
             [[Paragraph(
-                f'<font color="#334155"><b>PERIOD</b></font>  <font color="#64748b">{period_label}</font>'
+                f'<font color="#334155"><b>PERIOD</b></font>  <font color="#64748b">{_pdf_text(period_label)}</font>'
                 f'&nbsp;&nbsp;&nbsp;<font color="#334155"><b>ROWS</b></font>  '
                 f'<font color="#64748b">{(len(kpi_data) if isinstance(kpi_data, list) else 1) if kpi_data is not None else 0}</font>',
                 ParagraphStyle('RPeriod', parent=s_cell, fontSize=7, leading=9))]],
             colWidths=[doc.width], hAlign='LEFT'))
         story.append(Spacer(1, 6))
 
-        # Render table / metric
-        rows = _as_2d_rows(kt, kpi_data)
+        # Render table / metric. Per-section guard: one unrenderable
+        # section must not 500 the whole report.
+        try:
+            rows = _as_2d_rows(kt, kpi_data)
 
-        chart = _section_chart(kt, rows, doc.width)
-        if chart is not None:
-            story.append(chart)
-            story.append(Spacer(1, 6))
+            chart = _section_chart(kt, rows, doc.width)
+            if chart is not None:
+                story.append(chart)
+                story.append(Spacer(1, 6))
 
-        if kt == 'utilization_rate':
-            # Metric hero card
-            val = kpi_data if isinstance(kpi_data, (int, float)) else 0
-            try:
-                val_f = float(val)
-            except Exception:
-                val_f = 0.0
-            # clamp display 0..100
-            val_f = max(0.0, min(100.0, val_f))
-            hero = Table([
-                [Paragraph(f"{val_f:.1f}<font size=\"14\" color=\"#1d4ed8\">%</font>", s_kpi_big)],
-                [Paragraph('collection currently on loan', s_kpi_caption)],
-                [Paragraph(
-                    f'<font color="#334155"><b>{int(round(val_f))} of 100</b></font>'
-                    f'  <font color="#64748b">active titles borrowed in the selected window</font>',
-                    ParagraphStyle('RKpiSub', parent=s_kpi_caption, alignment=TA_CENTER))],
-            ], colWidths=[doc.width], hAlign='CENTER')
-            hero.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, -1), SLATE_50),
-                ('BOX', (0, 0), (-1, -1), 0.6, SLATE_300),
-                ('INNERGRID', (0, 0), (-1, -1), 0.4, SLATE_300),
-                ('TOPPADDING', (0, 0), (-1, -1), 6),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                ('LEFTPADDING', (0, 0), (-1, -1), 12),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 12),
-                ('ROUNDEDCORNERS', [6, 6, 6, 6]),
-            ]))
-            story.append(hero)
-            story.append(Spacer(1, 4))
-            # also show tiny 2-col table for auditability
-            mini = Table(
-                [[Paragraph('Metric', s_cell_header), Paragraph('Value', s_cell_header)],
-                 [Paragraph('Utilization Rate (%)', s_cell), Paragraph(f"{val_f:.2f}%", s_cell_right)]],
-                colWidths=[doc.width * 0.70, doc.width * 0.30], hAlign='LEFT')
-            mini.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), NAVY),
-                ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 8),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [WHITE, SLATE_50]),
-                ('GRID', (0, 0), (-1, -1), 0.4, SLATE_300),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('TOPPADDING', (0, 0), (-1, -1), 5),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-                ('LEFTPADDING', (0, 0), (-1, -1), 6),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-            ]))
-            story.append(mini)
-        elif len(rows) == 1:
-            # empty state
-            empty_box = Table(
-                [[Paragraph('No records for this KPI in the selected period.', s_empty)]],
-                colWidths=[doc.width], hAlign='CENTER')
-            empty_box.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, -1), SLATE_50),
-                ('BOX', (0, 0), (-1, -1), 0.5, SLATE_300),
-                ('TOPPADDING', (0, 0), (-1, -1), 14),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 14),
-                ('LEFTPADDING', (0, 0), (-1, -1), 10),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 10),
-                ('ROUNDEDCORNERS', [6, 6, 6, 6]),
-            ]))
-            story.append(empty_box)
-        else:
-            # Styled data table
-            # choose column widths by shape: 2-col label/value tables get a
-            # wide label column; wider tables split the width evenly.
-            ncols = len(rows[0])
-            if ncols == 1:
-                cw = [doc.width]
-                aligns = [s_cell]
-            elif ncols == 2:
-                cw = [doc.width * 0.68, doc.width * 0.32]
-                aligns = [s_cell, s_cell_right]
-            else:
-                cw = [doc.width / ncols] * ncols
-                aligns = [s_cell] * ncols
-
-            header_cells = []
-            for j, c in enumerate(rows[0]):
-                style = s_cell_center if len(cw) == 1 else (s_cell_header if j == 0 else s_cell_header)
-                # numeric headers center/right
-                if len(cw) > 1 and j == 1:
-                    style = ParagraphStyle('RThR', parent=s_cell_header, alignment=TA_RIGHT)
-                elif len(cw) > 1 and j == 0:
-                    style = ParagraphStyle('RThL', parent=s_cell_header, alignment=TA_LEFT)
-                header_cells.append(Paragraph(str(c), style))
-
-            body = []
-            for r in rows[1:]:
-                cells = []
-                for j, val in enumerate(r):
-                    st = aligns[j] if j < len(aligns) else s_cell
-                    cells.append(Paragraph(str(val), st))
-                body.append(cells)
-
-            # optional: cap rows for readability, add "..." note
-            truncated = False
-            max_rows = 28
-            if len(body) > max_rows:
-                truncated = True
-                body = body[:max_rows]
-
-            t = Table([header_cells] + body, colWidths=cw, hAlign='LEFT', repeatRows=1)
-            wide_font = 7 if ncols > 4 else 8
-            style_cmds = [
-                ('BACKGROUND', (0, 0), (-1, 0), NAVY),
-                ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), wide_font),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 7),
-                ('TOPPADDING', (0, 0), (-1, 0), 7),
-                ('TOPPADDING', (0, 1), (-1, -1), 5),
-                ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
-                ('LEFTPADDING', (0, 0), (-1, -1), 7),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 7),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [WHITE, SLATE_100]),
-                ('GRID', (0, 0), (-1, -1), 0.4, SLATE_300),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('LINEBELOW', (0, 0), (-1, 0), 1.2, NAVY_DARK),
-            ]
-            # zebra is via ROWBACKGROUNDS; add light inner rule
-            t.setStyle(TableStyle(style_cmds))
-            story.append(t)
-            if truncated:
+            if kt == 'utilization_rate':
+                # Metric hero card
+                val = kpi_data if isinstance(kpi_data, (int, float)) else 0
+                try:
+                    val_f = float(val)
+                except Exception:
+                    val_f = 0.0
+                # clamp display 0..100
+                val_f = max(0.0, min(100.0, val_f))
+                hero = Table([
+                    [Paragraph(f"{val_f:.1f}<font size=\"14\" color=\"#1d4ed8\">%</font>", s_kpi_big)],
+                    [Paragraph('collection currently on loan', s_kpi_caption)],
+                    [Paragraph(
+                        f'<font color="#334155"><b>{int(round(val_f))} of 100</b></font>'
+                        f'  <font color="#64748b">active titles borrowed in the selected window</font>',
+                        ParagraphStyle('RKpiSub', parent=s_kpi_caption, alignment=TA_CENTER))],
+                ], colWidths=[doc.width], hAlign='CENTER')
+                hero.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, -1), SLATE_50),
+                    ('BOX', (0, 0), (-1, -1), 0.6, SLATE_300),
+                    ('INNERGRID', (0, 0), (-1, -1), 0.4, SLATE_300),
+                    ('TOPPADDING', (0, 0), (-1, -1), 6),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 12),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 12),
+                    ('ROUNDEDCORNERS', [6, 6, 6, 6]),
+                ]))
+                story.append(hero)
                 story.append(Spacer(1, 4))
-                story.append(Paragraph(
-                    f'Showing first {max_rows} rows.  Export includes all rows; '
-                    f'{len(rows) - 1 - max_rows} more row(s) not displayed in the paginated table.',
-                    ParagraphStyle('RTrunc', parent=s_empty, alignment=TA_LEFT, fontSize=7)))
+                # also show tiny 2-col table for auditability
+                mini = Table(
+                    [[Paragraph('Metric', s_cell_header), Paragraph('Value', s_cell_header)],
+                     [Paragraph('Utilization Rate (%)', s_cell), Paragraph(f"{val_f:.2f}%", s_cell_right)]],
+                    colWidths=[doc.width * 0.70, doc.width * 0.30], hAlign='LEFT')
+                mini.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), NAVY),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [WHITE, SLATE_50]),
+                    ('GRID', (0, 0), (-1, -1), 0.4, SLATE_300),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('TOPPADDING', (0, 0), (-1, -1), 5),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                ]))
+                story.append(mini)
+            elif len(rows) == 1:
+                # empty state
+                empty_box = Table(
+                    [[Paragraph('No records for this KPI in the selected period.', s_empty)]],
+                    colWidths=[doc.width], hAlign='CENTER')
+                empty_box.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, -1), SLATE_50),
+                    ('BOX', (0, 0), (-1, -1), 0.5, SLATE_300),
+                    ('TOPPADDING', (0, 0), (-1, -1), 14),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 14),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 10),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+                    ('ROUNDEDCORNERS', [6, 6, 6, 6]),
+                ]))
+                story.append(empty_box)
+            else:
+                # Styled data table
+                # choose column widths by shape: 2-col label/value tables get a
+                # wide label column; wider tables split the width evenly.
+                ncols = len(rows[0])
+                if ncols == 1:
+                    cw = [doc.width]
+                    aligns = [s_cell]
+                elif ncols == 2:
+                    cw = [doc.width * 0.68, doc.width * 0.32]
+                    aligns = [s_cell, s_cell_right]
+                else:
+                    cw = [doc.width / ncols] * ncols
+                    aligns = [s_cell] * ncols
+
+                header_cells = []
+                for j, c in enumerate(rows[0]):
+                    style = s_cell_center if len(cw) == 1 else (s_cell_header if j == 0 else s_cell_header)
+                    # numeric headers center/right
+                    if len(cw) > 1 and j == 1:
+                        style = ParagraphStyle('RThR', parent=s_cell_header, alignment=TA_RIGHT)
+                    elif len(cw) > 1 and j == 0:
+                        style = ParagraphStyle('RThL', parent=s_cell_header, alignment=TA_LEFT)
+                    header_cells.append(Paragraph(_pdf_text(c), style))
+
+                body = []
+                for r in rows[1:]:
+                    cells = []
+                    for j, val in enumerate(r):
+                        st = aligns[j] if j < len(aligns) else s_cell
+                        cells.append(Paragraph(_pdf_text(val), st))
+                    body.append(cells)
+
+                # optional: cap rows for readability, add "..." note
+                truncated = False
+                max_rows = 28
+                if len(body) > max_rows:
+                    truncated = True
+                    body = body[:max_rows]
+
+                t = Table([header_cells] + body, colWidths=cw, hAlign='LEFT', repeatRows=1)
+                wide_font = 7 if ncols > 4 else 8
+                style_cmds = [
+                    ('BACKGROUND', (0, 0), (-1, 0), NAVY),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, -1), wide_font),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 7),
+                    ('TOPPADDING', (0, 0), (-1, 0), 7),
+                    ('TOPPADDING', (0, 1), (-1, -1), 5),
+                    ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 7),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 7),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [WHITE, SLATE_100]),
+                    ('GRID', (0, 0), (-1, -1), 0.4, SLATE_300),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('LINEBELOW', (0, 0), (-1, 0), 1.2, NAVY_DARK),
+                ]
+                # zebra is via ROWBACKGROUNDS; add light inner rule
+                t.setStyle(TableStyle(style_cmds))
+                story.append(t)
+                if truncated:
+                    story.append(Spacer(1, 4))
+                    story.append(Paragraph(
+                        f'Showing first {max_rows} rows.  Export includes all rows; '
+                        f'{len(rows) - 1 - max_rows} more row(s) not displayed in the paginated table.',
+                        ParagraphStyle('RTrunc', parent=s_empty, alignment=TA_LEFT, fontSize=7)))
+        except Exception:
+            story.append(Paragraph(
+                'This section could not be rendered for the selected period.',
+                s_empty))
 
         # card footer spacing
         story.append(Spacer(1, 8))
@@ -1413,13 +1835,17 @@ def export_report():
     dept_label = ', '.join(departments)
     for kt in kpi_types:
         kpi_data = _run_kpi(kt, start_date, end_date, dept_list)
-        models.save_report_snapshot(
-            kt,
-            {'preset': preset, 'from': from_str, 'to': to_str,
-             'department': departments},
-            _jsonable(kpi_data),
-            current_user.id,
-        )
+        try:
+            models.save_report_snapshot(
+                kt,
+                {'preset': preset, 'from': from_str, 'to': to_str,
+                 'department': departments},
+                _jsonable(kpi_data),
+                current_user.id,
+            )
+        except Exception:
+            # Audit caching must never break the export itself.
+            pass
         sections.append((kt, kpi_data))
 
     stamp = datetime.now().strftime('%Y%m%d_%H%M%S')

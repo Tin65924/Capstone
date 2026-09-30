@@ -2,22 +2,22 @@ from datetime import date
 from app.database import db
 
 
-def mark_copy_present(accession_id):
-    return upsert_inventory_record(accession_id, 'available', 'realtime_scan', None)
+def mark_copy_present(accession_id, checked_by=None):
+    return upsert_inventory_record(accession_id, 'available', 'realtime_scan', checked_by)
 
 
-def mark_copy_missing(accession_id):
-    return upsert_inventory_record(accession_id, 'missing', 'realtime_scan', None)
+def mark_copy_missing(accession_id, checked_by=None):
+    return upsert_inventory_record(accession_id, 'missing', 'realtime_scan', checked_by)
 
 
-def mark_copy_damaged(accession_id, notes=None, session_id=None):
+def mark_copy_damaged(accession_id, notes=None, session_id=None, checked_by=None):
     inventory_type = 'annual_physical' if session_id else 'realtime_scan'
-    return upsert_inventory_record(accession_id, 'damaged', inventory_type, None, session_id=session_id, notes=notes)
+    return upsert_inventory_record(accession_id, 'damaged', inventory_type, checked_by, session_id=session_id, notes=notes)
 
 
-def mark_copy_lost(accession_id, session_id=None):
+def mark_copy_lost(accession_id, session_id=None, checked_by=None):
     inventory_type = 'annual_physical' if session_id else 'realtime_scan'
-    return upsert_inventory_record(accession_id, 'lost', inventory_type, None, session_id=session_id)
+    return upsert_inventory_record(accession_id, 'lost', inventory_type, checked_by, session_id=session_id)
 
 
 def upsert_inventory_record(accession_id, state, inventory_type, checked_by, session_id=None, notes=None):
@@ -36,7 +36,7 @@ def upsert_inventory_record(accession_id, state, inventory_type, checked_by, ses
     )
 
 
-def reconcile_inventory(session_id, scanned_accessions):
+def reconcile_inventory(session_id, scanned_accessions, checked_by=None):
     all_copies = db.fetch_all(
         '''SELECT al.accession_id, al.accession_number, ist.inventory_state
            FROM accession_log al
@@ -54,16 +54,16 @@ def reconcile_inventory(session_id, scanned_accessions):
         )
         if acc_id in scanned_set:
             state = 'borrowed' if active_loan else 'available'
-            upsert_inventory_record(acc_id, state, 'annual_physical', None, session_id=session_id)
+            upsert_inventory_record(acc_id, state, 'annual_physical', checked_by, session_id=session_id)
         elif active_loan:
-            upsert_inventory_record(acc_id, 'borrowed', 'annual_physical', None, session_id=session_id)
+            upsert_inventory_record(acc_id, 'borrowed', 'annual_physical', checked_by, session_id=session_id)
         else:
-            upsert_inventory_record(acc_id, 'missing', 'annual_physical', None, session_id=session_id)
+            upsert_inventory_record(acc_id, 'missing', 'annual_physical', checked_by, session_id=session_id)
             discrepancies.append({'accession_id': acc_id, 'accession': acc_num, 'issue': 'Missing'})
 
     db.execute(
-        'UPDATE inventory_sessions SET scanned_count = %s, session_status = %s, ended_at = %s WHERE session_id = %s',
-        (len(scanned_accessions), 'completed', date.today(), session_id)
+        'UPDATE inventory_sessions SET scanned_count = %s, session_status = %s, ended_at = %s, updated_at = NOW(), updated_by = %s WHERE session_id = %s',
+        (len(scanned_accessions), 'completed', date.today(), checked_by, session_id)
     )
     return discrepancies
 
@@ -96,7 +96,7 @@ def get_active_session(librarian_id):
     )
 
 
-def update_session_scan(session_id, accession_id):
+def update_session_scan(session_id, accession_id, updated_by=None):
     already_scanned = db.fetch_one(
         'SELECT inventory_id FROM inventory_status WHERE accession_id = %s AND session_id = %s',
         (accession_id, session_id)
@@ -104,15 +104,15 @@ def update_session_scan(session_id, accession_id):
     if already_scanned:
         return None
     return db.execute(
-        'UPDATE inventory_sessions SET scanned_count = scanned_count + 1 WHERE session_id = %s',
-        (session_id,)
+        'UPDATE inventory_sessions SET scanned_count = scanned_count + 1, updated_at = NOW(), updated_by = %s WHERE session_id = %s',
+        (updated_by, session_id)
     )
 
 
-def end_session(session_id):
+def end_session(session_id, updated_by=None):
     return db.execute(
-        "UPDATE inventory_sessions SET session_status = 'completed', ended_at = %s WHERE session_id = %s",
-        (date.today(), session_id)
+        "UPDATE inventory_sessions SET session_status = 'completed', ended_at = %s, updated_at = NOW(), updated_by = %s WHERE session_id = %s",
+        (date.today(), updated_by, session_id)
     )
 
 def get_scanned_in_session(session_id):
@@ -174,10 +174,10 @@ def count_accessions():
     return row[0] if row else 0
 
 
-def cancel_inventory_session(session_id):
+def cancel_inventory_session(session_id, updated_by=None):
     return db.execute(
-        "UPDATE inventory_sessions SET session_status = 'cancelled', ended_at = %s WHERE session_id = %s",
-        (date.today(), session_id)
+        "UPDATE inventory_sessions SET session_status = 'cancelled', ended_at = %s, updated_at = NOW(), updated_by = %s WHERE session_id = %s",
+        (date.today(), updated_by, session_id)
     )
 
 def get_session_export_rows(session_id):

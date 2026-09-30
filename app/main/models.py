@@ -120,4 +120,4 @@ def get_daily_borrows(days=6):
            ORDER BY d''',
         (days,)
     )
-    return [(row[0], row[1]) for row in rows]
+    return [(row[0], row[1]) for row in rows or []]

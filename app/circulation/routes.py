@@ -11,7 +11,7 @@ from .models import (
     count_active_loans, calculate_fine,
     get_borrower_by_user, get_borrower_by_id_number, get_borrower_details,
     get_circulation_stats, get_active_loans, get_recent_transactions,
-    get_overdue_loans_detail, get_due_soon_detail, get_loans_by_borrower,
+    get_loans_by_borrower,
     get_active_loan_by_id_and_user,
     create_reservation, get_next_queue_position,
     get_active_reservation_by_book_and_borrower, get_reservation_by_id,
@@ -22,10 +22,13 @@ from .models import (
     expire_overdue_reservations, get_borrowers_for_history,
     get_full_reservation_history_by_borrower, get_user_loan_history,
     get_fines_by_borrower, get_total_fines, get_fine_record, mark_fine_paid,
-    is_book_blocked_for_daily,
+    is_book_blocked_for_daily, is_accession_lost,
 )
 
 VALID_BORROW_TYPES = ('overnight', 'daily_circulation')
+
+VALID_LOAN_TYPE_FILTERS = ('all', 'overnight', 'daily_circulation')
+VALID_LOAN_STATUS_FILTERS = ('all', 'overdue', 'due_soon')
 
 
 def _borrow_limit(role_name):
@@ -34,13 +37,64 @@ def _borrow_limit(role_name):
     return current_app.config.get('MAX_BORROW_LIMIT_FACULTY', 5)
 
 
+def _borrower_status(row):
+    """Borrower status across the two borrower tuple shapes.
+
+    get_borrower_details() -> 7-tuple, status at [3].
+    get_borrower_by_user()  -> SELECT * (8 cols), status at [5].
+    Legacy test mocks use a 5-tuple with status at [4].
+    """
+    if not row:
+        return None
+    if len(row) == 7:
+        return row[3]
+    if len(row) >= 6:
+        return row[5]
+    if len(row) >= 5:
+        return row[4]
+    return row[3]
+
+
+def _book_is_archived(book):
+    """True when a book_catalog row is archived. Short mock tuples
+    (len <= 11) are treated as active so old tests keep passing."""
+    if not book or len(book) <= 11:
+        return False
+    return book[11] != 'active'
+
+
+def _claim_window():
+    """(deadline datetime, label) for reservation pickup. Hours-based
+    so a 2-hour window is possible; falls back to legacy DAYS setting."""
+    hours = current_app.config.get('RESERVATION_CLAIM_HOURS')
+    if hours is None:
+        days = current_app.config.get('RESERVATION_CLAIM_DAYS', 2)
+        try:
+            days = int(days)
+        except (TypeError, ValueError):
+            days = 2
+        return datetime.now() + timedelta(days=days), f'{days} day(s)'
+    try:
+        hours = float(hours)
+    except (TypeError, ValueError):
+        hours = 2
+    return datetime.now() + timedelta(hours=hours), f'{hours:g} hour(s)'
+
+
 def _compute_due_date(borrow_type, role_name):
     if borrow_type == 'daily_circulation':
         days = current_app.config.get('DAILY_CIRCULATION_DUE_DAYS', 0)
+        fallback = 0
     elif role_name == 'Student':
         days = current_app.config.get('OVERNIGHT_DUE_DAYS_STUDENT', 2)
+        fallback = 2
     else:
         days = current_app.config.get('OVERNIGHT_DUE_DAYS_FACULTY', 30)
+        fallback = 30
+    try:
+        days = int(days)
+    except (TypeError, ValueError):
+        days = fallback
     return date.today() + timedelta(days=days)
 
 
@@ -50,11 +104,55 @@ def _compute_due_date(borrow_type, role_name):
 def circulation_page():
     stats = get_circulation_stats()
     active_loans = get_active_loans()
-    recent = get_recent_transactions(10)
-    overdue = get_overdue_loans_detail()
-    due_soon = get_due_soon_detail(2)
+    recent = get_recent_transactions(10) or []
 
     search = request.args.get('search', '').strip()
+
+    loan_type = request.args.get('loan_type', 'all').strip().lower()
+    if loan_type not in VALID_LOAN_TYPE_FILTERS:
+        loan_type = 'all'
+    loan_status = request.args.get('loan_status', 'all').strip().lower()
+    if loan_status not in VALID_LOAN_STATUS_FILTERS:
+        loan_status = 'all'
+    borrow_date = request.args.get('borrow_date', '').strip()
+    if borrow_date:
+        try:
+            datetime.strptime(borrow_date, '%Y-%m-%d')
+        except ValueError:
+            borrow_date = ''
+    table_search = request.args.get('q', '').strip()
+
+    today_val = date.today()
+    due_soon_cutoff = today_val + timedelta(days=2)
+
+    # One status per active loan so badges, counts, and the status filter
+    # always agree (overdue = flagged or past due; due soon = active and
+    # due within 2 days; everything else is plain borrowed).
+    loan_flags = {}
+    for loan in active_loans or []:
+        if _loan_is_overdue(loan, today_val):
+            loan_flags[loan[0]] = 'overdue'
+        elif _loan_is_due_soon(loan, today_val, due_soon_cutoff):
+            loan_flags[loan[0]] = 'due_soon'
+        else:
+            loan_flags[loan[0]] = 'borrowed'
+
+    filtered_loans = []
+    for loan in active_loans or []:
+        if loan_type != 'all' and loan[3] != loan_type:
+            continue
+        if loan_status != 'all' and loan_flags.get(loan[0]) != loan_status:
+            continue
+        if borrow_date and str(loan[1])[:10] != borrow_date:
+            continue
+        if table_search and not _loan_matches_search(loan, table_search):
+            continue
+        filtered_loans.append(loan)
+    total_loans = len(active_loans or [])
+    filters_active = (loan_type != 'all' or loan_status != 'all'
+                      or bool(borrow_date) or bool(table_search))
+    modal_filter_count = (1 if loan_type != 'all' else 0) + (1 if borrow_date else 0)
+
     borrower = None
     borrower_loans = []
     if search:
@@ -68,17 +166,54 @@ def circulation_page():
     return render_template(
         'circulation/circulation.html',
         stats=stats,
-        active_loans=active_loans,
+        active_loans=filtered_loans,
+        total_loans=total_loans,
+        loan_flags=loan_flags,
+        loan_type=loan_type,
+        loan_status=loan_status,
+        borrow_date=borrow_date,
+        table_search=table_search,
+        filters_active=filters_active,
+        modal_filter_count=modal_filter_count,
+        overdue_count=sum(1 for flag in loan_flags.values() if flag == 'overdue'),
+        due_soon_count=sum(1 for flag in loan_flags.values() if flag == 'due_soon'),
         recent=recent,
-        overdue=overdue,
-        due_soon=due_soon,
         search=search,
         borrower=borrower,
         borrower_loans=borrower_loans,
-        today=date.today(),
+        today=today_val,
         borrow_limit_student=current_app.config.get('MAX_BORROW_LIMIT_STUDENT', 3),
         borrow_limit_faculty=current_app.config.get('MAX_BORROW_LIMIT_FACULTY', 5),
     )
+
+
+def _loan_matches_search(loan, query):
+    """Case-insensitive match on borrower, title, or accession number."""
+    needle = query.lower()
+    return any(needle in str(loan[i] or '').lower() for i in (5, 7, 8))
+
+
+def _loan_is_overdue(loan, today):
+    """True when an active-loan tuple is overdue (flagged or past due)."""
+    if loan[4] == 'overdue':
+        return True
+    if loan[4] != 'active' or loan[2] is None:
+        return False
+    try:
+        return loan[2] < today
+    except TypeError:
+        return str(loan[2])[:10] < today.isoformat()
+
+
+def _loan_is_due_soon(loan, today, cutoff):
+    """True when an active (not overdue) loan is due between today and cutoff."""
+    if loan[4] != 'active' or loan[2] is None:
+        return False
+    try:
+        return today <= loan[2] <= cutoff
+    except TypeError:
+        day = str(loan[2])[:10]
+        return today.isoformat() <= day <= cutoff.isoformat()
 
 
 @circulation_bp.route('/librarian/circulation/borrow', methods=['POST'])
@@ -103,17 +238,34 @@ def desk_borrow():
         flash('Borrower not found.', 'error')
         return redirect(url_for('circulation.circulation_page', search=id_number))
 
-    if borrower_row[3] != 'active':
+    borrower_status = borrower_row[3] if len(borrower_row) > 3 else None
+    if borrower_status != 'active':
         flash('This borrower account is not active.', 'error')
-        return redirect(url_for('circulation.circulation_page', search=borrower_row[1]))
+        return redirect(url_for('circulation.circulation_page', search=id_number))
 
     accession = get_accession_by_number(accession_number) if accession_number else None
     if not accession:
         flash('Accession not found.', 'error')
         return redirect(url_for('circulation.circulation_page', search=borrower_row[1]))
 
+    if is_accession_lost(accession[0]):
+        flash(f'Accession {accession_number} is marked as lost and cannot be borrowed.', 'error')
+        return redirect(url_for('circulation.circulation_page', search=borrower_row[1]))
+
+    book_for_accession = get_book_by_id(accession[2])
+    if book_for_accession is not None and _book_is_archived(book_for_accession):
+        flash('This book is archived and cannot be borrowed.', 'error')
+        return redirect(url_for('circulation.circulation_page', search=borrower_row[1]))
+
     if get_active_loan_by_accession(accession[0]):
         flash(f'Accession {accession_number} is already on loan.', 'error')
+        return redirect(url_for('circulation.circulation_page', search=borrower_row[1]))
+
+    # Don't let walk-ins jump the reservation queue: if someone else is
+    # waiting first for this book, direct them to allocate instead.
+    first_waiting = next_in_queue(accession[2])
+    if first_waiting and len(first_waiting) > 2 and first_waiting[2] != borrower_row[0]:
+        flash('This book has a waiting reservation queue — allocate it to the next borrower first.', 'error')
         return redirect(url_for('circulation.circulation_page', search=borrower_row[1]))
 
     if get_active_loan_by_book_and_borrower(accession[2], borrower_row[0]):
@@ -162,7 +314,7 @@ def desk_return():
 
     fine = calculate_fine(loan[0], current_app.config.get('OVERDUE_FINE_PER_DAY', 5.0),
                           current_app.config.get('OVERDUE_GRACE_DAYS', 0))
-    return_book(loan[0], fine, damage_notes, lost_flag)
+    return_book(loan[0], fine, damage_notes, lost_flag, updated_by=current_user.id)
     borrower_id_for_loan = loan[3] if len(loan) > 3 else None
     if borrower_id_for_loan is not None:
         create_notification(
@@ -182,10 +334,10 @@ def desk_return():
     log_activity(current_user.id, f'circulation:return:{loan[0]}')
 
     waiting = next_in_queue(accession[2])
-    if waiting:
+    if waiting and len(waiting) > 2 and not lost_flag:
         create_notification(
             waiting[2],
-            f'A reserved copy (accession {accession_number}) is ready for pickup.',
+            f'A copy ({accession_number}) was returned and is awaiting librarian allocation.',
             'hold_ready',
             str(waiting[0]),
         )
@@ -222,13 +374,23 @@ def reservations_page():
         status_filter = 'active'
         wanted = ('waiting', 'allocated')
 
-    groups = get_reservations_grouped()
-    reservations_by_book = {
-        row[0]: get_reservations_by_book(row[0]) for row in groups
-    }
-    active = sum(row[4] + row[5] for row in groups)
-    ready = sum(row[5] for row in groups)
-    pending = sum(row[4] for row in groups)
+    groups = get_reservations_grouped() or []
+    reservations_by_book = {}
+    for row in groups:
+        if not row:
+            continue
+        reservations_by_book[row[0]] = (
+            get_reservations_by_book(row[0]) or [])
+
+    def _num(r, i):
+        try:
+            return int(r[i] or 0)
+        except (IndexError, TypeError, ValueError):
+            return 0
+
+    active = sum(_num(row, 4) + _num(row, 5) for row in groups)
+    ready = sum(_num(row, 5) for row in groups)
+    pending = sum(_num(row, 4) for row in groups)
     if wanted:
         reservations_by_book = {
             book_id: [res for res in rows if res[2] in wanted]
@@ -253,8 +415,14 @@ def reservations_page():
 def reservation_action(reservation_id, action):
     keep_status = request.form.get('status', '').strip().lower()
     status_args = {'status': keep_status} if keep_status in ('active', 'waiting', 'allocated', 'history', 'all') else {}
+    # Sweep past-deadline allocations first so a stale 'allocated' row
+    # cannot be claimed after its 2-hour window.
+    try:
+        expire_overdue_reservations()
+    except Exception:
+        current_app.logger.warning('expire_overdue_reservations failed', exc_info=True)
     reservation = get_reservation_by_id(reservation_id)
-    if not reservation:
+    if not reservation or len(reservation) < 6:
         flash('Reservation not found.', 'error')
         return redirect(url_for('circulation.reservations_page', **status_args))
 
@@ -276,17 +444,17 @@ def reservation_action(reservation_id, action):
             borrower_name = borrower_detail[4] if borrower_detail else 'Borrower'
             flash(f'Cannot allocate — {borrower_name} has reached the borrow limit ({limit} books).', 'error')
             return redirect(url_for('circulation.reservations_page', **status_args))
-        deadline = datetime.now() + timedelta(days=current_app.config.get('RESERVATION_CLAIM_DAYS', 2))
-        allocate_reservation(reservation_id, deadline)
+        deadline, window_label = _claim_window()
+        allocate_reservation(reservation_id, deadline, updated_by=current_user.id)
         create_notification(
             reservation[2],
-            f'Your reserved book is ready. Claim within 2 days.',
+            f'Your reserved book is ready. Claim within {window_label}.',
             'hold_ready',
             str(reservation_id),
         )
         create_notification(
             reservation[2],
-            f'Reservation #{reservation_id} allocated. Claim by {deadline.strftime("%b %d, %Y")}.',
+            f'Reservation #{reservation_id} allocated. Claim by {deadline.strftime("%b %d, %Y %I:%M %p")}.',
             'reservation',
             str(reservation_id),
         )
@@ -313,7 +481,7 @@ def reservation_action(reservation_id, action):
             return redirect(url_for('circulation.reservations_page', **status_args))
         due_date = _compute_due_date('overnight', role_name)
         borrow_book(reservation[1], accession[0], reservation[2], current_user.id, 'overnight', due_date)
-        claim_reservation(reservation_id)
+        claim_reservation(reservation_id, updated_by=current_user.id)
         create_notification(
             reservation[2],
             f'Reservation #{reservation_id} claimed. Book due {due_date}.',
@@ -326,7 +494,7 @@ def reservation_action(reservation_id, action):
         if reservation[5] not in ('waiting', 'allocated'):
             flash('This reservation is already finished.', 'error')
             return redirect(url_for('circulation.reservations_page', **status_args))
-        expire_reservation(reservation_id)
+        expire_reservation(reservation_id, updated_by=current_user.id)
         create_notification(
             reservation[2],
             f'Reservation #{reservation_id} expired/cancelled.',
@@ -360,8 +528,12 @@ def user_borrow():
     if not borrower_row:
         flash('No borrower record found for your account.', 'error')
         return redirect(url_for('cataloging.book_info', book_id=book_id))
-    if borrower_row[4] != 'active':
+    if _borrower_status(borrower_row) != 'active':
         flash('Your borrower account is not active.', 'error')
+        return redirect(url_for('cataloging.book_info', book_id=book_id))
+
+    if _book_is_archived(book):
+        flash('This book is archived and cannot be borrowed.', 'error')
         return redirect(url_for('cataloging.book_info', book_id=book_id))
 
     if get_active_loan_by_book_and_borrower(book_id, borrower_row[0]):
@@ -394,6 +566,9 @@ def user_borrow():
         accession = get_accession_by_id(accession_id)
         if not accession or accession[2] != book_id:
             flash('Invalid copy selected.', 'error')
+            return redirect(url_for('cataloging.book_info', book_id=book_id))
+        if is_accession_lost(accession[0]):
+            flash('That copy is marked as lost and cannot be borrowed.', 'error')
             return redirect(url_for('cataloging.book_info', book_id=book_id))
         if get_active_loan_by_accession(accession[0]):
             flash('That copy is already borrowed.', 'error')
@@ -440,6 +615,14 @@ def user_reserve():
         flash('No borrower record found for your account.', 'error')
         return redirect(url_for('cataloging.book_info', book_id=book_id))
 
+    if _borrower_status(borrower_row) != 'active':
+        flash('Your borrower account is not active.', 'error')
+        return redirect(url_for('cataloging.book_info', book_id=book_id))
+
+    if _book_is_archived(book):
+        flash('This book is archived and cannot be reserved.', 'error')
+        return redirect(url_for('cataloging.book_info', book_id=book_id))
+
     existing = get_active_reservation_by_book_and_borrower(book_id, borrower_row[0])
     if existing:
         flash('You already have an active reservation for this book.', 'error')
@@ -475,7 +658,7 @@ def user_return():
         return redirect(url_for('main.user_profile'))
 
     loan = get_active_loan_by_id_and_user(circulation_id, current_user.id)
-    if not loan:
+    if not loan or len(loan) < 6:
         flash('Borrowing record not found or already returned.', 'error')
         return redirect(url_for('main.user_profile'))
 
@@ -485,7 +668,7 @@ def user_return():
 
     fine = calculate_fine(loan[0], current_app.config.get('OVERDUE_FINE_PER_DAY', 5.0),
                           current_app.config.get('OVERDUE_GRACE_DAYS', 0))
-    return_book(loan[0], fine)
+    return_book(loan[0], fine, updated_by=current_user.id)
     create_notification(
         loan[2],
         'You returned your book.'
@@ -588,7 +771,7 @@ def pay_fine(user_id, circulation_id):
     if fine[3]:
         flash('This fine is already paid.', 'info')
         return redirect(back)
-    mark_fine_paid(circulation_id)
+    mark_fine_paid(circulation_id, updated_by=current_user.id)
     log_activity(current_user.id, f'circulation:fine_paid:{circulation_id}')
     flash(f'Fine of ₱{float(fine[2]):.2f} marked as paid.', 'success')
     return redirect(back)

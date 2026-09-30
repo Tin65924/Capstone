@@ -100,6 +100,19 @@ class TestAnalyticsPage:
         assert b'id="board"' not in resp.data
         assert b'exportDashboard' in resp.data
 
+    def test_export_buttons_use_per_tab_sections(self, librarian_client, mock_db):
+        """Each tab's Export Report targets its own sections; Export All is the union."""
+        mock_db['fetch_one'].return_value = (5,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics')
+        assert resp.status_code == 200
+        assert b'exportDashboard(COLLECTION_SECTIONS)' in resp.data
+        assert b'exportDashboard(LIBRARY_SECTIONS)' in resp.data
+        assert b'exportDashboard(DEPARTMENT_SECTIONS)' in resp.data
+        assert b'exportDashboard(ALL_DASHBOARD_SECTIONS)' in resp.data
+        assert b'borrowers_by_department' in resp.data
+        assert b'overdue_by_department' in resp.data
+
     def test_no_riverside_credit_line(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = (5,)
         mock_db['fetch_all'].return_value = []
@@ -176,7 +189,8 @@ class TestKpiJson:
         resp = librarian_client.get('/librarian/analytics/kpi?kpi_type=underutilized_titles&from=2026-01-01&to=2026-12-31')
         assert resp.status_code == 200
         params = mock_db['fetch_all'].call_args[0][1]
-        assert params == (date(2026, 1, 1), date(2026, 12, 31))
+        assert params[:2] == (date(2026, 1, 1), date(2026, 12, 31))
+        assert params[-1] == 10
 
     def test_kpi_json_utilization_rate(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [(10,), (2,)]
@@ -321,6 +335,58 @@ class TestDashboardExport:
                      if 'INSERT INTO analytics_cache' in c[0][0]]
         assert snapshots == ['books_borrowed_per_program']
 
+    def test_export_department_breakdowns(self, librarian_client, mock_db):
+        """Borrower/overdue-by-department charts are exportable sections."""
+        mock_db['fetch_all'].return_value = [('BSIT', 12)]
+        resp = librarian_client.post(
+            '/librarian/analytics/export',
+            data={'kpi_type': 'all', 'format': 'pdf',
+                  'kpi_types': 'borrowers_by_department,overdue_by_department'})
+        assert resp.status_code == 200
+        assert resp.data[:4] == b'%PDF'
+        snapshots = [c[0][1][0] for c in mock_db['execute'].call_args_list
+                     if 'INSERT INTO analytics_cache' in c[0][0]]
+        assert snapshots == ['borrowers_by_department', 'overdue_by_department']
+
+    def test_export_department_breakdowns_honor_program_filter(self, librarian_client, mock_db):
+        """Usage-scoped breakdowns filter by the selected program."""
+        mock_db['fetch_all'].return_value = [('BSIT', 12)]
+        resp = librarian_client.post(
+            '/librarian/analytics/export',
+            data={'kpi_type': 'all', 'format': 'pdf',
+                  'kpi_types': 'borrowers_by_department',
+                  'department': 'BSIT'})
+        assert resp.status_code == 200
+        assert resp.data[:4] == b'%PDF'
+        params = [c[0][1] for c in mock_db['fetch_all'].call_args_list]
+        assert any(p and 'BSIT' in p for p in params)
+
+    def test_export_department_leaderboard(self, librarian_client, mock_db):
+        """Department Leaderboard is an exportable department-tab section."""
+        mock_db['fetch_all'].return_value = [('BSIT', 12, 5, 1)]
+        resp = librarian_client.post(
+            '/librarian/analytics/export',
+            data={'kpi_type': 'all', 'format': 'pdf',
+                  'kpi_types': 'department_leaderboard'})
+        assert resp.status_code == 200
+        assert resp.data[:4] == b'%PDF'
+        snapshots = [c[0][1][0] for c in mock_db['execute'].call_args_list
+                     if 'INSERT INTO analytics_cache' in c[0][0]]
+        assert snapshots == ['department_leaderboard']
+
+    def test_export_department_leaderboard_honors_program_filter(
+            self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [('BSIT', 12, 5, 1)]
+        resp = librarian_client.post(
+            '/librarian/analytics/export',
+            data={'kpi_type': 'all', 'format': 'pdf',
+                  'kpi_types': 'department_leaderboard',
+                  'department': 'BSIT'})
+        assert resp.status_code == 200
+        assert resp.data[:4] == b'%PDF'
+        params = [c[0][1] for c in mock_db['fetch_all'].call_args_list]
+        assert any(p and 'BSIT' in p for p in params)
+
     def test_tab_style_export_list(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = (10,)
         mock_db['fetch_all'].return_value = []
@@ -350,6 +416,35 @@ class TestDashboardExport:
         resp = librarian_client.post('/librarian/analytics/export',
                                      data={'kpi_type': 'all', 'format': 'pdf',
                                            'kpi_types': 'not_a_real_kpi'})
+        assert resp.status_code == 200
+        assert resp.data[:4] == b'%PDF'
+
+    def test_export_escapes_markup_in_titles(self, librarian_client, mock_db):
+        """Titles with <...>/& must not 500 the PDF (reportlab XML parse)."""
+        mock_db['fetch_all'].return_value = [
+            ('A <b>Bold</b> Title & More', 'Auth <X>', 5),
+        ]
+        resp = librarian_client.post('/librarian/analytics/export',
+                                     data={'kpi_type': 'all', 'format': 'pdf',
+                                           'kpi_types': 'top_books'})
+        assert resp.status_code == 200
+        assert resp.data[:4] == b'%PDF'
+
+    def test_export_survives_snapshot_failure(self, librarian_client, mock_db):
+        """A failing analytics_cache write must not 500 the export."""
+        mock_db['fetch_all'].return_value = [('BSIT', 12)]
+
+        orig_execute = mock_db['execute']
+
+        def _fail_insert(query, params=None):
+            if 'INSERT INTO analytics_cache' in query:
+                raise Exception('cache db down')
+            return orig_execute(query, params) if callable(orig_execute) else []
+
+        mock_db['execute'].side_effect = _fail_insert
+        resp = librarian_client.post('/librarian/analytics/export',
+                                     data={'kpi_type': 'books_borrowed_per_program',
+                                           'format': 'pdf'})
         assert resp.status_code == 200
         assert resp.data[:4] == b'%PDF'
 
@@ -996,3 +1091,588 @@ class TestUsageDepartmentFilter:
         assert resp.data[:4] == b'%PDF'
         query, params = mock_db['fetch_all'].call_args[0]
         assert 'BSIT' in params and 'BSBA' in params
+
+
+class TestBookAnalyticsTab:
+    def test_tab_present_without_sidebar_page(self, librarian_client, mock_db):
+        """Book Analytics lives inside Reports & Analytics: a tab button and
+        panel, with no standalone book page or sidebar entry."""
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics')
+        assert resp.status_code == 200
+        assert b'data-rtab="book"' in resp.data
+        assert b'data-rtab-panel="book"' in resp.data
+        assert b'book_analytics_page' not in resp.data
+        assert librarian_client.get('/librarian/analytics/book').status_code == 404
+
+    def test_empty_until_book_picked(self, librarian_client, mock_db):
+        """No book_id -> empty state, and no per-book queries run."""
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics?tab=book')
+        assert resp.status_code == 200
+        assert b'id="book-empty"' in resp.data
+        assert b'id="book-status-lines"' not in resp.data
+        for c in mock_db['fetch_all'].call_args_list:
+            assert 'OR b.author ILIKE' not in c[0][0]
+            assert 'c.book_id = %s' not in c[0][0]
+
+    def test_blank_search_runs_no_book_query(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics?q=++&tab=book')
+        assert resp.status_code == 200
+        assert b'id="book-empty"' in resp.data
+        for c in mock_db['fetch_all'].call_args_list:
+            assert 'OR b.author ILIKE' not in c[0][0]
+
+    def test_search_lists_books(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = [(1, 'Clean Code', 'Robert Martin', 'Science', 2008)]
+        resp = librarian_client.get('/librarian/analytics?q=clean&tab=book')
+        assert resp.status_code == 200
+        assert b'Clean Code' in resp.data
+        assert b'Show Analytics' in resp.data
+        assert b'Copyright Date' in resp.data
+        assert b'2008' in resp.data
+        assert b'id="book-empty"' not in resp.data
+        # results grid + live suggestions are scrollable
+        assert b'max-h-[420px] overflow-y-auto' in resp.data
+        assert b'max-h-72 overflow-y-auto' in resp.data
+
+    def test_selected_book_shows_graphs_only(self, librarian_client, mock_db):
+        """Selected book renders graphs (status lines + bars), no KPI cards."""
+        mock_db['fetch_one'].return_value = (1, 'Clean Code', 'Robert Martin', 'Science', 3)
+        mock_db['fetch_all'].return_value = [(1, 'Clean Code', 'Robert Martin', 'Science')]
+        resp = librarian_client.get('/librarian/analytics?q=clean&book_id=1&tab=book')
+        assert resp.status_code == 200
+        assert b'id="book-status-lines"' in resp.data
+        assert b'renderBookStatusLines' in resp.data
+        assert b'Clean Code' in resp.data
+        # KPI cards are gone: graphs only (Return Rate still exists on the
+        # dashboard tabs, so assert on the removed book KPI grid instead)
+        assert b'id="book-traffic"' not in resp.data
+        assert b'Total Borrows' not in resp.data
+        assert b'Unique Borrowers' not in resp.data
+
+    def test_unknown_book_flashes_error(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = None
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics?book_id=999&tab=book')
+        assert resp.status_code == 200
+        assert b'Book not found' in resp.data
+
+    def test_tab_deep_link_script(self, librarian_client, mock_db):
+        """?tab=book reopens the tab after picker round-trips."""
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics')
+        assert resp.status_code == 200
+        assert b'book-traffic-data' in resp.data
+        assert b'renderBookTraffic' in resp.data
+        assert b"get('tab') === 'book'" in resp.data
+
+
+class TestBookAnalyticsJson:
+    def test_search_requires_login(self, client, mock_db):
+        assert client.get('/librarian/analytics/book/search?q=x').status_code == 302
+
+    def test_search_returns_results(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [(1, 'Clean Code', 'Robert Martin', 'Science')]
+        body = librarian_client.get('/librarian/analytics/book/search?q=clean').get_json()
+        assert body == {'results': [
+            {'book_id': 1, 'title': 'Clean Code',
+             'author': 'Robert Martin', 'category': 'Science'}]}
+
+    def test_search_blank_returns_empty(self, librarian_client, mock_db):
+        body = librarian_client.get('/librarian/analytics/book/search?q=').get_json()
+        assert body == {'results': []}
+        assert mock_db['fetch_all'].call_count == 0
+
+    def test_data_requires_login(self, client, mock_db):
+        assert client.get('/librarian/analytics/book/data?book_id=1').status_code == 302
+
+    def test_data_rejects_bad_id(self, librarian_client, mock_db):
+        assert librarian_client.get('/librarian/analytics/book/data').status_code == 400
+        assert librarian_client.get(
+            '/librarian/analytics/book/data?book_id=abc').status_code == 400
+
+    def test_data_404_for_missing_book(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = None
+        resp = librarian_client.get('/librarian/analytics/book/data?book_id=999')
+        assert resp.status_code == 404
+
+    def test_data_returns_traffic(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (1, 'Clean Code', 'Robert Martin', 'Science', 3),
+            (10,), (4,), (2,), (6,), (5,), (4.0,),
+            (2,),
+        ]
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics/book/data?book_id=1')
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body['book']['title'] == 'Clean Code'
+        assert body['overview']['total'] == 10
+        assert body['overview']['waiting'] == 2
+
+    def test_data_status_trends_aligned(self, librarian_client, mock_db):
+        """Per-status rows pivot into zero-filled series over shared dates."""
+        from datetime import date
+        mock_db['fetch_one'].side_effect = [
+            (1, 'Clean Code', 'Robert Martin', 'Science', 3),
+            (10,), (4,), (2,), (6,), (5,), (4.0,),
+            (0,),
+        ]
+        mock_db['fetch_all'].side_effect = [
+            [],  # trend
+            [],  # by program
+            [],  # by user type
+            [],  # copies
+            [],  # recent
+            [  # status rows
+                (date(2026, 5, 1), 'borrowed', 3),
+                (date(2026, 5, 2), 'borrowed', 1),
+                (date(2026, 5, 1), 'claimed', 2),
+                (date(2026, 5, 1), 'bogus', 9),
+            ],
+        ]
+        body = librarian_client.get('/librarian/analytics/book/data?book_id=1').get_json()
+        trends = body['status_trends']
+        assert trends['dates'] == ['2026-05-01', '2026-05-02']
+        by_key = {s['key']: s for s in trends['series']}
+        assert sorted(by_key) == ['allocated', 'borrowed', 'claimed', 'expired',
+                                  'overdue', 'returned', 'waiting']
+        assert by_key['borrowed']['values'] == [3, 1]
+        assert by_key['claimed']['values'] == [2, 0]
+        assert by_key['waiting']['values'] == [0, 0]
+        assert all('label' in s and 'color' in s for s in trends['series'])
+
+    def test_data_bounded_range_fills_empty_days(self, librarian_client, mock_db):
+        """Custom range: lone spikes render on the full daily axis, zero-filled."""
+        from datetime import date
+        mock_db['fetch_one'].side_effect = [
+            (1, 'Clean Code', 'Robert Martin', 'Science', 3),
+            (10,), (4,), (2,), (6,), (5,), (4.0,),
+            (0,),
+        ]
+        mock_db['fetch_all'].side_effect = [
+            [],  # trend
+            [],  # by program
+            [],  # by user type
+            [],  # copies
+            [],  # recent
+            [(date(2026, 5, 2), 'borrowed', 3)],  # status rows
+        ]
+        body = librarian_client.get(
+            '/librarian/analytics/book/data?book_id=1&preset=custom'
+            '&from=2026-05-01&to=2026-05-03').get_json()
+        trends = body['status_trends']
+        assert trends['dates'] == ['2026-05-01', '2026-05-02', '2026-05-03']
+        by_key = {s['key']: s for s in trends['series']}
+        assert by_key['borrowed']['values'] == [0, 3, 0]
+
+    def test_data_huge_range_falls_back_to_observed(self, librarian_client, mock_db):
+        """Absurd ranges skip the fill and keep observed dates only."""
+        from datetime import date
+        mock_db['fetch_one'].side_effect = [
+            (1, 'Clean Code', 'Robert Martin', 'Science', 3),
+            (10,), (4,), (2,), (6,), (5,), (4.0,),
+            (0,),
+        ]
+        mock_db['fetch_all'].side_effect = [
+            [], [], [], [], [],
+            [(date(2026, 5, 2), 'borrowed', 3)],
+        ]
+        body = librarian_client.get(
+            '/librarian/analytics/book/data?book_id=1&preset=custom'
+            '&from=2020-01-01&to=2026-12-31').get_json()
+        assert body['status_trends']['dates'] == ['2026-05-02']
+
+    def test_sparse_hint_in_template(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics')
+        assert resp.status_code == 200
+        assert b'Only one day with activity' in resp.data
+
+
+class TestBookAnalyticsModels:
+    def test_search_blank_runs_no_query(self, mock_db):
+        from app.analytics.models import search_books_for_analytics
+        assert search_books_for_analytics('   ') == []
+        assert mock_db['fetch_all'].call_count == 0
+
+    def test_search_filters_active_titles(self, mock_db):
+        from app.analytics.models import search_books_for_analytics
+        mock_db['fetch_all'].return_value = []
+        search_books_for_analytics('code')
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert "catalog_status = 'active'" in query
+        assert params == ('%code%', '%code%', '%code%', '%code%', '%code%', 10)
+        assert 'b.subject_classification ILIKE' in query
+        assert 'a.accession_number ILIKE' in query
+        assert 'b.year_published' in query
+
+    def test_overview_bad_id_returns_zeros(self, mock_db):
+        from app.analytics.models import book_traffic_overview
+        assert book_traffic_overview('nope') == (0, 0, 0, 0, 0, 0.0, 0.0)
+        assert mock_db['fetch_one'].call_count == 0
+
+    def test_overview_returns_tuple(self, mock_db):
+        from app.analytics.models import book_traffic_overview
+        mock_db['fetch_one'].side_effect = [
+            (10,), (4,), (2,), (6,), (5,), (4.0,)]
+        assert book_traffic_overview(1) == (10, 4, 2, 6, 5, 4.0, 60.0)
+
+    def test_book_trend_scoped_to_book(self, mock_db):
+        from datetime import date
+        from app.analytics.models import book_borrowings_trend
+        mock_db['fetch_all'].return_value = [(date(2026, 5, 1), 3)]
+        assert book_borrowings_trend(1) == [(date(2026, 5, 1), 3)]
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'c.book_id = %s' in query
+        assert params[0] == 1
+
+    def test_recent_circulation_shows_accession_number(self, mock_db):
+        """Recent circulation exposes Accession No., not the TXN id."""
+        from app.analytics.models import recent_circulation
+        mock_db['fetch_all'].return_value = []
+        recent_circulation()
+        query = mock_db['fetch_all'].call_args[0][0]
+        assert 'a.accession_number' in query
+        assert 'JOIN accession_log a ON a.accession_id = c.accession_id' in query
+        assert 'c.circulation_id' not in query
+
+    def test_book_status_trends_unions_circulation_and_reservations(self, mock_db):
+        from datetime import date
+        from app.analytics.models import book_status_trends
+        mock_db['fetch_all'].return_value = [(date(2026, 5, 1), 'borrowed', 3)]
+        assert book_status_trends(1) == [(date(2026, 5, 1), 'borrowed', 3)]
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'UNION ALL' in query
+        assert "transaction_type = 'borrow'" in query
+        assert "transaction_type = 'return'" in query
+        assert "transaction_status = 'overdue'" in query
+        assert 'reservation_queue' in query
+        assert 'reservation_status' in query
+        # book_id scopes all four legs (3 circulation + 1 reservation)
+        assert params[:4] == (1, 1, 1, 1)
+        assert 'ORDER BY day' in query
+
+    def test_book_status_trends_bad_id_runs_no_query(self, mock_db):
+        from app.analytics.models import book_status_trends
+        assert book_status_trends('nope') == []
+        assert mock_db['fetch_all'].call_count == 0
+
+
+class TestAnalyticsTabRefresh:
+    def test_circulation_tracking_rename(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (5,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics')
+        assert resp.status_code == 200
+        assert b'Circulation Tracking' in resp.data
+        assert b'Collection Tracking' not in resp.data
+
+    def test_hbars_show_top_10(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (5,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics')
+        assert resp.status_code == 200
+        assert b'slice(0, 10)' in resp.data
+
+    def test_expand_modal_present_on_all_tabs(self, librarian_client, mock_db):
+        """Every non-pie graph card gets an expand (open_in_full) button
+        popping the whole card + data into a modal."""
+        mock_db['fetch_one'].return_value = (5,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics')
+        assert resp.status_code == 200
+        assert b'id="chartExpandModal"' in resp.data
+        assert b'id="chartExpandBody"' in resp.data
+        assert b'expandAnalyticsCard' in resp.data
+        assert b'closeChartExpand' in resp.data
+        assert b'initChartExpand' in resp.data
+        assert b'open_in_full' in resp.data
+        # expandable list covers bar/line/table cards on every tab ...
+        assert b"var ids = ['condition-bars'," in resp.data
+        assert b"'book-top-under-body'" in resp.data
+        # ... but no donut (pie) container is in that expandable list
+        ids_start = resp.data.index(b'var ids = [')
+        ids_end = resp.data.index(b'];', ids_start)
+        assert b'donut' not in resp.data[ids_start:ids_end]
+        # recent collection status table is intentionally not expandable
+        assert b"'recent-collection-body'" not in resp.data[ids_start:ids_end]
+        # expanded modal drops the cloned card title (header already shows it)
+        # and scales charts/tables up
+        assert b"clone.querySelector('h3')" in resp.data
+        assert b'#chartExpandBody svg.w-full' in resp.data
+
+    def test_expand_modal_shows_full_data_scrollable(self, librarian_client, mock_db):
+        """Expanded modal re-renders full datasets with scrollable bars/tables."""
+        mock_db['fetch_one'].return_value = (5,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics')
+        assert resp.status_code == 200
+        assert b'function renderExpandFull' in resp.data
+        assert b'EXPAND_FULL_CAP' in resp.data
+        assert b'expand-scroll' in resp.data
+        assert b'recentCollectionHTML' in resp.data
+        assert b'recentCircHTML' in resp.data
+        assert b'renderConditionBarsInto' in resp.data
+
+    def test_status_trends_filter_present(self, librarian_client, mock_db):
+        """Status Trends card offers a filter button opening a checkbox modal."""
+        mock_db['fetch_one'].return_value = (1, 'Clean Code', 'Robert Martin', 'Science', 3)
+        mock_db['fetch_all'].return_value = [(1, 'Clean Code', 'Robert Martin', 'Science')]
+        resp = librarian_client.get('/librarian/analytics?q=clean&book_id=1&tab=book')
+        assert resp.status_code == 200
+        assert b'id="book-status-filter-btn"' in resp.data
+        assert b'id="statusFilterModal"' in resp.data
+        assert b'id="status-filter-list"' in resp.data
+        assert b'function openStatusFilterModal' in resp.data
+        assert b'function toggleBookStatus' in resp.data
+        assert b'function drawStatusLines' in resp.data
+        assert b'BOOK_STATUS_SELECTION' in resp.data
+        assert b'type="checkbox"' in resp.data
+
+
+class TestRequestAnalytics:
+    def test_top_requested_titles(self, mock_db):
+        from app.analytics.models import top_requested_titles
+        mock_db['fetch_all'].return_value = [('Data Science', 5)]
+        assert top_requested_titles() == [('Data Science', 5)]
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'FROM request_records' in query
+        assert params[-1] == 10
+
+    def test_top_requested_titles_scoped_by_date(self, mock_db):
+        from app.analytics.models import top_requested_titles
+        top_requested_titles('2026-01-01', '2026-12-31')
+        params = mock_db['fetch_all'].call_args[0][1]
+        assert params == ('2026-01-01', '2026-12-31', 10)
+
+    def test_requests_by_role_split(self, mock_db):
+        from app.analytics.models import requests_by_role_split
+        mock_db['fetch_all'].return_value = [('Data Science', 3, 2, 0, 5)]
+        assert requests_by_role_split() == [('Data Science', 3, 2, 0, 5)]
+        query = mock_db['fetch_all'].call_args[0][0]
+        assert 'JOIN roles r' in query
+        assert "FILTER (WHERE r.role_name = 'Student')" in query
+
+    def test_requests_trend(self, mock_db):
+        from app.analytics.models import requests_trend
+        from datetime import date
+        mock_db['fetch_all'].return_value = [(date(2026, 1, 5), 2)]
+        assert requests_trend() == [(date(2026, 1, 5), 2)]
+        query = mock_db['fetch_all'].call_args[0][0]
+        assert 'request_date::date' in query
+
+    def test_requests_by_program(self, mock_db):
+        from app.analytics.models import requests_by_program
+        mock_db['fetch_all'].return_value = [('BSIS', 4)]
+        assert requests_by_program() == [('BSIS', 4)]
+        query = mock_db['fetch_all'].call_args[0][0]
+        assert 'program_label' in query
+
+    def test_requests_by_program_scoped_by_department(self, mock_db):
+        from app.analytics.models import requests_by_program
+        requests_by_program(departments=['BSIS'])
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'BSIS' in params
+
+    def test_requests_by_status(self, mock_db):
+        from app.analytics.models import requests_by_status
+        mock_db['fetch_all'].return_value = [('pending_review', 3), ('approved', 1)]
+        assert requests_by_status() == [('pending_review', 3), ('approved', 1)]
+
+    def test_dashboard_json_includes_requests(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics/dashboard')
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert 'requests' in body
+        for key in ('total', 'pending', 'approved', 'rejected', 'procured',
+                    'top_titles', 'by_role', 'trend', 'by_program'):
+            assert key in body['requests']
+
+    def test_kpi_json_new_types(self, librarian_client, mock_db):
+        # kpi_json is intentionally limited to board-era VALID_KPIS, so the
+        # new request sections 400 there; they are served via chart_json,
+        # dashboard_json, and export instead.
+        mock_db['fetch_all'].return_value = []
+        for kpi in ('top_requested_titles', 'requests_by_role',
+                    'requests_trend', 'requests_by_program'):
+            resp = librarian_client.get(f'/librarian/analytics/kpi?kpi_type={kpi}')
+            assert resp.status_code == 400
+
+    def test_chart_json_new_names(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = []
+        for name in ('top_requested_titles', 'requests_by_role',
+                     'requests_trend', 'requests_by_program'):
+            resp = librarian_client.get(f'/librarian/analytics/chart?name={name}')
+            assert resp.status_code == 200
+            assert resp.get_json()['chart'] == name
+
+    def test_export_new_kpi_returns_pdf(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [('Data Science', 3, 2, 0, 5)]
+        resp = librarian_client.post('/librarian/analytics/export',
+                                     data={'kpi_type': 'requests_by_role', 'format': 'pdf'})
+        assert resp.status_code == 200
+        assert resp.content_type == 'application/pdf'
+        assert resp.data[:4] == b'%PDF'
+
+    def test_page_has_requests_tab(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (5,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics')
+        assert resp.status_code == 200
+        # Request charts live inside the Library Analytics tab (no separate tab,
+        # no "Book Requests" header card — headline counts live on the requests page).
+        assert b'data-rtab="requests"' not in resp.data
+        assert b'>Book Requests</h2>' not in resp.data
+        assert b'data-rtab-panel="library"' in resp.data
+        assert b'id="req-top-titles"' in resp.data
+        assert b'id="req-role-split"' in resp.data
+        assert b'id="req-trend-line"' in resp.data
+        assert b'id="req-by-program"' in resp.data
+        assert b'function paintRequests' in resp.data
+
+    def test_requests_cards_link_to_filtered_requests(self, librarian_client, mock_db):
+        """Top requested-title bars navigate to the requests page pre-searched."""
+        mock_db['fetch_one'].return_value = (5,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics')
+        assert resp.status_code == 200
+        # No KPI card row in analytics — headline counts live on the requests page.
+        assert b'id="requests-kpis"' not in resp.data
+        # url_for('requests.list_requests') resolves server-side into the JS const.
+        assert b'/librarian/requests' in resp.data
+        assert b'function reqTitleSearchLink' in resp.data
+        # hbars accepts optional link wiring (other callers unaffected).
+        assert b'limit, linkFn' in resp.data
+
+
+class TestBookHeaderDetails:
+    FULL_ROW = (1, 'Clean Code', 'Robert C. Martin', 'Software Engineering',
+                2008, 3, 'Prentice Hall', '1st', '978-0132350884',
+                'QA76.76.R63', 'Book', 'Agile craftsmanship handbook.')
+
+    def test_traffic_payload_carries_full_details(self, mock_db):
+        from app.analytics.routes import compute_book_traffic
+        mock_db['fetch_one'].return_value = self.FULL_ROW
+        mock_db['fetch_all'].return_value = []
+        traffic = compute_book_traffic(1, None, None)
+        assert traffic is not None
+        book = traffic['book']
+        assert book['publisher'] == 'Prentice Hall'
+        assert book['edition'] == '1st'
+        assert book['isbn'] == '978-0132350884'
+        assert book['call_number'] == 'QA76.76.R63'
+        assert book['material_type'] == 'Book'
+        assert book['description'] == 'Agile craftsmanship handbook.'
+        assert book['copies'] == 3
+
+    def test_short_legacy_rows_still_work(self, mock_db):
+        from app.analytics.routes import compute_book_traffic
+        mock_db['fetch_one'].return_value = (1, 'Clean Code', 'R. Martin', 'SE', 2008, 1)
+        mock_db['fetch_all'].return_value = []
+        traffic = compute_book_traffic(1, None, None)
+        assert traffic is not None
+        assert traffic['book']['publisher'] is None
+        assert traffic['book']['copies'] == 1
+
+    def test_header_renders_details_without_logo(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = self.FULL_ROW
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics?q=clean&book_id=1')
+        assert resp.status_code == 200
+        body = resp.data.decode()
+        assert 'insights</span>' not in body
+        for text in ('Prentice Hall', '978-0132350884', 'QA76.76.R63',
+                     'Agile craftsmanship handbook.', 'Call Number', 'ISBN'):
+            assert text in body, text
+
+
+class TestRequestChartsHostile:
+    @staticmethod
+    def _empty(mock_db):
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+
+    def test_chart_new_names_hostile(self, librarian_client, mock_db):
+        self._empty(mock_db)
+        urls = ['/librarian/analytics/chart?name=requests_by_role&department=<script>',
+                '/librarian/analytics/chart?name=requests_trend&preset=bogus',
+                '/librarian/analytics/chart?name=requests_by_program&department=' + 'x' * 500,
+                '/librarian/analytics/chart?name=top_requested_titles&preset=custom&from=zzz']
+        for url in urls:
+            assert librarian_client.get(url).status_code == 200, url[:80]
+
+    def test_export_new_sections_empty(self, librarian_client, mock_db):
+        self._empty(mock_db)
+        for kpi in ('top_requested_titles', 'requests_by_role',
+                    'requests_trend', 'requests_by_program',
+                    'department_leaderboard'):
+            resp = librarian_client.post('/librarian/analytics/export',
+                                         data={'kpi_type': kpi})
+            assert resp.status_code == 200, kpi
+            assert resp.data[:4] == b'%PDF'
+
+    def test_leaderboard_malformed_rows(self, librarian_client, mock_db):
+        mock_db['fetch_all'].return_value = [('BSIT', 5)]
+        resp = librarian_client.post('/librarian/analytics/export',
+                                     data={'kpi_type': 'department_leaderboard'})
+        assert resp.status_code == 200
+        assert resp.data[:4] == b'%PDF'
+
+    def test_dashboard_requests_partial(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].side_effect = [
+            [('pending_review', None)], [('T', None)], [('T', 1, None, 0, 1)],
+            [], [],
+        ]
+        resp = librarian_client.get('/librarian/analytics/dashboard')
+        assert resp.status_code == 200
+        assert 'requests' in resp.get_json()
+
+    def test_requests_by_program_pseudo(self, librarian_client, mock_db):
+        from urllib.parse import quote
+        mock_db['fetch_all'].return_value = []
+        for dept in ('Admin', 'Librarian', 'No program', '', '   ',
+                     'BSIS', 'Nope'):
+            url = ('/librarian/analytics/chart?name=requests_by_program'
+                   '&department=' + quote(dept))
+            resp = librarian_client.get(url)
+            assert resp.status_code == 200, dept
+
+
+class TestHeaderEdges:
+    FULL = (1, 'Clean Code', 'R. Martin', 'SE', 2008, 2, None, None,
+            None, None, None, None)
+
+    def test_null_new_columns(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = self.FULL
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics?q=c&book_id=1')
+        assert resp.status_code == 200
+        assert '—'.encode() in resp.data
+
+    def test_evil_description(self, librarian_client, mock_db):
+        evil = '<script>alert(1)</script>'
+        row = (1, 'T', 'A', 'C', 2020, 1, 'P', 'E', 'I', 'CN', 'B', evil)
+        mock_db['fetch_one'].return_value = row
+        mock_db['fetch_all'].return_value = []
+        body = librarian_client.get('/librarian/analytics?q=t&book_id=1').data.decode()
+        assert evil not in body
+
+    def test_evil_new_fields(self, librarian_client, mock_db):
+        evil = '"><img src=x onerror=alert(1)>'
+        row = (1, 'T', 'A', 'C', 2020, 1, evil, evil, evil, evil, 'B', 'D')
+        mock_db['fetch_one'].return_value = row
+        mock_db['fetch_all'].return_value = []
+        body = librarian_client.get('/librarian/analytics?q=t&book_id=1').data.decode()
+        assert evil not in body

@@ -100,14 +100,16 @@
                     <h2 class="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 dark:text-white leading-tight break-words">
                         {{ book[1] }}
                     </h2>
-                    <button class="text-slate-400 hover:text-amber-500 transition-colors shrink-0 mt-1" title="Save to favorites">
-                        <span class="material-symbols-outlined text-2xl sm:text-3xl">star</span>
-                    </button>
                 </div>
                 <p class="text-sm sm:text-lg text-slate-600 dark:text-slate-400 font-medium break-words">{{ book[2] }}</p>
             </div>
             <div class="flex flex-col items-stretch sm:items-end gap-3 sm:gap-4 w-full lg:w-auto lg:min-w-[240px]">
-                {% if any_available %}
+                {% if is_archived %}
+                <span class="inline-flex justify-center bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 px-3 sm:px-4 py-2 rounded font-bold uppercase tracking-wider text-[11px] sm:text-xs items-center gap-2 border border-slate-200 dark:border-slate-700">
+                    <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+                    Archived
+                </span>
+                {% elif any_available %}
                 <span class="inline-flex justify-center bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 sm:px-4 py-2 rounded font-bold uppercase tracking-wider text-[11px] sm:text-xs items-center gap-2 border border-green-200 dark:border-green-800">
                     <span class="w-2 h-2 rounded-full bg-green-500"></span>
                     Available in Library
@@ -171,9 +173,13 @@
             {% if is_available %}{% set ns.available = ns.available + 1 %}{% endif %}
         {% endfor %}
         {% set user_has_book = current_user.is_authenticated and (current_user.id|int in borrower_map.values()) %}
+        {% set is_archived = book|length > 11 and book[11] != 'active' %}
         <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div class="min-w-0">
-                {% if user_has_book %}
+                {% if is_archived %}
+                <p class="text-sm font-bold text-slate-900 dark:text-slate-100">This book is archived</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Archived titles are kept for records and cannot be borrowed or reserved.</p>
+                {% elif user_has_book %}
                 <p class="text-sm font-bold text-slate-900 dark:text-slate-100">You have this book borrowed</p>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Return your copy before borrowing it again.</p>
                 {% elif any_available %}
@@ -181,11 +187,20 @@
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">A copy is ready — you can borrow it now.</p>
                 {% else %}
                 <p class="text-sm font-bold text-slate-900 dark:text-slate-100">No copies available</p>
+                {% if accessions|length == 0 %}
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">No copies have been cataloged yet — reserve below and we'll notify you if one arrives.</p>
+                {% else %}
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">All {{ accessions|length }} cop{{ 'y' if accessions|length == 1 else 'ies' }} {{ 'is' if accessions|length == 1 else 'are' }} currently borrowed — reserve instead and we'll notify you.</p>
+                {% endif %}
                 {% endif %}
             </div>
             <div class="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-end shrink-0">
-                {% if current_user.is_authenticated %}
+                {% if is_archived %}
+                    <button type="button" disabled title="This book is archived and cannot be borrowed."
+                        class="px-5 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 text-sm font-bold cursor-not-allowed opacity-60">Borrow</button>
+                    <button type="button" disabled title="This book is archived and cannot be reserved."
+                        class="px-5 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 text-sm font-bold cursor-not-allowed opacity-60 flex items-center justify-center gap-1">Reserve <span class="material-symbols-outlined text-[18px]">bookmark_add</span></button>
+                {% elif current_user.is_authenticated %}
                     {% if user_has_book %}
                     <button type="button" disabled title="You already have a copy of this book borrowed."
                         class="px-5 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 text-sm font-bold cursor-not-allowed opacity-60">Borrowed</button>

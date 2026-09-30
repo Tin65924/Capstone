@@ -347,9 +347,9 @@
                             <td class="max-w-[180px]">
                                 <button type="button" onclick="toggleCopies('{{ book[0] }}', this)"
                                         class="flex items-center gap-1 w-full text-left group"
-                                        title="{{ book[13] if book[13] else 'No accession copies' }}">
+                                        title="{{ book[-1] if book[-1] else 'No accession copies' }}">
                                     <span class="material-symbols-outlined text-[16px] text-gray-400 group-hover:text-primary transition-colors">expand_more</span>
-                                    <span class="font-mono text-xs truncate">{{ book[13] if book[13] else '—' }}</span>
+                                    <span class="font-mono text-xs truncate">{{ book[-1] if book[-1] else '—' }}</span>
                                     {% if copies %}
                                     <span class="text-[10px] font-bold text-primary bg-primary/10 rounded-full px-1.5 py-0.5 ml-auto shrink-0">{{ copies|length }}</span>
                                     {% endif %}
@@ -478,7 +478,7 @@
                             <div class="text-[10px] font-bold uppercase text-gray-400">Accession</div>
                             <button type="button" onclick="toggleCopies('{{ book[0] }}-mobile', this)" class="flex items-center gap-1 w-full text-left mt-1">
                                 <span class="material-symbols-outlined text-[14px] text-gray-400">expand_more</span>
-                                <span class="font-mono text-xs truncate">{{ book[13] if book[13] else '—' }}</span>
+                                <span class="font-mono text-xs truncate">{{ book[-1] if book[-1] else '—' }}</span>
                                 {% if copies %}<span class="text-[10px] font-bold text-primary bg-primary/10 rounded-full px-1.5 py-0.5 ml-auto">{{ copies|length }}</span>{% endif %}
                             </button>
                         </div>
@@ -681,11 +681,11 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Title *</label>
-                        <input type="text" name="title" id="edit_title" required class="form-input">
+                        <input type="text" name="title" id="edit_title" required class="form-input" data-suggest="book_title">
                     </div>
                     <div>
                         <label class="form-label">Author *</label>
-                        <input type="text" name="author" id="edit_author" required class="form-input">
+                        <input type="text" name="author" id="edit_author" required class="form-input" data-suggest="book_author">
                     </div>
                     <div>
                         <label class="form-label">Material Type</label>
@@ -704,7 +704,7 @@
                     </div>
                     <div>
                         <label class="form-label">Publisher</label>
-                        <input type="text" name="publisher" id="edit_publisher" class="form-input">
+                        <input type="text" name="publisher" id="edit_publisher" class="form-input" data-suggest="book_publisher">
                     </div>
                     <div>
                         <label class="form-label">Year Published</label>
@@ -712,7 +712,7 @@
                     </div>
                     <div>
                         <label class="form-label">ISBN</label>
-                        <input type="text" name="isbn" id="edit_isbn" class="form-input">
+                        <input type="text" name="isbn" id="edit_isbn" class="form-input" data-suggest="book_isbn">
                     </div>
                     <div>
                         <label class="form-label">Call Number / LOC Class.</label>
@@ -720,7 +720,7 @@
                     </div>
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Category</label>
-                        <input type="text" name="subject_classification" id="edit_subject" class="form-input" placeholder="e.g. Computer Science">
+                        <input type="text" name="subject_classification" id="edit_subject" class="form-input" placeholder="e.g. Computer Science" data-suggest="book_subject">
                     </div>
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Description</label>

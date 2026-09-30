@@ -294,7 +294,7 @@
                 </div>
                 <div class="flex justify-between mt-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest px-2">
                     {% for d, cnt in daily %}
-                    <span>{{ d.strftime('%a') }}</span>
+                    <span>{{ d.strftime('%a') if d.strftime is defined else d }}</span>
                     {% else %}
                     <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
                     {% endfor %}
@@ -316,7 +316,7 @@
                                 <div class="text-[10px] text-gray-400">{{ a[2] }} '{{ a[3] }}'</div>
                             </div>
                         </div>
-                        <div class="text-[10px] text-gray-400 font-bold">{{ a[4].strftime('%b %d') if a[4] else '' }}</div>
+                        <div class="text-[10px] text-gray-400 font-bold">{{ a[4].strftime('%b %d') if a[4] and a[4].strftime is defined else (a[4] or '') }}</div>
                     </div>
                     {% endfor %}
                     {% else %}

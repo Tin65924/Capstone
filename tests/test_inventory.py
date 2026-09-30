@@ -121,7 +121,7 @@ class TestQuickCheck:
 
 class TestDamageAndLost:
     def test_mark_damaged(self, librarian_client, mock_db):
-        mock_db['fetch_one'].return_value = None
+        mock_db['fetch_one'].side_effect = [(10, 'ACC-001', 1), None]
 
         resp = librarian_client.post('/librarian/inventory/accession/1/damage', data={'notes': 'torn cover'})
 
@@ -130,7 +130,7 @@ class TestDamageAndLost:
         assert 'INSERT INTO inventory_status' in call_args[0][0]
 
     def test_mark_lost(self, librarian_client, mock_db):
-        mock_db['fetch_one'].return_value = None
+        mock_db['fetch_one'].return_value = (10, 'ACC-001', 1)
 
         resp = librarian_client.post('/librarian/inventory/accession/1/lost')
 

@@ -185,11 +185,19 @@ def search_books_filtered(query, field=None, year_from=None, year_to=None, sort_
             args.extend([pattern, pattern, pattern, pattern])
 
     if year_from:
-        conditions.append('year_published >= %s')
-        args.append(int(year_from))
+        try:
+            args.append(int(year_from))
+        except (TypeError, ValueError):
+            pass
+        else:
+            conditions.append('year_published >= %s')
     if year_to:
-        conditions.append('year_published <= %s')
-        args.append(int(year_to))
+        try:
+            args.append(int(year_to))
+        except (TypeError, ValueError):
+            pass
+        else:
+            conditions.append('year_published <= %s')
     if category:
         conditions.append('subject_classification = %s')
         args.append(category)
@@ -263,7 +271,7 @@ def get_accessions_by_book(book_id):
     return db.fetch_all(
         'SELECT * FROM accession_log WHERE book_id = %s ORDER BY accession_id',
         (book_id,)
-    )
+    ) or []
 
 
 def get_accession_by_number(accession_number):
@@ -287,13 +295,13 @@ def get_accessions_for_books(book_ids):
         'SELECT accession_id, accession_number, book_id, source, date_accessioned '
         'FROM accession_log WHERE book_id = ANY(%s) ORDER BY accession_id',
         (book_ids,)
-    )
+    ) or []
 
 
-def update_accession(accession_id, accession_number, source):
+def update_accession(accession_id, accession_number, source, updated_by=None):
     return db.execute(
-        'UPDATE accession_log SET accession_number=%s, source=%s WHERE accession_id=%s',
-        (accession_number, source, accession_id)
+        'UPDATE accession_log SET accession_number=%s, source=%s, updated_at=NOW(), updated_by=%s WHERE accession_id=%s',
+        (accession_number, source, updated_by, accession_id)
     )
 
 
@@ -334,14 +342,17 @@ def get_user_favorites(user_id):
 
 
 def update_book(book_id, title, author, edition, publisher, year_published,
-                subject_classification, call_number, isbn, material_type, description):
+                subject_classification, call_number, isbn, material_type, description,
+                updated_by=None):
     return db.execute(
         '''UPDATE book_catalog SET title=%s, author=%s, edition=%s, publisher=%s,
            year_published=%s, subject_classification=%s, call_number=%s,
-           isbn=%s, material_type=%s, description=%s
+           isbn=%s, material_type=%s, description=%s,
+           updated_at=NOW(), updated_by=%s
            WHERE book_id=%s''',
         (title, author, edition, publisher, year_published,
-         subject_classification, call_number, isbn, material_type, description, book_id)
+         subject_classification, call_number, isbn, material_type, description,
+         updated_by, book_id)
     )
 
 
@@ -356,10 +367,10 @@ def delete_book(book_id):
     db.execute('DELETE FROM book_catalog WHERE book_id = %s', (book_id,))
 
 
-def update_book_status(book_id, status):
+def update_book_status(book_id, status, updated_by=None):
     return db.execute(
-        'UPDATE book_catalog SET catalog_status=%s WHERE book_id=%s',
-        (status, book_id)
+        'UPDATE book_catalog SET catalog_status=%s, updated_at=NOW(), updated_by=%s WHERE book_id=%s',
+        (status, updated_by, book_id)
     )
 
 

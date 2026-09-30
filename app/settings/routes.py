@@ -45,6 +45,7 @@ def legacy_settings_redirect():
 def update_settings():
     errors = []
     updated = 0
+    updated_keys = []
     for key, (label, kind, _desc) in SETTING_DEFS.items():
         if kind == 'bool':
             # Toggle switches submit getlist values (checkbox '1' when
@@ -68,6 +69,7 @@ def update_settings():
                 continue
             update_setting(key, value, current_user.id)
             updated += 1
+            updated_keys.append(key)
             continue
         raw = request.form.get(key, '').strip()
         if raw == '':
@@ -97,6 +99,7 @@ def update_settings():
             continue
         update_setting(key, value, current_user.id)
         updated += 1
+        updated_keys.append(key)
     try:
         sync_settings_to_config(current_app)
     except Exception:
@@ -108,7 +111,8 @@ def update_settings():
         except Exception:
             pass
     if updated:
-        log_activity(current_user.id, f'settings:update:{updated}')
+        detail = f'settings:update:{updated}:{",".join(updated_keys)}'
+        log_activity(current_user.id, detail[:255])
     if errors:
         for err in errors:
             flash(err, 'error')

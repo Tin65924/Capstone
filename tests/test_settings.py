@@ -349,3 +349,111 @@ class TestRestoreToggle:
         mock_db['fetch_one'].side_effect = RuntimeError('db down')
         assert is_restore_enabled() is True  # fail open preserves restore
         mock_db['fetch_one'].side_effect = None
+
+
+class TestUpdateHostile:
+    @staticmethod
+    def _defs(mock_db):
+        mock_db['fetch_one'].return_value = None
+        mock_db['fetch_all'].return_value = []
+
+    def test_unknown_and_empty(self, admin_client, mock_db):
+        self._defs(mock_db)
+        for data in ({}, {'NOPE': '1'}, {'BACKUP_DAY': ''},
+                     {'BACKUP_DAY': '   '}):
+            assert admin_client.post('/admin/settings/update',
+                                     data=data).status_code == 302, data
+
+    def test_numeric_edges(self, admin_client, mock_db):
+        self._defs(mock_db)
+        for data in ({'BACKUP_DAY': '29'}, {'BACKUP_DAY': '0'},
+                     {'BACKUP_HOUR': '24'}, {'BACKUP_HOUR': '-1'},
+                     {'BACKUP_KEEP': '999999999'},
+                     {'BACKUP_DAY': '+5'}, {'BACKUP_DAY': '007'},
+                     {'MAX_BORROW_LIMIT_STUDENT': '1'},
+                     {'OVERDUE_FINE_PER_DAY': '-0.01'},
+                     {'OVERDUE_FINE_PER_DAY': 'junk'},
+                     {'OVERDUE_FINE_PER_DAY': '1e3'},
+                     {'BACKUP_RESTORE_ENABLED': 'maybe'},
+                     {'BACKUP_RESTORE_ENABLED': ''}):
+            assert admin_client.post('/admin/settings/update',
+                                     data=data).status_code == 302, data
+
+    def test_xss_value_flashed_escaped(self, admin_client, mock_db):
+        self._defs(mock_db)
+        evil = '<script>alert(1)</script>'
+        resp = admin_client.post('/admin/settings/update',
+                                 data={'BACKUP_DAY': evil},
+                                 follow_redirects=True)
+        assert resp.status_code == 200
+        assert evil not in resp.data.decode()
+
+    def test_all_valid_at_once(self, admin_client, mock_db):
+        self._defs(mock_db)
+        resp = admin_client.post('/admin/settings/update',
+                                 data={'BACKUP_DAY': '5', 'BACKUP_HOUR': '3',
+                                       'BACKUP_KEEP': '6',
+                                       'MAX_BORROW_LIMIT_STUDENT': '4',
+                                       'OVERDUE_FINE_PER_DAY': '7.5'})
+        assert resp.status_code == 302
+        writes = [c[0][1] for c in mock_db['execute'].call_args_list
+                  if 'library_settings' in c[0][0]]
+        # Only ADMIN_ONLY_KEYS persist here; circulation keys are rejected.
+        assert [w[0] for w in writes] == ['BACKUP_DAY', 'BACKUP_HOUR',
+                                          'BACKUP_KEEP']
+
+    def test_faculty_forbidden(self, faculty_client, mock_db):
+        assert faculty_client.post('/admin/settings/update',
+                                   data={'BACKUP_DAY': '5'}).status_code == 302
+
+    def test_get_on_update_rejected(self, admin_client):
+        assert admin_client.get('/admin/settings/update').status_code == 405
+
+
+class TestSyncEdges:
+    def test_junk_db_values(self, app):
+        from app.settings import models as m
+        samb = [(k, v) for k, v in
+                [('BACKUP_DAY', 'junk'), ('BACKUP_HOUR', None),
+                 ('MAX_BORROW_LIMIT_STUDENT', '2.9'),
+                 ('OVERDUE_FINE_PER_DAY', 'oops'),
+                 ('BACKUP_RESTORE_ENABLED', 'YES'),
+                 ('UNKNOWN_KEY', '1')]]
+        import app.settings.models as mm
+        orig = mm.get_settings_dict
+        mm.get_settings_dict = lambda: dict(samb)
+        try:
+            m.sync_settings_to_config(app)
+        finally:
+            mm.get_settings_dict = orig
+        assert app.config['BACKUP_DAY'] == 1
+        assert app.config['MAX_BORROW_LIMIT_STUDENT'] == 2
+
+    def test_restore_flag_variants(self, mock_db):
+        from app.settings.models import is_restore_enabled
+        for raw, expected in ((None, True), ('0', False), ('OFF', False),
+                              ('no', False), ('yes', True), ('', True),
+                              ('2', True)):
+            mock_db['fetch_one'].return_value = (raw,) if raw is not None else None
+            assert is_restore_enabled() is expected, raw
+
+    def test_missing_keys_use_defaults(self, mock_db):
+        from app.settings.models import get_setting, get_settings_dict
+        mock_db['fetch_all'].return_value = []
+        mock_db['fetch_one'].return_value = None
+        assert get_setting('BACKUP_DAY') == '1'
+        assert get_settings_dict()['BACKUP_DAY'] == '1'
+
+
+class TestPageEdges:
+    def test_empty_settings_table(self, admin_client, mock_db):
+        mock_db['fetch_one'].return_value = None
+        mock_db['fetch_all'].return_value = []
+        assert admin_client.get('/admin/settings').status_code == 200
+
+    def test_evil_stored_values_escaped(self, admin_client, mock_db):
+        evil = '"><img src=x onerror=alert(1)>'
+        mock_db['fetch_all'].return_value = [('BACKUP_DAY', evil, 'd', None)]
+        mock_db['fetch_one'].return_value = None
+        body = admin_client.get('/admin/settings').data.decode()
+        assert evil not in body

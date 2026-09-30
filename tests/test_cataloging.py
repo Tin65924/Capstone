@@ -275,7 +275,9 @@ class TestCatalogingCopies:
         assert 'mstatus=success' in resp.location
         call_args = mock_db['execute'].call_args_list[0]
         assert 'UPDATE accession_log' in call_args[0][0]
-        assert call_args[0][1] == ('ACC-0099', 'donation', 21)
+        assert 'updated_at' in call_args[0][0]
+        assert 'updated_by' in call_args[0][0]
+        assert call_args[0][1] == ('ACC-0099', 'donation', '3', 21)
 
     def test_edit_accession_duplicate(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [SAMPLE_ACC_ROW, (99, 'ACC-0099', 2, 3, '2025-01-01', 'purchase')]
@@ -668,6 +670,25 @@ class TestBulkImport:
             'file': _csv_file(csv_content),
         })
         self._assert_job(resp)
+
+    def test_bulk_import_runs_inline_without_worker_thread(
+            self, librarian_client, mock_db):
+        """No stray worker threads: under TESTING the import runs inline so
+        no thread outlives the mocked database (post-teardown crashes)."""
+        import threading
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
+        before = set(threading.enumerate())
+        resp = librarian_client.post('/librarian/cataloging/bulk-import', data={
+            'file': _csv_file(self._make_csv([self.VALID_ROW])),
+        })
+        self._assert_job(resp)
+        job_id = resp.get_json()['job_id']
+        status = librarian_client.get(
+            f'/librarian/cataloging/bulk-import/status/{job_id}').get_json()
+        assert status['status'] == 'done'
+        assert status['done'] == status['total'] == 1
+        assert set(threading.enumerate()) <= before
 
     def test_bulk_import_headers_random_order(self, librarian_client, mock_db):
         mock_db['execute'].return_value = [(1,)]

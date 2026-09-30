@@ -56,25 +56,62 @@ def _live_in_progress():
     return row
 
 
+def _busy_kind():
+    """'backup'/'restore' while a worker runs, else None.
+
+    Backups pre-insert an in_progress history row; restores do not (only
+    the in-memory job exists until the safety snapshot lands), so the
+    caller needs the kind to describe progress truthfully.
+    """
+    job = jobs.active_job()
+    if job is not None:
+        return job.get('kind') or 'backup'
+    if _live_in_progress() is not None:
+        return 'backup'
+    return None
+
+
 def _busy():
     """True while a backup/restore worker is running (memory or DB row)."""
-    return jobs.active_job() is not None or _live_in_progress() is not None
+    return _busy_kind() is not None
 
 
 def _backup_stats(logs):
-    completed = [row for row in logs if row[3] == 'completed']
-    total_size = sum((row[2] or 0) for row in completed)
+    def _status(row):
+        try:
+            return row[3]
+        except (IndexError, TypeError):
+            return None
+
+    def _size(row):
+        try:
+            return int(row[2] or 0)
+        except (IndexError, TypeError, ValueError):
+            return 0
+
+    def _created(row):
+        try:
+            return row[6]
+        except (IndexError, TypeError):
+            return None
+
+    completed = [row for row in logs if _status(row) == 'completed']
+    total_size = sum(_size(row) for row in completed)
     # The newest row may be an in_progress run — health is about the newest
     # *finished* backup, so look at completed rows only.
     last = completed[0] if completed else None
     # Healthy only when the newest run succeeded and is recent — a failed
     # latest run must show Warning, never Healthy.
     healthy = False
-    if last and last[3] == 'completed' and last[6]:
-        created = last[6]
+    if last and _status(last) == 'completed' and _created(last):
+        created = _created(last)
         if getattr(created, 'tzinfo', None) is None:
-            created = created.replace(tzinfo=timezone.utc)
-        healthy = (datetime.now(timezone.utc) - created) <= timedelta(days=35)
+            try:
+                created = created.replace(tzinfo=timezone.utc)
+            except (AttributeError, TypeError, ValueError):
+                created = None
+        if created is not None:
+            healthy = (datetime.now(timezone.utc) - created) <= timedelta(days=35)
     return {
         'count': len(completed),
         'total_size': total_size,
@@ -83,15 +120,28 @@ def _backup_stats(logs):
     }
 
 
+def _pad_backup_row(row, width=7):
+    """Pad short/legacy backup rows so positional template reads never crash."""
+    try:
+        items = list(row)
+    except TypeError:
+        return (None,) * width
+    if len(items) < width:
+        items = items + [None] * (width - len(items))
+    return tuple(items)
+
+
 @backup_bp.route('/admin/backup')
 @login_required
 @admin_required
 def backup_page():
-    logs = get_backup_logs()
+    logs = [_pad_backup_row(row) for row in (get_backup_logs() or [])]
     stats = _backup_stats(logs or [])
-    recovery_events = [row for row in (logs or []) if row[3] == 'failed'][:10]
+    recovery_events = [row for row in (logs or [])
+                       if len(row) > 3 and row[3] == 'failed'][:10]
     keep_n = current_app.config.get('BACKUP_KEEP', 12)
-    busy = _busy()
+    busy_kind = _busy_kind()
+    busy = busy_kind is not None
     last_job = None if busy else jobs.recent_finished_job()
     return render_template(
         'backup/backup.html',
@@ -100,6 +150,7 @@ def backup_page():
         recovery_events=recovery_events,
         keep_n=keep_n,
         busy=busy,
+        busy_kind=busy_kind,
         last_job=last_job,
         restore_enabled=is_restore_enabled(),
         # One-shot signal: the restore POST redirects here with the
@@ -149,7 +200,7 @@ def create_backup_route():
 @admin_required
 def download_backup(backup_id):
     row = get_backup_by_id(backup_id)
-    if not row:
+    if not row or len(row) < 2:
         flash('Backup not found.', 'error')
         return redirect(url_for('backup.backup_page'))
     try:
@@ -176,7 +227,7 @@ def restore_backup_route(backup_id):
         flash(_RESTORE_DISABLED_MSG, 'error')
         return redirect(url_for('backup.backup_page'))
     row = get_backup_by_id(backup_id)
-    if not row:
+    if not row or len(row) < 4:
         flash('Backup not found.', 'error')
         return redirect(url_for('backup.backup_page'))
     if row[3] != 'completed':
@@ -215,7 +266,7 @@ def delete_backup_route(backup_id):
         return jsonify({'error': 'A backup or restore is running — '
                                  'wait for it to finish before deleting.'}), 409
     row = get_backup_by_id(backup_id)
-    if not row:
+    if not row or len(row) < 2:
         return jsonify({'error': 'Backup not found.'}), 404
     try:
         path = resolve_backup_path(row[1])

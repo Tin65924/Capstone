@@ -12,6 +12,28 @@ DEFAULT_BACKUP_DIR = os.path.join(
     'backups',
 )
 
+# Dropped before every restore, inside the same single transaction as the
+# dump replay (psql runs -c options before --file). Removes every table
+# with CASCADE so the dump's own DROP CONSTRAINT list never has to be
+# dependency-complete:
+#   - pg_dump --clean emits one DROP CONSTRAINT per object known at
+#     backup time. If the live schema gained FKs afterwards (e.g. the
+#     *_updated_by columns added by schema.sql), replaying an older dump
+#     fails with "cannot drop constraint ... pkey because other objects
+#     depend on it" under ON_ERROR_STOP.
+#   - Dropping all tables up front makes the restore immune to that
+#     drift in either direction; the dump's DROPs become harmless
+#     IF EXISTS no-ops and its CREATEs rebuild the backup-time schema
+#     (run_schema re-adds newer columns/tables on next app start).
+# Tables (not the schema itself) are dropped to preserve schema
+# ownership/grants; owned sequences go away with their tables via CASCADE.
+_PG_PRECLEAN_TABLES = (
+    "DO $$DECLARE r RECORD; BEGIN "
+    "FOR r IN SELECT tablename FROM pg_tables WHERE schemaname='public' LOOP "
+    "EXECUTE 'DROP TABLE IF EXISTS public.' || quote_ident(r.tablename) || ' CASCADE'; "
+    "END LOOP; END$$;"
+)
+
 # A hung pg_dump/psql must fail loudly instead of freezing the UI forever.
 _SUBPROCESS_TIMEOUT = 600  # seconds
 
@@ -137,6 +159,10 @@ def restore_backup(filename):
     a false success. The dump's --clean --if-exists DROPs make this a true
     replace: rows added after the backup was taken are deleted.
 
+    A CASCADE pre-clean (_PG_PRECLEAN_TABLES) runs first in the same
+    transaction so older dumps replay cleanly even when the live schema
+    has since gained FKs the dump never knew to DROP (e.g. *_updated_by).
+
     Raises FileNotFoundError if the file is missing, ValueError on
     traversal, RuntimeError with captured psql stderr on failure.
     """
@@ -153,6 +179,9 @@ def restore_backup(filename):
              # Never wait forever on a table lock (e.g. another session's
              # idle transaction): fail with a clear error instead.
              '-c', "SET lock_timeout = '120s'",
+             # psql runs -c steps before --file, all inside the one
+             # --single-transaction: see _PG_PRECLEAN_TABLES.
+             '-c', _PG_PRECLEAN_TABLES,
              '--file=' + filepath],
             check=True,
             capture_output=True,

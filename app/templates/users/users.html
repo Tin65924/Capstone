@@ -243,20 +243,13 @@
             <div class="min-w-0">
                 {% if is_staff_view|default(false) %}
                 <h1 class="text-2xl sm:text-3xl font-bold font-outfit leading-tight">Staff Management</h1>
-                <p class="text-sm sm:text-base text-gray-500 mt-1">Manage librarians, faculty, and admin access.</p>
+                <p class="text-sm sm:text-base text-gray-500 mt-1">Manage librarian and faculty accounts.</p>
                 {% else %}
                 <h1 class="text-2xl sm:text-3xl font-bold font-outfit leading-tight">User Management</h1>
-                <p class="text-sm sm:text-base text-gray-500 mt-1">{% if is_admin_view|default(false) %}Control access roles and monitor all library accounts.{% else %}Control access roles and monitor library members (students and faculty).{% endif %}</p>
-                {% endif %}
-                {% if is_admin_view|default(false) %}
-                <div class="flex gap-2 mt-3">
-                    <a href="{{ url_for('auth.admin_users', status=status_filter, role=role_filter) }}" class="px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors {% if not scope %}bg-primary text-white border-primary{% else %}bg-white text-gray-600 border-gray-200 hover:border-primary{% endif %}">All</a>
-                    <a href="{{ url_for('auth.admin_users', scope='staff', status=status_filter, role=role_filter) }}" class="px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors {% if scope == 'staff' %}bg-primary text-white border-primary{% else %}bg-white text-gray-600 border-gray-200 hover:border-primary{% endif %}">Staff</a>
-                    <a href="{{ url_for('auth.admin_users', scope='members', status=status_filter, role=role_filter) }}" class="px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors {% if scope == 'members' %}bg-primary text-white border-primary{% else %}bg-white text-gray-600 border-gray-200 hover:border-primary{% endif %}">Members</a>
-                </div>
+                <p class="text-sm sm:text-base text-gray-500 mt-1">{% if scope == 'all' and is_admin_view|default(false) %}Control access roles and monitor all library accounts.{% else %}Control access roles and monitor library members (students and faculty).{% endif %}</p>
                 {% endif %}
             </div>
-            <div class="flex gap-2 sm:gap-3 shrink-0">
+                <div class="flex gap-2 sm:gap-3 shrink-0">
                 <a href="{{ url_for('circulation.user_history_list') }}"
                    class="inline-flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-bold rounded-lg border border-gray-200 bg-white text-gray-700 hover:border-primary hover:text-primary transition-colors">
                     <span class="material-symbols-outlined text-[16px] sm:text-[18px]">history</span> User History
@@ -269,7 +262,7 @@
         </div>
 
 
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-6 sm:mb-8 animate-in" style="animation-delay: 0.1s;">
+        <div class="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-2 sm:gap-4 mb-6 sm:mb-8 animate-in" style="animation-delay: 0.1s;">
             <a href="{{ url_for('auth.admin_users', scope=scope) }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if not status_filter and not role_filter %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">group</span></div>
@@ -285,6 +278,11 @@
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if role_filter == 'Student' %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">school</span></div>
                 <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Students</div><div class="text-base sm:text-xl font-bold">{{ students }}</div></div>
+            </a>
+            <a href="{{ url_for('auth.admin_users', scope=scope, role='Faculty') }}"
+               class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if role_filter == 'Faculty' %}ring-2 ring-primary{% endif %}">
+                <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">person</span></div>
+                <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Faculty</div><div class="text-base sm:text-xl font-bold">{{ faculty }}</div></div>
             </a>
             {% endif %}
             <a href="{{ url_for('auth.admin_users', scope=scope, status='disabled') }}"
@@ -379,7 +377,7 @@
                             <td class="font-mono text-xs">{{ p[5] or '—' }}</td>
                             <td><span class="badge badge-role">{{ p[3] }}</span></td>
                             <td class="text-gray-500">{{ p[6] or '—' }}</td>
-                            <td class="text-gray-500 text-sm">{{ p[4].strftime('%b %d, %Y') }}</td>
+                            <td class="text-gray-500 text-sm">{{ p[4].strftime('%b %d, %Y') if p[4] and p[4].strftime is defined else (p[4] or '') }}</td>
                             <td>
                                 <form method="POST" action="{{ url_for('auth.approve_user_route', user_id=p[0]) }}" style="display:inline">
                                     <button class="text-emerald-600 hover:text-emerald-800 text-sm font-bold flex items-center gap-1 px-3 py-1 rounded border border-emerald-200 hover:bg-emerald-50 transition-colors">
@@ -400,7 +398,7 @@
                     <div class="flex flex-wrap gap-1.5 mb-2">
                         <span class="badge badge-role text-[11px]">{{ p[3] }}</span>
                         <span class="text-[11px] text-gray-500">{{ p[6] or '—' }}</span>
-                        <span class="text-[11px] text-gray-400">{{ p[4].strftime('%b %d, %Y') }}</span>
+                        <span class="text-[11px] text-gray-400">{{ p[4].strftime('%b %d, %Y') if p[4] and p[4].strftime is defined else (p[4] or '') }}</span>
                     </div>
                     <form method="POST" action="{{ url_for('auth.approve_user_route', user_id=p[0]) }}">
                         <button class="w-full py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold hover:bg-emerald-100 flex items-center justify-center gap-1">
@@ -474,7 +472,7 @@
                             </td>
                             <td>
                                 <div class="flex gap-2 items-center">
-                                    {% if is_admin_view|default(false) %}
+                                    {% if is_admin_view|default(false) or current_user.role == 'Librarian' %}
                                     <button data-user-id="{{ u[0] }}" data-user-name="{{ u[2]|escape }}" data-user-idnum="{{ u[6] or '' }}" data-user-dept="{{ u[7] or '' }}" data-user-role="{{ u[3] }}"
                                         onclick="openEditModal(this)"
                                         class="btn-action hover:border-blue-500 hover:text-blue-500" title="Edit">
@@ -572,7 +570,7 @@
                         <span class="badge badge-role text-[11px]">{{ u[3] }}</span>
                     </div>
                     <div class="flex flex-wrap gap-1.5 mb-3">
-                        {% if is_admin_view|default(false) %}
+                        {% if is_admin_view|default(false) or current_user.role == 'Librarian' %}
                         <button data-user-id="{{ u[0] }}" data-user-name="{{ u[2]|escape }}" data-user-idnum="{{ u[6] or '' }}" data-user-dept="{{ u[7] or '' }}" data-user-role="{{ u[3] }}" onclick="openEditModal(this)" class="flex-1 py-2 rounded-lg border border-gray-200 bg-white text-xs font-bold flex items-center justify-center gap-1" title="Edit"><span class="material-symbols-outlined text-[16px]">edit</span> Edit</button>
                         {% endif %}
                         <a href="{{ url_for('circulation.user_history_detail', user_id=u[0]) }}" class="flex-1 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-bold flex items-center justify-center gap-1" title="View user history"><span class="material-symbols-outlined text-[16px]">history</span> History</a>
@@ -616,9 +614,24 @@
                 {% endfor %}
             </div>
         </div>
+        {% if total_pages > 1 %}
+        <div class="flex items-center justify-center gap-2 mb-6 flex-wrap">
+            <a href="{{ url_for('auth.admin_users', scope=scope, status=status_filter, role=role_filter, page=current_page - 1) if current_page > 1 else '#' }}"
+               class="px-4 py-2 rounded-lg text-sm font-bold border border-gray-200 {% if current_page <= 1 %}text-gray-300 pointer-events-none{% else %}text-gray-700 hover:bg-gray-50{% endif %}">
+                Previous
+            </a>
+            <span class="text-sm text-gray-500 px-2">
+                Page {{ current_page }} of {{ total_pages }}
+            </span>
+            <a href="{{ url_for('auth.admin_users', scope=scope, status=status_filter, role=role_filter, page=current_page + 1) if current_page < total_pages else '#' }}"
+               class="px-4 py-2 rounded-lg text-sm font-bold border border-gray-200 {% if current_page >= total_pages %}text-gray-300 pointer-events-none{% else %}text-gray-700 hover:bg-gray-50{% endif %}">
+                Next
+            </a>
+        </div>
+        {% endif %}
     </main>
 
-{% if is_admin_view|default(false) %}
+{% if is_admin_view|default(false) or current_user.role == 'Librarian' %}
 <div id="editModal" class="fixed inset-0 z-50 hidden bg-black/40 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-md mx-4 p-4 sm:p-6 animate-in max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between mb-6">

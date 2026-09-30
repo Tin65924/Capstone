@@ -109,26 +109,26 @@
                 <!-- Borrowings & Returns -->
                 <h2 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-2 sm:mb-3" style="">Borrowings &amp; Returns</h2>
                 <div class="space-y-3 sm:space-y-4 mb-8 sm:mb-10">
-                    {% for txn in transactions %}
-                    {% set returned = txn[5] == 'returned' %}
+                    {% for record in transactions %}
+                    {% set returned = record[5] == 'returned' %}
                     <div
                         class="bg-white dark:bg-[#1a2235] p-4 sm:p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                         <div class="min-w-0 flex-1">
-                            <h3 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white truncate" style="">{{ txn[7] }}</h3>
-                            <p class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm truncate" style="">{{ txn[8] }} · {{ txn[9] }}</p>
+                            <h3 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white truncate" style="">{{ record[7] }}</h3>
+                            <p class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm truncate" style="">{{ record[8] }} · {{ record[9] }}</p>
                         </div>
                         <div class="flex flex-wrap items-center gap-2 sm:gap-4 shrink-0">
                             <span class="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500"
                                 style="">
-                                {% if returned %}Returned {{ txn[3] }}{% else %}Due {{ txn[2] }}{% endif %}
+                                {% if returned %}Returned {{ record[3] }}{% else %}Due {{ record[2] }}{% endif %}
                             </span>
                             <span
-                                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold {% if returned %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400{% elif txn[5] == 'overdue' %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400{% else %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400{% endif %}"
+                                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold {% if returned %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400{% elif record[5] == 'overdue' %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400{% else %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400{% endif %}"
                                 style="">
-                                {% if returned %}Returned{% elif txn[5] == 'overdue' %}Overdue{% else %}Borrowed{% endif %}
+                                {% if returned %}Returned{% elif record[5] == 'overdue' %}Overdue{% else %}Borrowed{% endif %}
                             </span>
-                            {% if returned and txn[6] %}
-                            <span class="text-xs font-bold text-gray-500" style="">Fine ₱{{ txn[6] }}</span>
+                            {% if returned and record[6] %}
+                            <span class="text-xs font-bold text-gray-500" style="">Fine ₱{{ record[6] }}</span>
                             {% endif %}
                         </div>
                     </div>
@@ -151,7 +151,7 @@
                                 <h3 class="text-sm font-bold text-gray-900 dark:text-white truncate">{{ fine[5] }}</h3>
                                 <p class="text-xs text-gray-500 truncate">{{ fine[6] }} · Due {{ fine[2] }}{% if fine[3] %} · Returned {{ fine[3] }}{% endif %}</p>
                             </div>
-                            <span class="text-sm font-bold text-red-600 dark:text-red-400 shrink-0">₱{{ '%.2f'|format(fine[4]|float) }}</span>
+                            <span class="text-sm font-bold text-red-600 dark:text-red-400 shrink-0">₱{{ '%.2f'|format(fine[4]|float) if fine and fine|length > 4 else '—' }}</span>
                         </div>
                         {% else %}
                         <p class="text-sm text-gray-500 dark:text-gray-400">No fines. Keep returning books on time!</p>

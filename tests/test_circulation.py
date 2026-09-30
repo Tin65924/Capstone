@@ -1,6 +1,6 @@
 """Tests for the Circulation module: desk borrow/return, reservations, user borrow/reserve, RBAC, availability labels."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 
 class TestCirculationAccess:
@@ -49,7 +49,7 @@ class TestCirculationPage:
         assert resp.status_code == 200
         assert b'No borrower found' in resp.data
 
-    def test_stat_cards_link_to_sections(self, librarian_client, mock_db):
+    def test_stat_cards_link_to_filtered_borrowings(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [
             (2,),   # stats active loans
             (1,),   # stats overdue
@@ -58,12 +58,154 @@ class TestCirculationPage:
         mock_db['fetch_all'].return_value = []
         resp = librarian_client.get('/librarian/circulation')
         assert resp.status_code == 200
-        assert b'href="#all-borrowings"' in resp.data
-        assert b'href="#overdue-books"' in resp.data
-        assert b'href="#due-soon"' in resp.data
+        # One borrowings table; the stat cards deep-link into its filters.
         assert b'id="all-borrowings"' in resp.data
-        assert b'id="overdue-books"' in resp.data
-        assert b'id="due-soon"' in resp.data
+        assert b'loan_status=overdue' in resp.data
+        assert b'loan_status=due_soon' in resp.data
+        assert b'id="loan-filters"' in resp.data
+        assert b'name="q"' in resp.data
+        assert b'id="loan-filter-btn"' in resp.data
+        assert b'id="loan-filter-modal"' in resp.data
+        assert b'name="loan_type"' in resp.data
+        assert b'name="borrow_date"' in resp.data
+        # Body-level modal like the other modals: a fixed overlay nested
+        # inside the animated card would be clipped to the card instead of
+        # covering the whole screen.
+        assert resp.data.index(b'id="loan-filter-modal"') > resp.data.index(b'</main>')
+        # Modal fields still submit with the table search form.
+        assert b'form="loan-filters"' in resp.data
+        # Overdue / Due Soon are filters now, not separate tables.
+        assert b'id="overdue-books"' not in resp.data
+        assert b'id="due-soon"' not in resp.data
+
+
+class TestCirculationLoanFilters:
+    """All Borrowings filters: type, borrow date, overdue, due soon."""
+
+    @staticmethod
+    def _loan(cid=1, borrow=None, due=None, btype='overnight',
+              status='active', name='Alice', title='Book A', acc='ACC-1'):
+        return (cid, borrow, due, btype, status, name, 5, title, acc, 1)
+
+    def _page(self, librarian_client, mock_db, loans, query=''):
+        mock_db['fetch_one'].side_effect = [
+            (len(loans),),  # stats active loans
+            (0,),           # stats overdue
+            (0,),           # stats due soon
+        ]
+        mock_db['fetch_all'].side_effect = [loans, []]
+        return librarian_client.get('/librarian/circulation' + query)
+
+    def test_filter_overnight_only(self, librarian_client, mock_db):
+        loans = [
+            self._loan(1, date(2026, 8, 1), date(2099, 1, 1), 'overnight', 'active', 'Alice', 'Book A', 'ACC-1'),
+            self._loan(2, date(2026, 8, 1), date(2099, 1, 1), 'daily_circulation', 'active', 'Bob', 'Book B', 'ACC-2'),
+        ]
+        resp = self._page(librarian_client, mock_db, loans, '?loan_type=overnight')
+        assert resp.status_code == 200
+        assert b'ACC-1' in resp.data
+        assert b'ACC-2' not in resp.data
+
+    def test_filter_daily_only(self, librarian_client, mock_db):
+        loans = [
+            self._loan(1, date(2026, 8, 1), date(2099, 1, 1), 'overnight', 'active', 'Alice', 'Book A', 'ACC-1'),
+            self._loan(2, date(2026, 8, 1), date(2099, 1, 1), 'daily_circulation', 'active', 'Bob', 'Book B', 'ACC-2'),
+        ]
+        resp = self._page(librarian_client, mock_db, loans, '?loan_type=daily_circulation')
+        assert resp.status_code == 200
+        assert b'ACC-2' in resp.data
+        assert b'ACC-1' not in resp.data
+
+    def test_filter_overdue(self, librarian_client, mock_db):
+        loans = [
+            self._loan(1, date(2026, 8, 1), date.today() - timedelta(days=1), 'overnight', 'active', 'Alice', 'Book A', 'ACC-1'),
+            self._loan(2, date(2026, 8, 1), date(2099, 1, 1), 'overnight', 'active', 'Bob', 'Book B', 'ACC-2'),
+        ]
+        resp = self._page(librarian_client, mock_db, loans, '?loan_status=overdue')
+        assert resp.status_code == 200
+        assert b'ACC-1' in resp.data
+        assert b'ACC-2' not in resp.data
+        assert b'Overdue' in resp.data
+
+    def test_filter_due_soon(self, librarian_client, mock_db):
+        loans = [
+            self._loan(1, date(2026, 8, 1), date.today() + timedelta(days=1), 'overnight', 'active', 'Alice', 'Book A', 'ACC-1'),
+            self._loan(2, date(2026, 8, 1), date(2099, 1, 1), 'overnight', 'active', 'Bob', 'Book B', 'ACC-2'),
+        ]
+        resp = self._page(librarian_client, mock_db, loans, '?loan_status=due_soon')
+        assert resp.status_code == 200
+        assert b'ACC-1' in resp.data
+        assert b'ACC-2' not in resp.data
+        assert b'Due Soon' in resp.data
+
+    def test_filter_borrow_date(self, librarian_client, mock_db):
+        loans = [
+            self._loan(1, date(2026, 8, 1), date(2099, 1, 1), 'overnight', 'active', 'Alice', 'Book A', 'ACC-1'),
+            self._loan(2, date(2026, 8, 5), date(2099, 1, 1), 'overnight', 'active', 'Bob', 'Book B', 'ACC-2'),
+        ]
+        resp = self._page(librarian_client, mock_db, loans, '?borrow_date=2026-08-01')
+        assert resp.status_code == 200
+        assert b'ACC-1' in resp.data
+        assert b'ACC-2' not in resp.data
+
+    def test_invalid_filter_values_fall_back_to_all(self, librarian_client, mock_db):
+        loans = [
+            self._loan(1, date(2026, 8, 1), date(2099, 1, 1), 'overnight', 'active', 'Alice', 'Book A', 'ACC-1'),
+        ]
+        resp = self._page(librarian_client, mock_db, loans,
+                          '?loan_type=bogus&loan_status=bogus&borrow_date=not-a-date')
+        assert resp.status_code == 200
+        assert b'ACC-1' in resp.data
+
+    def test_no_match_shows_clear_filters(self, librarian_client, mock_db):
+        loans = [
+            self._loan(1, date(2026, 8, 1), date(2099, 1, 1), 'overnight', 'active', 'Alice', 'Book A', 'ACC-1'),
+        ]
+        resp = self._page(librarian_client, mock_db, loans, '?loan_status=overdue')
+        assert resp.status_code == 200
+        assert b'No borrowings match the selected filters' in resp.data
+
+    def test_table_search_matches_borrower(self, librarian_client, mock_db):
+        loans = [
+            self._loan(1, date(2026, 8, 1), date(2099, 1, 1), 'overnight', 'active', 'Alice', 'Book A', 'ACC-1'),
+            self._loan(2, date(2026, 8, 1), date(2099, 1, 1), 'overnight', 'active', 'Bob', 'Book B', 'ACC-2'),
+        ]
+        resp = self._page(librarian_client, mock_db, loans, '?q=alice')
+        assert resp.status_code == 200
+        assert b'ACC-1' in resp.data
+        assert b'ACC-2' not in resp.data
+
+    def test_table_search_matches_title_and_accession(self, librarian_client, mock_db):
+        loans = [
+            self._loan(1, date(2026, 8, 1), date(2099, 1, 1), 'overnight', 'active', 'Alice', 'Algorithms', 'ACC-1'),
+            self._loan(2, date(2026, 8, 1), date(2099, 1, 1), 'overnight', 'active', 'Bob', 'Databases', 'ACC-2'),
+        ]
+        resp = self._page(librarian_client, mock_db, loans, '?q=algo')
+        assert resp.status_code == 200
+        assert b'Algorithms' in resp.data
+        assert b'Databases' not in resp.data
+        resp = self._page(librarian_client, mock_db, loans, '?q=acc-2')
+        assert resp.status_code == 200
+        assert b'ACC-2' in resp.data
+        assert b'ACC-1' not in resp.data
+
+    def test_table_search_combines_with_modal_filters(self, librarian_client, mock_db):
+        loans = [
+            self._loan(1, date(2026, 8, 1), date(2099, 1, 1), 'overnight', 'active', 'Alice', 'Book A', 'ACC-1'),
+            self._loan(2, date(2026, 8, 1), date(2099, 1, 1), 'daily_circulation', 'active', 'Alice', 'Book B', 'ACC-2'),
+        ]
+        resp = self._page(librarian_client, mock_db, loans, '?q=alice&loan_type=daily_circulation')
+        assert resp.status_code == 200
+        assert b'ACC-2' in resp.data
+        assert b'ACC-1' not in resp.data
+
+    def test_table_search_no_match(self, librarian_client, mock_db):
+        loans = [
+            self._loan(1, date(2026, 8, 1), date(2099, 1, 1), 'overnight', 'active', 'Alice', 'Book A', 'ACC-1'),
+        ]
+        resp = self._page(librarian_client, mock_db, loans, '?q=zzz-no-such-loan')
+        assert resp.status_code == 200
+        assert b'No borrowings match the selected filters' in resp.data
 
 
 class TestDeskBorrow:
@@ -71,7 +213,10 @@ class TestDeskBorrow:
         mock_db['fetch_one'].side_effect = [
             (1, '2024-0001', 'CS', 'active', 'Test Student', 1, 'Student'),  # borrower details
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),              # accession
+            None,                                                            # not lost
+            None,                                                            # book lookup (active)
             None,                                                            # no active loan
+            None,                                                            # no waiting queue
             None,                                                            # no active loan for this book
             (0,),                                                            # count active loans
         ]
@@ -101,6 +246,8 @@ class TestDeskBorrow:
         mock_db['fetch_one'].side_effect = [
             (1, '2024-0001', 'CS', 'active', 'Test Student', 1, 'Student'),
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),
+            None,  # not lost
+            None,  # book lookup (active)
             (55, 10, 1, 1, 5, 'overnight', 'borrow', '2026-08-01', '2026-08-03', None, 0, None, False, 'active'),
         ]
         resp = librarian_client.post('/librarian/circulation/borrow', data={
@@ -115,7 +262,10 @@ class TestDeskBorrow:
         mock_db['fetch_one'].side_effect = [
             (1, '2024-0001', 'CS', 'active', 'Test Student', 1, 'Student'),
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),
-            None,
+            None,  # not lost
+            None,  # book lookup (active)
+            None,  # copy not on loan
+            None,  # no waiting queue
             None,  # no active loan for this book
             (3,),  # count active loans == student limit
         ]
@@ -131,7 +281,10 @@ class TestDeskBorrow:
         mock_db['fetch_one'].side_effect = [
             (1, '2024-0001', 'CS', 'active', 'Test Student', 1, 'Student'),
             (11, '2024-00124', 5, 1, '2024-01-10', 'purchase'),  # different copy, same book
+            None,                                                 # not lost
+            None,                                                 # book lookup (active)
             None,                                                 # this copy not on loan
+            None,                                                 # no waiting queue
             (55, 10, 1, 1, 5, 'overnight', 'borrow', '2026-08-01', '2026-08-03', None, 0, None, False, 'active'),  # already holds book 5
         ]
         resp = librarian_client.post('/librarian/circulation/borrow', data={
@@ -200,9 +353,11 @@ class TestReservationLifecycle:
         ]
         resp = librarian_client.post('/librarian/reservations/9/allocate')
         assert resp.status_code == 302
-        assert mock_db['execute'].call_count >= 2
-        notification_call = mock_db['execute'].call_args_list[1]
-        assert 'INSERT INTO notification_log' in notification_call[0][0]
+        # First execute is the expiry sweep, then allocate + 2 notifications.
+        assert mock_db['execute'].call_count >= 3
+        notif_calls = [c for c in mock_db['execute'].call_args_list
+                       if 'INSERT INTO notification_log' in c[0][0]]
+        assert notif_calls
 
     def test_allocate_rejected_when_no_available_copy(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [
@@ -211,19 +366,21 @@ class TestReservationLifecycle:
         ]
         resp = librarian_client.post('/librarian/reservations/9/allocate')
         assert resp.status_code == 302
-        assert mock_db['execute'].call_count == 0
+        # Only the expiry sweep runs; no allocate/notification writes.
+        assert mock_db['execute'].call_count == 1
+        assert 'claim_deadline' in mock_db['execute'].call_args_list[0][0][0]
 
     def test_allocate_rejected_when_not_waiting(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = (9, 5, 2, 1, '2026-08-01 10:00:00', 'claimed', None)
         resp = librarian_client.post('/librarian/reservations/9/allocate')
         assert resp.status_code == 302
-        assert mock_db['execute'].call_count == 0
+        assert mock_db['execute'].call_count == 1  # expiry sweep only
 
     def test_claim_requires_allocated(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None)
         resp = librarian_client.post('/librarian/reservations/9/claim')
         assert resp.status_code == 302
-        assert mock_db['execute'].call_count == 0
+        assert mock_db['execute'].call_count == 1  # expiry sweep only
 
     def test_claim_success(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [
@@ -235,10 +392,11 @@ class TestReservationLifecycle:
         ]
         resp = librarian_client.post('/librarian/reservations/9/claim')
         assert resp.status_code == 302
-        first_call = mock_db['execute'].call_args_list[0]
+        # [0] expiry sweep, [1] INSERT loan, [2] claim update.
+        first_call = mock_db['execute'].call_args_list[1]
         assert 'INSERT INTO circulation_records' in first_call[0][0]
         assert 'overnight' in first_call[0][1]
-        second_call = mock_db['execute'].call_args_list[1]
+        second_call = mock_db['execute'].call_args_list[2]
         assert "reservation_status = 'claimed'" in second_call[0][0]
 
     def test_claim_rejected_when_no_available_copy(self, librarian_client, mock_db):
@@ -248,7 +406,7 @@ class TestReservationLifecycle:
         ]
         resp = librarian_client.post('/librarian/reservations/9/claim')
         assert resp.status_code == 302
-        assert mock_db['execute'].call_count == 0
+        assert mock_db['execute'].call_count == 1  # expiry sweep only
 
     def test_claim_rejected_when_borrower_at_limit(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [
@@ -260,7 +418,7 @@ class TestReservationLifecycle:
         ]
         resp = librarian_client.post('/librarian/reservations/9/claim')
         assert resp.status_code == 302
-        assert mock_db['execute'].call_count == 0
+        assert mock_db['execute'].call_count == 1  # expiry sweep only
 
     def test_claim_rejected_when_already_holding_book(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [
@@ -271,7 +429,7 @@ class TestReservationLifecycle:
         ]
         resp = librarian_client.post('/librarian/reservations/9/claim')
         assert resp.status_code == 302
-        assert mock_db['execute'].call_count == 0
+        assert mock_db['execute'].call_count == 1  # expiry sweep only
 
     def test_allocate_rejected_when_borrower_at_limit(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [
@@ -283,7 +441,7 @@ class TestReservationLifecycle:
         ]
         resp = librarian_client.post('/librarian/reservations/9/allocate')
         assert resp.status_code == 302
-        assert mock_db['execute'].call_count == 0
+        assert mock_db['execute'].call_count == 1  # expiry sweep only
 
     def test_allocate_rejected_when_already_holding_book(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [
@@ -294,14 +452,17 @@ class TestReservationLifecycle:
         ]
         resp = librarian_client.post('/librarian/reservations/9/allocate')
         assert resp.status_code == 302
-        assert mock_db['execute'].call_count == 0
+        assert mock_db['execute'].call_count == 1  # expiry sweep only
 
     def test_expire_success(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', '2026-08-03 10:00:00')
         resp = librarian_client.post('/librarian/reservations/9/expire')
         assert resp.status_code == 302
-        call_args = mock_db['execute'].call_args_list[0]
-        assert "reservation_status = 'expired'" in call_args[0][0]
+        # Sweep + manual expire + notification (+ audit log).
+        assert mock_db['execute'].call_count >= 2
+        assert any("reservation_status = 'expired'" in c[0][0]
+                   and 'claim_deadline' not in c[0][0]
+                   for c in mock_db['execute'].call_args_list)
 
     def test_action_preserves_status_filter(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', '2026-08-03 10:00:00')
@@ -898,11 +1059,13 @@ class TestPayFine:
 
     def test_mark_fine_paid_sql(self, mock_db):
         from app.circulation.models import mark_fine_paid
-        mark_fine_paid(55)
+        mark_fine_paid(55, updated_by=3)
         query, params = mock_db['execute'].call_args[0]
         assert 'UPDATE circulation_records' in query
         assert 'fine_paid = TRUE' in query
-        assert params == (55,)
+        assert 'updated_at' in query
+        assert 'updated_by' in query
+        assert params == (3, 55)
 
     def test_unpaid_filter_in_fine_queries(self, mock_db):
         from app.circulation.models import get_fines_by_borrower, get_total_fines
