@@ -36,13 +36,14 @@ reused and no duplicates are created.
 Idempotent / safely rerunnable:
   * Books are matched on their natural key (title, author, isbn) —
     existing titles are reused, never duplicated.
-  * Seeded books carry a [SEED-BOOKS] marker in their description; reruns
-    count each seeded book's existing copies and only top up the shortfall
-    (same no-duplicate principle as the bulk-import worker in
+  * Reruns count each title's existing copies and only top up the
+    shortfall (same no-duplicate principle as the bulk-import worker in
     app/cataloging/routes.py).
-  * --reset removes ONLY rows created by this seeder (accessions belonging
-    to [SEED-BOOKS] titles, plus their dependent circulation/inventory rows
-    and catalog rows left with no copies), never user data.
+  * --reset wipes the whole book collection (all catalog rows, copies,
+    and their dependent circulation/inventory/reservation rows) so a
+    fresh database can be reseeded from scratch. Only use it when the
+    seeded data IS the collection — never once real circulation data
+    you care about exists.
 """
 
 import argparse
@@ -50,8 +51,7 @@ import os
 import re
 import sys
 
-SEED_MARKER = "[SEED-BOOKS]"
-SEED_LIBRARIAN_EMAIL = "seed-books@mcst.edu.ph"
+SEED_LIBRARIAN_EMAIL = "majenifer.labag@mcst.edu.ph"
 TARGET_COPIES = 5100  # >= 5,000 required; slight headroom for safety
 
 PROGRAMS = [
@@ -635,7 +635,7 @@ def ensure_seed_librarian(cur):
            VALUES (%s, %s, %s, %s, 'active')
            ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
            RETURNING user_id""",
-        (SEED_LIBRARIAN_EMAIL, "seed_books_oauth", "Seed Books Librarian", role_id),
+        (SEED_LIBRARIAN_EMAIL, "seed_books_oauth", "Majenifer Labag", role_id),
     )
     return cur.fetchone()[0]
 
@@ -650,37 +650,25 @@ def ensure_departments(cur):
 
 
 def reset_seed(cur):
-    """Delete ONLY rows created by this seeder: accessions belonging to
-    [SEED-BOOKS] titles (whatever their number format), then catalog rows
-    left with no copies."""
-    cur.execute(
-        """SELECT a.accession_id FROM accession_log a
-           JOIN book_catalog b ON b.book_id = a.book_id
-           WHERE b.description LIKE %s""",
-        ("%" + SEED_MARKER + "%",),
-    )
-    aids = [r[0] for r in cur.fetchall()]
-    if aids:
-        cur.execute(
-            "DELETE FROM circulation_records WHERE accession_id = ANY(%s)", (aids,)
-        )
-        print("removed %d seeded circulation rows" % cur.rowcount)
-        cur.execute(
-            "DELETE FROM inventory_status WHERE accession_id = ANY(%s)", (aids,)
-        )
-        print("removed %d seeded inventory rows" % cur.rowcount)
-        cur.execute(
-            "DELETE FROM accession_log WHERE accession_id = ANY(%s)", (aids,)
-        )
-        print("removed %d seeded accession rows" % cur.rowcount)
-    cur.execute(
-        """DELETE FROM book_catalog b
-           WHERE b.description LIKE %s
-             AND NOT EXISTS (SELECT 1 FROM accession_log a
-                             WHERE a.book_id = b.book_id)""",
-        ("%" + SEED_MARKER + "%",),
-    )
-    print("removed %d orphaned seeded catalog rows" % cur.rowcount)
+    """Wipe the whole book collection so a fresh database can be reseeded
+    from scratch. Deletes dependents first to satisfy foreign keys."""
+    cur.execute("DELETE FROM circulation_records")
+    print("removed %d circulation rows" % cur.rowcount)
+    cur.execute("DELETE FROM inventory_status")
+    print("removed %d inventory rows" % cur.rowcount)
+    cur.execute("DELETE FROM reservation_queue")
+    print("removed %d reservation rows" % cur.rowcount)
+    cur.execute("DELETE FROM user_favorites")
+    print("removed %d favorite rows" % cur.rowcount)
+    cur.execute("DELETE FROM procurement_log")
+    print("removed %d procurement rows" % cur.rowcount)
+    cur.execute("UPDATE request_records SET matched_book_id = NULL "
+                "WHERE matched_book_id IS NOT NULL")
+    print("unlinked %d request rows" % cur.rowcount)
+    cur.execute("DELETE FROM accession_log")
+    print("removed %d accession rows" % cur.rowcount)
+    cur.execute("DELETE FROM book_catalog")
+    print("removed %d catalog rows" % cur.rowcount)
 
 
 def _next_accession_seq(cur, prefix):
@@ -696,15 +684,14 @@ def _next_accession_seq(cur, prefix):
     return best + 1
 
 
-def _seeded_copy_counts(cur):
-    """Existing copy count per [SEED-BOOKS] title."""
+def _copy_counts(cur, book_ids):
+    """Existing copy count per title."""
+    if not book_ids:
+        return {}
     cur.execute(
-        """SELECT a.book_id, COUNT(*)
-           FROM accession_log a
-           JOIN book_catalog b ON b.book_id = a.book_id
-           WHERE b.description LIKE %s
-           GROUP BY a.book_id""",
-        ("%" + SEED_MARKER + "%",),
+        """SELECT book_id, COUNT(*) FROM accession_log
+           WHERE book_id = ANY(%s) GROUP BY book_id""",
+        (list(book_ids),),
     )
     return dict(cur.fetchall())
 
@@ -753,20 +740,26 @@ def seed(conn, target, prefix=""):
                    RETURNING book_id""",
                 (title, author, edition, publisher, year, subject,
                  call_number_for(program, n, year), isbn,
-                 "%s Recommended for %s. %s"
-                 % (blurb, PROGRAM_LABEL[program], SEED_MARKER)),
+                 "%s Recommended for %s."
+                 % (blurb, PROGRAM_LABEL[program])),
             )
             book_id = cur.fetchone()[0]
             book_by_key[key] = book_id
             titles_new += 1
         else:
             titles_reused += 1
+            # Strip the retired [SEED-BOOKS] tag if present from an older run.
+            cur.execute(
+                """UPDATE book_catalog SET description = REPLACE(description, ' [SEED-BOOKS]', '')
+                   WHERE book_id = %s AND description LIKE %s""",
+                (book_id, "%[SEED-BOOKS]%"),
+            )
         per_program[program][0] += 1
 
-    # Top up each seeded title to its planned copy count, numbering new
-    # copies sequentially from max(existing)+1 (0001, 0002, ... on a fresh
-    # DB). Reruns only fill shortfalls — never duplicates.
-    have = _seeded_copy_counts(cur)  # includes titles inserted above
+    # Top up each title to its planned copy count, numbering new copies
+    # sequentially from max(existing)+1 (0001, 0002, ... on a fresh DB).
+    # Reruns only fill shortfalls — never duplicates.
+    have = _copy_counts(cur, set(book_by_key.values()))
     seq = _next_accession_seq(cur, prefix)
     cur.execute("SELECT accession_number FROM accession_log")
     existing_acc = {r[0] for r in cur.fetchall()}
@@ -805,22 +798,6 @@ def seed(conn, target, prefix=""):
     total_titles = cur.fetchone()[0]
     cur.execute("SELECT COUNT(*) FROM accession_log")
     total_copies = cur.fetchone()[0]
-    cur.execute(
-        """SELECT COUNT(*) FROM accession_log a
-           JOIN book_catalog b ON b.book_id = a.book_id
-           WHERE b.description LIKE %s""",
-        ("%" + SEED_MARKER + "%",),
-    )
-    seeded_copies = cur.fetchone()[0]
-    cur.execute(
-        """SELECT b.book_id, b.subject_classification,
-                  (SELECT COUNT(*) FROM accession_log a
-                   WHERE a.book_id = b.book_id)
-           FROM book_catalog b WHERE b.description LIKE %s""",
-        ("%" + SEED_MARKER + "%",),
-    )
-    seeded_rows = cur.fetchall()
-    # Attribute seeded rows back to programs via subject match.
     cur.close()
     return {
         "titles_new": titles_new,
@@ -830,8 +807,6 @@ def seed(conn, target, prefix=""):
         "per_program": per_program,
         "total_titles": total_titles,
         "total_copies": total_copies,
-        "seeded_copies": seeded_copies,
-        "seeded_titles": len(seeded_rows),
     }
 
 
@@ -843,7 +818,9 @@ def main():
     ap.add_argument("--target", type=int, default=TARGET_COPIES,
                     help="Minimum physical copies (default %d)" % TARGET_COPIES)
     ap.add_argument("--reset", action="store_true",
-                    help="Delete prior seeded rows before seeding")
+                    help="WIPE the whole book collection (catalog, copies, "
+                         "and dependent rows) before seeding. Only for a "
+                         "fresh database.")
     ap.add_argument("--prefix", default="",
                     help="Accession-number prefix (default: none, i.e. "
                          "0001, 0002, ...). Use --prefix BKSEED- for the "
@@ -868,10 +845,8 @@ def main():
     print("\n=== Book seeder report ===")
     print("titles inserted: %d | titles reused: %d"
           % (report["titles_new"], report["titles_reused"]))
-    print("copies inserted: %d | copies skipped (already present): %d"
+    print("copies inserted: %d | copies already present: %d"
           % (report["copies_new"], report["copies_skipped"]))
-    print("seeded titles: %d | seeded copies: %d"
-          % (report["seeded_titles"], report["seeded_copies"]))
     print("DB totals: %d titles, %d copies"
           % (report["total_titles"], report["total_copies"]))
     print("\nPer program (titles handled / copies added this run):")
