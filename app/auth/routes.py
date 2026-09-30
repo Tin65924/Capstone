@@ -23,7 +23,8 @@ from .models import (
     get_user_record, audit_text,
     get_departments, is_valid_department, create_department,
     get_department_by_id, delete_department, count_borrowers_in_department,
-    get_profile_by_user, DEPT_TYPES, is_valid_any_department
+    get_profile_by_user, DEPT_TYPES, is_valid_any_department,
+    is_valid_id_number, normalize_id_number, ID_NUMBER_EXAMPLES, get_user_by_id_number
 )
 from .user import User
 from .decorators import librarian_required, admin_required
@@ -222,11 +223,20 @@ def role_select():
 
     if request.method == 'POST':
         role_name = request.form.get('role')
-        id_number = request.form.get('id_number', '').strip()
+        id_number = normalize_id_number(request.form.get('id_number', ''), role_name)
         department = request.form.get('department', '').strip()
 
         if role_name not in ('Student', 'Faculty'):
             return _render_register('Please select a valid role.')
+
+        if not is_valid_id_number(id_number, role_name):
+            example = ID_NUMBER_EXAMPLES.get(role_name, '')
+            return _render_register(
+                f'Invalid ID number for {role_name}. Use format {example}.'
+            )
+
+        if get_user_by_id_number(id_number):
+            return _render_register('This ID number is already registered.')
 
         # Students pick a Program, faculty pick a Department — strictly
         # from the controlled vocabulary so variants can't creep in.
@@ -666,7 +676,22 @@ def edit_user_route(user_id):
         profile = get_profile_by_user(user_id)
         role_name = profile[2] if profile else None
         current_dept = profile[6] if profile else None
+        current_id = profile[5] if profile and len(profile) > 5 else None
         has_borrower = bool(profile and len(profile) > 4 and profile[4] is not None)
+        if id_number and role_name in ID_NUMBER_EXAMPLES:
+            id_number = normalize_id_number(id_number, role_name)
+            # Unchanged value (e.g. legacy rows) stays editable; only new
+            # values must match the canonical per-role format.
+            if id_number != (current_id or ''):
+                if not is_valid_id_number(id_number, role_name):
+                    flash(f'Invalid ID number for {role_name}. Use format '
+                          f'{ID_NUMBER_EXAMPLES[role_name]}.', 'error')
+                    return redirect(url_for('auth.admin_users', modal='editModal',
+                                            user_id=user_id, mstatus='error'))
+                if get_user_by_id_number(id_number):
+                    flash('This ID number is already registered.', 'error')
+                    return redirect(url_for('auth.admin_users', modal='editModal',
+                                            user_id=user_id, mstatus='error'))
         if has_borrower and department != (current_dept or ''):
             if role_name in ('Student', 'Faculty'):
                 dept_type = 'program' if role_name == 'Student' else 'department'

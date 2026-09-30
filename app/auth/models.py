@@ -1,4 +1,41 @@
 from app.database import db
+import re
+
+
+# Canonical ID-number formats per role (strict):
+#   Student   0000-00000  e.g. 2024-00123
+#   Faculty   FAC-00000  e.g. FAC-00123
+#   Librarian LIB-00000  e.g. LIB-00123
+#   Admin     1-10       e.g. 7
+ID_NUMBER_PATTERNS = {
+    'Student': re.compile(r'^\d{4}-\d{5}$'),
+    'Faculty': re.compile(r'^FAC-\d{5}$'),
+    'Librarian': re.compile(r'^LIB-\d{5}$'),
+    'Admin': re.compile(r'^(10|[1-9])$'),
+}
+
+ID_NUMBER_EXAMPLES = {
+    'Student': '2024-00123 (format: 0000-00000)',
+    'Faculty': 'FAC-00123 (format: FAC-00000)',
+    'Librarian': 'LIB-00123 (format: LIB-00000)',
+    'Admin': '1-10 (e.g. 7)',
+}
+
+
+def normalize_id_number(id_number, role_name=None):
+    """Strip whitespace; uppercase FAC-/LIB- prefixes for staff."""
+    value = (id_number or '').strip()
+    if role_name in ('Faculty', 'Librarian') or value.upper().startswith(('FAC-', 'LIB-')):
+        return value.upper()
+    return value
+
+
+def is_valid_id_number(id_number, role_name):
+    """True when id_number matches the canonical format for role_name."""
+    pattern = ID_NUMBER_PATTERNS.get(role_name)
+    if not pattern:
+        return False
+    return bool(pattern.match(normalize_id_number(id_number, role_name)))
 
 
 def get_user_by_id(user_id):

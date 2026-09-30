@@ -55,7 +55,8 @@
                     <label for="id_number" class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">ID Number</label>
                     <input type="text" id="id_number" name="id_number" required
                            class="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors text-sm"
-                           placeholder="e.g. 2024-8192">
+                           placeholder="e.g. 2024-00123" pattern="\d{4}-\d{5}" title="Student format: 0000-00000 (e.g. 2024-00123)">
+                    <p id="id-hint" class="mt-2 text-xs text-slate-500 dark:text-slate-400">Select a role above to see the required ID format.</p>
                     <p data-exists-msg class="hidden mt-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm font-medium text-red-700 dark:text-red-300"></p>
                 </div>
                 <div id="program-wrap" class="hidden">
@@ -105,6 +106,12 @@
     var deptWrap = document.getElementById('department-wrap');
     var programSel = document.getElementById('program');
     var deptSel = document.getElementById('department');
+    var idInput = document.getElementById('id_number');
+    var idHint = document.getElementById('id-hint');
+    var FORMATS = {
+        Student: {placeholder: 'e.g. 2024-00123', pattern: '\\d{4}-\\d{5}', title: 'Student format: 0000-00000 (e.g. 2024-00123)', hint: 'Student ID format: 0000-00000 (e.g. 2024-00123)'},
+        Faculty: {placeholder: 'e.g. FAC-00123', pattern: 'FAC-[0-9]{5}', title: 'Faculty format: FAC-00000 (e.g. FAC-00123)', hint: 'Faculty ID format: FAC-00000 (e.g. FAC-00123)'}
+    };
     function sync() {
         var role = (document.querySelector('input[name="role"]:checked') || {}).value;
         var showProgram = role === 'Student';
@@ -115,6 +122,13 @@
         deptSel.disabled = !showDept;
         programSel.required = showProgram;
         deptSel.required = showDept;
+        if (FORMATS[role] && idInput) {
+            idInput.placeholder = FORMATS[role].placeholder;
+            idInput.pattern = FORMATS[role].pattern;
+            idInput.title = FORMATS[role].title;
+            if (role === 'Faculty') idInput.value = idInput.value.toUpperCase();
+            if (idHint) idHint.textContent = FORMATS[role].hint;
+        }
     }
     document.querySelectorAll('input[name="role"]').forEach(function (r) {
         r.addEventListener('change', sync);

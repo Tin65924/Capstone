@@ -666,6 +666,7 @@
                     <label class="text-xs font-bold uppercase tracking-wider text-gray-500">ID Number</label>
                     <input type="text" name="id_number" id="editIdNumber"
                         class="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+                    <p id="editIdHint" class="mt-1 text-[11px] text-gray-400"></p>
                 </div>
                 <div>
                     <label class="text-xs font-bold uppercase tracking-wider text-gray-500">Department</label>
@@ -725,6 +726,22 @@ function openEditModal(btn) {
     document.getElementById('editName').value = btn.getAttribute('data-user-name');
     document.getElementById('editIdNumber').value = btn.getAttribute('data-user-idnum');
     var role = btn.getAttribute('data-user-role');
+    var ID_FORMATS = {
+        Student: {placeholder: '2024-00123', pattern: '\\d{4}-\\d{5}', title: 'Student format: 0000-00000', hint: 'Format: 0000-00000 (e.g. 2024-00123)'},
+        Faculty: {placeholder: 'FAC-00123', pattern: 'FAC-[0-9]{5}', title: 'Faculty format: FAC-00000', hint: 'Format: FAC-00000 (e.g. FAC-00123)'},
+        Librarian: {placeholder: 'LIB-00123', pattern: 'LIB-[0-9]{5}', title: 'Librarian format: LIB-00000', hint: 'Format: LIB-00000 (e.g. LIB-00123)'},
+        Admin: {placeholder: '1-10', pattern: '(10|[1-9])', title: 'Admin format: 1-10', hint: 'Format: 1-10 (e.g. 7)'}
+    };
+    var idInput = document.getElementById('editIdNumber');
+    var idHint = document.getElementById('editIdHint');
+    if (ID_FORMATS[role]) {
+        idInput.placeholder = ID_FORMATS[role].placeholder;
+        idInput.pattern = ID_FORMATS[role].pattern;
+        idInput.title = ID_FORMATS[role].title;
+        if (idHint) idHint.textContent = ID_FORMATS[role].hint;
+    } else if (idHint) {
+        idHint.textContent = '';
+    }
     var current = btn.getAttribute('data-user-dept') || '';
     var list = role === 'Student' ? PROGRAM_NAMES : (role === 'Faculty' ? DEPARTMENT_NAMES : PROGRAM_NAMES.concat(DEPARTMENT_NAMES));
     var sel = document.getElementById('editDepartment');

@@ -205,7 +205,7 @@ class TestRoleSelect:
 
             resp = client.post('/login/role-select', data={
                 'role': 'Student',
-                'id_number': '2024-0001',
+                'id_number': '2024-00001',
                 'department': 'BSIS',
             })
             assert resp.status_code == 302
@@ -225,7 +225,7 @@ class TestRoleSelect:
 
             resp = client.post('/login/role-select', data={
                 'role': 'Student',
-                'id_number': '2024-0001',
+                'id_number': '2024-00001',
                 'department': 'Made Up Program',
             })
             assert resp.status_code == 200
@@ -247,7 +247,7 @@ class TestRoleSelect:
 
             resp = client.post('/login/role-select', data={
                 'role': 'Faculty',
-                'id_number': '2024-1001',
+                'id_number': 'FAC-10001',
                 'department': 'CS Department',
             })
             assert resp.status_code == 200
@@ -267,6 +267,72 @@ class TestRoleSelect:
         })
         assert resp.status_code == 200
         assert b'valid' in resp.data.lower() or b'error' in resp.data.lower()
+
+    def test_role_select_rejects_bad_student_id(self, client, mock_db):
+        with client.session_transaction() as sess:
+            sess['_google_oauth_data'] = {
+                'email': 'test@mcst.edu.ph',
+                'oauth_sub': 'sub-123',
+                'full_name': 'Test User',
+            }
+        resp = client.post('/login/role-select', data={
+            'role': 'Student',
+            'id_number': '2024-0001',
+            'department': 'BSIS',
+        })
+        assert resp.status_code == 200
+        assert b'invalid id' in resp.data.lower()
+        assert mock_db['execute'].call_count == 0
+
+    def test_role_select_rejects_bad_faculty_id(self, client, mock_db):
+        with client.session_transaction() as sess:
+            sess['_google_oauth_data'] = {
+                'email': 'faculty@mcst.edu.ph',
+                'oauth_sub': 'sub-789',
+                'full_name': 'Faculty User',
+            }
+        resp = client.post('/login/role-select', data={
+            'role': 'Faculty',
+            'id_number': '2024-10001',
+            'department': 'CS Department',
+        })
+        assert resp.status_code == 200
+        assert b'invalid id' in resp.data.lower()
+        assert mock_db['execute'].call_count == 0
+
+    def test_role_select_rejects_duplicate_id(self, client, mock_db):
+        with client.session_transaction() as sess:
+            sess['_google_oauth_data'] = {
+                'email': 'test@mcst.edu.ph',
+                'oauth_sub': 'sub-123',
+                'full_name': 'Test User',
+            }
+        mock_db['fetch_one'].return_value = (9, 'other@mcst.edu.ph', 'Student', 'Other')
+        resp = client.post('/login/role-select', data={
+            'role': 'Student',
+            'id_number': '2024-00001',
+            'department': 'BSIS',
+        })
+        assert resp.status_code == 200
+        assert b'already registered' in resp.data.lower()
+        assert mock_db['execute'].call_count == 0
+
+
+class TestIdNumberFormats:
+    def test_patterns(self):
+        from app.auth.models import is_valid_id_number
+        assert is_valid_id_number('2024-00001', 'Student')
+        assert not is_valid_id_number('2024-0001', 'Student')
+        assert not is_valid_id_number('FAC-00001', 'Student')
+        assert is_valid_id_number('FAC-00001', 'Faculty')
+        assert is_valid_id_number('fac-00001', 'Faculty')
+        assert not is_valid_id_number('2024-00001', 'Faculty')
+        assert is_valid_id_number('LIB-00001', 'Librarian')
+        assert not is_valid_id_number('LIB-001', 'Librarian')
+        assert is_valid_id_number('7', 'Admin')
+        assert is_valid_id_number('10', 'Admin')
+        assert not is_valid_id_number('11', 'Admin')
+        assert not is_valid_id_number('0', 'Admin')
 
 
 class TestDepartmentsManager:
