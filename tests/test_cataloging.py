@@ -471,6 +471,50 @@ class TestSqlPagination:
         assert resp.status_code == 200
 
 
+class TestFilterCombinations:
+    """Category + type filters must AND together (AND binds tighter than OR
+    in SQL, so the physical-type OR needs explicit parens)."""
+
+    def test_physical_or_is_parenthesized(self, mock_db):
+        from app.cataloging.models import search_books_filtered
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        search_books_filtered('', category='Fiction', material_type='physical')
+        page_q = mock_db['fetch_all'].call_args[0][0]
+        assert '(material_type IS NULL OR material_type != %s)' in page_q
+        count_q = mock_db['fetch_one'].call_args[0][0]
+        assert '(material_type IS NULL OR material_type != %s)' in count_q
+
+    def test_category_and_physical_both_bound(self, mock_db):
+        from app.cataloging.models import search_books_filtered
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        search_books_filtered('', category='Fiction', material_type='physical')
+        _, page_args = mock_db['fetch_all'].call_args[0]
+        assert 'Fiction' in page_args
+        assert 'E-Book' in page_args
+        assert page_args.index('Fiction') < page_args.index('E-Book')
+
+    def test_category_ebook_combines(self, mock_db):
+        from app.cataloging.models import search_books_filtered
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        search_books_filtered('', category='Fiction', material_type='ebook')
+        page_q, page_args = mock_db['fetch_all'].call_args[0]
+        assert 'subject_classification = %s' in page_q
+        assert 'material_type = %s' in page_q
+        assert tuple(page_args[:2]) == ('Fiction', 'E-Book')
+
+    def test_category_physical_route_renders(self, client, mock_db):
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].side_effect = [[], []]
+        resp = client.get('/catalog?category=Fiction&material_type=physical')
+        assert resp.status_code == 200
+        page_args = mock_db['fetch_all'].call_args_list[0][0]
+        assert 'Fiction' in page_args[1]
+        assert 'E-Book' in page_args[1]
+
+
 class TestPublicCatalog:
     def test_public_catalog_all(self, client, mock_db):
         # Bare /catalog is empty by default: only categories queried, no book search.

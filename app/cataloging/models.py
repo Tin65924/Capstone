@@ -293,7 +293,10 @@ def _filtered_where(query, field=None, year_from=None, year_to=None,
             conditions.append('material_type = %s')
             args.append('E-Book')
         elif material_type == 'physical':
-            conditions.append('material_type IS NULL OR material_type != %s')
+            # Parens are load-bearing: without them AND binds tighter than
+            # OR, so a combined category + physical filter would match every
+            # non-ebook row regardless of category.
+            conditions.append('(material_type IS NULL OR material_type != %s)')
             args.append('E-Book')
     DAILY_BLOCKED = (
         "(EXISTS (SELECT 1 FROM circulation_records c2 WHERE c2.book_id = book_catalog.book_id "
