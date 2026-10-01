@@ -54,6 +54,12 @@ def index():
     return render_template('public/index.html', new_arrivals=new_arrivals)
 
 
+@main_bp.route('/health')
+def health():
+    """Liveness probe for Render/uptime monitors. No auth, no DB."""
+    return jsonify({'status': 'ok'}), 200
+
+
 @main_bp.route('/dashboard')
 @login_required
 def dashboard():
