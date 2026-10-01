@@ -107,7 +107,7 @@
             <p class="text-sm sm:text-base text-gray-500 mt-2 font-medium">Hello, {{ current_user.full_name.split()[0] }}. Governance health for accounts, staff, collection, and backups.</p>
         </div>
 
-        <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4 mb-6 sm:mb-10 animate-in" style="animation-delay: 0.1s;">
+        <div class="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-4 mb-6 sm:mb-10 animate-in" style="animation-delay: 0.1s;">
             <a href="{{ url_for('auth.admin_users') }}" class="card block p-2 sm:p-4 cursor-pointer hover:border-primary/40">
                 <div class="text-indigo-500 mb-1"><span class="material-symbols-outlined">group</span></div>
                 <div class="stat-label">Total Users</div>
@@ -128,10 +128,15 @@
                 <div class="stat-label">Faculty</div>
                 <div class="stat-value">{{ stats.active_faculty }}</div>
             </div>
-            <a href="{{ url_for('cataloging.cataloging_page') }}" class="card block p-2 sm:p-4 cursor-pointer hover:border-primary/40">
+            <a href="{{ url_for('cataloging.cataloging_page') }}" title="View titles in Cataloging" class="card block p-2 sm:p-4 cursor-pointer hover:border-primary/40">
                 <div class="text-violet-500 mb-1"><span class="material-symbols-outlined">menu_book</span></div>
-                <div class="stat-label">Total Collection</div>
-                <div class="stat-value">{{ stats.total_collection }}</div>
+                <div class="stat-label break-words leading-tight">Total Collection per Title</div>
+                <div class="stat-value">{{ stats.total_titles|default(stats.total_collection) }}</div>
+            </a>
+            <a href="{{ url_for('cataloging.cataloging_page') }}" title="View copies in Cataloging" class="card block p-2 sm:p-4 cursor-pointer hover:border-primary/40">
+                <div class="text-blue-500 mb-1"><span class="material-symbols-outlined">layers</span></div>
+                <div class="stat-label break-words leading-tight">Total Collection per Accession</div>
+                <div class="stat-value">{{ stats.total_accessions|default(0) }}</div>
             </a>
             <a href="{{ url_for('backup.backup_page') }}" class="card block min-w-0 p-2 sm:p-4 cursor-pointer hover:border-primary/40">
                 <div class="text-slate-500 mb-1"><span class="material-symbols-outlined">settings_backup_restore</span></div>

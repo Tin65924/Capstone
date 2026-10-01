@@ -164,11 +164,14 @@ class TestDashboardAttention:
 
     def test_dashboard_stats_extended(self, mock_db):
         from app.main.models import get_dashboard_stats
-        mock_db['fetch_one'].side_effect = [(100,), (10,), (4,), (3,)]
+        mock_db['fetch_one'].side_effect = [(100,), (250,), (10,), (4,), (3,)]
         mock_db['fetch_all'].side_effect = [self.GROUPS, [], [(7,)]]
         stats = get_dashboard_stats()
         assert stats['reservations_waiting'] == 5
         assert stats['procurement_open'] == 1
+        assert stats['total_titles'] == 100
+        assert stats['total_accessions'] == 250
+        assert stats['total_collection'] == 100
 
     def test_waiting_reservations_skips_bad_rows(self, mock_db):
         from app.main.models import count_waiting_reservations
@@ -179,7 +182,7 @@ class TestDashboardAttention:
 
     def test_librarian_dashboard_shows_panel(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [
-            (100,), (10,), (4,), (3,), (10,), (3,), (1,),
+            (100,), (250,), (10,), (4,), (3,), (10,), (3,), (1,),
         ]
         mock_db['fetch_all'].side_effect = [
             self.GROUPS, [], [(7,)], [], [], self.PENDING, self.GROUPS,
@@ -193,6 +196,8 @@ class TestDashboardAttention:
         assert b'Waiting reservations' in resp.data
         assert b'Reservations' in resp.data
         assert b'To Order' in resp.data
+        assert b'Total Collection per Title' in resp.data
+        assert b'Total Collection per Accession' in resp.data
         assert b'/librarian/reservations' in resp.data
         assert b'/librarian/procurement' in resp.data
         assert b'/librarian/users' in resp.data

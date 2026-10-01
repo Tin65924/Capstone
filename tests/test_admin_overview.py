@@ -11,7 +11,7 @@ def _admin_ok(mock_db):
 class TestAdminOverviewStats:
     def test_keys_and_role_mapping(self, mock_db):
         from app.main.models import get_admin_overview_stats
-        mock_db['fetch_one'].side_effect = [(42,), (3,), (120,)]
+        mock_db['fetch_one'].side_effect = [(42,), (3,), (120,), (350,)]
         mock_db['fetch_all'].return_value = [
             ('Librarian', 4), ('Faculty', 6), ('Student', 30), ('Admin', 2),
         ]
@@ -24,11 +24,13 @@ class TestAdminOverviewStats:
             'active_students': 30,
             'active_admins': 2,
             'total_collection': 120,
+            'total_titles': 120,
+            'total_accessions': 350,
         }
 
     def test_skips_bad_role_rows(self, mock_db):
         from app.main.models import get_admin_overview_stats
-        mock_db['fetch_one'].side_effect = [(10,), (0,), (5,)]
+        mock_db['fetch_one'].side_effect = [(10,), (0,), (5,), (9,)]
         mock_db['fetch_all'].return_value = [
             ('Librarian', 2), ('short',), ('Faculty', 'x'),
         ]
@@ -58,7 +60,7 @@ class TestAdminOverviewStats:
 
 class TestAdminDashboardRoute:
     def _mock_overview(self, mock_db):
-        mock_db['fetch_one'].side_effect = [(42,), (3,), (120,)]
+        mock_db['fetch_one'].side_effect = [(42,), (3,), (120,), (350,)]
         mock_db['fetch_all'].side_effect = [
             [('Librarian', 4), ('Faculty', 6)],  # count_active_users_by_role
             [],  # get_pending_users
@@ -73,6 +75,8 @@ class TestAdminDashboardRoute:
         assert b'System Overview' in resp.data
         assert b'Total Users' in resp.data
         assert b'Pending Approvals' in resp.data
+        assert b'Total Collection per Title' in resp.data
+        assert b'Total Collection per Accession' in resp.data
         assert b'Backup Status' in resp.data
         assert b'Needs Attention' in resp.data
         assert b'Recent Admin Activity' in resp.data

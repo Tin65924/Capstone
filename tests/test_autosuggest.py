@@ -3,6 +3,8 @@ import pytest
 
 def _mock_fetch_all_by_query(mock_db):
     def side_effect(query, params=None):
+        if 'SELECT DISTINCT title, author' in query:
+            return [('The Great Gatsby', 'F. Scott Fitzgerald')]
         if 'UNION SELECT author' in query:
             return [('The Great Gatsby',), ('F. Scott Fitzgerald',), ('Literature',)]
         if 'WHERE title ILIKE' in query:
@@ -44,7 +46,23 @@ class TestSuggestions:
     def test_book_search_suggestions(self, client, mock_db):
         _mock_fetch_all_by_query(mock_db)
         resp = client.get('/api/suggestions?field=book_search&q=the')
-        assert resp.get_json()['suggestions'] == ['The Great Gatsby', 'F. Scott Fitzgerald', 'Literature']
+        body = resp.get_json()
+        assert body['suggestions'] == ['The Great Gatsby', 'F. Scott Fitzgerald', 'Literature']
+        assert body['rich'] == [{'title': 'The Great Gatsby', 'author': 'F. Scott Fitzgerald'}]
+
+    def test_book_search_rich_empty_when_no_pairs(self, client, mock_db):
+        mock_db['fetch_all'].side_effect = lambda q, p=None: (
+            [('Plain Title',)] if 'UNION SELECT author' in q else []
+        )
+        resp = client.get('/api/suggestions?field=book_search&q=the')
+        body = resp.get_json()
+        assert body['suggestions'] == ['Plain Title']
+        assert body['rich'] == []
+
+    def test_non_search_fields_have_no_rich_key(self, client, mock_db):
+        _mock_fetch_all_by_query(mock_db)
+        resp = client.get('/api/suggestions?field=book_title&q=the')
+        assert resp.get_json() == {'suggestions': ['The Great Gatsby', 'The Catcher in the Rye']}
 
     def test_empty_db_returns_empty(self, client, mock_db):
         resp = client.get('/api/suggestions?field=book_isbn&q=978')
@@ -53,6 +71,19 @@ class TestSuggestions:
     def test_autosuggest_js_served(self, client):
         resp = client.get('/static/js/autosuggest.js')
         assert resp.status_code == 200
+
+    def test_autosuggest_js_matches_analytics_style(self, client):
+        body = client.get('/static/js/autosuggest.js').data.decode()
+        assert 'rounded-xl shadow-xl' in body
+        assert 'hover:bg-blue-50/60' in body
+        assert 'font-bold' in body and 'truncate' in body
+
+    def test_home_search_has_suggest(self, client, mock_db):
+        mock_db['fetch_one'].return_value = None
+        mock_db['fetch_all'].return_value = []
+        body = client.get('/').data.decode()
+        assert 'data-suggest="book_search"' in body
+        assert 'js/autosuggest.js' in body
 
 
 class TestBookExists:

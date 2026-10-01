@@ -115,6 +115,22 @@ def suggest_book_values(field, prefix, limit=8):
     )
 
 
+def suggest_books_rich(prefix, limit=8):
+    """Title/author pairs for the analytics-style suggestion dropdown.
+
+    Returns [(title, author)] for active books whose title or author
+    matches the prefix — the same two-line row style as the Book
+    Analytics picker (bold title, author at right).
+    """
+    pattern = f'{prefix}%'
+    return db.fetch_all(
+        'SELECT DISTINCT title, author FROM book_catalog '
+        "WHERE catalog_status = 'active' AND (title ILIKE %s OR author ILIKE %s) "
+        'ORDER BY title LIMIT %s',
+        (pattern, pattern, limit)
+    )
+
+
 def get_all_books():
     """Active books only — archived books surface solely via get_books_by_status('archived')."""
     return db.fetch_all(

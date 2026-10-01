@@ -3,7 +3,7 @@ from datetime import date, datetime
 from flask_login import login_required, current_user
 from . import main_bp
 from .models import get_dashboard_stats, get_recent_activity, get_daily_borrows, get_attention_summary, get_admin_overview_stats
-from app.cataloging.models import get_recent_books, suggest_book_values, get_book_by_title_author_isbn
+from app.cataloging.models import get_recent_books, suggest_book_values, suggest_books_rich, get_book_by_title_author_isbn
 from app.auth.decorators import librarian_required, admin_required
 
 SUGGEST_FIELDS = {
@@ -356,7 +356,20 @@ def suggestions():
         rows = suggest_programs(q)
     else:
         rows = suggest_book_values(BOOK_FIELD_MAP[field], q)
-    return jsonify({'suggestions': [row[0] for row in rows if row and row[0]]})
+    payload = {'suggestions': [row[0] for row in rows if row and row[0]]}
+    if field == 'book_search':
+        # Rich title/author pairs for the analytics-style dropdown
+        # (bold title left, author right). Plain `suggestions` is kept
+        # so existing clients keep working.
+        try:
+            rich_rows = suggest_books_rich(q) or []
+        except Exception:
+            rich_rows = []
+        payload['rich'] = [
+            {'title': r[0], 'author': r[1] if len(r) > 1 else ''}
+            for r in rich_rows if r and r[0]
+        ]
+    return jsonify(payload)
 
 
 @main_bp.route('/api/book-exists')

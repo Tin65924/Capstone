@@ -100,9 +100,11 @@
     function getDropdown(input) {
         if (input._asBox) return input._asBox;
         var box = document.createElement('div');
-        box.className = 'as-box hidden fixed z-[9999] min-w-[200px] max-h-60 overflow-y-auto py-1 '
-            + 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 '
-            + 'rounded-lg shadow-lg';
+        // Same look as the Book Analytics picker (#book-suggest):
+        // rounded-xl card, shadow-xl, rows highlight blue on hover.
+        box.className = 'as-box hidden fixed z-[9999] min-w-[200px] max-h-72 overflow-y-auto '
+            + 'bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 '
+            + 'rounded-xl shadow-xl overflow-hidden text-sm';
         box.setAttribute('role', 'listbox');
         document.body.appendChild(box);
         input._asBox = box;
@@ -121,7 +123,9 @@
         if (!box) return;
         var items = box.querySelectorAll('.as-item');
         for (var i = 0; i < items.length; i++) {
-            items[i].classList.toggle('as-item-active', i === index);
+            var on = i === index;
+            items[i].classList.toggle('as-item-active', on);
+            items[i].classList.toggle('bg-blue-50/60', on);
         }
         var el = items[index];
         if (el) el.scrollIntoView({ block: 'nearest' });
@@ -143,37 +147,68 @@
         input.dispatchEvent(evt);
     }
 
-    function renderDropdown(input, suggestions) {
+    function highlightMatch(text, q, lowerQ) {
+        var idx = String(text).toLowerCase().indexOf(lowerQ);
+        if (idx < 0 || !q) return escHtml(text);
+        return escHtml(text.slice(0, idx)) + '<strong>'
+            + escHtml(text.slice(idx, idx + q.length)) + '</strong>'
+            + escHtml(text.slice(idx + q.length));
+    }
+
+    function renderDropdown(input, suggestions, rich) {
         var state = input._as;
         var box = getDropdown(input);
         box.innerHTML = '';
         var q = input.value.trim();
         var lowerQ = q.toLowerCase();
 
-        suggestions.forEach(function (s, i) {
-            var item = document.createElement('button');
-            item.type = 'button';
-            item.setAttribute('role', 'option');
-            item.className = 'as-item block w-full text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200';
-            var idx = s.toLowerCase().indexOf(lowerQ);
-            if (idx > -1) {
-                item.innerHTML = escHtml(s.slice(0, idx)) + '<strong>'
-                    + escHtml(s.slice(idx, idx + q.length)) + '</strong>'
-                    + escHtml(s.slice(idx + q.length));
-            } else {
-                item.textContent = s;
-            }
-            item.addEventListener('mousedown', function (e) {
-                e.preventDefault();
-                acceptSuggestion(input, s);
+        // Rich book rows (Book Analytics style): bold title left,
+        // author right. Clicking fills the input with the title.
+        if (rich && rich.length) {
+            rich.forEach(function (r, i) {
+                var item = document.createElement('button');
+                item.type = 'button';
+                item.setAttribute('role', 'option');
+                item.className = 'as-item flex items-center gap-2 px-3 py-2 hover:bg-blue-50/60 '
+                    + 'dark:hover:bg-slate-700/50 w-full text-left';
+                var titleEl = document.createElement('span');
+                titleEl.className = 'text-[13px] font-bold text-slate-700 dark:text-slate-200 truncate';
+                titleEl.innerHTML = highlightMatch(r.title, q, lowerQ);
+                var authorEl = document.createElement('span');
+                authorEl.className = 'text-[11px] text-slate-400 truncate ml-auto';
+                authorEl.textContent = r.author || '';
+                item.appendChild(titleEl);
+                item.appendChild(authorEl);
+                item.addEventListener('mousedown', function (e) {
+                    e.preventDefault();
+                    acceptSuggestion(input, r.title);
+                });
+                item.addEventListener('mouseenter', function () {
+                    setHighlight(input, i);
+                });
+                box.appendChild(item);
             });
-            item.addEventListener('mouseenter', function () {
-                setHighlight(input, i);
+            state.suggestions = rich.map(function (r) { return r.title; });
+        } else {
+            suggestions.forEach(function (s, i) {
+                var item = document.createElement('button');
+                item.type = 'button';
+                item.setAttribute('role', 'option');
+                item.className = 'as-item flex items-center gap-2 px-3 py-2 hover:bg-blue-50/60 '
+                    + 'dark:hover:bg-slate-700/50 w-full text-left text-sm text-slate-700 dark:text-slate-200';
+                item.innerHTML = highlightMatch(s, q, lowerQ);
+                item.addEventListener('mousedown', function (e) {
+                    e.preventDefault();
+                    acceptSuggestion(input, s);
+                });
+                item.addEventListener('mouseenter', function () {
+                    setHighlight(input, i);
+                });
+                box.appendChild(item);
             });
-            box.appendChild(item);
-        });
+            state.suggestions = suggestions;
+        }
 
-        state.suggestions = suggestions;
         state.highlight = 0;
         positionDropdown(input, box);
         box.classList.remove('hidden');
@@ -194,11 +229,12 @@
             .then(function (data) {
                 if (normalize(input.value.trim()) !== requested || document.activeElement !== input) return;
                 var list = data.suggestions || [];
-                if (!list.length) {
+                var rich = data.rich || [];
+                if (!rich.length && !list.length) {
                     closeDropdown(input);
                     return;
                 }
-                renderDropdown(input, list);
+                renderDropdown(input, list, rich);
             })
             .catch(function () { closeDropdown(input); });
     }

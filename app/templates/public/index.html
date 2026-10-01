@@ -16,7 +16,7 @@
                 </div>
                 <input name="q"
                     class="block w-full rounded-xl border-0 py-3 sm:py-4 pl-10 sm:pl-12 pr-24 sm:pr-36 text-gray-900 dark:text-white ring-1 ring-inset ring-gray-300 dark:ring-gray-700 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary bg-gray-50 dark:bg-gray-800 text-sm sm:text-lg sm:leading-6 shadow-sm transition-shadow"
-                    placeholder="Search by title, author, or ISBN..." type="text">
+                    placeholder="Search by title, author, or ISBN..." type="text" data-suggest="book_search" autocomplete="off">
                 <div class="absolute inset-y-0 right-0 flex py-1.5 sm:py-2 pr-1.5 sm:pr-2">
                     <button type="submit"
                         class="inline-flex items-center justify-center rounded-lg bg-primary px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-sm hover:bg-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 whitespace-nowrap">
@@ -66,6 +66,7 @@
             document.getElementById('searchField').value = btn.getAttribute('data-field');
         });
         </script>
+        <script src="{{ url_for('static', filename='js/autosuggest.js') }}"></script>
     </div>
 </section>
 <main class="flex-grow layout-container w-full max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
