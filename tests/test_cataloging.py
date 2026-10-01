@@ -407,6 +407,70 @@ class TestCopyStatusFilter:
         assert '/user/profile' in resp.location
 
 
+class TestSqlPagination:
+    """Perf regression tests: page views must page in SQL (COUNT + LIMIT /
+    OFFSET), never materialize the whole catalog in Python."""
+
+    def test_filtered_search_pages_in_sql(self, mock_db):
+        from app.cataloging.models import search_books_filtered
+        mock_db['fetch_one'].return_value = (120,)
+        mock_db['fetch_all'].return_value = SAMPLE_BOOKS[:1]
+        rows, total = search_books_filtered('harry', page=2, per_page=50)
+        assert total == 120
+        assert rows == SAMPLE_BOOKS[:1]
+        count_q = mock_db['fetch_one'].call_args[0][0]
+        assert 'COUNT(*)' in count_q
+        page_q, page_args = mock_db['fetch_all'].call_args[0]
+        assert 'LIMIT %s OFFSET %s' in page_q
+        assert page_args[-2:] == (50, 50)
+
+    def test_filtered_search_clamps_bad_page(self, mock_db):
+        from app.cataloging.models import search_books_filtered
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        rows, total = search_books_filtered('x', page=-3, per_page=50)
+        assert (rows, total) == ([], 0)
+        assert mock_db['fetch_all'].call_args[0][1][-2:] == (50, 0)
+
+    def test_staff_list_pages_in_sql(self, mock_db):
+        from app.cataloging.models import (
+            get_all_books_paginated, get_books_by_status_paginated,
+            get_books_by_copy_status_paginated,
+        )
+        mock_db['fetch_one'].return_value = (4500,)
+        mock_db['fetch_all'].return_value = SAMPLE_BOOKS[:1]
+        rows, total = get_all_books_paginated(page=1, per_page=20)
+        assert total == 4500
+        assert 'LIMIT %s OFFSET %s' in mock_db['fetch_all'].call_args[0][0]
+        rows, total = get_books_by_status_paginated('archived', page=2, per_page=20)
+        assert total == 4500
+        assert mock_db['fetch_all'].call_args[0][1][-2:] == (20, 20)
+        rows, total = get_books_by_copy_status_paginated('overdue', page=1, per_page=20)
+        assert total == 4500
+        assert 'EXISTS' in mock_db['fetch_all'].call_args[0][0]
+
+    def test_staff_copy_status_unknown_returns_empty(self, mock_db):
+        from app.cataloging.models import get_books_by_copy_status_paginated
+        assert get_books_by_copy_status_paginated('bogus') == ([], 0)
+        assert mock_db['fetch_one'].call_count == 0
+        assert mock_db['fetch_all'].call_count == 0
+
+    def test_staff_route_clamps_past_end_page(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (3,)
+        mock_db['fetch_all'].return_value = SAMPLE_BOOKS
+        resp = librarian_client.get('/librarian/cataloging?page=99')
+        assert resp.status_code == 200
+
+    def test_public_route_clamps_past_end_page(self, client, mock_db):
+        mock_db['fetch_one'].return_value = (3,)
+        mock_db['fetch_all'].side_effect = [
+            SAMPLE_BOOKS, [],  # page 99 attempt + categories
+            SAMPLE_BOOKS, [],  # clamped page 1 re-fetch + categories
+        ]
+        resp = client.get('/catalog?q=harry&page=99')
+        assert resp.status_code == 200
+
+
 class TestPublicCatalog:
     def test_public_catalog_all(self, client, mock_db):
         # Bare /catalog is empty by default: only categories queried, no book search.
@@ -470,8 +534,9 @@ class TestPublicCatalog:
              None, 'active', '2024-01-01')
             for i in range(1, 121)
         ]
+        mock_db['fetch_one'].return_value = (120,)
         mock_db['fetch_all'].side_effect = [
-            many_books,                  # search_books_filtered books (120)
+            many_books[:50],             # search_books_filtered page 1
             [],                          # get_distinct_categories
         ]
         # Empty catalog by default — must provide a search/filter to paginate
@@ -481,7 +546,8 @@ class TestPublicCatalog:
         assert '>1 - 50</span> of <span class="font-medium text-slate-900 dark:text-slate-100">120</span>' in body
         assert 'Next' in body
 
-        mock_db['fetch_all'].side_effect = [many_books, []]
+        mock_db['fetch_all'].side_effect = [many_books[100:], []]
+        mock_db['fetch_one'].return_value = (120,)
         resp2 = client.get('/catalog?q=Book&page=3')
         assert resp2.status_code == 200
         body2 = resp2.get_data(as_text=True)

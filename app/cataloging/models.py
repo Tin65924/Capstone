@@ -132,12 +132,75 @@ def suggest_books_rich(prefix, limit=8):
 
 
 def get_all_books():
-    """Active books only — archived books surface solely via get_books_by_status('archived')."""
+    """Active books only — archived books surface solely via get_books_by_status('archived').
+
+    Full list (with per-book accession numbers) for exports. Page views
+    must use get_all_books_paginated() instead so 4.5k+ rows are never
+    materialized per request.
+    """
     return db.fetch_all(
         f"SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog WHERE catalog_status = 'active' ORDER BY {DISTINCT_ORDER}")
 
 
+def _count_books(where, args):
+    row = db.fetch_one(f'SELECT COUNT(*) FROM book_catalog {where}', args)
+    return row[0] if row else 0
+
+
+def get_all_books_paginated(page=1, per_page=20):
+    """Paginated active-book listing for the staff page. Same row shape
+    as get_all_books; returns (rows, total)."""
+    page = max(1, page or 1)
+    per_page = max(1, per_page or 20)
+    where = "WHERE catalog_status = 'active'"
+    total = _count_books(where, ())
+    rows = db.fetch_all(
+        f'SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers '
+        f'FROM book_catalog {where} ORDER BY {DISTINCT_ORDER} LIMIT %s OFFSET %s',
+        (per_page, (page - 1) * per_page)
+    )
+    return rows, total
+
+
+def get_books_by_status_paginated(status, page=1, per_page=20):
+    """Paginated status listing for the staff page. Same row shape as
+    get_books_by_status; returns (rows, total)."""
+    page = max(1, page or 1)
+    per_page = max(1, per_page or 20)
+    where = 'WHERE catalog_status = %s'
+    total = _count_books(where, (status,))
+    rows = db.fetch_all(
+        f'SELECT *, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog '
+        f'{where} ORDER BY title LIMIT %s OFFSET %s',
+        (status, per_page, (page - 1) * per_page)
+    )
+    return rows, total
+
+
 COPY_STATUS_FILTERS = ('overdue', 'lost_damaged', 'maintenance')
+
+
+def _copy_status_condition(copy_status):
+    """EXISTS fragment for a problem-copy listing, or None when unknown."""
+    if copy_status == 'overdue':
+        return (
+            "EXISTS (SELECT 1 FROM accession_log al "
+            "JOIN circulation_records c ON c.accession_id = al.accession_id "
+            "WHERE al.book_id = book_catalog.book_id AND c.transaction_status = 'overdue')"
+        )
+    if copy_status == 'lost_damaged':
+        return (
+            "EXISTS (SELECT 1 FROM accession_log al "
+            "JOIN inventory_status i ON i.accession_id = al.accession_id "
+            "WHERE al.book_id = book_catalog.book_id AND i.inventory_state IN ('lost', 'damaged'))"
+        )
+    if copy_status == 'maintenance':
+        return (
+            "EXISTS (SELECT 1 FROM accession_log al "
+            "JOIN inventory_status i ON i.accession_id = al.accession_id "
+            "WHERE al.book_id = book_catalog.book_id AND i.inventory_state = 'missing')"
+        )
+    return None
 
 
 def get_books_by_copy_status(copy_status):
@@ -145,30 +208,33 @@ def get_books_by_copy_status(copy_status):
 
     Same row shape as get_all_books (book_catalog.* + accession_numbers).
     Archived books are excluded — they only appear under ?status=archived.
+    Full list; page views must use get_books_by_copy_status_paginated().
     """
-    if copy_status == 'overdue':
-        condition = (
-            "EXISTS (SELECT 1 FROM accession_log al "
-            "JOIN circulation_records c ON c.accession_id = al.accession_id "
-            "WHERE al.book_id = book_catalog.book_id AND c.transaction_status = 'overdue')"
-        )
-    elif copy_status == 'lost_damaged':
-        condition = (
-            "EXISTS (SELECT 1 FROM accession_log al "
-            "JOIN inventory_status i ON i.accession_id = al.accession_id "
-            "WHERE al.book_id = book_catalog.book_id AND i.inventory_state IN ('lost', 'damaged'))"
-        )
-    elif copy_status == 'maintenance':
-        condition = (
-            "EXISTS (SELECT 1 FROM accession_log al "
-            "JOIN inventory_status i ON i.accession_id = al.accession_id "
-            "WHERE al.book_id = book_catalog.book_id AND i.inventory_state = 'missing')"
-        )
-    else:
+    condition = _copy_status_condition(copy_status)
+    if condition is None:
         return []
     return db.fetch_all(
         f'SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers '
         f"FROM book_catalog WHERE book_catalog.catalog_status = 'active' AND ({condition}) ORDER BY {DISTINCT_ORDER}")
+
+
+def get_books_by_copy_status_paginated(copy_status, page=1, per_page=20):
+    """Paginated problem-copy listing for the staff page. Same row shape
+    as get_books_by_copy_status; returns (rows, total). Unknown filters
+    return ([], 0), mirroring get_books_by_copy_status."""
+    condition = _copy_status_condition(copy_status)
+    if condition is None:
+        return [], 0
+    page = max(1, page or 1)
+    per_page = max(1, per_page or 20)
+    where = f"WHERE book_catalog.catalog_status = 'active' AND ({condition})"
+    total = _count_books(where, ())
+    rows = db.fetch_all(
+        f'SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers '
+        f'FROM book_catalog {where} ORDER BY {DISTINCT_ORDER} LIMIT %s OFFSET %s',
+        (per_page, (page - 1) * per_page)
+    )
+    return rows, total
 
 
 def get_distinct_categories():
@@ -177,8 +243,13 @@ def get_distinct_categories():
     )
 
 
-def search_books_filtered(query, field=None, year_from=None, year_to=None, sort_by=None,
-                          category=None, material_type=None, availability=None):
+def _filtered_where(query, field=None, year_from=None, year_to=None,
+                    category=None, material_type=None, availability=None):
+    """Shared WHERE builder for the public-catalog filtered search.
+
+    Returns (where_clause, args). Sort does not affect row selection,
+    so it stays with the callers.
+    """
     conditions = ["catalog_status = 'active'"]
     args = []
     pattern = f'%{query}%' if query else None
@@ -251,6 +322,29 @@ def search_books_filtered(query, field=None, year_from=None, year_to=None, sort_
         "AND NOT EXISTS (SELECT 1 FROM circulation_records c WHERE c.accession_id = al.accession_id "
         "AND c.transaction_status IN ('active', 'overdue'))) AS available_count"
     )
+    return where, tuple(args), availability_col, available_count_col
+
+
+def search_books_filtered(query, field=None, year_from=None, year_to=None, sort_by=None,
+                          category=None, material_type=None, availability=None,
+                          page=1, per_page=50):
+    """Filtered public-catalog search, paginated in SQL.
+
+    Returns (rows, total): only the requested page is materialized — the
+    per-row availability subqueries run for `per_page` rows instead of
+    every match. Row shape is unchanged (book_catalog.* + availability +
+    available_count), so callers and templates are unaffected.
+    """
+    page = max(1, page or 1)
+    per_page = max(1, per_page or 50)
+    where, args, availability_col, available_count_col = _filtered_where(
+        query, field, year_from, year_to, category, material_type, availability)
+
+    count_row = db.fetch_one(
+        f'SELECT COUNT(*) FROM (SELECT DISTINCT ON ({DISTINCT_ORDER}) 1 FROM book_catalog {where}) sub',
+        args
+    )
+    total = count_row[0] if count_row else 0
 
     if sort_by == 'title':
         order = 'ORDER BY title ASC'
@@ -260,12 +354,16 @@ def search_books_filtered(query, field=None, year_from=None, year_to=None, sort_
         order = f'ORDER BY {DISTINCT_ORDER}'
 
     base = f'SELECT DISTINCT ON ({DISTINCT_ORDER}) book_catalog.*, {availability_col}, {available_count_col} FROM book_catalog {where} ORDER BY {DISTINCT_ORDER}'
+    offset = (page - 1) * per_page
     if sort_by in ('title', 'year_desc'):
         return db.fetch_all(
-            f'SELECT * FROM ({base}) AS deduped {order}',
-            tuple(args)
-        )
-    return db.fetch_all(base, tuple(args))
+            f'SELECT * FROM ({base}) AS deduped {order} LIMIT %s OFFSET %s',
+            args + (per_page, offset)
+        ), total
+    return db.fetch_all(
+        f'{base} LIMIT %s OFFSET %s',
+        args + (per_page, offset)
+    ), total
 
 
 def get_recent_books(limit=5):
