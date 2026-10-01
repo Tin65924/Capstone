@@ -543,7 +543,14 @@ def export_users():
 @login_required
 @librarian_required
 def approve_user_route(user_id):
-    if not get_user_by_id(user_id):
+    user = db.fetch_one(
+        '''SELECT u.user_id, u.email, r.role_name, u.full_name
+           FROM user_accounts u
+           JOIN roles r ON u.role_id = r.role_id
+           WHERE u.user_id = %s''',
+        (user_id,)
+    )
+    if not user:
         flash('User not found.', 'error')
         return redirect(url_for('auth.admin_users'))
     approve_user(user_id, updated_by=current_user.id)
