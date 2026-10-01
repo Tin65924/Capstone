@@ -1676,3 +1676,64 @@ class TestHeaderEdges:
         mock_db['fetch_all'].return_value = []
         body = librarian_client.get('/librarian/analytics?q=t&book_id=1').data.decode()
         assert evil not in body
+
+
+class TestDashboardCache:
+    def test_fresh_hit_returns_payload(self, mock_db):
+        from datetime import datetime
+        from app.analytics.models import get_dashboard_cache
+        payload = {'usage': {'total': 5}}
+        mock_db['fetch_one'].return_value = (payload, datetime.now())
+        assert get_dashboard_cache({'start': None, 'end': None, 'departments': []}) == payload
+        query = mock_db['fetch_one'].call_args[0][0]
+        assert 'analytics_cache' in query
+        assert 'circulation_summary' in mock_db['fetch_one'].call_args[0][1][0]
+
+    def test_stale_and_missing_return_none(self, mock_db):
+        from datetime import datetime, timedelta
+        from app.analytics.models import get_dashboard_cache
+        mock_db['fetch_one'].return_value = ({'a': 1}, datetime.now() - timedelta(hours=1))
+        assert get_dashboard_cache({}) is None
+        mock_db['fetch_one'].return_value = None
+        assert get_dashboard_cache({}) is None
+        mock_db['fetch_one'].return_value = ('not-json{{{', datetime.now())
+        assert get_dashboard_cache({}) is None
+
+    def test_set_prunes_then_inserts(self, mock_db):
+        from app.analytics.models import set_dashboard_cache
+        set_dashboard_cache({'start': None}, {'usage': {}}, generated_by=4)
+        queries = [c[0][0] for c in mock_db['execute'].call_args_list]
+        assert any(q.strip().startswith('DELETE FROM analytics_cache') for q in queries)
+        assert any('INSERT INTO analytics_cache' in q for q in queries)
+
+    def test_wrapper_uses_cache_on_hit(self, mock_db):
+        from unittest.mock import patch
+        from app.analytics import routes
+        payload = {'usage': {'total': 9}}
+        with patch.object(routes, '_dashboard_cache_allowed', return_value=True):
+            with patch.object(routes.models, 'get_dashboard_cache', return_value=payload) as mock_get:
+                with patch.object(routes.models, 'set_dashboard_cache') as mock_set:
+                    assert routes.compute_dashboard(None, None) == payload
+                    mock_get.assert_called_once()
+                    mock_set.assert_not_called()
+        assert mock_db['fetch_all'].call_count == 0
+
+    def test_wrapper_falls_back_and_stores(self, mock_db):
+        from unittest.mock import patch
+        from app.analytics import routes
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        stored = {}
+        with patch.object(routes, '_dashboard_cache_allowed', return_value=True):
+            with patch.object(routes.models, 'get_dashboard_cache', return_value=None):
+                with patch.object(routes.models, 'set_dashboard_cache',
+                                  side_effect=lambda k, p, g=None: stored.update(payload=p)):
+                    out = routes.compute_dashboard(None, None)
+                    assert out == routes._compute_dashboard(None, None)
+                    assert stored['payload'] == out
+
+    def test_wrapper_bypassed_in_testing(self, mock_db):
+        from app.analytics import routes
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        assert routes.compute_dashboard(None, None) == routes._compute_dashboard(None, None)

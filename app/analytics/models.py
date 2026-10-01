@@ -217,6 +217,71 @@ def save_report_snapshot(report_type, filter_params, kpi_data, generated_by):
 
 
 # ---------------------------------------------------------------------------
+# Riverside dashboard cache (perf batch #4).
+#
+# compute_dashboard() fans out to ~20 aggregate queries; the analytics page
+# and its JSON endpoint both call it per load. Cache the JSON-serializable
+# payload in analytics_cache (report_type 'circulation_summary', already in
+# the table CHECK) keyed by the exact filter set, with a short TTL so fresh
+# loans surface within minutes. Reads/writes are best-effort — any failure
+# degrades to uncached compute, never a 500. Pruning keeps the table bounded.
+# ---------------------------------------------------------------------------
+
+DASHBOARD_CACHE_TYPE = 'circulation_summary'
+DASHBOARD_CACHE_TTL_SECONDS = 300
+
+
+def _cache_fresh(generated_date, ttl_seconds):
+    """True when a cache timestamp is within TTL. Unparseable → stale."""
+    from datetime import datetime, timedelta
+    try:
+        if hasattr(generated_date, 'year'):
+            stamped = generated_date.replace(tzinfo=None)
+        else:
+            stamped = datetime.fromisoformat(str(generated_date)[:19])
+    except (TypeError, ValueError):
+        return False
+    try:
+        return datetime.now() - stamped < timedelta(seconds=int(ttl_seconds))
+    except (TypeError, ValueError):
+        return False
+
+
+def get_dashboard_cache(filter_params, ttl_seconds=DASHBOARD_CACHE_TTL_SECONDS):
+    """Freshest cached dashboard payload for filter_params, or None."""
+    row = db.fetch_one(
+        '''SELECT kpi_data, generated_date FROM analytics_cache
+           WHERE report_type = %s AND filter_params = %s::jsonb
+           ORDER BY generated_date DESC LIMIT 1''',
+        (DASHBOARD_CACHE_TYPE, json.dumps(filter_params))
+    )
+    if not row:
+        return None
+    try:
+        payload, stamped = row[0], row[1]
+    except (IndexError, TypeError):
+        return None
+    if not _cache_fresh(stamped, ttl_seconds):
+        return None
+    if isinstance(payload, str):
+        try:
+            return json.loads(payload)
+        except (TypeError, ValueError):
+            return None
+    return payload
+
+
+def set_dashboard_cache(filter_params, payload, generated_by=None):
+    """Store a dashboard payload and prune entries older than a day."""
+    db.execute(
+        '''DELETE FROM analytics_cache
+           WHERE report_type = %s AND generated_date < NOW() - INTERVAL '1 day' ''',
+        (DASHBOARD_CACHE_TYPE,)
+    )
+    return save_report_snapshot(DASHBOARD_CACHE_TYPE, filter_params, payload, generated_by)
+
+
+# ---------------------------------------------------------------------------
 # Riverside-style dashboard queries.
 #
 # The reference dashboards (Collection Tracking / Library Analytics / Usage

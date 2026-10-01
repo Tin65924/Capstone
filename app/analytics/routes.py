@@ -148,7 +148,60 @@ def _clean_department_list(values):
     return seen
 
 
-def compute_dashboard(start_date, end_date, departments=None):
+def _dashboard_cache_key(start_date, end_date, departments):
+    """JSON-safe cache key for a dashboard filter set."""
+    def _iso(value):
+        try:
+            return value.isoformat() if hasattr(value, 'isoformat') else value
+        except (TypeError, ValueError):
+            return None
+    depts = sorted({(d or '').strip() for d in (departments or []) if (d or '').strip()})
+    return {'start': _iso(start_date), 'end': _iso(end_date), 'departments': depts}
+
+
+def _dashboard_cache_allowed():
+    """Cache only in real requests — never in tests (deterministic mocks)
+    and never without an app context."""
+    try:
+        from flask import current_app, has_app_context
+        return has_app_context() and not current_app.config.get('TESTING')
+    except Exception:
+        return False
+
+
+def _dashboard_actor():
+    try:
+        from flask_login import current_user
+        return current_user.id
+    except Exception:
+        return None
+
+
+def compute_dashboard(start_date, end_date, departments=None, _use_cache=True):
+    """Assemble Riverside-style dashboard payload from model queries.
+
+    Results are cached per filter set (see models.get/set_dashboard_cache,
+    TTL 5 min). Cache is best-effort and disabled in tests; any failure
+    falls back to fresh compute.
+    """
+    key = _dashboard_cache_key(start_date, end_date, departments)
+    if _use_cache and _dashboard_cache_allowed():
+        try:
+            hit = models.get_dashboard_cache(key)
+        except Exception:
+            hit = None
+        if hit is not None:
+            return hit
+    payload = _compute_dashboard(start_date, end_date, departments)
+    if _use_cache and _dashboard_cache_allowed():
+        try:
+            models.set_dashboard_cache(key, payload, _dashboard_actor())
+        except Exception:
+            pass
+    return payload
+
+
+def _compute_dashboard(start_date, end_date, departments=None):
     """Assemble Riverside-style dashboard payload from model queries.
 
     Returns JSON-serializable dicts/lists only (dates stringified); the

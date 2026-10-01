@@ -59,3 +59,45 @@ class TestExecuteTransactions:
                 db.execute('UPDATE t SET a = %s', (1,))
         conn.rollback.assert_called_once()
         conn.commit.assert_not_called()
+
+
+class TestInitDbSchemaGate:
+    """init_db itself is globally mocked in tests (conftest.patcher_init_db),
+    so these pause that patcher to exercise the real gating logic."""
+
+    @staticmethod
+    def _pause_init_db_patch():
+        import sys
+        patcher = getattr(sys.modules.get('conftest'), 'patcher_init_db', None)
+        if patcher is None:
+            pytest.skip('conftest init_db patcher unavailable')
+        patcher.stop()
+        return patcher
+
+    def test_schema_runs_by_default(self, app):
+        from unittest.mock import patch
+        from app import database
+        patcher = self._pause_init_db_patch()
+        try:
+            app.config['SKIP_SCHEMA_SYNC'] = False
+            with patch.object(database, 'run_schema') as mock_run:
+                database.init_db(app)
+                mock_run.assert_called_once_with(app)
+        finally:
+            patcher.start()
+
+    def test_schema_skipped_when_flagged(self, app):
+        from unittest.mock import patch
+        from app import database
+        patcher = self._pause_init_db_patch()
+        try:
+            app.config['SKIP_SCHEMA_SYNC'] = True
+            with patch.object(database, 'run_schema') as mock_run:
+                database.init_db(app)
+                mock_run.assert_not_called()
+        finally:
+            app.config['SKIP_SCHEMA_SYNC'] = False
+            patcher.start()
+
+    def test_flag_defaults_off(self, app):
+        assert app.config.get('SKIP_SCHEMA_SYNC') is False
