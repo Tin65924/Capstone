@@ -8,8 +8,13 @@ from app.procurement.models import get_procurement_items
 
 
 def get_dashboard_stats():
-    total = db.fetch_one(
+    titles = db.fetch_one(
         "SELECT COUNT(*) FROM book_catalog WHERE catalog_status = 'active'"
+    )
+    accessions = db.fetch_one(
+        '''SELECT COUNT(*) FROM accession_log a
+           JOIN book_catalog b ON a.book_id = b.book_id
+           WHERE b.catalog_status = 'active' '''
     )
     active_loans = db.fetch_one(
         "SELECT COUNT(*) FROM circulation_records WHERE transaction_type = 'borrow' AND transaction_status IN ('active', 'overdue')"
@@ -20,8 +25,12 @@ def get_dashboard_stats():
     overdue = db.fetch_one(
         "SELECT COUNT(*) FROM circulation_records WHERE transaction_type = 'borrow' AND transaction_status IN ('active', 'overdue') AND due_date < CURRENT_DATE"
     )
+    total_titles = titles[0] if titles else 0
+    total_accessions = accessions[0] if accessions else 0
     return {
-        'total_collection': total[0] if total else 0,
+        'total_collection': total_titles,
+        'total_titles': total_titles,
+        'total_accessions': total_accessions,
         'active_loans': active_loans[0] if active_loans else 0,
         'open_requests': open_requests[0] if open_requests else 0,
         'overdue_items': overdue[0] if overdue else 0,
@@ -84,6 +93,13 @@ def get_admin_overview_stats():
     collection = db.fetch_one(
         "SELECT COUNT(*) FROM book_catalog WHERE catalog_status = 'active'"
     )
+    accessions = db.fetch_one(
+        '''SELECT COUNT(*) FROM accession_log a
+           JOIN book_catalog b ON a.book_id = b.book_id
+           WHERE b.catalog_status = 'active' '''
+    )
+    total_titles = collection[0] if collection else 0
+    total_accessions = accessions[0] if accessions else 0
     return {
         'total_users': total,
         'pending_users': pending,
@@ -91,7 +107,9 @@ def get_admin_overview_stats():
         'active_faculty': by_role.get('Faculty', 0),
         'active_students': by_role.get('Student', 0),
         'active_admins': by_role.get('Admin', 0),
-        'total_collection': collection[0] if collection else 0,
+        'total_collection': total_titles,
+        'total_titles': total_titles,
+        'total_accessions': total_accessions,
     }
 
 

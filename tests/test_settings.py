@@ -241,7 +241,7 @@ class TestResetDbRemoved:
         assert resp.status_code == 404
 
     def test_no_reset_link_in_admin_sidebar(self, admin_client, mock_db):
-        mock_db['fetch_one'].side_effect = [(10,), (0,), (5,)]
+        mock_db['fetch_one'].side_effect = [(10,), (0,), (5,), (9,)]
         mock_db['fetch_all'].side_effect = [[], [], [], []]
         resp = admin_client.get('/admin')
         assert resp.status_code == 200
@@ -250,7 +250,7 @@ class TestResetDbRemoved:
 
     def test_no_settings_link_in_librarian_sidebar(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [
-            (100,), (10,), (4,), (3,), (10,), (3,), (1,),
+            (100,), (250,), (10,), (4,), (3,), (10,), (3,), (1,),
         ]
         from tests.test_main import TestDashboardAttention
         mock_db['fetch_all'].side_effect = [

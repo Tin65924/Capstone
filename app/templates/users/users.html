@@ -266,39 +266,39 @@
             <a href="{{ url_for('auth.admin_users', scope=scope) }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if not status_filter and not role_filter %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">group</span></div>
-                <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Total</div><div class="text-base sm:text-xl font-bold">{{ total }}</div></div>
+                <div class="min-w-0 flex-1"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider break-words leading-tight" title="Total">Total</div><div class="text-base sm:text-xl font-bold">{{ total }}</div></div>
             </a>
             <a href="{{ url_for('auth.admin_users', scope=scope, status='active') }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if status_filter == 'active' %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">verified_user</span></div>
-                <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Active</div><div class="text-base sm:text-xl font-bold">{{ active }}</div></div>
+                <div class="min-w-0 flex-1"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider break-words leading-tight" title="Active">Active</div><div class="text-base sm:text-xl font-bold">{{ active }}</div></div>
             </a>
             {% if not is_staff_view|default(false) %}
             <a href="{{ url_for('auth.admin_users', scope=scope, role='Student') }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if role_filter == 'Student' %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">school</span></div>
-                <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Students</div><div class="text-base sm:text-xl font-bold">{{ students }}</div></div>
+                <div class="min-w-0 flex-1"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider break-words leading-tight" title="Students">Students</div><div class="text-base sm:text-xl font-bold">{{ students }}</div></div>
             </a>
             <a href="{{ url_for('auth.admin_users', scope=scope, role='Faculty') }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if role_filter == 'Faculty' %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">person</span></div>
-                <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Faculty</div><div class="text-base sm:text-xl font-bold">{{ faculty }}</div></div>
+                <div class="min-w-0 flex-1"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider break-words leading-tight" title="Faculty">Faculty</div><div class="text-base sm:text-xl font-bold">{{ faculty }}</div></div>
             </a>
             {% endif %}
             <a href="{{ url_for('auth.admin_users', scope=scope, status='disabled') }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if status_filter == 'disabled' %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">person_off</span></div>
-                <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Inactive</div><div class="text-base sm:text-xl font-bold">{{ inactive }}</div></div>
+                <div class="min-w-0 flex-1"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider break-words leading-tight" title="Inactive">Inactive</div><div class="text-base sm:text-xl font-bold">{{ inactive }}</div></div>
             </a>
             <a href="{{ url_for('auth.admin_users', scope=scope, status='archived') }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if status_filter == 'archived' %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">archive</span></div>
-                <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Archived</div><div class="text-base sm:text-xl font-bold">{{ archived }}</div></div>
+                <div class="min-w-0 flex-1"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider break-words leading-tight" title="Archived">Archived</div><div class="text-base sm:text-xl font-bold">{{ archived }}</div></div>
             </a>
             <a href="{{ url_for('auth.admin_users', scope=scope, status='pending') }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if status_filter == 'pending' %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">pending_actions</span></div>
-                <div class="min-w-0"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider truncate">Pending</div><div class="text-base sm:text-xl font-bold">{{ pending|length }}</div></div>
+                <div class="min-w-0 flex-1"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider break-words leading-tight" title="Pending">Pending</div><div class="text-base sm:text-xl font-bold">{{ pending|length }}</div></div>
             </a>
         </div>
 
