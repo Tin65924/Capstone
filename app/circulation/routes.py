@@ -86,11 +86,11 @@ def _compute_due_date(borrow_type, role_name):
         days = current_app.config.get('DAILY_CIRCULATION_DUE_DAYS', 0)
         fallback = 0
     elif role_name == 'Student':
-        days = current_app.config.get('OVERNIGHT_DUE_DAYS_STUDENT', 2)
-        fallback = 2
+        days = current_app.config.get('OVERNIGHT_DUE_DAYS_STUDENT', 1)
+        fallback = 1
     else:
-        days = current_app.config.get('OVERNIGHT_DUE_DAYS_FACULTY', 30)
-        fallback = 30
+        days = current_app.config.get('OVERNIGHT_DUE_DAYS_FACULTY', 7)
+        fallback = 7
     try:
         days = int(days)
     except (TypeError, ValueError):

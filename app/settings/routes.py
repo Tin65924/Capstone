@@ -3,46 +3,25 @@ from flask_login import login_required, current_user
 import re
 from . import settings_bp
 from .models import (SETTING_CATEGORIES, SETTING_DEFS, ADMIN_ONLY_KEYS,
+                     LIBRARIAN_EDITABLE_KEYS,
                      SETTING_RANGES, get_settings_dict, update_setting,
                      sync_settings_to_config)
-from app.auth.decorators import admin_required
+from app.auth.decorators import admin_required, librarian_required
 from app.auth.models import log_activity
 
 
-@settings_bp.route('/admin/settings')
-@login_required
-@admin_required
-def settings_page():
-    try:
-        values = get_settings_dict()
-    except Exception:
-        values = {}
-        flash('Library settings table is not available yet.', 'error')
-    # Admins see only admin-only constants; circulation settings live in
-    # the database with their defaults and have no UI surface.
+def _filtered_categories(allowed_keys):
     categories = [
         {'id': anchor, 'title': title, 'icon': icon, 'blurb': blurb,
          'fields': [(key, SETTING_DEFS[key]) for key in keys
-                    if key in ADMIN_ONLY_KEYS]}
+                    if key in allowed_keys]}
         for anchor, title, icon, blurb, keys in SETTING_CATEGORIES
     ]
-    categories = [c for c in categories if c['fields']]
-    return render_template('settings/settings.html', defs=SETTING_DEFS,
-                           values=values, categories=categories,
-                           sidebar='components/admin_sidebar_nav.html')
+    return [c for c in categories if c['fields']]
 
 
-@settings_bp.route('/librarian/settings')
-@login_required
-def legacy_settings_redirect():
-    """Backward-compat redirect: settings moved to /admin/settings."""
-    return redirect(url_for('settings.settings_page'))
-
-
-@settings_bp.route('/admin/settings/update', methods=['POST'])
-@login_required
-@admin_required
-def update_settings():
+def _apply_updates(allowed_keys):
+    """Shared validation for both settings forms. Returns (updated, updated_keys, errors)."""
     errors = []
     updated = 0
     updated_keys = []
@@ -55,7 +34,7 @@ def update_settings():
                     for r in request.form.getlist(key)]
             if not raws:
                 continue
-            if key not in ADMIN_ONLY_KEYS:
+            if key not in allowed_keys:
                 errors.append(f'{label}: not editable here.')
                 continue
             try:
@@ -74,7 +53,7 @@ def update_settings():
         raw = request.form.get(key, '').strip()
         if raw == '':
             continue
-        if key not in ADMIN_ONLY_KEYS:
+        if key not in allowed_keys:
             errors.append(f'{label}: not editable here.')
             continue
         try:
@@ -82,6 +61,10 @@ def update_settings():
                 value = float(raw)
                 if value < 0:
                     raise ValueError('must be >= 0')
+                if key == 'RESERVATION_CLAIM_HOURS' and value == 0:
+                    raise ValueError('must be greater than 0')
+                if key == 'OVERDUE_FINE_PER_DAY' and value > 1000:
+                    raise ValueError('must be at most 1000')
             else:
                 # Strict integers: reject decimals like "2.5" instead of truncating.
                 if not re.fullmatch(r'\d+', raw):
@@ -94,12 +77,22 @@ def update_settings():
                     raise ValueError(f'must be at least {lo}')
                 if hi is not None and value > hi:
                     raise ValueError(f'must be at most {hi}')
+                if key in ('MAX_BORROW_LIMIT_STUDENT', 'MAX_BORROW_LIMIT_FACULTY') and value > 20:
+                    raise ValueError('must be at most 20')
+                if key in ('OVERNIGHT_DUE_DAYS_STUDENT', 'OVERNIGHT_DUE_DAYS_FACULTY',
+                           'DAILY_CIRCULATION_DUE_DAYS', 'OVERDUE_GRACE_DAYS',
+                           'RESERVATION_CLAIM_DAYS', 'DUE_SOON_NOTIFY_DAYS') and value > 60:
+                    raise ValueError('must be at most 60')
         except ValueError as e:
             errors.append(f'{label}: invalid value "{raw}" ({e}).')
             continue
         update_setting(key, value, current_user.id)
         updated += 1
         updated_keys.append(key)
+    return updated, updated_keys, errors
+
+
+def _finish_update(updated, updated_keys, errors, redirect_endpoint):
     try:
         sync_settings_to_config(current_app)
     except Exception:
@@ -122,4 +115,58 @@ def update_settings():
         flash(f'{updated} setting(s) updated.', 'success')
     else:
         flash('No changes submitted.', 'info')
-    return redirect(url_for('settings.settings_page'))
+    return redirect(url_for(redirect_endpoint))
+
+
+@settings_bp.route('/admin/settings')
+@login_required
+@admin_required
+def settings_page():
+    try:
+        values = get_settings_dict()
+    except Exception:
+        values = {}
+        flash('Library settings table is not available yet.', 'error')
+    # Admins see only admin-only constants; circulation settings live in
+    # the database with their defaults and have no UI surface here —
+    # librarians edit them at /librarian/settings.
+    categories = _filtered_categories(ADMIN_ONLY_KEYS)
+    return render_template('settings/settings.html', defs=SETTING_DEFS,
+                           values=values, categories=categories,
+                           sidebar='components/admin_sidebar_nav.html',
+                           form_action=url_for('settings.update_settings'),
+                           cancel_url=url_for('main.admin_dashboard'))
+
+
+@settings_bp.route('/librarian/settings')
+@login_required
+@librarian_required
+def librarian_settings_page():
+    """Circulation constants for librarians: due dates, fines, limits, pickup windows."""
+    try:
+        values = get_settings_dict()
+    except Exception:
+        values = {}
+        flash('Library settings table is not available yet.', 'error')
+    categories = _filtered_categories(LIBRARIAN_EDITABLE_KEYS)
+    return render_template('settings/settings.html', defs=SETTING_DEFS,
+                           values=values, categories=categories,
+                           sidebar='components/librarian_sidebar_nav.html',
+                           form_action=url_for('settings.update_librarian_settings'),
+                           cancel_url=url_for('main.librarian_dashboard'))
+
+
+@settings_bp.route('/admin/settings/update', methods=['POST'])
+@login_required
+@admin_required
+def update_settings():
+    updated, updated_keys, errors = _apply_updates(ADMIN_ONLY_KEYS)
+    return _finish_update(updated, updated_keys, errors, 'settings.settings_page')
+
+
+@settings_bp.route('/librarian/settings/update', methods=['POST'])
+@login_required
+@librarian_required
+def update_librarian_settings():
+    updated, updated_keys, errors = _apply_updates(LIBRARIAN_EDITABLE_KEYS)
+    return _finish_update(updated, updated_keys, errors, 'settings.librarian_settings_page')

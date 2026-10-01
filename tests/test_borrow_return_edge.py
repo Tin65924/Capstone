@@ -104,7 +104,7 @@ class TestDueDate:
             app.config['OVERNIGHT_DUE_DAYS_FACULTY'] = None
             app.config['DAILY_CIRCULATION_DUE_DAYS'] = 'x'
             assert _compute_due_date('overnight', 'Student') == date.today() + \
-                __import__('datetime').timedelta(days=2)
+                __import__('datetime').timedelta(days=1)
             assert _compute_due_date('overnight', 'Faculty') == date.today() + \
-                __import__('datetime').timedelta(days=30)
+                __import__('datetime').timedelta(days=7)
             assert _compute_due_date('daily_circulation', 'X') == date.today()

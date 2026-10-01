@@ -38,10 +38,12 @@ class TestSettingsAccess:
         assert b'BACKUP_KEEP' in resp.data
         assert b'MAX_BORROW_LIMIT_STUDENT' not in resp.data
 
-    def test_legacy_url_redirects_to_admin(self, admin_client):
+    def test_librarian_settings_renders_for_admin(self, admin_client, mock_db):
+        mock_db['fetch_all'].return_value = []
         resp = admin_client.get('/librarian/settings')
-        assert resp.status_code == 302
-        assert SETTINGS_URL in resp.location
+        assert resp.status_code == 200
+        assert b'MAX_BORROW_LIMIT_STUDENT' in resp.data
+        assert b'BACKUP_DAY' not in resp.data
 
     def test_legacy_url_unauthenticated_redirects(self, client):
         resp = client.get('/librarian/settings')
@@ -248,7 +250,7 @@ class TestResetDbRemoved:
         assert b'Reset Database' not in resp.data
         assert b'reset-db' not in resp.data
 
-    def test_no_settings_link_in_librarian_sidebar(self, librarian_client, mock_db):
+    def test_settings_link_in_librarian_sidebar(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [
             (100,), (250,), (10,), (4,), (3,), (10,), (3,), (1,),
         ]
@@ -259,7 +261,8 @@ class TestResetDbRemoved:
         ]
         resp = librarian_client.get('/librarian')
         assert resp.status_code == 200
-        assert b'Library Settings' not in resp.data
+        assert b'Library Settings' in resp.data
+        assert b'/librarian/settings' in resp.data
 
 
 class TestRestoreToggle:

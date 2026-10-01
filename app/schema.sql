@@ -243,8 +243,8 @@ CREATE TABLE IF NOT EXISTS library_settings (
 INSERT INTO library_settings (setting_key, setting_value, description) VALUES
     ('MAX_BORROW_LIMIT_STUDENT', '3', 'Max active loans for students'),
     ('MAX_BORROW_LIMIT_FACULTY', '5', 'Max active loans for faculty'),
-    ('OVERNIGHT_DUE_DAYS_STUDENT', '2', 'Overnight loan due days for students'),
-    ('OVERNIGHT_DUE_DAYS_FACULTY', '30', 'Overnight loan due days for faculty'),
+    ('OVERNIGHT_DUE_DAYS_STUDENT', '1', 'Overnight loan due days for students'),
+    ('OVERNIGHT_DUE_DAYS_FACULTY', '7', 'Overnight loan due days for faculty'),
     ('DAILY_CIRCULATION_DUE_DAYS', '0', 'Daily circulation due days (0 = same day)'),
     ('OVERDUE_FINE_PER_DAY', '5.0', 'Overdue fine in pesos per day'),
     ('OVERDUE_GRACE_DAYS', '0', 'Grace days before fines accrue'),

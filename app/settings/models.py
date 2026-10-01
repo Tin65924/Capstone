@@ -38,6 +38,19 @@ SETTING_CATEGORIES = [
 ADMIN_ONLY_KEYS = frozenset({'BACKUP_DAY', 'BACKUP_HOUR', 'BACKUP_KEEP',
                              'BACKUP_RESTORE_ENABLED'})
 
+# Keys librarians may view/edit on /librarian/settings. This is the
+# complement of ADMIN_ONLY_KEYS: every circulation constant lives here so
+# librarians can tune due dates, fines, borrow limits, and pickup windows
+# without touching backup/admin-only settings.
+LIBRARIAN_EDITABLE_KEYS = frozenset({
+    'MAX_BORROW_LIMIT_STUDENT', 'MAX_BORROW_LIMIT_FACULTY',
+    'OVERNIGHT_DUE_DAYS_STUDENT', 'OVERNIGHT_DUE_DAYS_FACULTY',
+    'DAILY_CIRCULATION_DUE_DAYS',
+    'OVERDUE_FINE_PER_DAY', 'OVERDUE_GRACE_DAYS',
+    'RESERVATION_CLAIM_HOURS', 'RESERVATION_CLAIM_DAYS',
+    'DUE_SOON_NOTIFY_DAYS',
+})
+
 
 # key -> (label, kind, description). Kinds: int, float, bool.
 SETTING_DEFS = {
@@ -68,8 +81,8 @@ SETTING_RANGES = {
 DEFAULTS = {
     'MAX_BORROW_LIMIT_STUDENT': '3',
     'MAX_BORROW_LIMIT_FACULTY': '5',
-    'OVERNIGHT_DUE_DAYS_STUDENT': '2',
-    'OVERNIGHT_DUE_DAYS_FACULTY': '30',
+    'OVERNIGHT_DUE_DAYS_STUDENT': '1',
+    'OVERNIGHT_DUE_DAYS_FACULTY': '7',
     'DAILY_CIRCULATION_DUE_DAYS': '0',
     'OVERDUE_FINE_PER_DAY': '5.0',
     'OVERDUE_GRACE_DAYS': '0',
