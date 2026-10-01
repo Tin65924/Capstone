@@ -291,3 +291,32 @@ ALTER TABLE inventory_sessions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
 ALTER TABLE inventory_sessions ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
 ALTER TABLE notification_log ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
 ALTER TABLE notification_log ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
+
+-- Read-path indexes for catalog scale (4.5k+ books). Plain btree covers
+-- prefix ILIKE, equality filters, joins, and ORDER BY; UNIQUE constraints
+-- elsewhere already index their columns, so they are not repeated here.
+-- IF NOT EXISTS keeps the re-applied schema idempotent; a failing
+-- statement never blocks the rest (see run_schema).
+CREATE INDEX IF NOT EXISTS idx_book_catalog_status ON book_catalog (catalog_status);
+CREATE INDEX IF NOT EXISTS idx_book_catalog_title ON book_catalog (title);
+CREATE INDEX IF NOT EXISTS idx_book_catalog_author ON book_catalog (author);
+CREATE INDEX IF NOT EXISTS idx_book_catalog_isbn ON book_catalog (isbn);
+CREATE INDEX IF NOT EXISTS idx_book_catalog_subject ON book_catalog (subject_classification);
+CREATE INDEX IF NOT EXISTS idx_book_catalog_year ON book_catalog (year_published);
+CREATE INDEX IF NOT EXISTS idx_accession_log_book ON accession_log (book_id);
+CREATE INDEX IF NOT EXISTS idx_accession_log_number ON accession_log (accession_number);
+CREATE INDEX IF NOT EXISTS idx_circ_accession ON circulation_records (accession_id);
+CREATE INDEX IF NOT EXISTS idx_circ_book ON circulation_records (book_id);
+CREATE INDEX IF NOT EXISTS idx_circ_status ON circulation_records (transaction_status);
+CREATE INDEX IF NOT EXISTS idx_circ_borrow_date ON circulation_records (borrow_date);
+CREATE INDEX IF NOT EXISTS idx_borrowers_department ON borrowers (department);
+CREATE INDEX IF NOT EXISTS idx_audit_time ON audit_trail (log_timestamp);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_trail (user_id);
+CREATE INDEX IF NOT EXISTS idx_reservation_book ON reservation_queue (book_id);
+CREATE INDEX IF NOT EXISTS idx_reservation_status ON reservation_queue (reservation_status);
+CREATE INDEX IF NOT EXISTS idx_inventory_accession ON inventory_status (accession_id);
+CREATE INDEX IF NOT EXISTS idx_requests_status ON request_records (request_status);
+CREATE INDEX IF NOT EXISTS idx_requests_requester ON request_records (requester_id);
+CREATE INDEX IF NOT EXISTS idx_notif_recipient ON notification_log (recipient_id);
+CREATE INDEX IF NOT EXISTS idx_user_accounts_status ON user_accounts (account_status);
+CREATE INDEX IF NOT EXISTS idx_user_accounts_role ON user_accounts (role_id);

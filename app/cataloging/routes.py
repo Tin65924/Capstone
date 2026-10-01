@@ -81,24 +81,40 @@ def cataloging_page():
     status_filter = request.args.get('status', '')
     copy_status = request.args.get('copy_status', '')
     page = request.args.get('page', 1, type=int)
+    page = max(1, page or 1)
     per_page = 20
 
     from app.cataloging.models import COPY_STATUS_FILTERS
     if copy_status not in COPY_STATUS_FILTERS:
         copy_status = ''
     if copy_status:
-        from app.cataloging.models import get_books_by_copy_status
-        books = get_books_by_copy_status(copy_status)
-        total = len(books)
+        from app.cataloging.models import get_books_by_copy_status_paginated
+        books, total = get_books_by_copy_status_paginated(copy_status, page, per_page)
     elif status_filter:
-        from app.cataloging.models import get_books_by_status
-        books = get_books_by_status(status_filter)
-        total = len(books)
+        from app.cataloging.models import get_books_by_status_paginated
+        books, total = get_books_by_status_paginated(status_filter, page, per_page)
     elif query:
         books, total = search_books_paginated(query, field, page, per_page)
     else:
-        books = get_all_books()
-        total = len(books)
+        from app.cataloging.models import get_all_books_paginated
+        books, total = get_all_books_paginated(page, per_page)
+
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    if page > total_pages:
+        # Stale/bookmarked page past the end after data changed — clamp
+        # and re-fetch once instead of rendering an empty page.
+        page = total_pages
+        if copy_status:
+            from app.cataloging.models import get_books_by_copy_status_paginated
+            books, total = get_books_by_copy_status_paginated(copy_status, page, per_page)
+        elif status_filter:
+            from app.cataloging.models import get_books_by_status_paginated
+            books, total = get_books_by_status_paginated(status_filter, page, per_page)
+        elif query:
+            books, total = search_books_paginated(query, field, page, per_page)
+        else:
+            from app.cataloging.models import get_all_books_paginated
+            books, total = get_all_books_paginated(page, per_page)
 
     accessions_by_book = {}
     if books:
@@ -709,19 +725,27 @@ def public_catalog():
         total_pages = 1
         page = 1
     else:
-        books_all = search_books_filtered(
+        page = max(1, request.args.get('page', 1, type=int) or 1)
+        per_page = 50
+        books, total = search_books_filtered(
             query, field=field if field else None,
             year_from=year_from or None, year_to=year_to or None,
             sort_by=sort_by or None, category=category or None,
-            material_type=material_type or None, availability=availability or None
+            material_type=material_type or None, availability=availability or None,
+            page=page, per_page=per_page
         )
         categories = [row[0] for row in get_distinct_categories()]
-        per_page = 50
-        total = len(books_all)
         total_pages = max(1, (total + per_page - 1) // per_page)
-        page = max(1, min(request.args.get('page', 1, type=int), total_pages))
-        start = (page - 1) * per_page
-        books = books_all[start:start + per_page]
+        if page > total_pages:
+            # Stale/bookmarked page past the end — clamp and re-fetch once.
+            page = total_pages
+            books, total = search_books_filtered(
+                query, field=field if field else None,
+                year_from=year_from or None, year_to=year_to or None,
+                sort_by=sort_by or None, category=category or None,
+                material_type=material_type or None, availability=availability or None,
+                page=page, per_page=per_page
+            )
 
     return render_template('public/catalog.html', books=books,
                            search_query=query, search_field=field,

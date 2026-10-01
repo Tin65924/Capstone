@@ -58,9 +58,12 @@
 
 ### `cataloging_page()`
 - If `query` present, calls `search_books_paginated(query, field, page, per_page=20)` → `(books_list, total)`
-- If no query, calls `get_all_books()` → `books_list`, `total = len(books)`
+- If `?copy_status=` present, calls `get_books_by_copy_status_paginated(...)` → `(books_list, total)` (unfiltered full list lives in `get_books_by_copy_status`, used by exports)
+- If `?status=` present, calls `get_books_by_status_paginated(...)` → `(books_list, total)` (unfiltered full list lives in `get_books_by_status`, used by exports)
+- If no query, calls `get_all_books_paginated(page, per_page=20)` → `(books_list, total)` (unfiltered full list lives in `get_all_books()`, used by exports)
+- Out-of-range `page` is clamped to the last page with one re-fetch
 - Also calls `get_accessions_for_books(page_book_ids)` once and groups results by `book_id` into `accessions_by_book` (passed to the template for the per-copy expandable rows)
-- Renders `cataloging/cataloging.html`
+- Renders `cataloging/catalog.html`
 
 ### `add_book()`
 - `request.form`: `title`*, `author`*, `accession_number`, `source`, `edition`, `publisher`, `year_published`, `subject_classification`, `call_number`, `isbn`, `material_type` (default `'Book'`), `description`
@@ -111,8 +114,8 @@
 - Flash: success count; first 10 errors individually; `"... and N more error(s)"` if >10
 
 ### `public_catalog()`
-- `?q=` → `search_books(query, field=field if field else None)` — field-specialized ILIKE queries
-- No q → `get_all_books()`
+- `?q=`/filters → `search_books_filtered(..., page, per_page=50)` → `(books_page, total)` (COUNT + LIMIT/OFFSET in SQL; out-of-range page clamped with one re-fetch)
+- No q/filters → empty state (only `get_distinct_categories()` runs)
 - Renders `public/catalog.html`
 
 ### `book_info(book_id)`
@@ -125,7 +128,11 @@
 
 | Function | Returns | SQL |
 |----------|---------|-----|
-| `get_all_books()` | `list[tuple]` | `SELECT DISTINCT ON (...) *, accession_numbers FROM book_catalog ORDER BY ...` (14 cols) |
+| `get_all_books()` | `list[tuple]` | Full active list with `accession_numbers` — exports only; page views use `get_all_books_paginated` |
+| `get_all_books_paginated(page, per_page)` | `(list[tuple], total_count)` | Same rows + `COUNT(*)` + `LIMIT %s OFFSET %s` |
+| `get_books_by_status_paginated(status, page, per_page)` | `(list[tuple], total_count)` | Same rows as `get_books_by_status` + `COUNT(*)` + `LIMIT %s OFFSET %s` |
+| `get_books_by_copy_status_paginated(copy_status, page, per_page)` | `(list[tuple], total_count)` | Same rows as `get_books_by_copy_status` + `COUNT(*)` + `LIMIT %s OFFSET %s` |
+| `search_books_filtered(..., page=1, per_page=50)` | `(list[tuple], total_count)` | Filtered WHERE (shared `_filtered_where`) + `COUNT(*)` + `LIMIT %s OFFSET %s`; row shape unchanged |
 | `get_book_by_id(book_id)` | `tuple\|None` | `SELECT * FROM book_catalog WHERE book_id = %s` |
 | `get_book_by_title_author_isbn(title, author, isbn)` | `tuple\|None` | `SELECT book_id ...` on `(title, author, isbn)` or `(title, author)` when isbn empty |
 | `search_books(query, field=None)` | `list[tuple]` | ILIKE on one or all of title/author/isbn/subject |
