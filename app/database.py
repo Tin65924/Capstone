@@ -170,4 +170,7 @@ def run_schema(app):
 
 def init_db(app):
     db.init_app(app)
+    if app.config.get('SKIP_SCHEMA_SYNC'):
+        app.logger.info('SKIP_SCHEMA_SYNC is set — skipping schema initialization.')
+        return
     run_schema(app)

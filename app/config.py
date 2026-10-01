@@ -37,3 +37,7 @@ class Config:
     BACKUP_DAY = _int_env('BACKUP_DAY', 1)
     BACKUP_HOUR = _int_env('BACKUP_HOUR', 2)
     BACKUP_KEEP = _int_env('BACKUP_KEEP', 12)
+    # Skip replaying schema.sql at boot (faster restarts once the DB is
+    # initialized). Default OFF (run it) so fresh databases never break —
+    # only set SKIP_SCHEMA_SYNC=1 after the schema is known-good.
+    SKIP_SCHEMA_SYNC = os.getenv('SKIP_SCHEMA_SYNC', '0') == '1'

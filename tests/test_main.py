@@ -180,6 +180,44 @@ class TestDashboardAttention:
         ]
         assert count_waiting_reservations() == 5
 
+    def test_stats_bypassed_without_app_context(self, mock_db):
+        """Direct model calls (no app context) always hit the DB so unit
+        tests stay deterministic and never leak cached values."""
+        from app.main.models import get_dashboard_stats
+        mock_db['fetch_one'].side_effect = [(100,), (250,), (10,), (4,), (3,)]
+        mock_db['fetch_all'].side_effect = [self.GROUPS, [], [(7,)]]
+        first = get_dashboard_stats()
+        mock_db['fetch_one'].side_effect = [(1,), (2,), (3,), (4,), (5,)]
+        mock_db['fetch_all'].side_effect = [self.GROUPS, [], [(7,)]]
+        second = get_dashboard_stats()
+        assert first['total_titles'] == 100
+        assert second['total_titles'] == 1
+
+    def test_stats_cached_in_requests(self, app, mock_db):
+        """Inside a non-testing request the second call is served from
+        cache (no extra DB hits) until cleared."""
+        from app.main.models import get_dashboard_stats, clear_stats_cache
+        clear_stats_cache()
+        mock_db['fetch_one'].side_effect = [(100,), (250,), (10,), (4,), (3,)]
+        mock_db['fetch_all'].side_effect = [self.GROUPS, [], [(7,)]]
+        old_testing = app.config.get('TESTING')
+        app.config['TESTING'] = False
+        try:
+            with app.app_context():
+                first = get_dashboard_stats()
+                calls_after_first = mock_db['fetch_one'].call_count
+                second = get_dashboard_stats()
+                assert second == first
+                assert mock_db['fetch_one'].call_count == calls_after_first
+                clear_stats_cache()
+                mock_db['fetch_one'].side_effect = [(7,), (8,), (9,), (10,), (11,)]
+                mock_db['fetch_all'].side_effect = [self.GROUPS, [], [(7,)]]
+                third = get_dashboard_stats()
+                assert third['total_titles'] == 7
+        finally:
+            app.config['TESTING'] = old_testing
+            clear_stats_cache()
+
     def test_librarian_dashboard_shows_panel(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [
             (100,), (250,), (10,), (4,), (3,), (10,), (3,), (1,),

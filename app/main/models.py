@@ -6,8 +6,52 @@ from app.circulation.models import (
 )
 from app.procurement.models import get_procurement_items
 
+import threading
+import time
+
+# Short-lived in-process cache for Overview headline counts (perf batch
+# #5). The librarian/admin dashboards re-count on every hit; a 60s TTL
+# absorbs repeat views without visible staleness. Single-worker safe
+# (gunicorn runs one worker); disabled without an app context and under
+# TESTING so mocked tests stay deterministic.
+STATS_TTL_SECONDS = 60
+_stats_cache = {}
+_stats_lock = threading.Lock()
+
+
+def _stats_cache_allowed():
+    try:
+        from flask import current_app, has_app_context
+        return has_app_context() and not current_app.config.get('TESTING')
+    except Exception:
+        return False
+
+
+def _cached_stats(key, compute):
+    if not _stats_cache_allowed():
+        return compute()
+    now = time.monotonic()
+    with _stats_lock:
+        hit = _stats_cache.get(key)
+        if hit is not None and now - hit[0] < STATS_TTL_SECONDS:
+            return hit[1]
+    value = compute()
+    with _stats_lock:
+        _stats_cache[key] = (time.monotonic(), value)
+    return value
+
+
+def clear_stats_cache():
+    """Drop all cached Overview counts (tests, manual refresh)."""
+    with _stats_lock:
+        _stats_cache.clear()
+
 
 def get_dashboard_stats():
+    return _cached_stats('dashboard', _get_dashboard_stats)
+
+
+def _get_dashboard_stats():
     titles = db.fetch_one(
         "SELECT COUNT(*) FROM book_catalog WHERE catalog_status = 'active'"
     )
@@ -70,11 +114,17 @@ def get_attention_summary():
 def get_admin_overview_stats():
     """Governance-focused counts for the admin System Overview.
 
+    Cached per _cached_stats (60s TTL); see _get_admin_overview_stats.
     Unlike get_dashboard_stats (circulation-focused for librarians),
     this answers: how many accounts exist, who is waiting for approval,
     and how is staff distributed. Backup health is rendered separately
     from backup_log so this stays cheap to mock and test.
     """
+    return _cached_stats('admin_overview', _get_admin_overview_stats)
+
+
+def _get_admin_overview_stats():
+    """Uncached admin overview counts (see get_admin_overview_stats)."""
     from app.auth.models import (
         count_active_users_by_role,
         count_pending_users,
