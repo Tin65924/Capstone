@@ -10,7 +10,7 @@ class Database:
             self.init_app(app)
 
     def init_app(self, app):
-        dsn = app.config['DATABASE_URL']
+        dsn = _with_connect_timeout(app.config['DATABASE_URL'])
         self._pool = pool.ThreadedConnectionPool(
             minconn=1,
             maxconn=10,
@@ -56,6 +56,24 @@ class Database:
         return self.execute(query, params)
 
 db = Database()
+
+
+def _with_connect_timeout(dsn, seconds=10):
+    """Append connect_timeout so a bad DATABASE_URL fails fast.
+
+    Without this, psycopg2 can block on TCP connect for minutes per
+    attempt — on Render that looks like a hung deploy ending in a
+    port-scan timeout instead of a clear connection error in the logs.
+    Handles both URL-style (postgresql://...) and keyword-style
+    (host=... dbname=...) DSNs; leaves an explicit value untouched.
+    """
+    if not isinstance(dsn, str) or 'connect_timeout' in dsn:
+        return dsn
+    if '://' in dsn:
+        sep = '&' if '?' in dsn else '?'
+        return f'{dsn}{sep}connect_timeout={seconds}'
+    spacer = ' ' if dsn and not dsn.endswith(' ') else ''
+    return f'{dsn}{spacer}connect_timeout={seconds}'
 
 
 def run_schema(app):

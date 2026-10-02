@@ -16,8 +16,8 @@ services:
     name: mcst-library
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn run:app --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120
-    healthCheckPath: /
+    startCommand: gunicorn run:app --bind 0.0.0.0:$PORT --workers 1 --worker-class gthread --threads 8 --timeout 120
+    healthCheckPath: /health
     envVars:
       - key: SECRET_KEY
         generateValue: true
