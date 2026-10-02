@@ -9,16 +9,26 @@ import re
 #   Admin     1-10       e.g. 7
 ID_NUMBER_PATTERNS = {
     'Student': re.compile(r'^\d{4}-\d{5}$'),
-    'Faculty': re.compile(r'^\d{9}$'),
+    'Faculty': re.compile(r'^FAC-\d{5}$'),
     'Librarian': re.compile(r'^LIB-\d{5}$'),
     'Admin': re.compile(r'^(10|[1-9])$'),
 }
 
 ID_NUMBER_EXAMPLES = {
     'Student': '2024-00123 (format: 0000-00000)',
-    'Faculty': '000000000 (format: 9 digits)',
+    'Faculty': 'FAC-00123 (format: FAC-00000)',
     'Librarian': 'LIB-00123 (format: LIB-00000)',
     'Admin': '1-10 (e.g. 7)',
+}
+
+# Max input lengths per role (exact canonical lengths):
+#   Student  0000-00000 = 10, Faculty FAC-00000 = 9,
+#   Librarian LIB-00000 = 9, Admin 1-10 = 2.
+ID_NUMBER_MAX_LENGTHS = {
+    'Student': 10,
+    'Faculty': 9,
+    'Librarian': 9,
+    'Admin': 2,
 }
 
 

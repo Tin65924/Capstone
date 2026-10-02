@@ -324,7 +324,7 @@ class TestIdNumberFormats:
         assert is_valid_id_number('2024-00001', 'Student')
         assert not is_valid_id_number('2024-0001', 'Student')
         assert not is_valid_id_number('FAC-00001', 'Student')
-        assert is_valid_id_number('000000001', 'Faculty')
+        assert is_valid_id_number('FAC-00001', 'Faculty')
         assert not is_valid_id_number('0000001', 'Faculty')
         assert not is_valid_id_number('2024-00001', 'Faculty')
         assert is_valid_id_number('LIB-00001', 'Librarian')

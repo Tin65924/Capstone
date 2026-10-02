@@ -81,9 +81,9 @@
             <div class="flex flex-col bg-white dark:bg-[#151c2b] rounded-xl border border-[#e7ebf3] dark:border-gray-800 divide-y divide-[#e7ebf3] dark:divide-gray-800 overflow-hidden shadow-sm">
                 {% if new_arrivals %}
                     {% for book in new_arrivals %}
-                    <div class="group flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors gap-2">
+                    <a href="{{ url_for('cataloging.book_info', book_id=book[0]) }}" class="group flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors gap-2">
                         <div class="flex flex-col gap-0.5 min-w-0 flex-1">
-                            <h4 class="text-base sm:text-lg font-bold text-[#0f172a] dark:text-white group-hover:text-primary transition-colors truncate sm:whitespace-normal">{{ book[1] }}</h4>
+                            <h4 class="text-base sm:text-lg font-bold text-[#0f172a] dark:text-white group-hover:text-primary group-hover:underline transition-colors truncate sm:whitespace-normal">{{ book[1] }}</h4>
                             <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">{{ book[2] }}</p>
                         </div>
                         <div class="mt-1 sm:mt-0 shrink-0">
@@ -95,7 +95,7 @@
                             <span class="inline-flex items-center rounded-md bg-yellow-50 dark:bg-yellow-900/30 px-2.5 py-1 text-xs font-bold text-yellow-800 dark:text-yellow-500 ring-1 ring-inset ring-yellow-600/20 uppercase tracking-wider">{{ book[11] }}</span>
                             {% endif %}
                         </div>
-                    </div>
+                    </a>
                     {% endfor %}
                 {% else %}
                     <div class="p-5 text-center text-gray-500 dark:text-gray-400">
