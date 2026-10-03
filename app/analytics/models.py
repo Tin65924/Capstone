@@ -1034,12 +1034,16 @@ def book_status_trends(book_id, start_date=None, end_date=None):
 
 
 def top_requested_titles(start_date=None, end_date=None, limit=10):
-    """Return [(book_title, request_count)] most-requested books first."""
+    """Return [(book_title, request_count)] most-requested books first.
+
+    Pending-only: counts rows with request_status = 'pending_review'.
+    """
     try:
         limit = int(limit)
     except (TypeError, ValueError):
         limit = 10
     parts, params = _range_clause('rr.request_date', start_date, end_date)
+    parts.append("rr.request_status = 'pending_review'")
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
         '''SELECT rr.book_title, COUNT(*) AS total
@@ -1055,12 +1059,14 @@ def requests_by_role_split(start_date=None, end_date=None, limit=10):
 
     One row per requested title with the Student / Faculty / Other-staff
     split, so the Analytics tab can render a stacked demand bar per title.
+    Pending-only: counts rows with request_status = 'pending_review'.
     """
     try:
         limit = int(limit)
     except (TypeError, ValueError):
         limit = 10
     parts, params = _range_clause('rr.request_date', start_date, end_date)
+    parts.append("rr.request_status = 'pending_review'")
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
         '''SELECT rr.book_title,
@@ -1079,8 +1085,13 @@ def requests_by_role_split(start_date=None, end_date=None, limit=10):
 
 
 def requests_trend(start_date=None, end_date=None):
-    """Return [(day, request_count)] daily book-request volume."""
+    """Return [(day, request_count)] daily book-request volume.
+
+    Includes pending_review + rejected so denied demand stays visible
+    over time.
+    """
     parts, params = _range_clause('rr.request_date', start_date, end_date)
+    parts.append("rr.request_status IN ('pending_review', 'rejected')")
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
         '''SELECT rr.request_date::date AS day, COUNT(*)
@@ -1094,8 +1105,10 @@ def requests_by_program(start_date=None, end_date=None, departments=None):
 
     program_label matches books_borrowed_per_program: the borrower's
     department, falling back to Admin/Librarian role or 'No program'.
+    Pending-only: counts rows with request_status = 'pending_review'.
     """
     parts, params = _range_clause('rr.request_date', start_date, end_date)
+    parts.append("rr.request_status = 'pending_review'")
     dept_clause, dept_params = _department_clause(departments, 'b', 'r')
     if dept_clause:
         parts.append(dept_clause)

@@ -88,10 +88,10 @@ DASHBOARD_DESCRIPTIONS = {
     'borrowers_by_department': 'Distinct active borrowers grouped by program/department.',
     'overdue_by_department': 'Overdue loans grouped by program/department.',
     'department_leaderboard': 'Borrowings, borrowers, and overdue per program/department.',
-    'top_requested_titles': 'Most-requested books not yet in the collection.',
-    'requests_by_role': 'Top requested titles split into Student / Faculty / Other staff.',
-    'requests_trend': 'Daily book-request counts in the selected period.',
-    'requests_by_program': 'Book requests grouped by borrower program/department.',
+    'top_requested_titles': 'Most-requested pending books not yet in the collection (pending requests only).',
+    'requests_by_role': 'Top pending requested titles split into Student / Faculty / Other staff (pending requests only).',
+    'requests_trend': 'Daily pending + rejected book-request counts in the selected period.',
+    'requests_by_program': 'Pending book requests grouped by borrower program/department (pending requests only).',
 }
 
 EXPORTABLE_KPIS = set(VALID_KPIS) | set(DASHBOARD_LABELS)
