@@ -700,6 +700,19 @@ def change_user_role(user_id):
         if new_role is None:
             flash('Invalid role selected.', 'error')
             return redirect(url_for('auth.admin_users'))
+        is_self = str(user_id) == str(current_user.id)
+        demoting_admin = old_role == 'Admin' and new_role != 'Admin'
+        if demoting_admin:
+            try:
+                admin_count = get_admin_count()
+            except Exception:
+                admin_count = 2
+            if admin_count <= 1:
+                if is_self:
+                    flash('You are the last admin. Transfer the admin role to another user before changing your own role.', 'error')
+                else:
+                    flash('This is the last admin account. Assign another admin before changing this role.', 'error')
+                return redirect(url_for('auth.admin_users'))
         update_user_role(user_id, role_id, updated_by=current_user.id)
         if old_role and new_role:
             detail = (f':{audit_text(old_role, 30)}~>'
