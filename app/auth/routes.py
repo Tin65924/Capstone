@@ -38,6 +38,23 @@ def _allowed_email(email):
     return email.lower().endswith(f'@{ALLOWED_DOMAIN}')
 
 
+def _login_status(user_id):
+    """Account status for a returning OAuth user ('active' on any doubt).
+
+    get_user_by_oauth_sub/get_user_by_email carry no status, so sign-in
+    must check explicitly — otherwise an archived/disabled user would
+    'log in' and then bounce on every page with a generic
+    'Please sign in' message that never explains the real reason.
+    """
+    try:
+        record = get_user_record(user_id)
+    except Exception:
+        return 'active'
+    if record and len(record) > 4 and record[4]:
+        return record[4]
+    return 'active'
+
+
 def _safe_next_url(fallback_endpoint='main.user_profile'):
     """Pop a validated post-login redirect from the session.
 
@@ -176,6 +193,13 @@ def google_callback():
 
     existing_user = get_user_by_oauth_sub(oauth_sub)
     if existing_user:
+        status = _login_status(existing_user[0])
+        if status == 'pending':
+            flash('Your account is still waiting for librarian approval.', 'info')
+            return render_template('auth/pending_approval.html', email=email)
+        if status != 'active':
+            flash(f'Your account is {status}. Contact the librarian if you need access.', 'error')
+            return redirect(url_for('auth.login'))
         user = User(*existing_user)
         login_user(user)
         log_activity(user.id, 'login', None)
@@ -258,8 +282,15 @@ def role_select():
 
         existing = get_user_by_oauth_sub(oauth_sub) or get_user_by_email(email)
         if existing:
-            user = User(*existing)
+            status = _login_status(existing[0])
             session.pop(SESSION_OAUTH_KEY, None)
+            if status == 'pending':
+                flash('Your account is still waiting for librarian approval.', 'info')
+                return render_template('auth/pending_approval.html', email=email)
+            if status != 'active':
+                flash(f'Your account is {status}. Contact the librarian if you need access.', 'error')
+                return redirect(url_for('auth.login'))
+            user = User(*existing)
             login_user(user)
             log_activity(user.id, 'login')
             flash('Welcome back!', 'success')
@@ -575,8 +606,12 @@ def _target_name(user_id):
 @login_required
 @admin_required
 def toggle_user_status_route(user_id):
-    if not get_user_record(user_id):
+    record = get_user_record(user_id)
+    if not record:
         flash('User not found.', 'error')
+        return redirect(url_for('auth.admin_users'))
+    if len(record) > 4 and record[4] not in ('active', 'disabled'):
+        flash('Only active or disabled accounts can have their status toggled.', 'info')
         return redirect(url_for('auth.admin_users'))
     toggle_user_status(user_id, updated_by=current_user.id)
     log_activity(current_user.id, f'toggled_user_status:{user_id}:{_target_name(user_id)}')

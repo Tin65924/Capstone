@@ -150,6 +150,53 @@ class TestGoogleCallback:
                                 assert resp.status_code == 302
                                 assert '/user/profile' in resp.location
 
+    def test_callback_archived_user_blocked_with_reason(self, client, mock_oauth_flow, mock_db):
+        with client.session_transaction() as sess:
+            sess['_oauth_state'] = 'test-state'
+        mock_oauth_flow.fetch_token.return_value = None
+        mock_oauth_flow.credentials.id_token = 'fake-id-token'
+        mock_db['fetch_one'].return_value = (1, 'a@mcst.edu.ph', 'Student', 'Ann', 'archived')
+
+        import app.auth.routes as auth_routes
+        with patch.object(auth_routes, 'id_token') as mock_id_token:
+            mock_id_token.verify_oauth2_token.return_value = {
+                'iss': 'accounts.google.com',
+                'email': 'a@mcst.edu.ph',
+                'sub': 'google-sub-1',
+                'name': 'Ann',
+            }
+            with patch('app.auth.routes.get_user_by_oauth_sub') as mock_get:
+                mock_get.return_value = (1, 'a@mcst.edu.ph', 'Student', 'Ann')
+                with patch('app.auth.routes.login_user') as mock_login:
+                    resp = client.get('/login/google/callback', query_string={'state': 'test-state', 'code': 'auth-code'})
+                    assert resp.status_code == 302
+                    assert resp.location.endswith('/login')
+                    assert not mock_login.called
+                    assert mock_db['execute'].call_count == 0
+
+    def test_callback_pending_user_sees_approval_page(self, client, mock_oauth_flow, mock_db):
+        with client.session_transaction() as sess:
+            sess['_oauth_state'] = 'test-state'
+        mock_oauth_flow.fetch_token.return_value = None
+        mock_oauth_flow.credentials.id_token = 'fake-id-token'
+        mock_db['fetch_one'].return_value = (2, 'f@mcst.edu.ph', 'Faculty', 'Fac', 'pending')
+
+        import app.auth.routes as auth_routes
+        with patch.object(auth_routes, 'id_token') as mock_id_token:
+            mock_id_token.verify_oauth2_token.return_value = {
+                'iss': 'accounts.google.com',
+                'email': 'f@mcst.edu.ph',
+                'sub': 'google-sub-2',
+                'name': 'Fac',
+            }
+            with patch('app.auth.routes.get_user_by_oauth_sub') as mock_get:
+                mock_get.return_value = (2, 'f@mcst.edu.ph', 'Faculty', 'Fac')
+                with patch('app.auth.routes.login_user') as mock_login:
+                    resp = client.get('/login/google/callback', query_string={'state': 'test-state', 'code': 'auth-code'})
+                    assert resp.status_code == 200
+                    assert b'approval' in resp.data.lower() or b'pending' in resp.data.lower()
+                    assert not mock_login.called
+
     def test_second_user_goes_to_role_select(self, client):
         with client.session_transaction() as sess:
             sess['_oauth_state'] = 'test-state'
