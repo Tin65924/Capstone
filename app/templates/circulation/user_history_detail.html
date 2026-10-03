@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ user_data[3] }} — History | MCST Library</title>
+    <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='images/Library_Logo.jpg') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/Library_Logo.jpg') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
@@ -57,6 +59,11 @@
     </div>
 
     <main>
+        <!-- Mobile top bar -->
+        <div class="lg:hidden sticky top-0 z-30 flex items-center gap-2 bg-white border-b border-[#cfd7e7] px-4 py-3 mb-4">
+            <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover">
+            <span class="font-bold text-sm">User History</span>
+        </div>
         {% include 'components/flash_messages.html' %}
         <nav class="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm text-gray-500 mb-4">
             <a href="{{ url_for('auth.admin_users') }}" class="hover:text-primary hover:underline font-medium">User Management & Access Control</a>

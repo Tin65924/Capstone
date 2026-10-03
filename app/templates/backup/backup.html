@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Backup & Recovery | MCST Library</title>
+    <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='images/Library_Logo.jpg') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/Library_Logo.jpg') }}">
     {% if busy %}<meta http-equiv="refresh" content="5">{% endif %}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -209,6 +211,11 @@
 
     <!-- Main Content Area -->
     <main>
+        <!-- Mobile top bar -->
+        <div class="lg:hidden sticky top-0 z-30 flex items-center gap-2 bg-white dark:bg-[#1a2235] border-b border-[#cfd7e7] dark:border-gray-700 px-4 py-3 mb-4">
+            <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover">
+            <span class="font-bold text-sm">System Backup</span>
+        </div>
         {% include 'components/flash_messages.html' %}
         <!-- Premium Status Header -->
         <div class="status-header animate-up">

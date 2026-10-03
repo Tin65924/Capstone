@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Analytics & Reporting | MCST Library</title>
+    <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='images/Library_Logo.jpg') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/Library_Logo.jpg') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
@@ -266,7 +268,7 @@
         <div class="top-bar">
             <div class="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
                 <button id="mobile-sidebar-open" type="button" class="lg:hidden p-2 -ml-1 rounded-lg hover:bg-slate-100"><span class="material-symbols-outlined">menu</span></button>
-                <span class="material-symbols-outlined text-primary hidden sm:inline">analytics</span>
+                <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover shrink-0">
                 <h2 class="text-base sm:text-xl font-bold font-outfit truncate">Reporting Dashboard</h2>
             </div>
             <div class="flex items-center gap-1.5 sm:gap-3 shrink-0">
