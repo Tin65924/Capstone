@@ -23,6 +23,7 @@ from .models import (
     get_user_record, audit_text,
     get_departments, is_valid_department, create_department,
     get_department_by_id, get_department_by_name, delete_department, count_borrowers_in_department,
+    update_department_status, DEPT_STATUSES,
     get_profile_by_user, DEPT_TYPES, is_valid_any_department,
     is_valid_id_number, normalize_id_number, ID_NUMBER_EXAMPLES, get_user_by_id_number
 )
@@ -388,8 +389,21 @@ def admin_users():
     # space instead of bouncing into admin space.
     sidebar = ('components/admin_sidebar_nav.html' if scope == 'staff'
                else 'components/librarian_sidebar_nav.html')
+    # Full vocab (including inactive) drives the management listing so
+    # librarians can reactivate entries; dropdowns/options below only
+    # receive the active subset — inactive values never appear as options.
+    # NOTE: roles are fetched before the vocab to preserve the DB call
+    # order the test-suite mocks rely on (users, pending, roles, vocab).
+    roles = get_roles()
+    programs_all = get_departments('program', include_inactive=True) or []
+    departments_all = get_departments('department', include_inactive=True) or []
+
+    def _only_active(rows):
+        return [r for r in (rows or [])
+                if (r[3] if len(r) > 3 and r[3] else 'active') == 'active']
+
     return render_template('users/users.html',
-                               users=users, roles=get_roles(),
+                               users=users, roles=roles,
                                pending=pending, total=total,
                                active=active, students=students,
                                faculty=faculty,
@@ -402,8 +416,10 @@ def admin_users():
                            is_staff_view=(scope == 'staff'),
                            is_admin_view=is_admin_view,
                            sidebar=sidebar,
-                           programs=get_departments('program'),
-                           departments=get_departments('department'))
+                           programs=_only_active(programs_all),
+                           departments=_only_active(departments_all),
+                           programs_all=programs_all,
+                           departments_all=departments_all)
 
 
 _USER_EXPORT_HEADERS = [
@@ -803,7 +819,8 @@ def delete_department_route(department_id):
     dept = get_department_by_id(department_id)
     if not dept:
         return _fail('Entry not found.', 404)
-    in_use = count_borrowers_in_department(dept[1])
+    dept_type = dept[2] if len(dept) > 2 else None
+    in_use = count_borrowers_in_department(dept[1], dept_type)
     if in_use:
         return _fail(f'Cannot delete "{dept[1]}" — {in_use} borrower(s) still use it.', 409)
     delete_department(department_id)
@@ -811,6 +828,45 @@ def delete_department_route(department_id):
     if wants_json:
         return jsonify({'deleted': department_id, 'name': dept[1]})
     flash(f'"{dept[1]}" deleted.', 'success')
+    return redirect(url_for('auth.admin_users'))
+
+
+@auth_bp.route('/librarian/departments/<int:department_id>/status', methods=['POST'])
+@login_required
+@librarian_required
+def update_department_status_route(department_id):
+    """Switch a program/department between active and inactive.
+
+    Librarian-accessible (Admin included): inactive entries stay in the
+    table but disappear from every registration/profile option.
+    """
+    wants_json = _wants_json()
+
+    def _fail(message, code):
+        if wants_json:
+            return jsonify({'error': message}), code
+        flash(message, 'error')
+        return redirect(url_for('auth.admin_users'))
+
+    status = (request.form.get('status') or '').strip().lower()
+    if status not in DEPT_STATUSES:
+        return _fail('Invalid status. Choose Active or Inactive.', 400)
+
+    dept = get_department_by_id(department_id)
+    if not dept:
+        return _fail('Entry not found.', 404)
+    current = dept[3] if len(dept) > 3 and dept[3] else 'active'
+    if current == status:
+        if wants_json:
+            return jsonify({'updated': department_id, 'name': dept[1], 'status': status})
+        flash(f'"{dept[1]}" is already {status}.', 'info')
+        return redirect(url_for('auth.admin_users'))
+
+    update_department_status(department_id, status)
+    log_activity(current_user.id, f'department_status:{department_id}:{status}')
+    if wants_json:
+        return jsonify({'updated': department_id, 'name': dept[1], 'status': status})
+    flash(f'"{dept[1]}" set to {status}.', 'success')
     return redirect(url_for('auth.admin_users'))
 
 

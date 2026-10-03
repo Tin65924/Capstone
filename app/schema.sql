@@ -262,8 +262,15 @@ CREATE TABLE IF NOT EXISTS departments (
     name          VARCHAR(100) NOT NULL,
     dept_type     VARCHAR(20) NOT NULL
                   CHECK (dept_type IN ('program', 'department')),
+    status        VARCHAR(20) NOT NULL DEFAULT 'active'
+                  CHECK (status IN ('active', 'inactive')),
     UNIQUE (dept_type, name)
 );
+
+-- Active/inactive toggle for programs & departments. Inactive entries
+-- stay in the table (borrower history intact) but are hidden from every
+-- registration/profile option. Idempotent for existing databases.
+ALTER TABLE departments ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active';
 
 -- Audit columns (Updated By / Updated Date) for every table editable via
 -- the frontend. inventory_status already audits via checked_by /

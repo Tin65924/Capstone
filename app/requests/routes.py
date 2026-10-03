@@ -6,7 +6,8 @@ from . import requests_bp
 from .models import (
     create_request, get_requests, get_request_by_id,
     update_request_status, get_demand_by_role, get_borrower_by_user,
-    check_duplicate_request, get_requests_with_details, get_requests_by_borrower,
+    check_duplicate_request, check_catalog_exists,
+    check_approved_request_exists, get_requests_with_details, get_requests_by_borrower,
     count_requests, count_requests_by_status, build_stacked_chart, build_variant_lookup,
     _cluster_demand, normalize_title, PER_PAGE
 )
@@ -370,6 +371,10 @@ def user_request_book():
 
         if check_duplicate_request(borrower_id, book_title):
             flash('You already requested this book.', 'error')
+            return redirect(url_for('requests.user_request_book'))
+
+        if check_catalog_exists(book_title) or check_approved_request_exists(book_title):
+            flash('Book is already existing in the catalog', 'error')
             return redirect(url_for('requests.user_request_book'))
 
         new_request_id = create_request(borrower_id, book_title, author)

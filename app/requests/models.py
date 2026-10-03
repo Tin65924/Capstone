@@ -307,3 +307,60 @@ def check_duplicate_request(requester_id, book_title):
             return True
 
     return False
+
+
+def _title_matches(existing_title, normalized):
+    """Normalized exact + fuzzy title comparison shared by existence checks."""
+    try:
+        existing_normalized = normalize_title(existing_title or '')
+    except Exception:
+        return False
+    if not existing_normalized or not normalized:
+        return False
+    if existing_normalized == normalized:
+        return True
+    try:
+        return SequenceMatcher(None, existing_normalized, normalized).ratio() >= TITLE_FUZZY_RATIO
+    except Exception:
+        return False
+
+
+def check_catalog_exists(book_title):
+    """True when an active (not archived/inactive) catalog book matches.
+
+    Only rows with catalog_status = 'active' block a new request;
+    archived (or inactive) books are requestable again.
+    """
+    normalized = normalize_title(book_title or '')
+    if not normalized:
+        return False
+    rows = db.fetch_all(
+        "SELECT title FROM book_catalog WHERE catalog_status = 'active'"
+    ) or []
+    for row in rows:
+        try:
+            title = row[0]
+        except (IndexError, TypeError):
+            continue
+        if _title_matches(title, normalized):
+            return True
+    return False
+
+
+def check_approved_request_exists(book_title):
+    """True when an already-approved (or procured) request matches the title."""
+    normalized = normalize_title(book_title or '')
+    if not normalized:
+        return False
+    rows = db.fetch_all(
+        "SELECT book_title FROM request_records "
+        "WHERE request_status IN ('approved', 'procured')"
+    ) or []
+    for row in rows:
+        try:
+            title = row[0]
+        except (IndexError, TypeError):
+            continue
+        if _title_matches(title, normalized):
+            return True
+    return False

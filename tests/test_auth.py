@@ -568,6 +568,37 @@ class TestDepartmentsManager:
         assert resp.status_code == 404
         assert mock_db['execute'].call_count == 0
 
+    def test_delete_department_scopes_count_to_faculty(self, admin_client, mock_db):
+        """A student program sharing the name must not block deleting the
+        faculty department entry (e.g. 'BA Communication')."""
+        from app.auth.models import count_borrowers_in_department
+        mock_db['fetch_one'].side_effect = [
+            (1, 'BA Communication', 'department', 'active'),  # get_department_by_id
+            (0,),  # faculty-scoped count -> nobody uses it
+        ]
+        resp = admin_client.post('/admin/departments/1/delete')
+        assert resp.status_code == 302
+        count_query = mock_db['fetch_one'].call_args_list[1][0][0]
+        assert 'Faculty' in count_query
+        assert 'Student' not in count_query
+        call_args = mock_db['execute'].call_args_list[0]
+        assert 'DELETE FROM departments' in call_args[0][0]
+
+    def test_count_scopes_program_to_students(self, mock_db):
+        from app.auth.models import count_borrowers_in_department
+        mock_db['fetch_one'].return_value = (2,)
+        assert count_borrowers_in_department('BSIS', 'program') == 2
+        query = mock_db['fetch_one'].call_args[0][0]
+        assert 'Student' in query
+        assert 'Faculty' not in query
+
+    def test_count_unscoped_keeps_legacy_query(self, mock_db):
+        from app.auth.models import count_borrowers_in_department
+        mock_db['fetch_one'].return_value = (1,)
+        assert count_borrowers_in_department('BSIS') == 1
+        query = mock_db['fetch_one'].call_args[0][0]
+        assert 'JOIN' not in query
+
     def test_users_page_has_ajax_hooks(self, admin_client, mock_db):
         mock_db['fetch_all'].side_effect = [
             [],  # users

@@ -359,6 +359,10 @@ def describe_activity(actor, activity):
     m = re.match(r'^deleted_department:(\d+)$', code)
     if m:
         return f'{who} deleted department #{m.group(1)}'
+    m = re.match(r'^department_status:(\d+):(active|inactive)$', code)
+    if m:
+        verb = 'activated' if m.group(2) == 'active' else 'deactivated'
+        return f'{who} {verb} department #{m.group(1)}'
 
     m = re.match(r'^settings:update:(\d+)(?::(.+))?$', code)
     if m:
@@ -496,8 +500,8 @@ def _activity_category(code):
         return 'Profile & notifications'
     if c.startswith(('approved_user:', 'toggled_user_status:',
                      'archived_user:', 'unarchived_user:', 'deleted_user:',
-                     'edited_user:', 'changed_role:', 'added_department:',
-                     'deleted_department:', 'users:export:')):
+                      'edited_user:', 'changed_role:', 'added_department:',
+                      'deleted_department:', 'department_status:', 'users:export:')):
         return 'User management'
     return 'Other'
 
@@ -743,24 +747,47 @@ def update_own_profile(user_id, full_name, phone_number=None, department=None):
 
 DEPT_TYPES = ('program', 'department')
 
+DEPT_STATUSES = ('active', 'inactive')
 
-def get_departments(dept_type=None):
-    """Controlled-vocabulary entries as (department_id, name, dept_type)."""
+
+def _dept_status(row):
+    """Status at index 3 when present; legacy 3-tuple rows count as active."""
+    try:
+        return row[3] if len(row) > 3 and row[3] else 'active'
+    except (IndexError, TypeError):
+        return 'active'
+
+
+def get_departments(dept_type=None, include_inactive=False):
+    """Controlled-vocabulary entries as (department_id, name, dept_type, status).
+
+    Default returns active entries only — every registration/profile
+    dropdown and option list must never show inactive values. Pass
+    include_inactive=True for the management listing so librarians can
+    see and reactivate inactive entries.
+    """
+    status_filter = '' if include_inactive else " AND status = 'active'"
     if dept_type:
         return db.fetch_all(
-            'SELECT department_id, name, dept_type FROM departments '
-            'WHERE dept_type = %s ORDER BY name',
+            'SELECT department_id, name, dept_type, status FROM departments '
+            'WHERE dept_type = %s' + status_filter + ' ORDER BY name',
             (dept_type,)
         )
     return db.fetch_all(
-        'SELECT department_id, name, dept_type FROM departments '
+        'SELECT department_id, name, dept_type, status FROM departments '
+        'WHERE 1 = 1' + status_filter + ' '
         'ORDER BY dept_type, name'
     )
 
 
+def get_active_departments(dept_type=None):
+    """Active entries only (registration/profile/edit options)."""
+    return get_departments(dept_type, include_inactive=False)
+
+
 def is_valid_department(name, dept_type):
     row = db.fetch_one(
-        'SELECT 1 FROM departments WHERE name = %s AND dept_type = %s',
+        "SELECT 1 FROM departments WHERE name = %s AND dept_type = %s AND status = 'active'",
         (name, dept_type)
     )
     return row is not None
@@ -769,7 +796,7 @@ def is_valid_department(name, dept_type):
 def is_valid_any_department(name):
     """Staff (Admin/Librarian) may hold either a program or a department."""
     row = db.fetch_one(
-        'SELECT 1 FROM departments WHERE name = %s',
+        "SELECT 1 FROM departments WHERE name = %s AND status = 'active'",
         (name,)
     )
     return row is not None
@@ -784,7 +811,7 @@ def create_department(name, dept_type):
 
 def get_department_by_id(department_id):
     return db.fetch_one(
-        'SELECT department_id, name, dept_type FROM departments WHERE department_id = %s',
+        'SELECT department_id, name, dept_type, status FROM departments WHERE department_id = %s',
         (department_id,)
     )
 
@@ -792,16 +819,49 @@ def get_department_by_id(department_id):
 def get_department_by_name(name):
     """Single vocab entry by exact name (for JSON add responses)."""
     return db.fetch_one(
-        'SELECT department_id, name, dept_type FROM departments WHERE name = %s',
+        'SELECT department_id, name, dept_type, status FROM departments WHERE name = %s',
         (name,)
     )
 
 
-def count_borrowers_in_department(name):
-    row = db.fetch_one(
-        'SELECT COUNT(*) FROM borrowers WHERE department = %s',
-        (name,)
+def update_department_status(department_id, status):
+    """Switch a program/department between active and inactive."""
+    return db.execute(
+        'UPDATE departments SET status = %s WHERE department_id = %s',
+        (status, department_id)
     )
+
+
+def count_borrowers_in_department(name, dept_type=None):
+    """Borrowers actually bound to a vocab entry.
+
+    Programs are only selectable by Students and departments only by
+    Faculty, so a same-named value on the other side (e.g. a student
+    program "BA Communication" vs the faculty department of the same
+    name) must not block deletion. Unscoped (dept_type=None) keeps the
+    legacy all-borrower count.
+    """
+    if dept_type == 'program':
+        row = db.fetch_one(
+            'SELECT COUNT(*) FROM borrowers b '
+            'JOIN user_accounts u ON u.user_id = b.user_id '
+            'JOIN roles r ON r.role_id = u.role_id '
+            "WHERE b.department = %s AND r.role_name = 'Student'",
+            (name,)
+        )
+    elif dept_type == 'department':
+        row = db.fetch_one(
+            'SELECT COUNT(*) FROM borrowers b '
+            'JOIN user_accounts u ON u.user_id = b.user_id '
+            'JOIN roles r ON r.role_id = u.role_id '
+            "WHERE b.department = %s AND r.role_name = 'Faculty'",
+            (name,)
+        )
+    else:
+        row = db.fetch_one(
+            'SELECT COUNT(*) FROM borrowers WHERE department = %s',
+            (name,)
+        )
     return row[0] if row else 0
 
 
