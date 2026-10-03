@@ -618,6 +618,39 @@ class TestUserManagement:
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
 
+    @staticmethod
+    def _archived_lookup(q, p=None, status='archived'):
+        """Mimic real DB semantics: the active-only lookup sees nothing
+        for non-active users, while status-agnostic reads see the row."""
+        if "account_status = 'active'" in q:
+            return None
+        if q.strip().startswith('SELECT account_status'):
+            return (status,)
+        return (1, 'a@mcst.edu.ph', 'Student', 'Ann', status)
+
+    def test_delete_archived_user_succeeds(self, admin_client, mock_db):
+        mock_db['fetch_one'].side_effect = self._archived_lookup
+        resp = admin_client.post('/admin/users/1/delete')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count >= 1
+        assert 'DELETE FROM user_accounts' in mock_db['execute'].call_args_list[0][0][0]
+
+    def test_unarchive_archived_user_succeeds(self, admin_client, mock_db):
+        mock_db['fetch_one'].side_effect = self._archived_lookup
+        resp = admin_client.post('/admin/users/1/unarchive')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count >= 1
+        assert 'UPDATE user_accounts' in mock_db['execute'].call_args_list[0][0][0]
+
+    def test_archive_disabled_user_succeeds(self, admin_client, mock_db):
+        import functools
+        mock_db['fetch_one'].side_effect = functools.partial(
+            self._archived_lookup, status='disabled')
+        resp = admin_client.post('/admin/users/1/archive')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count >= 1
+        assert 'UPDATE user_accounts' in mock_db['execute'].call_args_list[0][0][0]
+
     def test_delete_user_librarian_forbidden(self, librarian_client, mock_db):
         resp = librarian_client.post('/admin/users/1/delete')
         assert resp.status_code == 302

@@ -19,7 +19,7 @@ from .models import (
     create_pending_user, create_borrower, get_roles, get_role_by_name,
     log_activity, log_system_event, get_all_users, get_pending_users,
     approve_user, update_user_role, toggle_user_status,
-    update_user_details, archive_user, unarchive_user, delete_user, get_admin_count, get_user_by_id,
+    update_user_details, archive_user, unarchive_user, delete_user, get_admin_count,
     get_user_record, audit_text,
     get_departments, is_valid_department, create_department,
     get_department_by_id, delete_department, count_borrowers_in_department,
@@ -575,7 +575,7 @@ def _target_name(user_id):
 @login_required
 @admin_required
 def toggle_user_status_route(user_id):
-    if not get_user_by_id(user_id):
+    if not get_user_record(user_id):
         flash('User not found.', 'error')
         return redirect(url_for('auth.admin_users'))
     toggle_user_status(user_id, updated_by=current_user.id)
@@ -588,7 +588,7 @@ def toggle_user_status_route(user_id):
 @login_required
 @admin_required
 def archive_user_route(user_id):
-    if not get_user_by_id(user_id):
+    if not get_user_record(user_id):
         flash('User not found.', 'error')
         return redirect(url_for('auth.admin_users'))
     archive_user(user_id, updated_by=current_user.id)
@@ -601,7 +601,7 @@ def archive_user_route(user_id):
 @login_required
 @admin_required
 def unarchive_user_route(user_id):
-    if not get_user_by_id(user_id):
+    if not get_user_record(user_id):
         flash('User not found.', 'error')
         return redirect(url_for('auth.admin_users'))
     unarchive_user(user_id, updated_by=current_user.id)
@@ -616,7 +616,7 @@ def unarchive_user_route(user_id):
 def delete_user_route(user_id):
     # Name first: the row is gone after delete_user().
     target_name = _target_name(user_id)
-    user = get_user_by_id(user_id)
+    user = get_user_record(user_id)
     if not user:
         flash('User not found.', 'error')
         return redirect(url_for('auth.admin_users'))
