@@ -68,6 +68,41 @@ class TestMarkNotificationRead:
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
 
+    JSON = {'Accept': 'application/json'}
+
+    def test_mark_read_json_returns_unread_count(self, student_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (1, 1, '2024-0001', 'CS', 'active'),  # borrower
+            (2,),  # count_unread_notifications
+        ]
+        resp = student_client.post('/user/notifications/1/read', headers=self.JSON)
+        assert resp.status_code == 200
+        assert resp.get_json() == {'read': 1, 'unread_count': 2}
+
+    def test_mark_all_read_json(self, student_client, mock_db):
+        mock_db['fetch_one'].return_value = (1, 1, '2024-0001', 'CS', 'active')
+        resp = student_client.post('/user/notifications/read-all', headers=self.JSON)
+        assert resp.status_code == 200
+        assert resp.get_json() == {'read_all': True, 'unread_count': 0}
+
+    def test_mark_read_json_no_borrower_404(self, student_client, mock_db):
+        mock_db['fetch_one'].return_value = None
+        resp = student_client.post('/user/notifications/1/read', headers=self.JSON)
+        assert resp.status_code == 404
+        assert 'error' in resp.get_json()
+        assert mock_db['execute'].call_count == 0
+
+    def test_notifications_page_has_ajax_hooks(self, student_client, mock_db):
+        mock_db['fetch_one'].return_value = (1, 1, '2024-0001', 'CS', 'active')
+        mock_db['fetch_all'].return_value = [
+            (1, 'You borrowed copy X.', 'borrow', '10', '2026-08-10 09:00:00', False),
+        ]
+        resp = student_client.get('/user/notifications')
+        assert resp.status_code == 200
+        assert b'data-notif-read=' in resp.data
+        assert b'data-notif-card=' in resp.data
+        assert b'js/ajax_ui.js' in resp.data
+
 
 class TestUpdateProfile:
     PROFILE = (1, 'student@mcst.edu.ph', 'Student', 'Test Student',

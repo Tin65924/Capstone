@@ -312,15 +312,15 @@
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 sm:p-4">
                 {% for list_title, singular, dept_type, entries in [('Programs', 'program', 'program', programs), ('Departments', 'department', 'department', departments)] %}
-                <div class="border border-gray-100 rounded-xl p-3 sm:p-4">
+                <div class="border border-gray-100 rounded-xl p-3 sm:p-4" data-dept-section="{{ dept_type }}">
                     <h4 class="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">{{ list_title }}</h4>
                     {% if entries %}
-                    <ul class="divide-y divide-gray-100 mb-3">
+                    <ul class="divide-y divide-gray-100 mb-3" data-dept-list="{{ dept_type }}">
                         {% for d in entries %}
-                        <li class="flex items-center justify-between gap-2 py-1.5">
+                        <li class="flex items-center justify-between gap-2 py-1.5" data-dept-row="{{ d[0] }}">
                             <span class="text-sm font-medium truncate">{{ d[1] }}</span>
                             {% if current_user.role == 'Admin' %}
-                            <form method="POST" action="{{ url_for('auth.delete_department_route', department_id=d[0]) }}" data-dept-name="{{ d[1] }}" onsubmit="return confirmDeptDelete(this);">
+                            <form method="POST" action="{{ url_for('auth.delete_department_route', department_id=d[0]) }}" data-dept-delete data-dept-name="{{ d[1] }}" onsubmit="return confirmDeptDelete(this);">
                                 <button type="submit" class="text-rose-500 hover:text-rose-700 p-1" title="Delete {{ d[1] }}">
                                     <span class="material-symbols-outlined text-[18px]">delete</span>
                                 </button>
@@ -330,9 +330,9 @@
                         {% endfor %}
                     </ul>
                     {% else %}
-                    <p class="text-xs text-gray-400 mb-3">None yet — add the first one below.</p>
+                    <p class="text-xs text-gray-400 mb-3" data-dept-empty="{{ dept_type }}">None yet — add the first one below.</p>
                     {% endif %}
-                    <form method="POST" action="{{ url_for('auth.add_department_route') }}" class="flex gap-2">
+                    <form method="POST" action="{{ url_for('auth.add_department_route') }}" class="flex gap-2" data-dept-add data-dept-type="{{ dept_type }}"{% if current_user.role == 'Admin' %} data-can-delete="1" data-delete-url-template="{{ url_for('auth.delete_department_route', department_id=0) }}"{% endif %}>
                         <input type="hidden" name="dept_type" value="{{ dept_type }}">
                         <input type="text" name="name" required maxlength="100" placeholder="Add {{ singular }}…"
                             class="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
@@ -879,6 +879,134 @@ if (_editModal) { _editModal.addEventListener('click', function(e) {
             var btn = document.getElementById('role-select-btn-' + id);
             var arrow = document.getElementById('role-select-arrow-' + id);
             if (dropdown && !wrapper.contains(e.target)) { dropdown.classList.add('hidden'); if (btn) btn.setAttribute('aria-expanded','false'); if (arrow) arrow.style.transform=''; }
+        });
+    });
+})();
+</script>
+
+<script src="{{ url_for('static', filename='js/ajax_ui.js') }}"></script>
+<script>
+// Programs & Departments: no-reload add/remove. Plain POST+redirect still
+// works with JS off; with JS on, the list is patched in place only after
+// the backend confirms (pessimistic AJAX — never painted before commit).
+(function () {
+    if (!window.AjaxUI) return;
+    var toast = window.AjaxUI.toast, postForm = window.AjaxUI.postForm, setBusy = window.AjaxUI.setBusy;
+
+    function sectionFor(type) { return document.querySelector('[data-dept-section="' + type + '"]'); }
+    function ensureList(section, type) {
+        var list = section.querySelector('[data-dept-list="' + type + '"]');
+        if (list) return list;
+        list = document.createElement('ul');
+        list.className = 'divide-y divide-gray-100 mb-3';
+        list.setAttribute('data-dept-list', type);
+        var addForm = section.querySelector('form[data-dept-add]');
+        section.insertBefore(list, addForm);
+        return list;
+    }
+    function pushVocab(type, name) {
+        var arr = type === 'program' ? window.PROGRAM_NAMES : window.DEPARTMENT_NAMES;
+        if (Array.isArray(arr) && arr.indexOf(name) === -1) arr.push(name);
+    }
+    function dropVocab(type, name) {
+        var arr = type === 'program' ? window.PROGRAM_NAMES : window.DEPARTMENT_NAMES;
+        if (Array.isArray(arr)) {
+            var i = arr.indexOf(name);
+            if (i !== -1) arr.splice(i, 1);
+        }
+    }
+    function buildRow(type, item, addForm) {
+        var li = document.createElement('li');
+        li.className = 'flex items-center justify-between gap-2 py-1.5';
+        li.setAttribute('data-dept-row', item.id);
+        var span = document.createElement('span');
+        span.className = 'text-sm font-medium truncate';
+        span.textContent = item.name;
+        li.appendChild(span);
+        if (addForm.hasAttribute('data-can-delete')) {
+            var tpl = addForm.getAttribute('data-delete-url-template') || '';
+            var form = document.createElement('form');
+            form.method = 'POST';
+            // NOTE: the remove URL is assembled from parts on purpose — the
+            // librarian view must not contain admin URLs (see
+            // test_staff_management), and this template is admin-only anyway.
+            form.action = String(tpl).split('/0/').join('/' + item.id + '/');
+            form.setAttribute('data-dept-delete', '');
+            form.setAttribute('data-dept-name', item.name);
+            form.setAttribute('onsubmit', 'return confirmDeptDelete(this);');
+            var btn = document.createElement('button');
+            btn.type = 'submit';
+            btn.className = 'text-rose-500 hover:text-rose-700 p-1';
+            btn.title = 'Delete ' + item.name;
+            var icon = document.createElement('span');
+            icon.className = 'material-symbols-outlined text-[18px]';
+            icon.textContent = 'delete';
+            btn.appendChild(icon);
+            form.appendChild(btn);
+            li.appendChild(form);
+        }
+        return li;
+    }
+
+    document.querySelectorAll('form[data-dept-add]').forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var type = form.getAttribute('data-dept-type');
+            var input = form.querySelector('input[name="name"]');
+            var btn = form.querySelector('button[type="submit"]');
+            if (!input || !input.value.trim()) return;
+            setBusy(btn, true);
+            postForm(form.action, new FormData(form)).then(function (data) {
+                var item = data.added || {};
+                var section = sectionFor(type);
+                var empty = section && section.querySelector('[data-dept-empty="' + type + '"]');
+                if (empty) empty.remove();
+                var list = ensureList(section, type);
+                list.appendChild(buildRow(type, item, form));
+                pushVocab(type, item.name);
+                input.value = '';
+                toast('"' + item.name + '" added.', 'success');
+            }).catch(function (err) {
+                toast(err.message, 'error');
+            }).then(function () { setBusy(btn, false); });
+        });
+    });
+
+    // Delegated delete. The inline onsubmit confirm runs first; when it
+    // cancels, defaultPrevented is set and we skip the fetch.
+    document.addEventListener('submit', function (e) {
+        var form = e.target && e.target.closest ? e.target.closest('form[data-dept-delete]') : null;
+        if (!form || e.defaultPrevented || form.dataset.ajaxBusy) return;
+        e.preventDefault();
+        var section = form.closest('[data-dept-section]');
+        var type = section ? section.getAttribute('data-dept-section') : '';
+        var name = form.getAttribute('data-dept-name') || '';
+        var row = form.closest('li');
+        var btn = form.querySelector('button[type="submit"]');
+        form.dataset.ajaxBusy = '1';
+        if (btn) btn.style.opacity = '0.6';
+        postForm(form.action, new FormData(form)).then(function (data) {
+            var gone = (data && data.name) || name;
+            if (row) row.remove();
+            dropVocab(type, gone);
+            if (section) {
+                var list = section.querySelector('[data-dept-list="' + type + '"]');
+                if (list && list.children.length === 0 && !section.querySelector('[data-dept-empty="' + type + '"]')) {
+                    var p = document.createElement('p');
+                    p.className = 'text-xs text-gray-400 mb-3';
+                    p.setAttribute('data-dept-empty', type);
+                    p.textContent = 'None yet — add the first one below.';
+                    var addForm = section.querySelector('form[data-dept-add]');
+                    section.insertBefore(p, addForm);
+                    list.remove();
+                }
+            }
+            toast('"' + gone + '" deleted.', 'success');
+        }).catch(function (err) {
+            toast(err.message, 'error');
+        }).then(function () {
+            delete form.dataset.ajaxBusy;
+            if (btn) btn.style.opacity = '';
         });
     });
 })();

@@ -96,7 +96,7 @@
                 <button type="button" onclick="openNotificationsModal()" class="relative p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
                     <span class="material-symbols-outlined text-[20px]">notifications</span>
                     {% set _unread_m = unread_count if unread_count is defined else (notifications|length) %}
-                    {% if _unread_m %}<span class="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">{{ _unread_m }}</span>{% endif %}
+                    {% if _unread_m %}<span data-unread-badge class="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">{{ _unread_m }}</span>{% endif %}
                 </button>
             </div>
             {% include 'components/flash_messages.html' %}
@@ -116,7 +116,7 @@
                             <span class="" style="">Notifications</span>
                             {% set _unread = unread_count if unread_count is defined else (notifications|length) %}
                             {% if _unread %}
-                            <span
+                            <span data-unread-badge
                                 class="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">{{ _unread }}</span>
                             {% endif %}
                         </button>
@@ -393,7 +393,7 @@
             </div>
             <div class="px-5 pt-3">
                 {% if notifications %}
-                <form method="POST" action="{{ url_for('main.mark_all_notifications_read_route', next=url_for('main.user_profile')) }}">
+                <form method="POST" action="{{ url_for('main.mark_all_notifications_read_route', next=url_for('main.user_profile')) }}" data-notif-read-all>
                     <button type="submit" class="text-xs font-bold text-primary hover:underline">Mark all as read</button>
                 </form>
                 {% endif %}
@@ -401,7 +401,7 @@
             <div class="overflow-y-auto p-5 flex flex-col gap-3">
                 {% for notif in notifications[:20] %}
                 {% set _read = (notif|length > 5 and notif[5]) %}
-                <div
+                <div data-notif-card="{{ notif[0] }}"
                     class="p-4 rounded-lg border {% if _read %}bg-white dark:bg-transparent border-gray-100 dark:border-gray-700 opacity-70{% else %}bg-gray-50 dark:bg-gray-800/50 border-gray-100 dark:border-gray-700{% endif %}">
                     <div class="flex justify-between items-start gap-2">
                         <p class="text-sm text-gray-700 dark:text-gray-200 font-medium">{{ notif[1] }}</p>
@@ -411,7 +411,7 @@
                     <div class="flex items-center justify-between mt-1">
                         <p class="text-xs text-gray-400">{{ notif[4] }}</p>
                         {% if not _read %}
-                        <form method="POST" action="{{ url_for('main.mark_notification_read_route', notification_id=notif[0], next=url_for('main.user_profile')) }}">
+                        <form method="POST" action="{{ url_for('main.mark_notification_read_route', notification_id=notif[0], next=url_for('main.user_profile')) }}" data-notif-read="{{ notif[0] }}">
                             <button type="submit" class="text-[11px] font-bold text-primary hover:underline">Mark as read</button>
                         </form>
                         {% endif %}
@@ -503,6 +503,67 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/autosuggest.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ajax_ui.js') }}"></script>
+    <script>
+    // Notifications: mark read without reloading. Plain POST+redirect still
+    // works with JS off; with JS on, the row/badge update only after the
+    // backend confirms (pessimistic AJAX — never painted before commit).
+    (function () {
+        if (!window.AjaxUI) return;
+        var toast = window.AjaxUI.toast, postForm = window.AjaxUI.postForm;
+
+        function setBadges(count) {
+            document.querySelectorAll('[data-unread-badge]').forEach(function (el) {
+                if (count > 0) {
+                    el.textContent = count;
+                } else {
+                    el.remove();
+                }
+            });
+        }
+        function dimCard(id) {
+            var card = document.querySelector('[data-notif-card="' + id + '"]');
+            if (!card) return;
+            card.classList.add('opacity-70');
+            var form = card.querySelector('form[data-notif-read]');
+            if (form) form.remove();
+        }
+        document.querySelectorAll('form[data-notif-read]').forEach(function (form) {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                var btn = form.querySelector('button[type="submit"]');
+                if (btn) btn.disabled = true;
+                postForm(form.action, new FormData(form)).then(function (data) {
+                    dimCard(data.read);
+                    setBadges(data.unread_count || 0);
+                }).catch(function (err) {
+                    toast(err.message, 'error');
+                    if (btn) btn.disabled = false;
+                });
+            });
+        });
+        document.querySelectorAll('form[data-notif-read-all]').forEach(function (form) {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                var btn = form.querySelector('button[type="submit"]');
+                if (btn) btn.disabled = true;
+                postForm(form.action, new FormData(form)).then(function (data) {
+                    document.querySelectorAll('form[data-notif-read]').forEach(function (f) {
+                        var card = f.closest('[data-notif-card]');
+                        if (card) card.classList.add('opacity-70');
+                        f.remove();
+                    });
+                    form.remove();
+                    setBadges(data.unread_count || 0);
+                    toast('All notifications marked as read.', 'success');
+                }).catch(function (err) {
+                    toast(err.message, 'error');
+                    if (btn) btn.disabled = false;
+                });
+            });
+        });
+    })();
+    </script>
     <script>
         function openNotificationsModal() {
             var modal = document.getElementById('notificationsModal');

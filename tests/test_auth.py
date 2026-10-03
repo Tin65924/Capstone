@@ -508,6 +508,80 @@ class TestDepartmentsManager:
         assert b"confirm('Delete &quot;" not in resp.data
         assert b'data-dept-name="HR"' in resp.data
 
+    JSON = {'Accept': 'application/json'}
+
+    def test_add_program_json_returns_new_row(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            None,  # is_valid_department -> not a duplicate
+            (99, 'BSCS', 'program'),  # get_department_by_name
+        ]
+        mock_db['execute'].return_value = 1
+        resp = librarian_client.post('/librarian/departments/add', data={
+            'name': 'BSCS',
+            'dept_type': 'program',
+        }, headers=self.JSON)
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body['added'] == {'id': 99, 'name': 'BSCS', 'dept_type': 'program'}
+
+    def test_add_duplicate_json_409(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (1,)
+        resp = librarian_client.post('/librarian/departments/add', data={
+            'name': 'BSIS',
+            'dept_type': 'program',
+        }, headers=self.JSON)
+        assert resp.status_code == 409
+        assert 'already exists' in resp.get_json()['error']
+        assert mock_db['execute'].call_count == 0
+
+    def test_add_missing_name_json_400(self, librarian_client, mock_db):
+        resp = librarian_client.post('/librarian/departments/add', data={
+            'name': '',
+            'dept_type': 'program',
+        }, headers=self.JSON)
+        assert resp.status_code == 400
+        assert 'required' in resp.get_json()['error']
+        assert mock_db['execute'].call_count == 0
+
+    def test_delete_unused_json(self, admin_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (5, 'BSCS', 'program'),  # get_department_by_id
+            (0,),                     # count_borrowers_in_department
+        ]
+        resp = admin_client.post('/admin/departments/5/delete', headers=self.JSON)
+        assert resp.status_code == 200
+        assert resp.get_json()['deleted'] == 5
+
+    def test_delete_in_use_json_409(self, admin_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (1, 'BSIS', 'program'),
+            (3,),
+        ]
+        resp = admin_client.post('/admin/departments/1/delete', headers=self.JSON)
+        assert resp.status_code == 409
+        assert 'borrower' in resp.get_json()['error']
+        assert mock_db['execute'].call_count == 0
+
+    def test_delete_missing_json_404(self, admin_client, mock_db):
+        mock_db['fetch_one'].return_value = None
+        resp = admin_client.post('/admin/departments/9/delete', headers=self.JSON)
+        assert resp.status_code == 404
+        assert mock_db['execute'].call_count == 0
+
+    def test_users_page_has_ajax_hooks(self, admin_client, mock_db):
+        mock_db['fetch_all'].side_effect = [
+            [],  # users
+            [],  # pending
+            [],  # roles
+            [(1, 'BSIS', 'program')],
+            [(2, 'HR', 'department')],
+        ]
+        resp = admin_client.get('/librarian/users')
+        assert resp.status_code == 200
+        assert b'data-dept-add' in resp.data
+        assert b'data-dept-delete' in resp.data
+        assert b'js/ajax_ui.js' in resp.data
+
 
 class TestUserCardFilters:
     USERS = [

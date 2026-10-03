@@ -3,7 +3,7 @@ import io
 import secrets
 from datetime import datetime
 
-from flask import Response, render_template, redirect, url_for, request, flash, session, abort, current_app
+from flask import Response, render_template, redirect, url_for, request, flash, session, abort, current_app, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
@@ -22,7 +22,7 @@ from .models import (
     update_user_details, archive_user, unarchive_user, delete_user, get_admin_count,
     get_user_record, audit_text,
     get_departments, is_valid_department, create_department,
-    get_department_by_id, delete_department, count_borrowers_in_department,
+    get_department_by_id, get_department_by_name, delete_department, count_borrowers_in_department,
     get_profile_by_user, DEPT_TYPES, is_valid_any_department,
     is_valid_id_number, normalize_id_number, ID_NUMBER_EXAMPLES, get_user_by_id_number
 )
@@ -761,21 +761,29 @@ def edit_user_route(user_id):
 def add_department_route():
     name = request.form.get('name', '').strip()
     dept_type = request.form.get('dept_type', '').strip()
+    wants_json = _wants_json()
+
+    def _fail(message, code):
+        if wants_json:
+            return jsonify({'error': message}), code
+        flash(message, 'error')
+        return redirect(url_for('auth.admin_users'))
+
     if not name:
-        flash('Program/department name is required.', 'error')
-        return redirect(url_for('auth.admin_users'))
+        return _fail('Program/department name is required.', 400)
     if dept_type not in DEPT_TYPES:
-        flash('Invalid type. Choose Program or Department.', 'error')
-        return redirect(url_for('auth.admin_users'))
+        return _fail('Invalid type. Choose Program or Department.', 400)
     if is_valid_department(name, dept_type):
-        flash(f'"{name}" already exists.', 'error')
-        return redirect(url_for('auth.admin_users'))
+        return _fail(f'"{name}" already exists.', 409)
     rowcount = create_department(name, dept_type)
     if not rowcount:
         # Lost a race with another insert (ON CONFLICT DO NOTHING).
-        flash(f'"{name}" already exists.', 'error')
-        return redirect(url_for('auth.admin_users'))
+        return _fail(f'"{name}" already exists.', 409)
     log_activity(current_user.id, f'added_department:{dept_type}:{name}')
+    if wants_json:
+        row = get_department_by_name(name)
+        return jsonify({'added': {'id': row[0], 'name': row[1],
+                                  'dept_type': row[2]}})
     flash(f'"{name}" added.', 'success')
     return redirect(url_for('auth.admin_users'))
 
@@ -784,18 +792,31 @@ def add_department_route():
 @login_required
 @admin_required
 def delete_department_route(department_id):
+    wants_json = _wants_json()
+
+    def _fail(message, code):
+        if wants_json:
+            return jsonify({'error': message}), code
+        flash(message, 'error')
+        return redirect(url_for('auth.admin_users'))
+
     dept = get_department_by_id(department_id)
     if not dept:
-        flash('Entry not found.', 'error')
-        return redirect(url_for('auth.admin_users'))
+        return _fail('Entry not found.', 404)
     in_use = count_borrowers_in_department(dept[1])
     if in_use:
-        flash(f'Cannot delete "{dept[1]}" — {in_use} borrower(s) still use it.', 'error')
-        return redirect(url_for('auth.admin_users'))
+        return _fail(f'Cannot delete "{dept[1]}" — {in_use} borrower(s) still use it.', 409)
     delete_department(department_id)
     log_activity(current_user.id, f'deleted_department:{department_id}')
+    if wants_json:
+        return jsonify({'deleted': department_id, 'name': dept[1]})
     flash(f'"{dept[1]}" deleted.', 'success')
     return redirect(url_for('auth.admin_users'))
+
+
+def _wants_json():
+    """True when the client asked for JSON (AJAX) instead of PRG redirect."""
+    return 'application/json' in (request.headers.get('Accept') or '')
 
 
 @auth_bp.route('/logout')

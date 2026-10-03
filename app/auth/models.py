@@ -789,6 +789,14 @@ def get_department_by_id(department_id):
     )
 
 
+def get_department_by_name(name):
+    """Single vocab entry by exact name (for JSON add responses)."""
+    return db.fetch_one(
+        'SELECT department_id, name, dept_type FROM departments WHERE name = %s',
+        (name,)
+    )
+
+
 def count_borrowers_in_department(name):
     row = db.fetch_one(
         'SELECT COUNT(*) FROM borrowers WHERE department = %s',

@@ -272,10 +272,16 @@ def mark_notification_read_route(notification_id):
     from app.auth.models import log_activity
     borrower = get_borrower_by_user(current_user.id)
     if not borrower:
+        if _wants_json():
+            return jsonify({'error': 'No borrower record found.'}), 404
         flash('No borrower record found.', 'error')
         return redirect(url_for('main.user_profile'))
     mark_notification_read(notification_id, borrower[0], updated_by=current_user.id)
     log_activity(current_user.id, f'notifications:read:{notification_id}')
+    if _wants_json():
+        from app.circulation.models import count_unread_notifications
+        return jsonify({'read': notification_id,
+                        'unread_count': count_unread_notifications(borrower[0]) or 0})
     return redirect(_safe_next('main.user_profile'))
 
 
@@ -286,12 +292,21 @@ def mark_all_notifications_read_route():
     from app.auth.models import log_activity
     borrower = get_borrower_by_user(current_user.id)
     if not borrower:
+        if _wants_json():
+            return jsonify({'error': 'No borrower record found.'}), 404
         flash('No borrower record found.', 'error')
         return redirect(url_for('main.user_profile'))
     mark_all_notifications_read(borrower[0], updated_by=current_user.id)
     log_activity(current_user.id, 'notifications:read_all')
+    if _wants_json():
+        return jsonify({'read_all': True, 'unread_count': 0})
     flash('All notifications marked as read.', 'success')
     return redirect(_safe_next('main.user_profile'))
+
+
+def _wants_json():
+    """True when the client asked for JSON (AJAX) instead of PRG redirect."""
+    return 'application/json' in (request.headers.get('Accept') or '')
 
 
 @main_bp.route('/user/history')
