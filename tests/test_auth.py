@@ -755,8 +755,10 @@ class TestUserManagement:
         resp = admin_client.post('/admin/users/1/delete')
         assert resp.status_code == 302
         assert mock_db['execute'].call_count >= 1
-        call_args = mock_db['execute'].call_args_list[0]
-        assert 'DELETE FROM user_accounts' in call_args[0][0]
+        statements = [c[0][0] for c in mock_db['execute'].call_args_list]
+        # delete_user cascade-cleans dependents before removing the account
+        assert any('DELETE FROM user_accounts' in s for s in statements)
+        assert any('DELETE FROM borrowers' in s for s in statements)
 
     def test_delete_user_not_archived_fails(self, admin_client, mock_db):
         mock_db['fetch_one'].return_value = ('active',)
@@ -785,7 +787,8 @@ class TestUserManagement:
         resp = admin_client.post('/admin/users/1/delete')
         assert resp.status_code == 302
         assert mock_db['execute'].call_count >= 1
-        assert 'DELETE FROM user_accounts' in mock_db['execute'].call_args_list[0][0][0]
+        statements = [c[0][0] for c in mock_db['execute'].call_args_list]
+        assert any('DELETE FROM user_accounts' in s for s in statements)
 
     def test_unarchive_archived_user_succeeds(self, admin_client, mock_db):
         mock_db['fetch_one'].side_effect = self._archived_lookup

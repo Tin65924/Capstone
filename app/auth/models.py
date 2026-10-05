@@ -690,7 +690,152 @@ def toggle_user_status(user_id, updated_by=None):
 
 
 def delete_user(user_id):
+    """Permanently remove an archived account without tripping FKs.
+
+    Plain ``DELETE FROM user_accounts`` 500s on any real account because
+    dependent rows reference it: ``borrowers.user_id`` (every member has
+    one), ``audit_trail.user_id``, ``user_favorites.user_id``, plus every
+    nullable ``updated_by``/``checked_by``/``reviewed_by``/``generated_by``
+    column. Those are safe to NULL/cascade away.
+
+    Business history that must survive (active loans, live reservations,
+    pending requests, staff action history on NOT NULL columns) is NOT
+    deleted here — check :func:`get_user_deletion_blocker` first; the
+    route refuses with a friendly message instead of hitting a FK
+    violation (500).
+    """
+    borrower = db.fetch_one(
+        'SELECT borrower_id FROM borrowers WHERE user_id = %s',
+        (user_id,)
+    )
+    borrower_id = borrower[0] if borrower else None
+    if borrower_id is not None:
+        db.execute(
+            'DELETE FROM notification_log WHERE recipient_id = %s',
+            (borrower_id,)
+        )
+        # Active waiting/allocated reservations are blocked by the
+        # pre-check; whatever remains here is terminal and safe to clear.
+        db.execute(
+            'DELETE FROM reservation_queue WHERE borrower_id = %s',
+            (borrower_id,)
+        )
+        req_rows = db.fetch_all(
+            'SELECT request_id FROM request_records WHERE requester_id = %s',
+            (borrower_id,)
+        ) or []
+        for req in req_rows:
+            try:
+                request_id = req[0]
+            except (IndexError, TypeError):
+                continue
+            db.execute(
+                'DELETE FROM procurement_log WHERE request_id = %s',
+                (request_id,)
+            )
+        db.execute(
+            'DELETE FROM request_records WHERE requester_id = %s',
+            (borrower_id,)
+        )
+        # Active/overdue loans are blocked by the pre-check; remaining
+        # returned rows are cleared so the borrower row can go.
+        db.execute(
+            'DELETE FROM circulation_records WHERE borrower_id = %s',
+            (borrower_id,)
+        )
+    db.execute('DELETE FROM user_favorites WHERE user_id = %s', (user_id,))
+    # Keep the audit history row, just detach the deleted actor.
+    db.execute('UPDATE audit_trail SET user_id = NULL WHERE user_id = %s', (user_id,))
+    for _table, _column in _NULLABLE_USER_REFS:
+        db.execute(
+            f'UPDATE {_table} SET {_column} = NULL WHERE {_column} = %s',
+            (user_id,)
+        )
+    db.execute('DELETE FROM borrowers WHERE user_id = %s', (user_id,))
     db.execute('DELETE FROM user_accounts WHERE user_id = %s', (user_id,))
+
+
+# Every nullable FK column pointing at user_accounts(user_id). Table and
+# column names come from this hardcoded list only (never user input), so
+# interpolating them is safe — values stay bound %s parameters.
+_NULLABLE_USER_REFS = (
+    ('user_accounts', 'updated_by'),
+    ('borrowers', 'updated_by'),
+    ('book_catalog', 'updated_by'),
+    ('accession_log', 'updated_by'),
+    ('request_records', 'reviewed_by'),
+    ('request_records', 'updated_by'),
+    ('procurement_log', 'updated_by'),
+    ('circulation_records', 'updated_by'),
+    ('inventory_status', 'checked_by'),
+    ('inventory_sessions', 'updated_by'),
+    ('reservation_queue', 'updated_by'),
+    ('notification_log', 'updated_by'),
+    ('analytics_cache', 'generated_by'),
+    ('library_settings', 'updated_by'),
+)
+
+
+def get_account_status(user_id):
+    """Raw account_status for archive-before-delete enforcement."""
+    return db.fetch_one(
+        'SELECT account_status FROM user_accounts WHERE user_id = %s',
+        (user_id,)
+    )
+
+
+def get_user_deletion_blocker(user_id):
+    """Human-readable reason an archived account cannot be deleted yet.
+
+    Returns e.g. 'active loans' when history on a NOT NULL FK (or live
+    operational state) would make the DELETE fail — the route turns this
+    into a flash message instead of a 500. Returns None when the account
+    is safe for :func:`delete_user` to cascade-clean.
+
+    Existence checks use fetch_all (empty == clear) so the contrived
+    single-tuple fetch_one mocks in the test-suite never read as blockers.
+    """
+    borrower = db.fetch_one(
+        'SELECT borrower_id FROM borrowers WHERE user_id = %s',
+        (user_id,)
+    )
+    borrower_id = borrower[0] if borrower else None
+    if borrower_id is not None:
+        rows = db.fetch_all(
+            "SELECT 1 FROM circulation_records WHERE borrower_id = %s "
+            "AND transaction_status IN ('active', 'overdue') LIMIT 1",
+            (borrower_id,)
+        ) or []
+        if rows:
+            return 'active loans'
+        rows = db.fetch_all(
+            "SELECT 1 FROM reservation_queue WHERE borrower_id = %s "
+            "AND reservation_status IN ('waiting', 'allocated') LIMIT 1",
+            (borrower_id,)
+        ) or []
+        if rows:
+            return 'active reservations'
+        rows = db.fetch_all(
+            "SELECT 1 FROM request_records WHERE requester_id = %s "
+            "AND request_status IN ('pending_review', 'approved') LIMIT 1",
+            (borrower_id,)
+        ) or []
+        if rows:
+            return 'pending book requests'
+    # Staff action history lives on NOT NULL columns that cannot be
+    # nulled — deleting would orphan catalog/circulation rows.
+    for _table, _column in (
+        ('accession_log', 'librarian_id'),
+        ('circulation_records', 'processed_by'),
+        ('inventory_sessions', 'librarian_id'),
+    ):
+        rows = db.fetch_all(
+            f'SELECT 1 FROM {_table} WHERE {_column} = %s LIMIT 1',
+            (user_id,)
+        ) or []
+        if rows:
+            return 'staff action history'
+    return None
 
 
 def archive_user(user_id, updated_by=None):

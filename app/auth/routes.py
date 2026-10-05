@@ -20,7 +20,7 @@ from .models import (
     log_activity, log_system_event, get_all_users, get_pending_users,
     approve_user, update_user_role, toggle_user_status,
     update_user_details, archive_user, unarchive_user, delete_user, get_admin_count,
-    get_user_record, audit_text,
+    get_user_record, audit_text, get_account_status, get_user_deletion_blocker,
     get_departments, is_valid_department, create_department,
     get_department_by_id, get_department_by_name, delete_department, count_borrowers_in_department,
     update_department_status, DEPT_STATUSES,
@@ -671,14 +671,24 @@ def delete_user_route(user_id):
     if not user:
         flash('User not found.', 'error')
         return redirect(url_for('auth.admin_users'))
-    status = db.fetch_one(
-        'SELECT account_status FROM user_accounts WHERE user_id = %s',
-        (user_id,)
-    )
-    if status and status[0] != 'archived':
+    if str(user_id) == str(current_user.id):
+        flash('You cannot delete your own account.', 'error')
+        return redirect(url_for('auth.admin_users'))
+    status = get_account_status(user_id)
+    status_value = status[0] if status else (user[4] if len(user) > 4 else None)
+    if status_value != 'archived':
         flash('User must be archived before deletion.', 'error')
         return redirect(url_for('auth.admin_users'))
-    delete_user(user_id)
+    blocker = get_user_deletion_blocker(user_id)
+    if blocker:
+        flash(f'Cannot delete {target_name} — account has {blocker}.', 'error')
+        return redirect(url_for('auth.admin_users'))
+    try:
+        delete_user(user_id)
+    except Exception:
+        current_app.logger.exception('Failed to delete user %s', user_id)
+        flash('Cannot delete this account — it is still linked to library records.', 'error')
+        return redirect(url_for('auth.admin_users'))
     log_activity(current_user.id, f'deleted_user:{user_id}:{target_name}')
     flash('User permanently deleted.', 'success')
     return redirect(url_for('auth.admin_users'))
