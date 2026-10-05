@@ -759,7 +759,7 @@ function openEditModal(btn) {
     var role = btn.getAttribute('data-user-role');
     var ID_FORMATS = {
         Student: {placeholder: '2024-00123', pattern: '\\d{4}-\\d{5}', title: 'Student format: 0000-00000', hint: 'Format: 0000-00000 (e.g. 2024-00123)', maxlength: 10},
-        Faculty: {placeholder: 'FAC-00123', pattern: 'FAC-[0-9]{5}', title: 'Faculty format: FAC-00000', hint: 'Format: FAC-00000 (e.g. FAC-00123)', maxlength: 9},
+        Faculty: {placeholder: '123456789', pattern: '[0-9]{9}', title: 'Faculty format: 000000000', hint: 'Format: 000000000 (e.g. 123456789)', maxlength: 9},
         Librarian: {placeholder: 'LIB-00123', pattern: 'LIB-[0-9]{5}', title: 'Librarian format: LIB-00000', hint: 'Format: LIB-00000 (e.g. LIB-00123)', maxlength: 9},
         Admin: {placeholder: '1-10', pattern: '(10|[1-9])', title: 'Admin format: 1-10', hint: 'Format: 1-10 (e.g. 7)', maxlength: 2}
     };

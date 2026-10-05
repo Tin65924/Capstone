@@ -294,7 +294,7 @@ class TestRoleSelect:
 
             resp = client.post('/login/role-select', data={
                 'role': 'Faculty',
-                'id_number': 'FAC-10001',
+                'id_number': '100012345',
                 'department': 'CS Department',
             })
             assert resp.status_code == 200
@@ -371,7 +371,7 @@ class TestIdNumberFormats:
         assert is_valid_id_number('2024-00001', 'Student')
         assert not is_valid_id_number('2024-0001', 'Student')
         assert not is_valid_id_number('FAC-00001', 'Student')
-        assert is_valid_id_number('FAC-00001', 'Faculty')
+        assert is_valid_id_number('123456789', 'Faculty')
         assert not is_valid_id_number('0000001', 'Faculty')
         assert not is_valid_id_number('2024-00001', 'Faculty')
         assert is_valid_id_number('LIB-00001', 'Librarian')

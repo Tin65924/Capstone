@@ -22,18 +22,17 @@ class TestIdNumberPatterns:
 
     def test_faculty_accepts_valid(self):
         from app.auth.models import is_valid_id_number
-        assert is_valid_id_number('FAC-00123', 'Faculty')
-        assert is_valid_id_number('FAC-00000', 'Faculty')
-        assert is_valid_id_number('fac-00123', 'Faculty')  # normalized to upper
-        assert is_valid_id_number('  FAC-00123  ', 'Faculty')  # stripped
+        assert is_valid_id_number('123456789', 'Faculty')
+        assert is_valid_id_number('000000000', 'Faculty')
+        assert is_valid_id_number('  123456789  ', 'Faculty')  # stripped
 
     def test_faculty_rejects_bad(self):
         from app.auth.models import is_valid_id_number
-        assert not is_valid_id_number('000000000', 'Faculty')  # legacy 9-digit, no prefix
+        assert not is_valid_id_number('FAC-00123', 'Faculty')  # no prefix allowed
         assert not is_valid_id_number('2024-00123', 'Faculty')
-        assert not is_valid_id_number('FAC-0012', 'Faculty')   # too short
-        assert not is_valid_id_number('FAC-001234', 'Faculty')  # too long
-        assert not is_valid_id_number('FA-00123', 'Faculty')
+        assert not is_valid_id_number('12345678', 'Faculty')   # too short
+        assert not is_valid_id_number('1234567890', 'Faculty')  # too long
+        assert not is_valid_id_number('12345-6789', 'Faculty')
         assert not is_valid_id_number('', 'Faculty')
 
     def test_librarian_accepts_valid(self):
@@ -67,7 +66,7 @@ class TestIdNumberExamplesMatchPatterns:
         from app.auth.models import ID_NUMBER_EXAMPLES, is_valid_id_number
         example_values = {
             'Student': '2024-00123',
-            'Faculty': 'FAC-00123',
+            'Faculty': '123456789',
             'Librarian': 'LIB-00123',
             'Admin': '7',
         }
@@ -75,10 +74,10 @@ class TestIdNumberExamplesMatchPatterns:
             assert is_valid_id_number(value, role), f'{role} example {value!r} invalid'
             assert value in ID_NUMBER_EXAMPLES[role]
 
-    def test_faculty_example_uses_fac_prefix(self):
+    def test_faculty_example_is_plain_nine_digits(self):
         from app.auth.models import ID_NUMBER_EXAMPLES
-        assert 'FAC-' in ID_NUMBER_EXAMPLES['Faculty']
-        assert '000000000' not in ID_NUMBER_EXAMPLES['Faculty']
+        assert 'FAC-' not in ID_NUMBER_EXAMPLES['Faculty']
+        assert '000000000' in ID_NUMBER_EXAMPLES['Faculty']
 
 
 class TestIdNumberMaxLengths:
@@ -86,7 +85,7 @@ class TestIdNumberMaxLengths:
         from app.auth.models import ID_NUMBER_MAX_LENGTHS
         assert ID_NUMBER_MAX_LENGTHS == {
             'Student': 10,    # 0000-00000
-            'Faculty': 9,     # FAC-00000
+            'Faculty': 9,     # 000000000
             'Librarian': 9,   # LIB-00000
             'Admin': 2,       # 1-10
         }
@@ -95,7 +94,7 @@ class TestIdNumberMaxLengths:
         from app.auth.models import ID_NUMBER_MAX_LENGTHS
         valid = {
             'Student': '2024-00123',
-            'Faculty': 'FAC-00123',
+            'Faculty': '123456789',
             'Librarian': 'LIB-00123',
             'Admin': '10',
         }
@@ -143,7 +142,7 @@ class TestIdNumberMaxLengths:
             }
         resp = client.post('/login/role-select', data={
             'role': 'Faculty',
-            'id_number': 'FAC-001234',  # 10 chars > maxlength 9
+            'id_number': '1234567890',  # 10 chars > maxlength 9
             'department': 'CS',
         })
         assert resp.status_code == 200

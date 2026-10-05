@@ -4,25 +4,25 @@ import re
 
 # Canonical ID-number formats per role (strict):
 #   Student   0000-00000  e.g. 2024-00123
-#   Faculty   FAC-00000  e.g. FAC-00123
+#   Faculty   000000000  e.g. 123456789
 #   Librarian LIB-00000  e.g. LIB-00123
 #   Admin     1-10       e.g. 7
 ID_NUMBER_PATTERNS = {
     'Student': re.compile(r'^\d{4}-\d{5}$'),
-    'Faculty': re.compile(r'^FAC-\d{5}$'),
+    'Faculty': re.compile(r'^\d{9}$'),
     'Librarian': re.compile(r'^LIB-\d{5}$'),
     'Admin': re.compile(r'^(10|[1-9])$'),
 }
 
 ID_NUMBER_EXAMPLES = {
     'Student': '2024-00123 (format: 0000-00000)',
-    'Faculty': 'FAC-00123 (format: FAC-00000)',
+    'Faculty': '123456789 (format: 000000000)',
     'Librarian': 'LIB-00123 (format: LIB-00000)',
     'Admin': '1-10 (e.g. 7)',
 }
 
 # Max input lengths per role (exact canonical lengths):
-#   Student  0000-00000 = 10, Faculty FAC-00000 = 9,
+#   Student  0000-00000 = 10, Faculty 000000000 = 9,
 #   Librarian LIB-00000 = 9, Admin 1-10 = 2.
 ID_NUMBER_MAX_LENGTHS = {
     'Student': 10,
@@ -33,9 +33,9 @@ ID_NUMBER_MAX_LENGTHS = {
 
 
 def normalize_id_number(id_number, role_name=None):
-    """Strip whitespace; uppercase FAC-/LIB- prefixes for staff."""
+    """Strip whitespace; uppercase the LIB- prefix for librarians."""
     value = (id_number or '').strip()
-    if role_name in ('Faculty', 'Librarian') or value.upper().startswith(('FAC-', 'LIB-')):
+    if role_name == 'Librarian' or value.upper().startswith('LIB-'):
         return value.upper()
     return value
 

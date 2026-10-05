@@ -110,7 +110,7 @@
     var idHint = document.getElementById('id-hint');
     var FORMATS = {
         Student: {placeholder: 'e.g. 2024-00123', pattern: '\\d{4}-\\d{5}', title: 'Student format: 0000-00000 (e.g. 2024-00123)', hint: 'Student ID format: 0000-00000 (e.g. 2024-00123)', maxlength: 10},
-        Faculty: {placeholder: 'e.g. FAC-00123', pattern: 'FAC-[0-9]{5}', title: 'Faculty format: FAC-00000 (e.g. FAC-00123)', hint: 'Faculty ID format: FAC-00000 (e.g. FAC-00123)', maxlength: 9}
+        Faculty: {placeholder: 'e.g. 123456789', pattern: '[0-9]{9}', title: 'Faculty format: 000000000 (e.g. 123456789)', hint: 'Faculty ID format: 000000000 (e.g. 123456789)', maxlength: 9}
     };
     function sync() {
         var role = (document.querySelector('input[name="role"]:checked') || {}).value;
@@ -130,7 +130,6 @@
             if (idInput.value.length > FORMATS[role].maxlength) {
                 idInput.value = idInput.value.slice(0, FORMATS[role].maxlength);
             }
-            if (role === 'Faculty') idInput.value = idInput.value.toUpperCase();
             if (idHint) idHint.textContent = FORMATS[role].hint;
         }
     }
