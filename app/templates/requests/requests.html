@@ -134,7 +134,7 @@
             </select>
             <button type="button" id="status-select-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="status-select-dropdown"
                 class="w-full flex items-center justify-between gap-2 bg-white dark:bg-[#1a2235] border border-gray-200 dark:border-gray-700 px-3 sm:px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
-                <span id="status-select-label" class="truncate">
+                <span id="status-select-label" class="min-w-0 flex-1 truncate text-left">
                     {% if current_status == 'pending_review' %}Pending{% elif current_status == 'approved' %}Approved{% elif current_status == 'rejected' %}Rejected{% elif current_status == 'procured' %}Procured{% else %}All{% endif %}
                 </span>
                 <span class="material-symbols-outlined text-gray-400 text-[20px] shrink-0 transition-transform duration-200" id="status-select-arrow">expand_more</span>

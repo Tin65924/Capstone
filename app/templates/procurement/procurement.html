@@ -141,7 +141,7 @@
                                         <div class="relative" id="proc-status-wrapper-{{ item[0] }}">
                                             <button type="button" id="proc-status-btn-{{ item[0] }}" aria-haspopup="listbox" aria-expanded="false"
                                                 class="w-full flex items-center justify-between gap-2 bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-700 px-3 sm:px-3.5 py-2.5 rounded-lg text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
-                                                <span id="proc-status-label-{{ item[0] }}" class="truncate">
+                                                <span id="proc-status-label-{{ item[0] }}" class="min-w-0 flex-1 truncate text-left">
                                                     {% if item[2] == 'for_ordering' %}For Ordering{% elif item[2] == 'ordered' %}Ordered{% elif item[2] == 'delivered' %}Delivered{% elif item[2] == 'procured' %}Procured{% elif item[2] == 'cancelled' %}Cancelled{% elif item[2] == 'out_of_stock' %}Out of Stock{% else %}{{ item[2].replace('_', ' ').title() }}{% endif %}
                                                 </span>
                                                 <span class="material-symbols-outlined text-gray-400 text-[18px] sm:text-[20px] shrink-0 transition-transform duration-200" id="proc-status-arrow-{{ item[0] }}">expand_more</span>
@@ -158,8 +158,8 @@
                                                 ] %}
                                                 {% set is_sel = item[2] == status_value %}
                                                 <li role="option" data-value="{{ status_value }}" tabindex="0" aria-selected="{{ 'true' if is_sel else 'false' }}"
-                                                    class="proc-status-option px-3 sm:px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors {% if is_sel %}bg-primary/10 text-primary font-semibold{% else %}text-gray-700 dark:text-gray-200{% endif %}">
-                                                    <span>{{ status_label }}</span>{% if is_sel %}<span class="material-symbols-outlined text-[16px] sm:text-[18px] text-primary">check</span>{% endif %}
+                                                    class="proc-status-option px-3 sm:px-4 py-2.5 cursor-pointer flex items-center justify-between gap-2 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors {% if is_sel %}bg-primary/10 text-primary font-semibold{% else %}text-gray-700 dark:text-gray-200{% endif %}">
+                                                    <span class="min-w-0 flex-1 truncate text-left">{{ status_label }}</span>{% if is_sel %}<span class="material-symbols-outlined text-[16px] sm:text-[18px] text-primary shrink-0">check</span>{% endif %}
                                                 </li>
                                                 {% endfor %}
                                             </ul>

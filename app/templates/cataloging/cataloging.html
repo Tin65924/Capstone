@@ -271,7 +271,7 @@
                     </select>
                     <button type="button" id="field-select-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="field-select-dropdown"
                         class="w-full flex items-center justify-between gap-2 bg-white border border-[#e2e8f0] px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg text-sm font-medium text-slate-700 hover:border-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
-                        <span id="field-select-label" class="truncate">{% if search_field == 'title' %}Title{% elif search_field == 'author' %}Author{% elif search_field == 'isbn' %}ISBN{% elif search_field == 'accession' %}Accession No.{% else %}All Fields{% endif %}</span>
+                        <span id="field-select-label" class="min-w-0 flex-1 truncate text-left">{% if search_field == 'title' %}Title{% elif search_field == 'author' %}Author{% elif search_field == 'isbn' %}ISBN{% elif search_field == 'accession' %}Accession No.{% else %}All Fields{% endif %}</span>
                         <span class="material-symbols-outlined text-slate-400 text-[20px] shrink-0 transition-transform duration-200" id="field-select-arrow">expand_more</span>
                     </button>
                     <ul id="field-select-dropdown" role="listbox" tabindex="-1"
