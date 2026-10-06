@@ -338,3 +338,12 @@ CREATE INDEX IF NOT EXISTS idx_user_accounts_role ON user_accounts (role_id);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_active_loan_per_accession ON circulation_records (accession_id) WHERE transaction_status IN ('active', 'overdue');
 CREATE UNIQUE INDEX IF NOT EXISTS uq_active_loan_per_book_borrower ON circulation_records (book_id, borrower_id) WHERE transaction_status IN ('active', 'overdue');
 CREATE UNIQUE INDEX IF NOT EXISTS uq_active_reservation_per_book_borrower ON reservation_queue (book_id, borrower_id) WHERE reservation_status IN ('waiting', 'allocated');
+-- Queue-position race net (F2 follow-up): get_next_queue_position() is
+-- SELECT-then-INSERT, so two simultaneous reserves can compute the same
+-- MAX(pos)+1. The loser fails here instead of silently sharing a queue
+-- slot; routes retry with a fresh position (see _create_reservation_retry).
+CREATE UNIQUE INDEX IF NOT EXISTS uq_active_queue_pos ON reservation_queue (book_id, queue_position) WHERE reservation_status IN ('waiting', 'allocated');
+-- Pending-request race net: routes .strip() titles and the app fuzzy layer
+-- handles case, so LOWER(TRIM()) here is only a best-effort race net for
+-- exact-match double-submits — near-duplicates still rely on the app layer.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_pending_req ON request_records (requester_id, LOWER(TRIM(book_title))) WHERE request_status = 'pending_review';

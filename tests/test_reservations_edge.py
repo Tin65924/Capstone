@@ -70,7 +70,7 @@ class TestActions:
     def test_allocate_success(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [
             (7, 1, 5, 1, None, 'waiting', None, None), ACC, None, DETAIL,
-            None, (0,), (1,)]
+            None, (0,), (0,), (2,)]
         mock_db['fetch_all'].return_value = []
         resp = librarian_client.post('/librarian/reservations/7/allocate')
         assert resp.status_code == 302

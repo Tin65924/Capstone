@@ -18,6 +18,18 @@ from app.auth.decorators import librarian_required
 # with the generic badge; the status can no longer be created or filtered.
 VALID_STATUSES = ['pending_review', 'approved', 'rejected', 'procured']
 
+
+def _is_unique_violation(exc):
+    """True when a request insert lost a double-submit race against the
+    partial unique index on open requests (uq_pending_req). Only this
+    expected, user-driven failure becomes a friendly message; every
+    other DB error still propagates to the 500 handler."""
+    try:
+        from psycopg2 import errors as _pg_errors
+        return isinstance(exc, _pg_errors.UniqueViolation)
+    except Exception:
+        return False
+
 @requests_bp.route('/librarian/requests')
 @login_required
 @librarian_required
@@ -356,6 +368,10 @@ def user_request_book():
             flash('Book title is required.', 'error')
             return redirect(url_for('requests.user_request_book'))
 
+        if not normalize_title(book_title):
+            flash('Book title is required.', 'error')
+            return redirect(url_for('requests.user_request_book'))
+
         if len(book_title) > 255:
             flash('Book title is too long (max 255 characters).', 'error')
             return redirect(url_for('requests.user_request_book'))
@@ -377,7 +393,13 @@ def user_request_book():
             flash('Book is already existing in the catalog', 'error')
             return redirect(url_for('requests.user_request_book'))
 
-        new_request_id = create_request(borrower_id, book_title, author)
+        try:
+            new_request_id = create_request(borrower_id, book_title, author)
+        except Exception as e:
+            if _is_unique_violation(e):
+                flash('Already submitted — showing your requests.', 'info')
+                return redirect(url_for('requests.user_request_book'))
+            raise
         try:
             from app.circulation.models import create_notification
             create_notification(

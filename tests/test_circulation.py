@@ -351,6 +351,8 @@ class TestReservationLifecycle:
             (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),  # borrower details
             None,                                                  # no active loan for this book
             (0,),                                                  # count active loans
+            (0,),                                                  # count allocated reservations
+            (2,),                                                  # count available accessions
         ]
         resp = librarian_client.post('/librarian/reservations/9/allocate')
         assert resp.status_code == 302
@@ -770,6 +772,7 @@ class TestUserBorrow:
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),  # available accession
             (0,),                                       # count active loans
             None,                                      # no active reservation for this book
+            None,                                      # no waiting queue (queue-jump guard)
         ]
         resp = student_client.post('/user/borrow', data={
             'book_id': 5,

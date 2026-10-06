@@ -297,7 +297,7 @@ def get_requests_by_borrower(borrower_id):
 def check_duplicate_request(requester_id, book_title):
     normalized = normalize_title(book_title)
     rows = db.fetch_all(
-        'SELECT book_title FROM request_records WHERE requester_id = %s',
+        "SELECT book_title FROM request_records WHERE requester_id = %s AND request_status IN ('pending_review', 'approved')",
         (requester_id,)
     ) or []
 

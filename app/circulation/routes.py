@@ -19,6 +19,7 @@ from .models import (
     allocate_reservation, claim_reservation, expire_reservation, next_in_queue,
     get_available_accession_by_book, create_notification,
     get_user_active_loans, get_active_loan_by_id_and_user,
+    count_allocated_reservations, count_available_accessions,
     expire_overdue_reservations, get_borrowers_for_history,
     get_full_reservation_history_by_borrower, get_user_loan_history,
     get_fines_by_borrower, get_total_fines, get_fine_record, mark_fine_paid,
@@ -54,6 +55,40 @@ def _is_unique_violation(exc):
         return isinstance(exc, _pg_errors.UniqueViolation)
     except Exception:
         return False
+
+
+class _DuplicateReservation(Exception):
+    """Lost a race against uq_active_reservation_per_book_borrower: the
+    borrower already holds an active reservation for this book. Routes
+    turn this into a friendly 'already have a pending reservation'
+    flash instead of the generic retry message."""
+    pass
+
+
+def _create_reservation_retry(book_id, borrower_id, max_attempts=3):
+    """Insert a waiting reservation, retrying queue-position collisions.
+
+    db.execute commits per statement (no multi-statement transactions),
+    so two simultaneous reserves can compute the same MAX(pos)+1; the
+    loser hits uq_active_queue_pos. On a unique violation, re-check for
+    a duplicate reservation (raise _DuplicateReservation when found)
+    and otherwise retry with a fresh position. After max_attempts
+    collisions the last violation propagates for the generic retry
+    flash. Non-unique errors propagate immediately."""
+    last_exc = None
+    position = None
+    for _ in range(max_attempts):
+        position = get_next_queue_position(book_id)
+        try:
+            create_reservation(book_id, borrower_id, position)
+            return position
+        except Exception as e:
+            if not _is_unique_violation(e):
+                raise
+            last_exc = e
+            if get_active_reservation_by_book_and_borrower(book_id, borrower_id):
+                raise _DuplicateReservation() from e
+    raise last_exc
 
 
 def _borrow_limit(role_name):
@@ -485,6 +520,13 @@ def reservation_action(reservation_id, action):
             borrower_name = borrower_detail[4] if borrower_detail else 'Borrower'
             flash(f'Cannot allocate — {borrower_name} has reached the borrow limit ({limit} books).', 'error')
             return redirect(url_for('circulation.reservations_page', **status_args))
+        # Over-booking guard: every physical copy already has an allocated
+        # reservation waiting, so allocating one more would promise a copy
+        # that does not exist. Kept alongside the no-copy check above,
+        # which covers copies that are still on loan.
+        if count_allocated_reservations(reservation[1]) >= count_available_accessions(reservation[1]):
+            flash('Cannot allocate — no unallocated copy is available.', 'error')
+            return redirect(url_for('circulation.reservations_page', **status_args))
         deadline, window_label = _claim_window()
         try:
             allocate_reservation(reservation_id, deadline, updated_by=current_user.id)
@@ -537,7 +579,21 @@ def reservation_action(reservation_id, action):
         due_date = _compute_due_date('overnight', role_name)
         try:
             borrow_book(reservation[1], accession[0], reservation[2], current_user.id, 'overnight', due_date)
-            claim_reservation(reservation_id, updated_by=current_user.id)
+            try:
+                claim_reservation(reservation_id, updated_by=current_user.id)
+            except Exception as inner:
+                if _is_unique_violation(inner):
+                    raise
+                # claim_reservation failed after the loan committed
+                # (per-statement commits, no multi-statement transaction):
+                # compensate the orphan loan best-effort, then re-raise.
+                try:
+                    orphan = get_active_loan_by_accession(accession[0])
+                    if orphan:
+                        return_book(orphan[0], 0, updated_by=current_user.id)
+                except Exception:
+                    pass
+                raise
         except Exception as e:
             if _is_unique_violation(e):
                 flash('Another transaction just completed — please refresh and try again.', 'error')
@@ -610,9 +666,11 @@ def user_borrow():
         if count_active_loans(borrower_row[0]) >= limit:
             flash(f'You have reached the borrow limit ({limit} books).', 'error')
             return redirect(url_for('cataloging.book_info', book_id=book_id))
-        position = get_next_queue_position(book_id)
         try:
-            create_reservation(book_id, borrower_row[0], position)
+            position = _create_reservation_retry(book_id, borrower_row[0])
+        except _DuplicateReservation:
+            flash('You already have a pending reservation for this book.', 'error')
+            return redirect(url_for('cataloging.book_info', book_id=book_id))
         except Exception as e:
             if _is_unique_violation(e):
                 flash('Another transaction just completed — please refresh and try again.', 'error')
@@ -653,6 +711,19 @@ def user_borrow():
 
     if get_active_reservation_by_book_and_borrower(book_id, borrower_row[0]):
         flash('You already have a pending reservation for this book.', 'error')
+        return redirect(url_for('cataloging.book_info', book_id=book_id))
+
+    # Queue-jump parity with desk_borrow: don't let a daily walk-in take a
+    # copy someone else is already queueing for (the overnight branch is
+    # unaffected — joining the queue is its purpose). Advisory read only;
+    # the write path's unique indexes stay authoritative.
+    try:
+        _first_waiting = next_in_queue(book_id)
+    except Exception:
+        _first_waiting = None
+    if (_first_waiting and len(_first_waiting) > 2
+            and _first_waiting[2] != borrower_row[0]):
+        flash('This book has a waiting reservation queue — please reserve it instead.', 'error')
         return redirect(url_for('cataloging.book_info', book_id=book_id))
 
     if borrow_type == 'daily_circulation' and is_book_blocked_for_daily(book_id):
@@ -713,9 +784,11 @@ def user_reserve():
         flash('A copy is available — you can borrow it instead.', 'info')
         return redirect(url_for('cataloging.book_info', book_id=book_id))
 
-    position = get_next_queue_position(book_id)
     try:
-        create_reservation(book_id, borrower_row[0], position)
+        position = _create_reservation_retry(book_id, borrower_row[0])
+    except _DuplicateReservation:
+        flash('You already have an active reservation for this book.', 'error')
+        return redirect(url_for('cataloging.book_info', book_id=book_id))
     except Exception as e:
         if _is_unique_violation(e):
             flash('Another transaction just completed — please refresh and try again.', 'error')

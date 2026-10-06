@@ -156,6 +156,29 @@ def get_available_accession_by_book(book_id):
     )
 
 
+def count_available_accessions(book_id):
+    """Copies of a book that are free to lend: no active/overdue loan and
+    not marked lost. Mirrors the availability WHERE logic of
+    get_available_accession_by_book (minus the daily-block clause, which
+    is a lending policy, not physical availability)."""
+    row = db.fetch_one(
+        '''SELECT COUNT(*) FROM accession_log a
+           WHERE a.book_id = %s
+             AND NOT EXISTS (
+                 SELECT 1 FROM circulation_records c
+                 WHERE c.accession_id = a.accession_id
+                   AND c.transaction_status IN ('active', 'overdue')
+             )
+             AND COALESCE((
+                   SELECT c3.lost_flag FROM circulation_records c3
+                   WHERE c3.accession_id = a.accession_id
+                   ORDER BY c3.circulation_id DESC LIMIT 1
+               ), FALSE) = FALSE''',
+        (book_id,)
+    )
+    return row[0] if row else 0
+
+
 def count_active_loans(borrower_id):
     row = db.fetch_one(
         "SELECT COUNT(*) FROM circulation_records WHERE borrower_id = %s AND transaction_status IN ('active', 'overdue')",

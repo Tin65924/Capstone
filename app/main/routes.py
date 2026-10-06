@@ -48,6 +48,59 @@ def _safe_departments(dept_type):
         return []
 
 
+def _coerce_due_day(due):
+    """Coerce a due-date value (date/datetime/ISO string) to a date.
+
+    Returns None when the value is missing or unparseable so callers
+    degrade gracefully instead of 500ing on malformed rows.
+    """
+    if due is None:
+        return None
+    if isinstance(due, datetime):
+        return due.date()
+    if isinstance(due, date):
+        return due
+    if isinstance(due, str):
+        try:
+            return datetime.fromisoformat(due).date()
+        except ValueError:
+            pass
+        try:
+            return datetime.strptime(due[:10], '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            return None
+    if hasattr(due, 'timetuple'):
+        try:
+            return date(due.year, due.month, due.day)
+        except Exception:
+            return None
+    return None
+
+
+def _overdue_loan_ids(loans, today, id_idx=0, due_idx=2, status_idx=4):
+    """Ids of loans that are flagged 'overdue' or active-but-past-due.
+
+    The DB never flips circulation status to 'overdue' on its own, so
+    date-past-due active loans must also render as Overdue. Short or
+    malformed rows are skipped, never fatal.
+    """
+    overdue = set()
+    for loan in loans or []:
+        try:
+            if len(loan) <= status_idx:
+                continue
+            status = loan[status_idx]
+            if status == 'overdue':
+                overdue.add(loan[id_idx])
+            elif status == 'active':
+                due_day = _coerce_due_day(loan[due_idx] if len(loan) > due_idx else None)
+                if due_day is not None and due_day < today:
+                    overdue.add(loan[id_idx])
+        except Exception:
+            continue
+    return overdue
+
+
 @main_bp.route('/')
 def index():
     new_arrivals = get_recent_books(5)
@@ -86,6 +139,7 @@ def user_profile():
 
     borrower = get_borrower_by_user(current_user.id)
     loans = []
+    overdue_ids = set()
     overdue_count = 0
     active_count = 0
     borrow_limit = 0
@@ -103,11 +157,17 @@ def user_profile():
         except Exception:
             current_app.logger.warning('expire_overdue_reservations failed', exc_info=True)
         loans = get_loans_by_borrower(borrower_id) or []
-        overdue_count = sum(1 for loan in loans if len(loan) > 4 and loan[4] == 'overdue')
+        today = date.today()
+        overdue_ids = _overdue_loan_ids(loans, today)
+        overdue_count = sum(1 for loan in loans if len(loan) > 0 and loan[0] in overdue_ids)
         try:
             active_count = count_active_loans(borrower_id)
         except Exception:
             active_count = len(loans)
+        try:
+            overdue_count = min(overdue_count, int(active_count))
+        except (TypeError, ValueError):
+            pass
 
         role_name = user_data[2] if user_data else ''
         if role_name == 'Faculty':
@@ -184,6 +244,7 @@ def user_profile():
     return render_template('users/user_profile.html', user_data=user_data,
                            profile=profile,
                            loans=loans, overdue_count=overdue_count,
+                           overdue_ids=overdue_ids,
                            active_count=active_count, borrow_limit=borrow_limit,
                            pickups=pickups, my_requests=my_requests,
                            borrowing_requests=borrowing_requests,
@@ -262,20 +323,36 @@ def user_notifications():
     from app.circulation.models import (
         get_borrower_by_user, get_notifications_by_borrower, count_unread_notifications
     )
+    NOTIFICATIONS_PER_PAGE = 50
+    try:
+        page = int(request.args.get('page', 1))
+    except (TypeError, ValueError):
+        page = 1
+    if page < 1:
+        page = 1
     notifications = []
     unread_count = 0
+    total = 0
+    total_pages = 1
     borrower = get_borrower_by_user(current_user.id)
     if borrower:
         try:
-            notifications = get_notifications_by_borrower(borrower[0]) or []
+            all_notifications = get_notifications_by_borrower(borrower[0]) or []
         except Exception:
-            notifications = []
+            all_notifications = []
         try:
             unread_count = count_unread_notifications(borrower[0])
         except Exception:
             unread_count = 0
+        total = len(all_notifications)
+        total_pages = max(1, (total + NOTIFICATIONS_PER_PAGE - 1) // NOTIFICATIONS_PER_PAGE)
+        if page > total_pages:
+            page = total_pages
+        start = (page - 1) * NOTIFICATIONS_PER_PAGE
+        notifications = all_notifications[start:start + NOTIFICATIONS_PER_PAGE]
     return render_template('users/user_notifications.html',
-                           notifications=notifications, unread_count=unread_count)
+                           notifications=notifications, unread_count=unread_count,
+                           page=page, total_pages=total_pages, total=total)
 
 
 @main_bp.route('/user/notifications/<int:notification_id>/read', methods=['POST'])
@@ -367,10 +444,14 @@ def user_history():
             notifications = get_notifications_by_borrower(borrower[0]) or []
         except Exception:
             notifications = []
+    # History rows carry status at index 5 (see get_user_loan_history);
+    # flag date-past-due actives as overdue for the badge.
+    overdue_ids = _overdue_loan_ids(transactions, date.today(), status_idx=5)
     return render_template('users/user_history.html',
                            transactions=transactions, my_requests=my_requests,
                            reservations=reservations, fines=fines,
-                           total_fines=total_fines, notifications=notifications)
+                           total_fines=total_fines, notifications=notifications,
+                           overdue_ids=overdue_ids)
 
 
 @main_bp.route('/api/bloom')
@@ -389,7 +470,10 @@ def suggestions():
         from app.auth.models import suggest_programs
         rows = suggest_programs(q)
     else:
-        rows = suggest_book_values(BOOK_FIELD_MAP[field], q)
+        try:
+            rows = suggest_book_values(BOOK_FIELD_MAP[field], q) or []
+        except Exception:
+            rows = []
     payload = {'suggestions': [row[0] for row in rows if row and row[0]]}
     if field == 'book_search':
         # Rich title/author pairs for the analytics-style dropdown
