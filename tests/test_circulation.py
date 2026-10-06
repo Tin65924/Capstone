@@ -347,6 +347,7 @@ class TestReservationLifecycle:
         mock_db['fetch_one'].side_effect = [
             (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),  # reservation
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),    # available copy
+            None,                                                  # book lookup (active)
             (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),  # borrower details
             None,                                                  # no active loan for this book
             (0,),                                                  # count active loans
@@ -386,6 +387,7 @@ class TestReservationLifecycle:
         mock_db['fetch_one'].side_effect = [
             (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', '2026-08-03 10:00:00'),  # reservation
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),                        # available copy
+            None,                                                                      # book lookup (active)
             (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),            # borrower details
             None,                                                                      # no active loan for this book
             (0,),                                                                      # count active loans
@@ -412,6 +414,7 @@ class TestReservationLifecycle:
         mock_db['fetch_one'].side_effect = [
             (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', '2026-08-03 10:00:00'),  # reservation
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),                        # available copy
+            None,                                                                      # book lookup (active)
             (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),            # borrower details
             None,                                                                      # no active loan for this book
             (3,),                                                                      # count == student limit
@@ -424,6 +427,7 @@ class TestReservationLifecycle:
         mock_db['fetch_one'].side_effect = [
             (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', '2026-08-03 10:00:00'),  # reservation
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),                        # available copy
+            None,                                                                      # book lookup (active)
             (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),            # borrower details
             (55, 5, 2, 1, 1, 'daily_circulation', 'borrow', '2026-08-01', '2026-08-02', None, 0, None, False, 'active'),  # already holds book 5
         ]
@@ -435,6 +439,7 @@ class TestReservationLifecycle:
         mock_db['fetch_one'].side_effect = [
             (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),  # reservation
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),    # available copy
+            None,                                                  # book lookup (active)
             (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),  # borrower details
             None,                                                  # no active loan for this book
             (3,),                                                  # count == limit
@@ -447,6 +452,7 @@ class TestReservationLifecycle:
         mock_db['fetch_one'].side_effect = [
             (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),  # reservation
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),    # available copy
+            None,                                                  # book lookup (active)
             (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),  # borrower details
             (55, 5, 2, 1, 1, 'daily_circulation', 'borrow', '2026-08-01', '2026-08-02', None, 0, None, False, 'active'),  # already holds book 5
         ]
@@ -763,6 +769,7 @@ class TestUserBorrow:
             None,                                      # no active loan for this book
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),  # available accession
             (0,),                                       # count active loans
+            None,                                      # no active reservation for this book
         ]
         resp = student_client.post('/user/borrow', data={
             'book_id': 5,

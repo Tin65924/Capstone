@@ -69,7 +69,7 @@ class TestHostileParams:
 class TestActions:
     def test_allocate_success(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [
-            (7, 1, 5, 1, None, 'waiting', None, None), ACC, DETAIL,
+            (7, 1, 5, 1, None, 'waiting', None, None), ACC, None, DETAIL,
             None, (0,), (1,)]
         mock_db['fetch_all'].return_value = []
         resp = librarian_client.post('/librarian/reservations/7/allocate')
@@ -91,7 +91,7 @@ class TestActions:
 
     def test_claim_success(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [
-            (7, 1, 5, 1, None, 'allocated', None, None), ACC, DETAIL,
+            (7, 1, 5, 1, None, 'allocated', None, None), ACC, None, DETAIL,
             None, (0,)]
         mock_db['fetch_all'].return_value = []
         assert librarian_client.post(

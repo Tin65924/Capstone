@@ -54,10 +54,11 @@ def get_active_loan_by_accession(accession_id):
 
 
 def get_active_loan_by_book_and_borrower(book_id, borrower_id):
-    # NOTE: application-level guard only. Concurrent POSTs can both pass this
-    # check and INSERT different accessions of the same book (no partial unique
-    # index on (book_id, borrower_id) WHERE active/overdue). Accepted for
-    # capstone scope; a DB-level constraint would close the race.
+    # Application-level guard plus DB-level partial unique indexes
+    # (uq_active_loan_per_book_borrower, uq_active_loan_per_accession,
+    # uq_active_reservation_per_book_borrower in schema.sql): a lost race
+    # surfaces as a unique violation, which routes turn into a friendly
+    # "refresh and try again" instead of a duplicate loan.
     return db.fetch_one(
         "SELECT * FROM circulation_records WHERE book_id = %s AND borrower_id = %s AND transaction_status IN ('active', 'overdue')",
         (book_id, borrower_id)

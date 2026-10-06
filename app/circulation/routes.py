@@ -31,6 +31,31 @@ VALID_LOAN_TYPE_FILTERS = ('all', 'overnight', 'daily_circulation')
 VALID_LOAN_STATUS_FILTERS = ('all', 'overdue', 'due_soon')
 
 
+def _safe_notify(borrower_id, message, notif_type, ref):
+    """Best-effort notification: a failed notification must never turn a
+    successful loan/return/reservation into a 500 (the write already
+    committed). Mirrors the try/except pattern in requests/routes.py."""
+    try:
+        create_notification(borrower_id, message, notif_type, ref)
+    except Exception:
+        current_app.logger.warning('create_notification failed for borrower %s',
+                                   borrower_id, exc_info=True)
+
+
+def _is_unique_violation(exc):
+    """True when a write lost a race against the partial unique indexes
+    in schema.sql (uq_active_loan_per_accession,
+    uq_active_loan_per_book_borrower,
+    uq_active_reservation_per_book_borrower). Only this expected,
+    user-driven failure is converted to a friendly retry message;
+    every other DB error still propagates to the 500 handler."""
+    try:
+        from psycopg2 import errors as _pg_errors
+        return isinstance(exc, _pg_errors.UniqueViolation)
+    except Exception:
+        return False
+
+
 def _borrow_limit(role_name):
     if role_name == 'Student':
         return current_app.config.get('MAX_BORROW_LIMIT_STUDENT', 3)
@@ -52,7 +77,9 @@ def _borrower_status(row):
         return row[5]
     if len(row) >= 5:
         return row[4]
-    return row[3]
+    if len(row) > 3:
+        return row[3]
+    return None
 
 
 def _book_is_archived(book):
@@ -282,8 +309,14 @@ def desk_borrow():
         return redirect(url_for('circulation.circulation_page', search=borrower_row[1]))
 
     due_date = _compute_due_date(borrow_type, borrower_row[6])
-    borrow_book(accession[2], accession[0], borrower_row[0], current_user.id, borrow_type, due_date)
-    create_notification(
+    try:
+        borrow_book(accession[2], accession[0], borrower_row[0], current_user.id, borrow_type, due_date)
+    except Exception as e:
+        if _is_unique_violation(e):
+            flash('Another transaction just completed — please refresh and try again.', 'error')
+            return redirect(url_for('circulation.circulation_page', search=borrower_row[1]))
+        raise
+    _safe_notify(
         borrower_row[0],
         f'You borrowed copy {accession_number}. Due {due_date}.',
         'borrow',
@@ -317,7 +350,7 @@ def desk_return():
     return_book(loan[0], fine, damage_notes, lost_flag, updated_by=current_user.id)
     borrower_id_for_loan = loan[3] if len(loan) > 3 else None
     if borrower_id_for_loan is not None:
-        create_notification(
+        _safe_notify(
             borrower_id_for_loan,
             f'You returned copy {accession_number}.'
             + (f' Overdue fine: ₱{fine:.2f}.' if fine > 0 else ' Thank you!'),
@@ -325,7 +358,7 @@ def desk_return():
             str(loan[0]),
         )
         if fine > 0:
-            create_notification(
+            _safe_notify(
                 borrower_id_for_loan,
                 f'Overdue fine of ₱{fine:.2f} assessed for copy {accession_number}. Please settle at the desk.',
                 'fine',
@@ -335,7 +368,7 @@ def desk_return():
 
     waiting = next_in_queue(accession[2])
     if waiting and len(waiting) > 2 and not lost_flag:
-        create_notification(
+        _safe_notify(
             waiting[2],
             f'A copy ({accession_number}) was returned and is awaiting librarian allocation.',
             'hold_ready',
@@ -433,7 +466,15 @@ def reservation_action(reservation_id, action):
         if not get_available_accession_by_book(reservation[1]):
             flash('Cannot allocate — all copies of this book are still on loan.', 'error')
             return redirect(url_for('circulation.reservations_page', **status_args))
+        book_for_reservation = get_book_by_id(reservation[1])
+        if book_for_reservation is not None and _book_is_archived(book_for_reservation):
+            flash('Cannot allocate — this book is archived.', 'error')
+            return redirect(url_for('circulation.reservations_page', **status_args))
         borrower_detail = get_borrower_details(reservation[2])
+        if borrower_detail is not None and _borrower_status(borrower_detail) != 'active':
+            borrower_name = borrower_detail[4] if len(borrower_detail) > 4 else 'Borrower'
+            flash(f'Cannot allocate — {borrower_name} borrower account is not active.', 'error')
+            return redirect(url_for('circulation.reservations_page', **status_args))
         role_name = borrower_detail[6] if borrower_detail else 'Student'
         if get_active_loan_by_book_and_borrower(reservation[1], reservation[2]):
             borrower_name = borrower_detail[4] if borrower_detail else 'Borrower'
@@ -445,14 +486,20 @@ def reservation_action(reservation_id, action):
             flash(f'Cannot allocate — {borrower_name} has reached the borrow limit ({limit} books).', 'error')
             return redirect(url_for('circulation.reservations_page', **status_args))
         deadline, window_label = _claim_window()
-        allocate_reservation(reservation_id, deadline, updated_by=current_user.id)
-        create_notification(
+        try:
+            allocate_reservation(reservation_id, deadline, updated_by=current_user.id)
+        except Exception as e:
+            if _is_unique_violation(e):
+                flash('Another transaction just completed — please refresh and try again.', 'error')
+                return redirect(url_for('circulation.reservations_page', **status_args))
+            raise
+        _safe_notify(
             reservation[2],
             f'Your reserved book is ready. Claim within {window_label}.',
             'hold_ready',
             str(reservation_id),
         )
-        create_notification(
+        _safe_notify(
             reservation[2],
             f'Reservation #{reservation_id} allocated. Claim by {deadline.strftime("%b %d, %Y %I:%M %p")}.',
             'reservation',
@@ -468,7 +515,15 @@ def reservation_action(reservation_id, action):
         if not accession:
             flash('Cannot claim — no copy of this book is available to check out.', 'error')
             return redirect(url_for('circulation.reservations_page', **status_args))
+        book_for_claim = get_book_by_id(reservation[1])
+        if book_for_claim is not None and _book_is_archived(book_for_claim):
+            flash('Cannot claim — this book is archived.', 'error')
+            return redirect(url_for('circulation.reservations_page', **status_args))
         borrower_detail = get_borrower_details(reservation[2])
+        if borrower_detail is not None and _borrower_status(borrower_detail) != 'active':
+            borrower_name = borrower_detail[4] if len(borrower_detail) > 4 else 'Borrower'
+            flash(f'Cannot claim — {borrower_name} borrower account is not active.', 'error')
+            return redirect(url_for('circulation.reservations_page', **status_args))
         role_name = borrower_detail[6] if borrower_detail else 'Student'
         if get_active_loan_by_book_and_borrower(reservation[1], reservation[2]):
             borrower_name = borrower_detail[4] if borrower_detail else 'Borrower'
@@ -480,9 +535,15 @@ def reservation_action(reservation_id, action):
             flash(f'Cannot claim — {borrower_name} has reached the borrow limit ({limit} books).', 'error')
             return redirect(url_for('circulation.reservations_page', **status_args))
         due_date = _compute_due_date('overnight', role_name)
-        borrow_book(reservation[1], accession[0], reservation[2], current_user.id, 'overnight', due_date)
-        claim_reservation(reservation_id, updated_by=current_user.id)
-        create_notification(
+        try:
+            borrow_book(reservation[1], accession[0], reservation[2], current_user.id, 'overnight', due_date)
+            claim_reservation(reservation_id, updated_by=current_user.id)
+        except Exception as e:
+            if _is_unique_violation(e):
+                flash('Another transaction just completed — please refresh and try again.', 'error')
+                return redirect(url_for('circulation.reservations_page', **status_args))
+            raise
+        _safe_notify(
             reservation[2],
             f'Reservation #{reservation_id} claimed. Book due {due_date}.',
             'reservation',
@@ -495,7 +556,7 @@ def reservation_action(reservation_id, action):
             flash('This reservation is already finished.', 'error')
             return redirect(url_for('circulation.reservations_page', **status_args))
         expire_reservation(reservation_id, updated_by=current_user.id)
-        create_notification(
+        _safe_notify(
             reservation[2],
             f'Reservation #{reservation_id} expired/cancelled.',
             'reservation',
@@ -550,8 +611,14 @@ def user_borrow():
             flash(f'You have reached the borrow limit ({limit} books).', 'error')
             return redirect(url_for('cataloging.book_info', book_id=book_id))
         position = get_next_queue_position(book_id)
-        create_reservation(book_id, borrower_row[0], position)
-        create_notification(
+        try:
+            create_reservation(book_id, borrower_row[0], position)
+        except Exception as e:
+            if _is_unique_violation(e):
+                flash('Another transaction just completed — please refresh and try again.', 'error')
+                return redirect(url_for('cataloging.book_info', book_id=book_id))
+            raise
+        _safe_notify(
             borrower_row[0],
             f'Overnight borrow request for "{book[1]}" submitted (queue #{position}). Awaiting librarian approval.',
             'reservation',
@@ -584,13 +651,23 @@ def user_borrow():
         flash(f'You have reached the borrow limit ({limit} books).', 'error')
         return redirect(url_for('cataloging.book_info', book_id=book_id))
 
+    if get_active_reservation_by_book_and_borrower(book_id, borrower_row[0]):
+        flash('You already have a pending reservation for this book.', 'error')
+        return redirect(url_for('cataloging.book_info', book_id=book_id))
+
     if borrow_type == 'daily_circulation' and is_book_blocked_for_daily(book_id):
         flash('Not Available — this book is borrowed as Overnight and already allocated.', 'error')
         return redirect(url_for('cataloging.book_info', book_id=book_id))
 
     due_date = _compute_due_date(borrow_type, current_user.role)
-    borrow_book(book_id, accession[0], borrower_row[0], current_user.id, borrow_type, due_date)
-    create_notification(
+    try:
+        borrow_book(book_id, accession[0], borrower_row[0], current_user.id, borrow_type, due_date)
+    except Exception as e:
+        if _is_unique_violation(e):
+            flash('Another transaction just completed — please refresh and try again.', 'error')
+            return redirect(url_for('cataloging.book_info', book_id=book_id))
+        raise
+    _safe_notify(
         borrower_row[0],
         f'You borrowed "{book[1]}". Due {due_date}.',
         'borrow',
@@ -637,8 +714,14 @@ def user_reserve():
         return redirect(url_for('cataloging.book_info', book_id=book_id))
 
     position = get_next_queue_position(book_id)
-    create_reservation(book_id, borrower_row[0], position)
-    create_notification(
+    try:
+        create_reservation(book_id, borrower_row[0], position)
+    except Exception as e:
+        if _is_unique_violation(e):
+            flash('Another transaction just completed — please refresh and try again.', 'error')
+            return redirect(url_for('cataloging.book_info', book_id=book_id))
+        raise
+    _safe_notify(
         borrower_row[0],
         f'Reservation for "{book[1]}" placed (queue #{position}). You will be notified when ready.',
         'reservation',
@@ -669,7 +752,7 @@ def user_return():
     fine = calculate_fine(loan[0], current_app.config.get('OVERDUE_FINE_PER_DAY', 5.0),
                           current_app.config.get('OVERDUE_GRACE_DAYS', 0))
     return_book(loan[0], fine, updated_by=current_user.id)
-    create_notification(
+    _safe_notify(
         loan[2],
         'You returned your book.'
         + (f' Overdue fine: ₱{fine:.2f}.' if fine > 0 else ' Thank you!'),
@@ -677,7 +760,7 @@ def user_return():
         str(loan[0]),
     )
     if fine > 0:
-        create_notification(
+        _safe_notify(
             loan[2],
             f'Overdue fine of ₱{fine:.2f} assessed. Please settle at the desk.',
             'fine',
@@ -687,7 +770,7 @@ def user_return():
 
     waiting = next_in_queue(loan[1])
     if waiting:
-        create_notification(
+        _safe_notify(
             waiting[2],
             'A reserved copy you queued for is ready for pickup.',
             'hold_ready',

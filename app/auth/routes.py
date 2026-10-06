@@ -16,7 +16,7 @@ from app.database import db
 from app.bloom_registry import bloom_registry
 from .models import (
     get_user_by_email, get_user_by_oauth_sub, create_user,
-    create_pending_user, create_borrower, get_roles, get_role_by_name,
+    create_pending_user, create_borrower, delete_signup_user, get_roles, get_role_by_name,
     log_activity, log_system_event, get_all_users, get_pending_users,
     approve_user, update_user_role, toggle_user_status,
     update_user_details, archive_user, unarchive_user, delete_user, get_admin_count,
@@ -304,7 +304,18 @@ def role_select():
         if role_name == 'Faculty':
             user_id = create_pending_user(email, oauth_sub, full_name, role[0])
             if user_id:
-                create_borrower(user_id, id_number, department)
+                try:
+                    create_borrower(user_id, id_number, department)
+                except Exception:
+                    current_app.logger.exception(
+                        'Faculty signup borrower insert failed for user %s', user_id)
+                    try:
+                        delete_signup_user(user_id)
+                    except Exception:
+                        current_app.logger.warning(
+                            'Orphan pending user %s needs manual cleanup',
+                            user_id, exc_info=True)
+                    return _render_register('Failed to create account. Please try again.')
                 bloom_registry.mark_dirty()
                 session.pop(SESSION_OAUTH_KEY, None)
                 flash('Your account requires librarian approval before you can access the system.', 'info')
@@ -315,7 +326,17 @@ def role_select():
         if not user_id:
             return _render_register('Failed to create account. Please try again.')
 
-        create_borrower(user_id, id_number, department)
+        try:
+            create_borrower(user_id, id_number, department)
+        except Exception:
+            current_app.logger.exception(
+                'Student signup borrower insert failed for user %s', user_id)
+            try:
+                delete_signup_user(user_id)
+            except Exception:
+                current_app.logger.warning(
+                    'Orphan user %s needs manual cleanup', user_id, exc_info=True)
+            return _render_register('Failed to create account. Please try again.')
         bloom_registry.mark_dirty()
         session.pop(SESSION_OAUTH_KEY, None)
         user = User(user_id, email, role_name, full_name)

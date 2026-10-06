@@ -211,8 +211,16 @@ def update_profile():
         flash('Full name is required.', 'error')
         return redirect(url_for('main.user_profile'))
 
+    if len(full_name) > 150:
+        flash('Full name is too long (max 150 characters).', 'error')
+        return redirect(url_for('main.user_profile'))
+
     if phone_number and not re.fullmatch(r'[+\d][\d\s\-()]{6,19}', phone_number):
         flash('Invalid phone number format.', 'error')
+        return redirect(url_for('main.user_profile'))
+
+    if department and len(department) > 100:
+        flash('Department name is too long (max 100 characters).', 'error')
         return redirect(url_for('main.user_profile'))
 
     try:
@@ -237,7 +245,12 @@ def update_profile():
             flash('Please select a valid program/department from the list.', 'error')
             return redirect(url_for('main.user_profile'))
 
-    update_own_profile(current_user.id, full_name, phone_number, department)
+    try:
+        update_own_profile(current_user.id, full_name, phone_number, department)
+    except Exception:
+        current_app.logger.exception('Profile update failed for user %s', current_user.id)
+        flash('Profile update failed. Please try again.', 'error')
+        return redirect(url_for('main.user_profile'))
     log_activity(current_user.id, 'profile:update')
     flash('Profile updated.', 'success')
     return redirect(url_for('main.user_profile'))

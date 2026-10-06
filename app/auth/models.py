@@ -149,6 +149,18 @@ def create_borrower(user_id, id_number, department=None):
     )
 
 
+def delete_signup_user(user_id):
+    """Remove a just-created account when its borrower insert fails.
+
+    Keeps a failed signup from leaving an orphan user row (no borrower):
+    the borrower INSERT already rolled back, so only the user row remains.
+    """
+    return db.execute(
+        'DELETE FROM user_accounts WHERE user_id = %s',
+        (user_id,)
+    )
+
+
 def get_roles():
     return db.fetch_all('SELECT role_id, role_name FROM roles ORDER BY role_id')
 
@@ -879,15 +891,36 @@ def get_profile_by_user(user_id):
 
 
 def update_own_profile(user_id, full_name, phone_number=None, department=None):
-    """Update editable self-service fields. Never touches id_number."""
+    """Update editable self-service fields. Never touches id_number.
+
+    Best-effort atomicity on the non-transactional db helper: the old
+    name is re-applied if the borrower update fails, so a midway DB
+    failure cannot leave name updated with phone/department stale.
+    """
+    old = db.fetch_one(
+        'SELECT full_name FROM user_accounts WHERE user_id = %s',
+        (user_id,)
+    )
+    old_name = old[0] if old else None
     db.execute(
         'UPDATE user_accounts SET full_name = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s',
         (full_name, user_id, user_id)
     )
-    db.execute(
-        'UPDATE borrowers SET phone_number = %s, department = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s',
-        (phone_number, department, user_id, user_id)
-    )
+    try:
+        db.execute(
+            'UPDATE borrowers SET phone_number = %s, department = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s',
+            (phone_number, department, user_id, user_id)
+        )
+    except Exception:
+        if old_name is not None:
+            try:
+                db.execute(
+                    'UPDATE user_accounts SET full_name = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s',
+                    (old_name, user_id, user_id)
+                )
+            except Exception:
+                pass
+        raise
 
 
 DEPT_TYPES = ('program', 'department')

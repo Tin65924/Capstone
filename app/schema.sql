@@ -327,3 +327,14 @@ CREATE INDEX IF NOT EXISTS idx_requests_requester ON request_records (requester_
 CREATE INDEX IF NOT EXISTS idx_notif_recipient ON notification_log (recipient_id);
 CREATE INDEX IF NOT EXISTS idx_user_accounts_status ON user_accounts (account_status);
 CREATE INDEX IF NOT EXISTS idx_user_accounts_role ON user_accounts (role_id);
+
+-- Race guards for concurrent borrows/reserves (F2): the app checks
+-- first (SELECT-then-INSERT), but two simultaneous POSTs can both pass
+-- the check. These partial unique indexes make the loser fail with a
+-- unique violation instead of creating a duplicate loan/reservation;
+-- routes catch it and ask the user to refresh. IF NOT EXISTS keeps the
+-- re-applied schema idempotent; pre-existing duplicates only log a
+-- skip-warning in run_schema without blocking the rest.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_active_loan_per_accession ON circulation_records (accession_id) WHERE transaction_status IN ('active', 'overdue');
+CREATE UNIQUE INDEX IF NOT EXISTS uq_active_loan_per_book_borrower ON circulation_records (book_id, borrower_id) WHERE transaction_status IN ('active', 'overdue');
+CREATE UNIQUE INDEX IF NOT EXISTS uq_active_reservation_per_book_borrower ON reservation_queue (book_id, borrower_id) WHERE reservation_status IN ('waiting', 'allocated');
