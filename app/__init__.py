@@ -54,6 +54,9 @@ def create_app(test_config=None):
 
     register_error_handlers(app)
 
+    from .circulation.models import format_due
+    app.template_filter('duefmt')(format_due)
+
     try:
         if not app.config.get('TESTING'):
             from .backup.scheduler import start_scheduler

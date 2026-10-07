@@ -440,7 +440,7 @@
                             {% for loan in borrower_loans %}
                             <li class="text-sm flex items-center justify-between gap-2">
                                 <span class="text-gray-700">{{ loan[5] }} <span class="text-gray-400">({{ loan[6] }})</span></span>
-                                <span class="text-xs {% if loan[4] == 'overdue' or (loan[4] == 'active' and loan[2] < today) %}text-red-600 font-bold{% else %}text-gray-500{% endif %}">due {{ loan[2] }}</span>
+                                <span class="text-xs {% if loan_flags.get(loan[0]) == 'overdue' %}text-red-600 font-bold{% else %}text-gray-500{% endif %}">due {{ loan[2]|duefmt }}</span>
                             </li>
                             {% endfor %}
                         </ul>
@@ -602,7 +602,7 @@
                             <td class="font-mono text-gray-500">{{ loan[8] }}</td>
                             <td>{{ 'Overnight' if loan[3] == 'overnight' else 'In-Library' }}</td>
                             <td class="text-gray-500">{{ loan[1] }}</td>
-                            <td class="{% if loan_flags.get(loan[0]) == 'overdue' %}text-red-600 font-bold{% endif %}">{{ loan[2] }}</td>
+                            <td class="{% if loan_flags.get(loan[0]) == 'overdue' %}text-red-600 font-bold{% endif %}">{{ loan[2]|duefmt }}</td>
                             <td>
                                 {% if loan_flags.get(loan[0]) == 'overdue' %}
                                 <span class="badge badge-danger">Overdue</span>
@@ -660,7 +660,7 @@
                                 {% endif %}
                             </td>
                             <td class="text-gray-500">{{ tx[1] }}</td>
-                            <td class="text-gray-500">{{ tx[4] if tx[0] == 'return' else tx[3] }}</td>
+                            <td class="text-gray-500">{{ (tx[4] if tx[0] == 'return' else tx[3])|duefmt }}</td>
                             <td class="{% if tx[5]|float(0) > 0 %}text-red-600 font-bold{% else %}text-gray-400{% endif %}">{{ '₱%.2f'|format(tx[5]|float(0)) if tx[5]|float(0) > 0 else '—' }}</td>
                         </tr>
                         {% else %}

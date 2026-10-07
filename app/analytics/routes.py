@@ -1,3 +1,4 @@
+import calendar
 import io
 from datetime import date, datetime, timedelta
 from xml.sax.saxutils import escape as _xml_escape
@@ -53,9 +54,14 @@ KPI_DESCRIPTIONS = {
 DASHBOARD_LABELS = {
     'trend_borrowings': 'Borrowings Trend',
     'trend_overdue': 'Overdue Trend',
+    'trend_borrowings_by_program': 'Borrowings Trend by Program',
+    'trend_overdue_by_program': 'Overdue Trend by Program',
     'top_categories': 'Top Borrowed Categories',
+    'top_categories_by_program': 'Top Categories by Program',
     'peak_periods': 'Peak Borrowing Periods',
     'top_books': 'Top Borrowed Books',
+    'top_books_by_program': 'Top Books by Program',
+    'fines_by_book': 'Books with Most Fines',
     'high_demand': 'Likely High-Demand Titles',
     'by_user_type': 'Borrowings by User Type',
     'collection_by_category': 'Collection by Category',
@@ -75,9 +81,14 @@ DASHBOARD_LABELS = {
 DASHBOARD_DESCRIPTIONS = {
     'trend_borrowings': 'Daily borrow counts in the selected period.',
     'trend_overdue': 'Daily overdue items by due date in the selected period (missing days are zero).',
+    'trend_borrowings_by_program': 'Daily borrows split by program/department — every point shows which program it belongs to.',
+    'trend_overdue_by_program': 'Daily overdue items split by program/department.',
     'top_categories': 'Borrows grouped by subject classification.',
+    'top_categories_by_program': 'Borrows grouped by category crossed with program/department.',
     'peak_periods': 'Borrowings grouped by day to show peak days.',
     'top_books': 'Most borrowed books with authors.',
+    'top_books_by_program': 'Top-book borrows split by program/department — which program borrowed each top title.',
+    'fines_by_book': 'Books ranked by total fines incurred (SUM of fine_amount, with fine count).',
     'high_demand': 'Active loans ranked by current demand.',
     'by_user_type': 'Borrows grouped by account role.',
     'collection_by_category': 'Active titles grouped by subject classification.',
@@ -87,7 +98,7 @@ DASHBOARD_DESCRIPTIONS = {
     'circulation_summary': 'Headline circulation totals for the period.',
     'borrowers_by_department': 'Distinct active borrowers grouped by program/department.',
     'overdue_by_department': 'Overdue loans grouped by program/department.',
-    'department_leaderboard': 'Borrowings, borrowers, and overdue per program/department.',
+    'department_leaderboard': 'Borrowings, borrowers, overdue and share per program/department. Share = program borrowings / total borrowings x 100.',
     'top_requested_titles': 'Most-requested pending books not yet in the collection (pending requests only).',
     'requests_by_role': 'Top pending requested titles split into Student / Faculty / Other staff (pending requests only).',
     'requests_trend': 'Daily pending + rejected book-request counts in the selected period.',
@@ -100,16 +111,21 @@ EXPORTABLE_KPIS = set(VALID_KPIS) | set(DASHBOARD_LABELS)
 def resolve_dates(preset, from_str, to_str):
     """Resolve a date range into (start_date, end_date).
 
-    Preset ``semester``/``year`` always wins over explicit dates (prevents
-    stale ``from``/``to`` from hidden custom inputs from overriding the
-    preset).  For ``custom`` (or ``all`` with explicit dates) the dates are
-    parsed; invalid dates fall back to no bounds.
+    The UI offers ``year`` / ``month`` / ``custom``. ``semester`` and
+    ``all`` are still honored for stale bookmarks and API callers:
+    semester maps to its school-term window, anything else with
+    explicit dates parses them, otherwise no bounds. Presets always
+    win over explicit dates (prevents stale ``from``/``to`` from hidden
+    custom inputs from overriding the preset).
     """
     today = date.today()
 
     # Preset ranges take precedence — ignore any stale from/to.
     if preset == 'year':
         return date(today.year, 1, 1), date(today.year, 12, 31)
+    if preset == 'month':
+        last_day = calendar.monthrange(today.year, today.month)[1]
+        return date(today.year, today.month, 1), date(today.year, today.month, last_day)
     if preset == 'semester':
         if today.month >= 8:
             return date(today.year, 8, 1), date(today.year, 12, 31)
@@ -129,11 +145,26 @@ def resolve_dates(preset, from_str, to_str):
 
 
 def _normalize_range(preset, from_str, to_str):
-    if preset in ('semester', 'year'):
+    if preset in ('semester', 'year', 'month'):
         from_str = to_str = ''
     elif preset not in ('custom', 'all'):
         from_str = to_str = ''
     return preset, from_str, to_str
+
+
+def _effective_preset(raw_preset, from_str, to_str):
+    """Preset actually applied for a request.
+
+    An explicit value always wins (including legacy ``semester``/``all``
+    bookmarks). A visit with custom dates but no preset behaves as
+    ``custom``; a bare visit falls back to the UI default ``year``.
+    """
+    raw = (raw_preset or '').strip()
+    if raw:
+        return raw
+    if (from_str or '').strip() or (to_str or '').strip():
+        return 'custom'
+    return 'year'
 
 
 def _clean_department_list(values):
@@ -265,6 +296,61 @@ def _compute_dashboard(start_date, end_date, departments=None):
                 continue
         return out
 
+    def _fines(rows):
+        """Fines rows: [title, author, total_fines, fine_count]."""
+        out = []
+        for r in rows or []:
+            try:
+                try:
+                    total = float(r[2] or 0)
+                except (TypeError, ValueError):
+                    total = 0.0
+                out.append([r[0], r[1] if len(r) > 1 else '',
+                            round(total, 2), int(r[3] or 0) if len(r) > 3 else 0])
+            except (IndexError, TypeError, ValueError):
+                continue
+        return out
+
+    def _program_triple(rows):
+        """Program-split rows: [label, program, count]."""
+        out = []
+        for r in rows or []:
+            try:
+                out.append([r[0], r[1] if len(r) > 1 else '',
+                            int(r[2] or 0) if len(r) > 2 else 0])
+            except (IndexError, TypeError, ValueError):
+                continue
+        return out
+
+    def _pivot_trend_by_program(rows, top_n=6):
+        """Pivot [(date, program, count)] into {dates, series}.
+
+        Dates ISO-sorted, zero-filled. Series capped to top_n programs by
+        total so the multi-line graph stays readable; every value still
+        carries its program label.
+        """
+        day_map = {}
+        prog_totals = {}
+        for r in rows or []:
+            try:
+                day = r[0].isoformat() if hasattr(r[0], 'isoformat') else str(r[0])
+                prog = str(r[1] or 'No program')
+                cnt = int(r[2] or 0)
+            except (IndexError, TypeError, ValueError):
+                continue
+            day_map.setdefault(day, {})[prog] = day_map.setdefault(day, {}).get(prog, 0) + cnt
+            prog_totals[prog] = prog_totals.get(prog, 0) + cnt
+        dates = sorted(day_map.keys())
+        top_progs = sorted(prog_totals, key=lambda p: prog_totals[p], reverse=True)[:top_n]
+        series = []
+        for prog in top_progs:
+            series.append({
+                'program': prog,
+                'total': prog_totals[prog],
+                'values': [day_map.get(d, {}).get(prog, 0) for d in dates],
+            })
+        return {'dates': dates, 'series': series}
+
     total_titles = _safe(models.count_active_titles) or 0
     total_copies = _safe(models.count_total_copies) or 0
     status_rows = _safe(models.count_circulation_status, start_date, end_date) or []
@@ -304,7 +390,14 @@ def _compute_dashboard(start_date, end_date, departments=None):
     by_program_all = _pair(_safe(models.books_borrowed_per_program, start_date, end_date))
     trend = _pair(_safe(models.borrowings_trend, start_date, end_date))
     overdue_t = _pair(_safe(models.overdue_trend, start_date, end_date))
+    trend_prog_raw = _safe(models.borrowings_trend_by_program, start_date, end_date) or []
+    overdue_prog_raw = _safe(models.overdue_trend_by_program, start_date, end_date) or []
+    trend_by_program = _pivot_trend_by_program(trend_prog_raw)
+    overdue_by_program = _pivot_trend_by_program(overdue_prog_raw)
     top_cats = _pair(_safe(models.top_borrowed_categories, start_date, end_date))
+    top_cats_by_prog = _program_triple(_safe(models.top_categories_by_program, start_date, end_date, 20))
+    top_books_by_prog = _program_triple(_safe(models.top_books_program_breakdown, start_date, end_date, 20))
+    fines = _fines(_safe(models.fines_by_book, start_date, end_date, 10))
     high_demand = _triple(_safe(models.high_demand_titles, start_date, end_date))
     overview = _safe(models.circulation_overview, start_date, end_date)
     if not overview:
@@ -326,8 +419,12 @@ def _compute_dashboard(start_date, end_date, departments=None):
     if dept_list:
         overview_u = _safe(models.circulation_overview, start_date, end_date, dept_list)
         trend_u = _pair(_safe(models.borrowings_trend, start_date, end_date, None, dept_list))
+        trend_prog_u_raw = _safe(models.borrowings_trend_by_program, start_date, end_date, None, dept_list) or []
+        overdue_prog_u_raw = _safe(models.overdue_trend_by_program, start_date, end_date, None, dept_list) or []
         top_books_u = _triple(_safe(
             models.top_borrowed_books_detailed, start_date, end_date, 5, None, dept_list))
+        top_books_prog_u = _program_triple(_safe(
+            models.top_books_program_breakdown, start_date, end_date, 20, None, dept_list))
         by_user_type_u = _pair(_safe(
             models.borrowings_by_user_type, start_date, end_date, None, None, dept_list))
         by_program_u = _pair(_safe(
@@ -343,13 +440,40 @@ def _compute_dashboard(start_date, end_date, departments=None):
     else:
         overview_u = overview
         trend_u = trend
+        trend_prog_u_raw = trend_prog_raw
+        overdue_prog_u_raw = overdue_prog_raw
         top_books_u = _triple(_safe(models.top_borrowed_books_detailed, start_date, end_date))
+        top_books_prog_u = _program_triple(_safe(models.top_books_program_breakdown, start_date, end_date, 20))
         by_user_type_u = _pair(_safe(models.borrowings_by_user_type, start_date, end_date))
         by_program_u = by_program_all
         overdue_dept_u = _pair(_safe(models.overdue_by_department, start_date, end_date))
         borrowers_dept_u = _pair(_safe(models.borrowers_by_department, start_date, end_date))
         dept_summary_u = _dept_summary_rows(_safe(models.department_summary, start_date, end_date))
         recent_u_raw = _safe(models.recent_circulation) or []
+    trend_by_program_u = _pivot_trend_by_program(trend_prog_u_raw)
+    overdue_by_program_u = _pivot_trend_by_program(overdue_prog_u_raw)
+    # Share % per program: borrowings_by_department/program =
+    #   program borrowings / total borrowings x 100.
+    # Denominator is the unfiltered period total so filtered views still
+    # show the true share; percentages sum to ~100 across programs.
+    _dept_total = sum((r[1] for r in by_program_all), 0) or 0
+    by_department_share = []
+    for prog, cnt in by_program_all:
+        try:
+            pct = round((cnt / _dept_total * 100), 1) if _dept_total else 0.0
+        except (TypeError, ValueError, ZeroDivisionError):
+            pct = 0.0
+        by_department_share.append([prog, int(cnt or 0), pct])
+    _dept_total_u = sum((r[1] for r in by_program_u), 0) or _dept_total or 0
+    by_department_share_u = []
+    for prog, cnt in by_program_u:
+        try:
+            # Scoped view: share vs scoped total when filtered, else vs period total.
+            denom = _dept_total_u if dept_list else _dept_total
+            pct = round((cnt / denom * 100), 1) if denom else 0.0
+        except (TypeError, ValueError, ZeroDivisionError):
+            pct = 0.0
+        by_department_share_u.append([prog, int(cnt or 0), pct])
     if not overview_u:
         overview_u = (0, 0, 0, 0.0, 0.0, 0)
     recent_circ_raw = _safe(models.recent_circulation) or []
@@ -427,7 +551,12 @@ def _compute_dashboard(start_date, end_date, departments=None):
             'new_additions': overview[5],
             'trend': trend,
             'overdue_trend': overdue_t,
+            'trend_by_program': trend_by_program,
+            'overdue_by_program': overdue_by_program,
             'top_categories': top_cats,
+            'top_categories_by_program': top_cats_by_prog,
+            'top_books_by_program': top_books_by_prog,
+            'fines_by_book': fines,
             'high_demand': high_demand,
             'recent': recent_circ,
         },
@@ -453,11 +582,18 @@ def _compute_dashboard(start_date, end_date, departments=None):
             'active_departments': len(by_program_all),
             'by_department': by_program_u,
             'by_department_all': by_program_all,
+            'by_department_share': by_department_share_u,
+            'by_department_share_all': by_department_share,
+            'dept_total': _dept_total,
+            'share_formula': 'share = program borrowings / total borrowings x 100',
             'overdue_by_department': overdue_dept_u,
             'borrowers_by_department': borrowers_dept_u,
             'dept_summary': dept_summary_u,
             'trend': trend_u,
+            'trend_by_program': trend_by_program_u,
+            'overdue_by_program': overdue_by_program_u,
             'top_books': top_books_u,
+            'top_books_by_program': top_books_prog_u,
             'by_user_type': by_user_type_u,
             'recent': recent_u,
             'departments': dept_list or [],
@@ -470,11 +606,11 @@ def _compute_dashboard(start_date, end_date, departments=None):
 @login_required
 @librarian_required
 def analytics_page():
-    preset = request.args.get('preset', 'all')
     from_str = request.args.get('from', '').strip()
     to_str = request.args.get('to', '').strip()
+    preset = _effective_preset(request.args.get('preset'), from_str, to_str)
     departments = _clean_department_list(request.args.getlist('department'))
-    # Normalize: semester/year presets ignore stale custom dates in the URL;
+    # Normalize: year/month presets ignore stale custom dates in the URL;
     # invalid presets fall back to no bounds (same as kpi_json/export_report).
     preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
     start_date, end_date = resolve_dates(preset, from_str, to_str)
@@ -622,7 +758,7 @@ def compute_book_traffic(book_id, start_date, end_date):
         day_values[(day, key)] = day_values.get((day, key), 0) + count
     status_dates = sorted(day_set)
     if start_date is not None and end_date is not None:
-        # Bounded period (semester/year/custom): show every day in the
+        # Bounded period (month/year/custom): show every day in the
         # range so lone spikes render as spikes on a real timeline instead
         # of collapsing the axis to the active days only. Cap the fill so
         # absurd ranges fall back to observed dates.
@@ -712,9 +848,9 @@ def book_data_json():
     book_id = _parse_book_id(request.args.get('book_id', ''))
     if not book_id:
         return jsonify({'error': 'invalid book_id'}), 400
-    preset = request.args.get('preset', 'all')
     from_str = request.args.get('from', '').strip()
     to_str = request.args.get('to', '').strip()
+    preset = _effective_preset(request.args.get('preset'), from_str, to_str)
     preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
     start_date, end_date = resolve_dates(preset, from_str, to_str)
     traffic = compute_book_traffic(book_id, start_date, end_date)
@@ -892,9 +1028,9 @@ def _forecast_payload(start_date, end_date, preset='all', from_str='', to_str=''
 @librarian_required
 def forecast_json():
     """Return forecast projections for the requested range as JSON."""
-    preset = request.args.get('preset', 'all')
     from_str = request.args.get('from', '').strip()
     to_str = request.args.get('to', '').strip()
+    preset = _effective_preset(request.args.get('preset'), from_str, to_str)
     preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
     start_date, end_date = resolve_dates(preset, from_str, to_str)
     return jsonify(_forecast_payload(start_date, end_date, preset, from_str, to_str))
@@ -905,9 +1041,9 @@ def forecast_json():
 @librarian_required
 def dashboard_json():
     """Return the Riverside dashboard payload for the requested range."""
-    preset = request.args.get('preset', 'all')
     from_str = request.args.get('from', '').strip()
     to_str = request.args.get('to', '').strip()
+    preset = _effective_preset(request.args.get('preset'), from_str, to_str)
     departments = _clean_department_list(request.args.getlist('department'))
     preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
     start_date, end_date = resolve_dates(preset, from_str, to_str)
@@ -923,8 +1059,13 @@ CHART_NAMES = frozenset({
     'borrowings_by_user_type',
     'borrowings_trend',
     'overdue_trend',
+    'trend_borrowings_by_program',
+    'trend_overdue_by_program',
     'top_categories',
+    'top_categories_by_program',
     'top_books',
+    'top_books_by_program',
+    'fines_by_book',
     'high_demand',
     'top_requested_titles',
     'requests_by_role',
@@ -952,7 +1093,20 @@ def _chart_rows(rows):
     out = []
     for r in rows or []:
         try:
-            out.append([c.isoformat() if hasattr(c, 'isoformat') else c for c in r])
+            converted = []
+            for c in r:
+                if hasattr(c, 'isoformat'):
+                    converted.append(c.isoformat())
+                    continue
+                try:
+                    import decimal
+                    if isinstance(c, decimal.Decimal):
+                        converted.append(float(c))
+                        continue
+                except ImportError:
+                    pass
+                converted.append(c)
+            out.append(converted)
         except TypeError:
             continue
     return out
@@ -982,12 +1136,29 @@ def _run_chart(name, start_date, end_date, args):
         return models.borrowings_trend(start_date, end_date, borrow_type)
     if name == 'overdue_trend':
         return models.overdue_trend(start_date, end_date, borrow_type)
+    if name == 'trend_borrowings_by_program':
+        return models.borrowings_trend_by_program(
+            start_date, end_date, borrow_type,
+            _clean_list(args.getlist('department')))
+    if name == 'trend_overdue_by_program':
+        return models.overdue_trend_by_program(
+            start_date, end_date, borrow_type,
+            _clean_list(args.getlist('department')))
     if name == 'top_categories':
         return models.top_borrowed_categories(start_date, end_date,
                                               borrow_type=borrow_type)
+    if name == 'top_categories_by_program':
+        return models.top_categories_by_program(
+            start_date, end_date, borrow_type=borrow_type)
     if name == 'top_books':
         return models.top_borrowed_books_detailed(start_date, end_date,
                                                   borrow_type=borrow_type)
+    if name == 'top_books_by_program':
+        return models.top_books_program_breakdown(
+            start_date, end_date, borrow_type=borrow_type,
+            departments=_clean_list(args.getlist('department')))
+    if name == 'fines_by_book':
+        return models.fines_by_book(start_date, end_date)
     if name == 'high_demand':
         return models.high_demand_titles(start_date, end_date, borrow_type=borrow_type)
     if name == 'top_requested_titles':
@@ -1027,9 +1198,9 @@ def chart_json():
     name = request.args.get('name', '')
     if name not in CHART_NAMES:
         return jsonify({'error': 'invalid chart name'}), 400
-    preset = request.args.get('preset', 'all')
     from_str = request.args.get('from', '').strip()
     to_str = request.args.get('to', '').strip()
+    preset = _effective_preset(request.args.get('preset'), from_str, to_str)
     preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
     start_date, end_date = resolve_dates(preset, from_str, to_str)
     return jsonify({
@@ -1047,10 +1218,10 @@ def kpi_json():
     kpi_type = request.args.get('kpi_type', '')
     if kpi_type not in VALID_KPIS:
         return jsonify({'error': 'invalid kpi_type'}), 400
-    preset = request.args.get('preset', 'all')
     from_str = request.args.get('from', '').strip()
     to_str = request.args.get('to', '').strip()
-    if preset in ('semester', 'year'):
+    preset = _effective_preset(request.args.get('preset'), from_str, to_str)
+    if preset in ('semester', 'year', 'month'):
         from_str = to_str = ''
     elif preset not in ('custom', 'all'):
         from_str = to_str = ''
@@ -1061,7 +1232,17 @@ def kpi_json():
 def _as_2d_rows(kpi_type, kpi_data):
     """Flatten a KPI query result into labeled, exportable 2-D rows."""
     if kpi_type == 'books_borrowed_per_program':
-        return [('Program', 'Total Borrows')] + [(r[0], r[1]) for r in kpi_data]
+        # Share % included per request: share = program / total x 100.
+        rows = list(kpi_data or [])
+        total = sum((r[1] or 0) for r in rows)
+        out = [('Program', 'Total Borrows', 'Share (%)')]
+        for r in rows:
+            try:
+                pct = round((r[1] or 0) / total * 100, 1) if total else 0.0
+            except (TypeError, ValueError, ZeroDivisionError):
+                pct = 0.0
+            out.append((r[0], r[1], pct))
+        return out
     if kpi_type == 'utilization_rate':
         return [('Metric', 'Value'), ('Utilization Rate (%)', kpi_data)]
     if kpi_type == 'most_borrowed_titles':
@@ -1070,6 +1251,32 @@ def _as_2d_rows(kpi_type, kpi_data):
         return [('Title',)] + [(r[0],) for r in kpi_data]
     if kpi_type == 'trend_borrowings':
         return [('Date', 'Borrowings')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'trend_borrowings_by_program':
+        # Flat rows carry their program: (date, program, count).
+        if isinstance(kpi_data, dict) and 'series' in kpi_data:
+            rows = [('Date', 'Program', 'Borrowings')]
+            for s in kpi_data.get('series', []):
+                prog = s.get('program', '')
+                for d, v in zip(kpi_data.get('dates', []), s.get('values', [])):
+                    rows.append((d, prog, v))
+            return rows
+        return [('Date', 'Program', 'Borrowings')] + [(r[0], r[1], r[2]) for r in (kpi_data or [])]
+    if kpi_type == 'trend_overdue_by_program':
+        if isinstance(kpi_data, dict) and 'series' in kpi_data:
+            rows = [('Date', 'Program', 'Overdue Items')]
+            for s in kpi_data.get('series', []):
+                prog = s.get('program', '')
+                for d, v in zip(kpi_data.get('dates', []), s.get('values', [])):
+                    rows.append((d, prog, v))
+            return rows
+        return [('Date', 'Program', 'Overdue Items')] + [(r[0], r[1], r[2]) for r in (kpi_data or [])]
+    if kpi_type == 'top_categories_by_program':
+        return [('Category', 'Program', 'Borrowings')] + [(r[0], r[1], r[2]) for r in (kpi_data or [])]
+    if kpi_type == 'top_books_by_program':
+        return [('Title', 'Program', 'Borrowings')] + [(r[0], r[1], r[2]) for r in (kpi_data or [])]
+    if kpi_type == 'fines_by_book':
+        return [('Title', 'Author', 'Total Fines (₱)', 'Fine Records')] + \
+            [(r[0], r[1], r[2], r[3]) for r in (kpi_data or [])]
     if kpi_type == 'peak_periods':
         return [('Date', 'Borrowings')] + [(r[0], r[1]) for r in (kpi_data or [])]
     if kpi_type == 'trend_overdue':
@@ -1099,8 +1306,19 @@ def _as_2d_rows(kpi_type, kpi_data):
     if kpi_type == 'overdue_by_department':
         return [('Department', 'Overdue Items')] + [(r[0], r[1]) for r in (kpi_data or [])]
     if kpi_type == 'department_leaderboard':
-        return [('Department', 'Borrowings', 'Borrowers', 'Overdue')] + \
-            [(r[0], r[1], r[2], r[3]) for r in (kpi_data or [])]
+        # Leaderboard gains a computed Share column; raw 4-col rows from
+        # department_summary still work (share computed here, not in SQL).
+        rows = list(kpi_data or [])
+        total = sum((r[1] or 0) for r in rows)
+        out = [('Department', 'Borrowings', 'Borrowers', 'Overdue', 'Share (%)')]
+        for r in rows:
+            try:
+                pct = round((r[1] or 0) / total * 100, 1) if total else 0.0
+            except (TypeError, ValueError, ZeroDivisionError):
+                pct = 0.0
+            out.append((r[0], r[1], r[2] if len(r) > 2 else 0,
+                        r[3] if len(r) > 3 else 0, pct))
+        return out
     if kpi_type == 'top_requested_titles':
         return [('Title', 'Requests')] + [(r[0], r[1]) for r in (kpi_data or [])]
     if kpi_type == 'requests_by_role':
@@ -1115,7 +1333,9 @@ def _as_2d_rows(kpi_type, kpi_data):
 
 USAGE_SCOPED_KPIS = frozenset({
     'books_borrowed_per_program', 'trend_borrowings', 'trend_overdue',
-    'top_books', 'high_demand', 'by_user_type', 'recent_circulation',
+    'trend_borrowings_by_program', 'trend_overdue_by_program',
+    'top_books', 'top_books_by_program', 'fines_by_book',
+    'high_demand', 'by_user_type', 'recent_circulation',
     'circulation_summary', 'borrowers_by_department', 'overdue_by_department',
     'requests_by_program', 'department_leaderboard',
 })
@@ -1140,14 +1360,24 @@ def _run_kpi(kpi_type, start_date, end_date, departments=None):
         return models.underutilized_titles(start_date, end_date)
     if kpi_type == 'trend_borrowings':
         return models.borrowings_trend(start_date, end_date, None, scoped)
+    if kpi_type == 'trend_borrowings_by_program':
+        return models.borrowings_trend_by_program(start_date, end_date, None, scoped)
+    if kpi_type == 'trend_overdue_by_program':
+        return models.overdue_trend_by_program(start_date, end_date, None, scoped)
     if kpi_type == 'peak_periods':
         return models.borrowings_trend(start_date, end_date, None, scoped)
     if kpi_type == 'trend_overdue':
         return models.overdue_trend(start_date, end_date, None, scoped)
     if kpi_type == 'top_categories':
         return models.top_borrowed_categories(start_date, end_date)
+    if kpi_type == 'top_categories_by_program':
+        return models.top_categories_by_program(start_date, end_date)
     if kpi_type == 'top_books':
         return models.top_borrowed_books_detailed(start_date, end_date, 5, None, scoped)
+    if kpi_type == 'top_books_by_program':
+        return models.top_books_program_breakdown(start_date, end_date, 20, None, scoped)
+    if kpi_type == 'fines_by_book':
+        return models.fines_by_book(start_date, end_date, 10)
     if kpi_type == 'high_demand':
         return models.high_demand_titles(start_date, end_date, borrow_type=None)
     if kpi_type == 'by_user_type':
@@ -1228,6 +1458,8 @@ def _format_period(start_date, end_date, preset, from_str, to_str):
             return f"Until {end_date:%b %d, %Y}"
     if preset == 'year':
         return f"Calendar Year {date.today().year}"
+    if preset == 'month':
+        return date.today().strftime('%B %Y')
     if preset == 'semester':
         return 'Current Semester' + (
             ' (Aug–Dec)' if date.today().month >= 8 else ' (Jan–May)'
@@ -1252,6 +1484,8 @@ _BAR_SECTIONS = frozenset({
     'books_borrowed_per_program', 'most_borrowed_titles', 'top_books', 'high_demand',
     'borrowers_by_department', 'overdue_by_department',
     'top_requested_titles', 'requests_by_program', 'peak_periods',
+    'fines_by_book', 'top_books_by_program', 'top_categories_by_program',
+    'trend_borrowings_by_program', 'trend_overdue_by_program',
 })
 
 
@@ -1427,6 +1661,33 @@ def _section_chart(kt, rows, width):
     if kt in _LINE_SECTIONS:
         color = _CHART_COLORS[6] if kt == 'trend_overdue' else _CHART_COLORS[0]
         return _line_drawing([(r[0], r[1]) for r in data if len(r) > 1], width, color)
+    if kt == 'fines_by_book':
+        # Rows are (title, author, total_fines, count): bar on total fines.
+        pairs = []
+        for r in data:
+            try:
+                pairs.append(('%s' % (r[0],), r[2] if len(r) > 2 else 0))
+            except (IndexError, TypeError):
+                continue
+        return _bar_drawing(pairs, width)
+    if kt in ('top_books_by_program', 'top_categories_by_program'):
+        # Rows are (label, program, count): label bars as "label · program".
+        pairs = []
+        for r in data:
+            try:
+                pairs.append(('%s · %s' % (r[0], r[1] if len(r) > 1 else ''), r[2] if len(r) > 2 else 0))
+            except (IndexError, TypeError):
+                continue
+        return _bar_drawing(pairs, width)
+    if kt in ('trend_borrowings_by_program', 'trend_overdue_by_program'):
+        # Rows are (date, program, count): label bars as "date · program".
+        pairs = []
+        for r in data[:10]:
+            try:
+                pairs.append(('%s · %s' % (r[0], r[1] if len(r) > 1 else ''), r[2] if len(r) > 2 else 0))
+            except (IndexError, TypeError):
+                continue
+        return _bar_drawing(pairs, width)
     if kt in _BAR_SECTIONS:
         return _bar_drawing([(r[0], r[1]) for r in data if len(r) > 1], width)
     return None
@@ -1831,12 +2092,12 @@ def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
 @librarian_required
 def export_report():
     kpi_type = request.form.get('kpi_type', '')
-    preset = request.form.get('preset', 'all')
     from_str = request.form.get('from', '').strip()
     to_str = request.form.get('to', '').strip()
+    preset = _effective_preset(request.form.get('preset'), from_str, to_str)
     departments = _clean_department_list(request.form.getlist('department'))
-    # Semester/year presets must not carry stale custom dates.
-    if preset in ('semester', 'year'):
+    # Semester/year/month presets must not carry stale custom dates.
+    if preset in ('semester', 'year', 'month'):
         from_str = to_str = ''
     elif preset not in ('custom', 'all'):
         from_str = to_str = ''

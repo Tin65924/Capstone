@@ -262,6 +262,7 @@
 
         <!-- Search & Filter -->
         <form method="GET" action="{{ url_for('cataloging.cataloging_page') }}" class="flex flex-col gap-3 mb-6 sm:mb-8 animate-in relative z-20" style="animation-delay: 0.1s;">
+            <input type="hidden" name="sort_by" value="{{ sort_by }}">
             <div class="flex flex-col sm:flex-row gap-2 sm:gap-2 w-full relative z-20">
                 <div class="relative w-full sm:w-auto sm:min-w-[160px] z-30" id="field-select-wrapper">
                     <select name="field" id="field-select-native" class="sr-only" tabindex="-1" aria-hidden="true">
@@ -300,34 +301,48 @@
         <!-- Table Card -->
         <div class="card animate-in overflow-hidden" style="animation-delay: 0.2s;">
             <div class="p-3 sm:p-4 border-b border-gray-100 flex items-center gap-1.5 sm:gap-2 bg-gray-50/50 overflow-x-auto scrollbar-thin">
-                <a href="{{ url_for('cataloging.cataloging_page', q=search_query, field=search_field) }}"
+                <a href="{{ url_for('cataloging.cataloging_page', q=search_query, field=search_field, sort_by=sort_by) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if not status_filter and not copy_status %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     All ({{ total }})
                 </a>
-                <a href="{{ url_for('cataloging.cataloging_page', status='active', q=search_query, field=search_field) }}"
+                <a href="{{ url_for('cataloging.cataloging_page', status='active', q=search_query, field=search_field, sort_by=sort_by) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if status_filter == 'active' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Active
                 </a>
-                <a href="{{ url_for('cataloging.cataloging_page', status='archived', q=search_query, field=search_field) }}"
+                <a href="{{ url_for('cataloging.cataloging_page', status='archived', q=search_query, field=search_field, sort_by=sort_by) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if status_filter == 'archived' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Archived
                 </a>
-                <a href="{{ url_for('cataloging.cataloging_page', copy_status='overdue') }}"
+                <a href="{{ url_for('cataloging.cataloging_page', copy_status='overdue', sort_by=sort_by) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if copy_status == 'overdue' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Overdue
                 </a>
-                <a href="{{ url_for('cataloging.cataloging_page', copy_status='lost') }}"
+                <a href="{{ url_for('cataloging.cataloging_page', copy_status='lost', sort_by=sort_by) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if copy_status == 'lost' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Lost
                 </a>
-                <a href="{{ url_for('cataloging.cataloging_page', copy_status='damaged') }}"
+                <a href="{{ url_for('cataloging.cataloging_page', copy_status='damaged', sort_by=sort_by) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if copy_status == 'damaged' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Damaged
                 </a>
-                <a href="{{ url_for('cataloging.cataloging_page', copy_status='maintenance') }}"
+                <a href="{{ url_for('cataloging.cataloging_page', copy_status='maintenance', sort_by=sort_by) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if copy_status == 'maintenance' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Maintenance
                 </a>
+                <form method="GET" action="{{ url_for('cataloging.cataloging_page') }}" class="ml-auto shrink-0 pl-2">
+                    <input type="hidden" name="q" value="{{ search_query }}">
+                    <input type="hidden" name="field" value="{{ search_field }}">
+                    <input type="hidden" name="status" value="{{ status_filter }}">
+                    <input type="hidden" name="copy_status" value="{{ copy_status }}">
+                    <select name="sort_by" onchange="this.form.submit()" aria-label="Sort books"
+                        class="text-xs sm:text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-md px-2 py-1 sm:py-1.5 outline-none focus:border-primary cursor-pointer">
+                        <option value="" {% if not sort_by %}selected{% endif %}>Title A–Z</option>
+                        <option value="title_desc" {% if sort_by == 'title_desc' %}selected{% endif %}>Title Z–A</option>
+                        <option value="accession_asc" {% if sort_by == 'accession_asc' %}selected{% endif %}>Accession ↑</option>
+                        <option value="accession_desc" {% if sort_by == 'accession_desc' %}selected{% endif %}>Accession ↓</option>
+                        <option value="newest" {% if sort_by == 'newest' %}selected{% endif %}>Newest first</option>
+                    </select>
+                </form>
             </div>
 
             <!-- Desktop table -->
@@ -576,14 +591,14 @@
                 </div>
                 <div class="flex gap-2">
                     {% if page > 1 %}
-                    <a href="{{ url_for('cataloging.cataloging_page', q=search_query, field=search_field, page=page-1) }}" class="page-btn">
+                    <a href="{{ url_for('cataloging.cataloging_page', q=search_query, field=search_field, status=status_filter, copy_status=copy_status, sort_by=sort_by, page=page-1) }}" class="page-btn">
                         <span class="material-symbols-outlined text-sm">chevron_left</span> Previous
                     </a>
                     {% else %}
                     <button class="page-btn" disabled><span class="material-symbols-outlined text-sm">chevron_left</span> Previous</button>
                     {% endif %}
                     {% if page * per_page < total %}
-                    <a href="{{ url_for('cataloging.cataloging_page', q=search_query, field=search_field, page=page+1) }}" class="page-btn">
+                    <a href="{{ url_for('cataloging.cataloging_page', q=search_query, field=search_field, status=status_filter, copy_status=copy_status, sort_by=sort_by, page=page+1) }}" class="page-btn">
                         Next <span class="material-symbols-outlined text-sm">chevron_right</span>
                     </a>
                     {% else %}

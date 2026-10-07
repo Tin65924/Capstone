@@ -411,6 +411,24 @@
                         <div class="chart-legend mb-2" aria-label="Requests by program legend"><span title="Requests per program"><span class="lg-dot" style="background:#8b5cf6"></span>Requests</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details</span></div>
                         <div id="req-by-program" class="space-y-1.5"></div></div>
                     </div>
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-1">12. Borrowings Trend by Program</h3>
+                        <p class="text-[10px] text-slate-400 mb-2">Each line is one program/department — which program each borrowing point belongs to.</p>
+                        <div id="trend-program-legend" class="chart-legend mb-2"></div>
+                        <div id="trend-program-lines" class="w-full overflow-hidden"></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-1">13. Overdue Trend by Program</h3>
+                        <p class="text-[10px] text-slate-400 mb-2">Each line is one program/department — which program each overdue item belongs to.</p>
+                        <div id="overdue-program-legend" class="chart-legend mb-2"></div>
+                        <div id="overdue-program-lines" class="w-full overflow-hidden"></div></div>
+                    </div>
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">14. Top Books by Program</h3>
+                        <p class="text-[10px] text-slate-400 mb-2">Top-title borrows labeled with their program — which program borrowed each title.</p>
+                        <div id="top-books-program-list" class="space-y-1.5"></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">15. Books with Most Fines</h3>
+                        <p class="text-[10px] text-slate-400 mb-2">Ranked by total fines incurred (SUM of fine_amount).</p>
+                        <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[480px]"><thead><tr class="text-left text-slate-500 border-b"><th class="py-2">#</th><th class="py-2">Title</th><th class="py-2">Author</th><th class="py-2 text-right">Total Fines (₱)</th><th class="py-2 text-right">Records</th></tr></thead><tbody id="fines-body"></tbody></table></div></div>
+                    </div>
                 </section>
 
                 <!-- ============ TAB: Department Analytics ============ -->
@@ -446,8 +464,8 @@
                     <div id="usage-kpis" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3"></div>
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                         <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">1. Borrowings by Department / Program</h3>
-                            
-                        <div class="chart-legend mb-2" aria-label="Borrowings by department legend"><span title="Total borrowings per program"><span class="lg-dot" style="background:#2563eb"></span>Borrowings</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details</span></div>
+                        <p class="text-[10px] text-slate-400 mb-2">Share = program borrowings / total borrowings × 100.</p>
+                        <div class="chart-legend mb-2" aria-label="Borrowings by department legend"><span title="Total borrowings per program"><span class="lg-dot" style="background:#2563eb"></span>Borrowings + share</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details</span></div>
                         <div id="dept-bars" class="space-y-1.5"></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">2. Active Borrowers by Department</h3>
                             
@@ -456,15 +474,27 @@
                     </div>
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">3. Overdue Items by Department</h3><div class="chart-legend mb-1" aria-label="Overdue by department legend"><span title="Overdue items per program"><span class="lg-dot" style="background:#ef4444"></span>Overdue</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details</span></div><div id="overdue-dept-bars" class="space-y-1.5 mt-2"></div></div>
-                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">4. Department Leaderboard</h3><div class="overflow-x-auto"><table class="w-full text-[11px]"><thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-2">Department</th><th class="py-2 pr-2 text-right">Borrowings</th><th class="py-2 pr-2 text-right">Borrowers</th><th class="py-2 text-right">Overdue</th></tr></thead><tbody id="dept-leaderboard-body"></tbody></table></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">4. Department Leaderboard</h3><p class="text-[10px] text-slate-400 mb-2">Share = program borrowings / total borrowings × 100.</p><div class="overflow-x-auto"><table class="w-full text-[11px]"><thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-2">Department</th><th class="py-2 pr-2 text-right">Borrowings</th><th class="py-2 pr-2 text-right">Borrowers</th><th class="py-2 pr-2 text-right">Overdue</th><th class="py-2 text-right">Share</th></tr></thead><tbody id="dept-leaderboard-body"></tbody></table></div></div>
                     </div>
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">5. Top Borrowed Books in Selected Departments</h3>
-                            
-                        <div id="top-books-list" class="space-y-2"></div></div>
+                        <p class="text-[10px] text-slate-400 mb-2">Each title labeled with its top borrowing program.</p>
+                        <div id="top-books-list" class="space-y-2"></div>
+                        <h4 class="text-[11px] font-extrabold text-slate-500 mt-3 mb-1">Top titles split by program</h4>
+                        <div id="top-books-program-bars" class="space-y-1.5"></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">6. Borrowings by User Type</h3>
                             
                         <div class="flex items-center gap-4"><div id="donut-usertype" class="shrink-0"></div><div id="legend-usertype" class="flex-1 space-y-1 text-xs min-w-0"></div></div></div>
+                    </div>
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-1">7. Borrowings Trend by Program</h3>
+                        <p class="text-[10px] text-slate-400 mb-2">Daily borrows per program in the selected department filter.</p>
+                        <div id="usage-trend-program-legend" class="chart-legend mb-2"></div>
+                        <div id="usage-trend-program-lines" class="w-full overflow-hidden"></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-1">8. Overdue Trend by Program</h3>
+                        <p class="text-[10px] text-slate-400 mb-2">Daily overdue per program in the selected department filter.</p>
+                        <div id="usage-overdue-program-legend" class="chart-legend mb-2"></div>
+                        <div id="usage-overdue-program-lines" class="w-full overflow-hidden"></div></div>
                     </div>
                 </section>
 
@@ -683,22 +713,20 @@
                 <div>
                     <label class="text-xs font-bold text-slate-500 uppercase tracking-widest">Time Range</label>
                     <select id="globalFilterPreset" class="sr-only" tabindex="-1" aria-hidden="true">
-                        <option value="all">All time</option>
-                        <option value="semester">This semester</option>
                         <option value="year">This year</option>
+                        <option value="month">This month</option>
                         <option value="custom">Custom dates</option>
                     </select>
                     <div class="relative mt-2" id="globalFilterPreset-wrapper">
                         <button type="button" id="globalFilterPreset-btn" aria-haspopup="listbox" aria-expanded="false"
                             class="w-full flex items-center justify-between gap-2 bg-gray-100 border border-transparent text-sm font-bold rounded-lg px-3 py-2.5 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
-                            <span id="globalFilterPreset-label" class="min-w-0 flex-1 truncate text-left">All time</span>
+                            <span id="globalFilterPreset-label" class="min-w-0 flex-1 truncate text-left">This year</span>
                             <span class="material-symbols-outlined text-slate-400 text-[20px] shrink-0 transition-transform duration-200" id="globalFilterPreset-arrow">expand_more</span>
                         </button>
                         <ul id="globalFilterPreset-dropdown" role="listbox"
                             class="hidden absolute z-50 top-full left-0 mt-2 w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl overflow-hidden py-1.5 text-sm">
-                            <li role="option" data-value="all" tabindex="0" aria-selected="true" class="global-preset-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-700/50 bg-primary/10 text-primary font-semibold"><span>All time</span><span class="material-symbols-outlined text-[18px] text-primary">check</span></li>
-                            <li role="option" data-value="semester" tabindex="0" aria-selected="false" class="global-preset-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-200"><span>This semester</span></li>
-                            <li role="option" data-value="year" tabindex="0" aria-selected="false" class="global-preset-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-200"><span>This year</span></li>
+                            <li role="option" data-value="year" tabindex="0" aria-selected="true" class="global-preset-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-700/50 bg-primary/10 text-primary font-semibold"><span>This year</span><span class="material-symbols-outlined text-[18px] text-primary">check</span></li>
+                            <li role="option" data-value="month" tabindex="0" aria-selected="false" class="global-preset-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-200"><span>This month</span></li>
                             <li role="option" data-value="custom" tabindex="0" aria-selected="false" class="global-preset-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-200"><span>Custom dates</span></li>
                         </ul>
                     </div>
@@ -776,8 +804,8 @@
         // Per-tab Export Report lists: each tab's upper-card button exports
         // only that tab's analytics. Keep these in sync with the cards above.
         const COLLECTION_SECTIONS = ['collection_by_category', 'copies_by_status', 'recent_collection'];
-        const LIBRARY_SECTIONS = ['circulation_summary', 'trend_borrowings', 'top_categories', 'peak_periods', 'trend_overdue', 'high_demand', 'recent_circulation', 'top_requested_titles', 'requests_by_role', 'requests_trend', 'requests_by_program'];
-        const DEPARTMENT_SECTIONS = ['circulation_summary', 'books_borrowed_per_program', 'borrowers_by_department', 'overdue_by_department', 'by_user_type', 'top_books', 'department_leaderboard'];
+        const LIBRARY_SECTIONS = ['circulation_summary', 'trend_borrowings', 'trend_borrowings_by_program', 'top_categories', 'top_categories_by_program', 'peak_periods', 'trend_overdue', 'trend_overdue_by_program', 'top_books_by_program', 'fines_by_book', 'high_demand', 'recent_circulation', 'top_requested_titles', 'requests_by_role', 'requests_trend', 'requests_by_program'];
+        const DEPARTMENT_SECTIONS = ['circulation_summary', 'books_borrowed_per_program', 'trend_borrowings_by_program', 'trend_overdue_by_program', 'top_books_by_program', 'borrowers_by_department', 'overdue_by_department', 'by_user_type', 'top_books', 'department_leaderboard'];
         // Export All covers every graph/chart/table on all tabs.
         const ALL_DASHBOARD_SECTIONS = [].concat(COLLECTION_SECTIONS, LIBRARY_SECTIONS, DEPARTMENT_SECTIONS).filter(function (s, i, a) { return a.indexOf(s) === i; });
         const GLOBAL = { preset: '{{ preset }}', from: '{{ from_date }}', to: '{{ to_date }}' };
@@ -838,7 +866,7 @@ function syncGlobalFilterCustomDates() {
 
         function openGlobalFilterModal() {
             const isCustom = GLOBAL.from || GLOBAL.to;
-            document.getElementById('globalFilterPreset').value = isCustom ? 'custom' : (GLOBAL.preset || 'all');
+            document.getElementById('globalFilterPreset').value = isCustom ? 'custom' : (GLOBAL.preset || 'year');
             document.getElementById('globalFilterFrom').value = GLOBAL.from || '';
             document.getElementById('globalFilterTo').value = GLOBAL.to || '';
             document.getElementById('globalFilterModal').classList.remove('hidden');
@@ -850,24 +878,20 @@ function syncGlobalFilterCustomDates() {
         }
 
         function applyGlobalFilter() {
-            const preset = document.getElementById('globalFilterPreset').value;
+            const preset = document.getElementById('globalFilterPreset').value || 'year';
             const from = document.getElementById('globalFilterFrom').value;
             const to = document.getElementById('globalFilterTo').value;
             const params = new URLSearchParams();
-            if (preset && preset !== 'all') params.set('preset', preset);
-            else if (!from && !to) params.set('preset', 'all');
-            else params.set('preset', preset);
-            // custom dates: only send when preset is custom or dates filled
-            if (from) params.set('from', from);
-            if (to) params.set('to', to);
-            // when preset is not custom, ignore dates to match backend resolve_dates
-            if (preset !== 'custom') {
-                params.delete('from');
-                params.delete('to');
-                if (preset !== 'all') params.set('preset', preset);
-                else params.set('preset', 'all');
+            params.set('preset', preset);
+            // Custom dates only travel with the custom preset; the backend
+            // ignores stale dates for year/month anyway.
+            if (preset === 'custom') {
+                if (from) params.set('from', from);
+                if (to) params.set('to', to);
             }
-            // keep the Book Analytics tab selection + department filter across reloads
+            // Keep the current tab selection + book/department context.
+            // Tab buttons mirror the active tab into the URL (see rtab
+            // handler), so a reload lands back on the same tab.
             var current = new URLSearchParams(window.location.search);
             ['q', 'book_id', 'tab', 'department'].forEach(function (k) {
                 current.getAll(k).forEach(function (v) { params.append(k, v); });
@@ -876,12 +900,13 @@ function syncGlobalFilterCustomDates() {
         }
 
         function resetGlobalFilter() {
-            // stay on the Book Analytics tab if that is where reset was opened
+            // Back to defaults (this year) without leaving the tab.
             var current = new URLSearchParams(window.location.search);
-            if (current.get('tab') === 'book' || current.get('q') || current.get('book_id')) {
-                window.location.search = 'preset=all&tab=book';
+            var tab = current.get('tab');
+            if (tab === 'collection' || tab === 'library' || tab === 'usage' || tab === 'book') {
+                window.location.search = 'preset=year&tab=' + tab;
             } else {
-                window.location.search = 'preset=all';
+                window.location.search = 'preset=year';
             }
         }
 
@@ -1252,28 +1277,156 @@ function syncGlobalFilterCustomDates() {
             }).join('') || '<tr><td colspan="4" class="py-6 text-center text-slate-400">No active demand.</td></tr>';
         }
 
-        function paintDeptCharts(rows, overdueRows, borrowerRows) {
-            hbars(document.getElementById('dept-bars'), rows || [], 'bg-blue-600');
+        function paintDeptCharts(rows, overdueRows, borrowerRows, shareRows) {
+            hbarsShare(document.getElementById('dept-bars'), rows || [], shareRows || [], 'bg-blue-600');
             hbars(document.getElementById('overdue-dept-bars'), overdueRows || [], 'bg-red-500');
             hbars(document.getElementById('borrowers-dept-bars'), borrowerRows || [], 'bg-green-600');
+        }
+
+        function hbarsShare(el, rows, shareRows, barClass) {
+            if (!el) return;
+            var shareByProg = {};
+            (shareRows || []).forEach(function (r) {
+                shareByProg[String(r[0])] = (r.length > 2 ? Number(r[2]) : null);
+            });
+            var total = (rows || []).reduce(function (a, r) { return a + (Number(r[1]) || 0); }, 0);
+            var visRows = (rows || []).slice(0, 10);
+            var max = Math.max.apply(null, visRows.map(function (r) { return Number(r[1]) || 0; }).concat([1]));
+            el.setAttribute('role', 'list');
+            el.setAttribute('aria-label', 'Borrowings by department with share');
+            el.innerHTML = visRows.map(function (r) {
+                var prog = String(r[0]), cnt = Number(r[1]) || 0;
+                var pct = (shareByProg[prog] !== undefined && shareByProg[prog] !== null)
+                    ? Number(shareByProg[prog]) : (total ? Math.round(cnt / total * 1000) / 10 : 0);
+                var pctW = max > 0 ? Math.round(cnt / max * 100) : 0;
+                var tipText = prog + ': ' + cnt.toLocaleString('en-US') + ' borrowings (' + pct + '% share; share = program / total × 100)';
+                return '<div class="hbar-row" role="listitem" title="' + escapeHtml(tipText) + '" tabindex="0">'
+                    + '<div class="flex justify-between text-[11px] font-semibold text-slate-600"><span class="truncate pr-2">' + escapeHtml(prog) + '</span><span>' + rNum(cnt) + ' · ' + pct + '%</span></div>'
+                    + '<div class="h-3 bg-slate-100 rounded-full overflow-hidden mt-0.5"><div class="hbar-fill h-full rounded-full ' + (barClass || 'bg-blue-600') + '" style="width:' + pctW + '%"></div></div>'
+                    + '<div class="text-[10px] text-slate-400 mt-0.5">' + escapeHtml(prog) + ' · share = ' + rNum(cnt) + ' / ' + rNum(total) + ' × 100</div></div>';
+            }).join('') || '<div class="text-xs text-slate-400">No data.</div>';
+            el.querySelectorAll('.hbar-row').forEach(function (node, i) {
+                var row = visRows[i] || ['-', 0];
+                var pct = (shareByProg[String(row[0])] !== undefined) ? Number(shareByProg[String(row[0])]) : 0;
+                bindChartTip(node, function () {
+                    return '<b>' + escapeHtml(String(row[0])) + '</b><span class="tt-sub">' + rNum(row[1]) + ' borrowings · ' + pct + '% share</span>';
+                });
+            });
+        }
+
+        function paintProgramLines(elId, legendId, pivot, colorSeed) {
+            var el = document.getElementById(elId);
+            var legend = document.getElementById(legendId);
+            if (!el) return;
+            var dates = (pivot && pivot.dates) || [];
+            var series = (pivot && pivot.series) || [];
+            if (!dates.length || !series.length) {
+                el.innerHTML = '<div class="text-xs text-slate-400 py-8 text-center">No program trend data.</div>';
+                if (legend) legend.innerHTML = '';
+                return;
+            }
+            if (legend) {
+                legend.innerHTML = series.map(function (s, i) {
+                    var c = RCOLORS[i % RCOLORS.length];
+                    return '<span title="' + escapeHtml(s.program) + ': ' + rNum(s.total) + ' in period"><span class="lg-dot" style="background:' + c + '"></span>' + escapeHtml(s.program) + ' (' + rNum(s.total) + ')</span>';
+                }).join('');
+            }
+            var W = 600, H = 268, ML = 48, MR = 14, MT = 12, MB = 46;
+            var plotW = W - ML - MR, plotH = H - MT - MB, base = MT + plotH;
+            var rawMax = 1;
+            series.forEach(function (s) { s.values.forEach(function (v) { rawMax = Math.max(rawMax, Number(v) || 0); }); });
+            var yMax = niceCeil(rawMax), n = dates.length, stepX = n > 1 ? plotW / (n - 1) : 0;
+            function X(i) { return ML + stepX * i; }
+            function Y(v) { return base - ((Number(v) || 0) / yMax) * plotH; }
+            var paths = '', dots = '';
+            series.forEach(function (s, si) {
+                var color = RCOLORS[si % RCOLORS.length];
+                var line = s.values.map(function (v, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); }).join(' ');
+                paths += '<path d="' + line + '" fill="none" stroke="' + color + '" stroke-width="2.5"/>';
+                s.values.forEach(function (v, i) {
+                    if (n > 45 && i % Math.ceil(n / 45) !== 0 && i !== n - 1) return;
+                    dots += '<circle class="line-dot" cx="' + X(i).toFixed(1) + '" cy="' + Y(v).toFixed(1) + '" r="3.5" fill="' + color + '" stroke="#fff" stroke-width="1.5"><title>' + escapeHtml(dates[i]) + ' · ' + escapeHtml(s.program) + ': ' + rNum(v) + '</title></circle>';
+                });
+            });
+            var yTicks = '', ti;
+            for (ti = 0; ti <= 4; ti++) {
+                var tv = Math.round(yMax * ti / 4), ty = base - (tv / yMax) * plotH;
+                yTicks += '<line x1="' + ML + '" y1="' + ty.toFixed(1) + '" x2="' + (W - MR) + '" y2="' + ty.toFixed(1) + '" stroke="' + (ti === 0 ? '#cbd5e1' : '#eef2f7') + '"/>'
+                    + '<text x="' + (ML - 7) + '" y="' + (ty + 3.5).toFixed(1) + '" text-anchor="end" font-size="10" fill="#94a3b8">' + rNum(tv) + '</text>';
+            }
+            var xCount = Math.min(5, n), xTicks = '', xi;
+            for (xi = 0; xi < xCount; xi++) {
+                var pi = xCount === 1 ? 0 : Math.round(xi * (n - 1) / (xCount - 1));
+                var dx = X(pi);
+                xTicks += '<text x="' + dx.toFixed(1) + '" y="' + (base + 18) + '" text-anchor="middle" font-size="10" fill="#94a3b8"><title>' + escapeHtml(String(dates[pi])) + '</title>' + escapeHtml(shortDate(dates[pi])) + '</text>';
+            }
+            el.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" class="w-full h-60" role="img" aria-label="Trend by program. Each line is one program.">'
+                + yTicks + paths
+                + '<line x1="' + ML + '" y1="' + base + '" x2="' + (W - MR) + '" y2="' + base + '" stroke="#cbd5e1"/>'
+                + xTicks + dots + '</svg>'
+                + '<div class="flex justify-between text-[10px] text-slate-400"><span>X: Date (' + escapeHtml(String(dates[0])) + ' → ' + escapeHtml(String(dates[dates.length - 1])) + ')</span><span>Y: Items per day · per program</span></div>';
+            el.querySelectorAll('.line-dot').forEach(function (dot) {
+                var t = dot.querySelector('title');
+                var txt = t ? t.textContent : 'point';
+                bindChartTip(dot, function () { return '<b>' + escapeHtml(txt.split(':')[0]) + '</b><span class="tt-sub">' + escapeHtml(txt) + '</span>'; });
+            });
+        }
+
+        function paintFines(rows) {
+            var tb = document.getElementById('fines-body');
+            if (!tb) return;
+            tb.innerHTML = (rows || []).slice(0, 10).map(function (r, i) {
+                var total = Number(r[2]) || 0;
+                return '<tr class="border-b last:border-0"><td class="py-2">' + (i + 1) + '</td>'
+                    + '<td class="py-2 font-semibold">' + escapeHtml(r[0]) + '</td>'
+                    + '<td class="py-2 text-slate-500">' + escapeHtml(r[1] || '') + '</td>'
+                    + '<td class="py-2 text-right font-bold text-red-600">₱' + total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</td>'
+                    + '<td class="py-2 text-right">' + rNum(r[3]) + '</td></tr>';
+            }).join('') || '<tr><td colspan="5" class="py-6 text-center text-slate-400">No fines in the selected period.</td></tr>';
+        }
+
+        function paintTopBooksProgram(rows) {
+            [['top-books-program-list', rows], ['top-books-program-bars', rows]].forEach(function (pair) {
+                var el = document.getElementById(pair[0]);
+                if (!el) return;
+                var vis = (pair[1] || []).slice(0, 10);
+                var max = Math.max.apply(null, vis.map(function (r) { return Number(r[2]) || 0; }).concat([1]));
+                el.innerHTML = vis.map(function (r) {
+                    var pct = max > 0 ? Math.round((Number(r[2]) || 0) / max * 100) : 0;
+                    var tip = String(r[0]) + ' · ' + String(r[1]) + ': ' + r[2];
+                    return '<div class="hbar-row" title="' + escapeHtml(tip) + '" tabindex="0">'
+                        + '<div class="flex justify-between text-[11px] font-semibold text-slate-600"><span class="truncate pr-2">' + escapeHtml(r[0]) + ' <span class="text-slate-400">· ' + escapeHtml(r[1]) + '</span></span><span>' + rNum(r[2]) + '</span></div>'
+                        + '<div class="h-2 rounded-full bg-slate-100 mt-0.5"><div class="hbar-fill h-2 rounded-full bg-violet-600" style="width:' + pct + '%"></div></div></div>';
+                }).join('') || '<div class="text-xs text-slate-400">No data.</div>';
+            });
         }
 
         function paintDeptLeaderboard(rows) {
             var tb = document.getElementById('dept-leaderboard-body');
             if (!tb) return;
+            var total = (rows || []).reduce(function (a, r) { return a + (Number(r[1]) || 0); }, 0);
             tb.innerHTML = (rows || []).map(function (r) {
-                return '<tr class="border-b last:border-0"><td class="py-2 pr-2 font-bold truncate" title="' + escapeHtml(r[0]) + '">' + escapeHtml(r[0]) + '</td>'
+                var cnt = Number(r[1]) || 0;
+                var pct = total ? (Math.round(cnt / total * 1000) / 10) : 0;
+                return '<tr class="border-b last:border-0"><td class="py-2 pr-2 font-bold truncate" title="' + escapeHtml(r[0] + ': ' + cnt + ' (' + pct + '% share)') + '">' + escapeHtml(r[0]) + '</td>'
                     + '<td class="py-2 pr-2 text-right">' + rNum(r[1]) + '</td>'
                     + '<td class="py-2 pr-2 text-right">' + rNum(r[2]) + '</td>'
-                    + '<td class="py-2 text-right font-bold ' + ((+r[3] || 0) ? 'text-red-600' : '') + '">' + rNum(r[3]) + '</td></tr>';
-            }).join('') || '<tr><td colspan="4" class="text-xs text-slate-400 py-4 text-center">No department activity yet.</td></tr>';
+                    + '<td class="py-2 pr-2 text-right font-bold ' + ((+r[3] || 0) ? 'text-red-600' : '') + '">' + rNum(r[3]) + '</td>'
+                    + '<td class="py-2 text-right font-bold text-blue-700">' + pct + '%</td></tr>';
+            }).join('') || '<tr><td colspan="5" class="text-xs text-slate-400 py-4 text-center">No department activity yet.</td></tr>';
         }
 
-        function paintTopBooks(rows) {
+        function paintTopBooks(rows, programRows) {
             var tb = document.getElementById('top-books-list');
             if (tb) tb.innerHTML = (rows || []).map(function (r, i) {
-                return '<div class="flex items-center gap-2 border rounded-lg px-2.5 py-2"><span class="w-6 h-6 rounded-full bg-blue-50 text-blue-700 text-[11px] font-extrabold flex items-center justify-center shrink-0">' + (i + 1) + '</span><span class="flex-1 min-w-0"><b class="block truncate text-[11px]">' + escapeHtml(r[0]) + '</b><span class="text-[10px] text-slate-500">' + escapeHtml(r[1] || '') + '</span></span><b class="text-[11px]">' + rNum(r[2]) + '</b></div>';
+                var progLabel = '';
+                try {
+                    var match = (programRows || []).filter(function (p) { return String(p[0]) === String(r[0]); }).slice(0, 2);
+                    if (match.length) progLabel = ' · ' + match.map(function (p) { return String(p[1]) + ' (' + rNum(p[2]) + ')'; }).join(', ');
+                } catch (e) { progLabel = ''; }
+                return '<div class="flex items-center gap-2 border rounded-lg px-2.5 py-2"><span class="w-6 h-6 rounded-full bg-blue-50 text-blue-700 text-[11px] font-extrabold flex items-center justify-center shrink-0">' + (i + 1) + '</span><span class="flex-1 min-w-0"><b class="block truncate text-[11px]">' + escapeHtml(r[0]) + '</b><span class="text-[10px] text-slate-500">' + escapeHtml(r[1] || '') + (progLabel ? ' <span class="text-violet-600 font-bold">· Top: ' + escapeHtml(progLabel.slice(3)) + '</span>' : '') + '</span></span><b class="text-[11px]">' + rNum(r[2]) + '</b></div>';
             }).join('') || '<div class="text-xs text-slate-400">No borrows yet.</div>';
+            paintTopBooksProgram(programRows || []);
         }
 
         function paintUserType(rows, centerTotal) {
@@ -1294,6 +1447,8 @@ function syncGlobalFilterCustomDates() {
             else if (name === 'overdue_trend') paintOverdueTrend(rows);
             else if (name === 'top_categories') paintTopCats(rows, centerTotal);
             else if (name === 'top_books') paintTopBooks(rows);
+            else if (name === 'fines_by_book') paintFines(rows);
+            else if (name === 'top_books_by_program') paintTopBooksProgram(rows);
             else if (name === 'high_demand') paintHighDemand(rows);
             else if (name === 'top_requested_titles') hbars(document.getElementById('req-top-titles'), rows, 'bg-blue-600', 10, reqTitleSearchLink);
             else if (name === 'requests_by_role') paintReqRoleSplitInto(document.getElementById('req-role-split'), rows);
@@ -1395,6 +1550,10 @@ function syncGlobalFilterCustomDates() {
             paintTopCats(L.top_categories || [], L.total);
             paintHighDemand(L.high_demand || []);
             paintOverdueTrend(L.overdue_trend || []);
+            paintProgramLines('trend-program-lines', 'trend-program-legend', L.trend_by_program || {});
+            paintProgramLines('overdue-program-lines', 'overdue-program-legend', L.overdue_by_program || {});
+            paintTopBooksProgram(L.top_books_by_program || []);
+            paintFines(L.fines_by_book || []);
             var ins = document.getElementById('insights-list');
             if (ins) ins.innerHTML =
                 '<div class="flex gap-2"><span class="material-symbols-outlined text-blue-600">trending_up</span><span><b>' + rNum(L.total) + ' borrowings</b> in the selected period with a <b>' + (L.return_rate || 0) + '% return rate</b>.</span></div>'
@@ -1417,17 +1576,24 @@ function syncGlobalFilterCustomDates() {
             U = U || {};
             var scope = usageScopeLabel();
             var top = (U.by_department && U.by_department[0]) || null;
+            var topShare = null;
+            try {
+                var shareRows = U.by_department_share || [];
+                topShare = shareRows.filter(function (r) { return String(r[0]) === String(top ? top[0] : ''); })[0] || null;
+            } catch (e) { topShare = null; }
             var uk = document.getElementById('usage-kpis');
             if (uk) uk.innerHTML =
-                kpiCard('book', 'Department Borrowings' + scope, rNum(U.total), '', 'bg-blue-50')
+                kpiCard('book', 'Department Borrowings' + scope, rNum(U.total), U.share_formula || 'share = program / total × 100', 'bg-blue-50')
                 + kpiCard('group', 'Active Borrowers' + scope, rNum(U.unique_borrowers), '', 'bg-green-50')
                 + kpiCard('account_balance', 'Departments Active', rNum(U.active_departments), '', 'bg-amber-50')
-                + kpiCard('emoji_events', 'Top Department', top ? escapeHtml(top[0]) : '—', top ? rNum(top[1]) + ' borrows' : '', 'bg-violet-50')
+                + kpiCard('emoji_events', 'Top Department', top ? escapeHtml(top[0]) : '—', top ? rNum(top[1]) + ' borrows' + (topShare ? ' · ' + topShare[2] + '%' : '') : '', 'bg-violet-50')
                 + kpiCard('schedule', 'Overdue in Departments' + scope, rNum(U.overdue), 'items', 'bg-red-50')
                 + kpiCard('layers', 'Avg. Books per Borrower', (U.avg_per_borrower || 0), '', 'bg-blue-50');
-            paintDeptCharts(U.by_department || [], U.overdue_by_department || [], U.borrowers_by_department || []);
+            paintDeptCharts(U.by_department || [], U.overdue_by_department || [], U.borrowers_by_department || [], U.by_department_share || []);
             paintDeptLeaderboard(U.dept_summary || []);
-            paintTopBooks(U.top_books || []);
+            paintTopBooks(U.top_books || [], U.top_books_by_program || []);
+            paintProgramLines('usage-trend-program-lines', 'usage-trend-program-legend', U.trend_by_program || {});
+            paintProgramLines('usage-overdue-program-lines', 'usage-overdue-program-legend', U.overdue_by_program || {});
             paintUserType(U.by_user_type || [], U.total);
         }
 
@@ -1515,7 +1681,7 @@ function syncGlobalFilterCustomDates() {
             USAGE_DEPTS = stagedUsageDepts();
             var loading = document.getElementById('usage-dept-loading');
             if (loading) loading.classList.remove('hidden');
-            var params = new URLSearchParams({ preset: GLOBAL.preset || 'all' });
+            var params = new URLSearchParams({ preset: GLOBAL.preset || 'year' });
             if (GLOBAL.from) params.set('from', GLOBAL.from);
             if (GLOBAL.to) params.set('to', GLOBAL.to);
             (USAGE_DEPTS || []).forEach(function (d) { params.append('department', d); });
@@ -1590,6 +1756,13 @@ function syncGlobalFilterCustomDates() {
                 document.querySelectorAll('[data-rtab-panel]').forEach(function (p) {
                     p.classList.toggle('hidden', p.getAttribute('data-rtab-panel') !== name);
                 });
+                // Mirror the active tab into the URL (no reload) so filter
+                // applies, exports, and reloads land back on this tab.
+                try {
+                    var url = new URL(window.location.href);
+                    url.searchParams.set('tab', name);
+                    window.history.replaceState(null, '', url.toString());
+                } catch (e) { /* history API unavailable — tab still switches */ }
             });
         });
 
@@ -1973,8 +2146,11 @@ function syncGlobalFilterCustomDates() {
             // (pie) containers are intentionally absent from this list.
             var ids = ['condition-bars',
                 'trend-line', 'peak-bars', 'high-demand-body', 'overdue-line',
+                'trend-program-lines', 'overdue-program-lines',
+                'top-books-program-list', 'fines-body',
                 'recent-circ-body', 'dept-bars', 'borrowers-dept-bars',
                 'overdue-dept-bars', 'dept-leaderboard-body', 'top-books-list',
+                'top-books-program-bars', 'usage-trend-program-lines', 'usage-overdue-program-lines',
                 'req-top-titles', 'req-role-split', 'req-trend-line', 'req-by-program',
                 'book-status-lines', 'book-trend', 'book-program', 'book-usertype',
                 'book-recent-body',
@@ -2019,9 +2195,11 @@ function syncGlobalFilterCustomDates() {
         updateUsageDeptLabel();
         renderBookTraffic();
         initChartExpand();
-        // Deep-link: ?tab=book (picker search/select round-trips) reopens the tab.
+        // Deep-link: ?tab=<collection|library|usage|book> reopens the tab,
+        // so filter applies, exports, and picker round-trips stay put.
         try {
-            if (new URLSearchParams(window.location.search).get('tab') === 'book') activateRtab('book');
+            var deepTab = new URLSearchParams(window.location.search).get('tab');
+            if (deepTab === 'collection' || deepTab === 'library' || deepTab === 'usage' || deepTab === 'book') activateRtab(deepTab);
         } catch (e) { /* URLSearchParams unsupported — stay on first tab */ }
     </script>
 </body>

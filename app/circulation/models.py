@@ -1,5 +1,75 @@
-from datetime import date
+from datetime import date, datetime
 from app.database import db
+
+
+# Due dates carry hours: every new loan is due at end of day (23:59) on
+# its due date. Overdue and fine policy stay calendar-day based (date
+# parts), so this changes display precision, not lending rules.
+DUE_END_HOUR = 23
+DUE_END_MINUTE = 59
+
+
+def end_of_day(day):
+    """Datetime at 23:59 on the given date (accepts date or datetime)."""
+    if isinstance(day, datetime):
+        day = day.date()
+    return datetime(day.year, day.month, day.day,
+                    DUE_END_HOUR, DUE_END_MINUTE)
+
+
+def coerce_due_day(value):
+    """Due value (date/datetime/ISO string) as a date, or None.
+
+    Central coercion so TIMESTAMP dues, legacy DATE rows, and short mock
+    tuples all compare safely. Never raises.
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value).date()
+        except ValueError:
+            pass
+        try:
+            return datetime.strptime(value[:10], '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            return None
+    if hasattr(value, 'timetuple'):
+        try:
+            return date(value.year, value.month, value.day)
+        except Exception:
+            return None
+    return None
+
+
+def format_due(value):
+    """Human due display with hours: 'Aug 05, 2026 · 11:59 PM'.
+
+    Legacy midnight rows (which never had hours) and plain dates render
+    date-only; None renders as an em dash; garbage passes through as
+    text instead of 500ing. Registered as the `duefmt` Jinja filter.
+    """
+    if value is None:
+        return '—'
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            try:
+                value = datetime.strptime(value[:10], '%Y-%m-%d')
+            except (ValueError, TypeError):
+                return value
+    if isinstance(value, datetime):
+        if value.hour == 0 and value.minute == 0 and value.second == 0:
+            return value.strftime('%b %d, %Y')
+        return value.strftime('%b %d, %Y · %I:%M %p')
+    if isinstance(value, date):
+        return value.strftime('%b %d, %Y')
+    return str(value)
 
 
 def borrow_book(book_id, accession_id, borrower_id, processed_by, borrow_type, due_date=None):
@@ -219,21 +289,17 @@ def calculate_fine(circulation_id, overdue_rate=5.0, grace_days=0):
         return 0
     if not due_date:
         return 0
-    # psycopg2 returns date objects, but be defensive against ISO strings
-    # (mocks, sqlite, manual edits).
-    if isinstance(due_date, str):
-        try:
-            due_date = date.fromisoformat(due_date[:10])
-        except ValueError:
-            return 0
-    if isinstance(return_date, str):
-        try:
-            return_date = date.fromisoformat(return_date[:10])
-        except ValueError:
-            return_date = None
-    returned = return_date if return_date else date.today()
+    # Calendar-day policy: compare date parts so TIMESTAMP dues (end of
+    # day) and legacy DATE rows fine identically. psycopg2 may return
+    # date or datetime; be defensive against ISO strings too.
+    due_day = coerce_due_day(due_date)
+    if due_day is None:
+        return 0
+    returned_day = coerce_due_day(return_date) if return_date else date.today()
+    if returned_day is None:
+        return 0
     try:
-        overdue_days = (returned - due_date).days - (grace_days or 0)
+        overdue_days = (returned_day - due_day).days - (grace_days or 0)
     except TypeError:
         return 0
     return max(0, overdue_days * overdue_rate)
@@ -259,7 +325,7 @@ def get_borrowing_by_program(program):
 def get_overdue_loans():
     return db.fetch_all(
         '''SELECT * FROM circulation_records
-           WHERE transaction_status IN ('active', 'overdue') AND due_date < CURRENT_DATE'''
+              WHERE transaction_status IN ('active', 'overdue') AND due_date::date < CURRENT_DATE'''
     )
 
 
@@ -267,7 +333,7 @@ def get_due_within_days(days=2):
     from datetime import timedelta
     target = date.today() + timedelta(days=days)
     return db.fetch_all(
-        "SELECT * FROM circulation_records WHERE due_date = %s AND transaction_status = 'active'",
+        "SELECT * FROM circulation_records WHERE due_date::date = (%s)::date AND transaction_status = 'active'",
         (target,)
     )
 
@@ -279,7 +345,7 @@ def get_due_soon_detail(days=2):
            JOIN borrowers br ON c.borrower_id = br.borrower_id
            JOIN user_accounts u ON br.user_id = u.user_id
            WHERE c.transaction_status = 'active'
-             AND c.due_date BETWEEN CURRENT_DATE AND CURRENT_DATE + %s
+              AND c.due_date::date BETWEEN CURRENT_DATE AND CURRENT_DATE + %s
            ORDER BY c.due_date''',
         (days,)
     )
@@ -294,7 +360,7 @@ def get_overdue_loans_detail():
            JOIN user_accounts u ON br.user_id = u.user_id
            JOIN book_catalog b ON c.book_id = b.book_id
            JOIN accession_log a ON c.accession_id = a.accession_id
-           WHERE c.transaction_status IN ('active', 'overdue') AND c.due_date < CURRENT_DATE
+            WHERE c.transaction_status IN ('active', 'overdue') AND c.due_date::date < CURRENT_DATE
            ORDER BY c.due_date'''
     )
 
@@ -304,10 +370,10 @@ def get_circulation_stats():
         "SELECT COUNT(*) FROM circulation_records WHERE transaction_status IN ('active', 'overdue')"
     )
     overdue = db.fetch_one(
-        "SELECT COUNT(*) FROM circulation_records WHERE transaction_status IN ('active', 'overdue') AND due_date < CURRENT_DATE"
+        "SELECT COUNT(*) FROM circulation_records WHERE transaction_status IN ('active', 'overdue') AND due_date::date < CURRENT_DATE"
     )
     due_soon = db.fetch_one(
-        "SELECT COUNT(*) FROM circulation_records WHERE transaction_status = 'active' AND due_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 2"
+        "SELECT COUNT(*) FROM circulation_records WHERE transaction_status = 'active' AND due_date::date BETWEEN CURRENT_DATE AND CURRENT_DATE + 2"
     )
     return {
         'active_loans': active[0] if active else 0,

@@ -22,6 +22,7 @@ from .models import (
     get_full_reservation_history_by_borrower, get_user_loan_history,
     get_fines_by_borrower, get_total_fines, get_fine_record, mark_fine_paid,
     is_book_blocked_for_daily, is_accession_lost,
+    end_of_day, coerce_due_day, format_due,
 )
 
 VALID_BORROW_TYPES = ('overnight', 'daily_circulation')
@@ -155,7 +156,7 @@ def _compute_due_date(borrow_type, role_name):
         days = int(days)
     except (TypeError, ValueError):
         days = fallback
-    return date.today() + timedelta(days=days)
+    return end_of_day(date.today() + timedelta(days=days))
 
 
 @circulation_bp.route('/librarian/circulation')
@@ -254,13 +255,20 @@ def _loan_matches_search(loan, query):
 
 
 def _loan_is_overdue(loan, today):
-    """True when an active-loan tuple is overdue (flagged or past due)."""
+    """True when an active-loan tuple is overdue (flagged or past due).
+
+    Compares calendar days so TIMESTAMP dues (end of day) and legacy
+    DATE rows share one policy: due today is not overdue until tomorrow.
+    """
     if loan[4] == 'overdue':
         return True
     if loan[4] != 'active' or loan[2] is None:
         return False
+    due_day = coerce_due_day(loan[2])
+    if due_day is None:
+        return False
     try:
-        return loan[2] < today
+        return due_day < today
     except TypeError:
         return str(loan[2])[:10] < today.isoformat()
 
@@ -269,8 +277,11 @@ def _loan_is_due_soon(loan, today, cutoff):
     """True when an active (not overdue) loan is due between today and cutoff."""
     if loan[4] != 'active' or loan[2] is None:
         return False
+    due_day = coerce_due_day(loan[2])
+    if due_day is None:
+        return False
     try:
-        return today <= loan[2] <= cutoff
+        return today <= due_day <= cutoff
     except TypeError:
         day = str(loan[2])[:10]
         return today.isoformat() <= day <= cutoff.isoformat()
@@ -351,12 +362,12 @@ def desk_borrow():
         raise
     _safe_notify(
         borrower_row[0],
-        f'You borrowed copy {accession_number}. Due {due_date}.',
+        f'You borrowed copy {accession_number}. Due {format_due(due_date)}.',
         'borrow',
         str(accession[0]),
     )
     log_activity(current_user.id, f'circulation:borrow:{accession[0]}')
-    flash(f'Borrowed — {accession_number} due {due_date}.', 'success')
+    flash(f'Borrowed — {accession_number} due {format_due(due_date)}.', 'success')
     return redirect(url_for('circulation.circulation_page', search=borrower_row[1]))
 
 
@@ -691,12 +702,12 @@ def reservation_action(reservation_id, action):
             raise
         _safe_notify(
             reservation[2],
-            f'Reservation #{reservation_id} claimed. Book due {due_date}.',
+            f'Reservation #{reservation_id} claimed. Book due {format_due(due_date)}.',
             'reservation',
             str(reservation_id),
         )
         log_activity(current_user.id, f'circulation:claim_reservation:{reservation_id}')
-        flash(f'Reservation claimed — booked as an overnight borrow due {due_date}.', 'success')
+        flash(f'Reservation claimed — booked as an overnight borrow due {format_due(due_date)}.', 'success')
     elif action == 'expire':
         if reservation[5] not in ('waiting', 'allocated'):
             flash('This reservation is already finished.', 'error')
@@ -830,12 +841,12 @@ def user_borrow():
         raise
     _safe_notify(
         borrower_row[0],
-        f'You borrowed "{book[1]}". Due {due_date}.',
+        f'You borrowed "{book[1]}". Due {format_due(due_date)}.',
         'borrow',
         str(accession[0]),
     )
     log_activity(current_user.id, f'circulation:user_borrow:{book_id}')
-    flash(f'Book borrowed — due {due_date}.', 'success')
+    flash(f'Book borrowed — due {format_due(due_date)}.', 'success')
     return redirect(url_for('cataloging.book_info', book_id=book_id))
 
 

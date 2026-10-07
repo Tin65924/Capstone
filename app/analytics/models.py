@@ -482,6 +482,138 @@ def overdue_trend(start_date=None, end_date=None, borrow_type=None,
     )
 
 
+def borrowings_trend_by_program(start_date=None, end_date=None, borrow_type=None,
+                                departments=None):
+    """Return [(borrow_date, program_label, count)] daily trend split by program.
+
+    Powers the "Borrowings Trend by Program" multi-line graph so every point
+    shows which program/department it belongs to. Same program_label logic
+    as books_borrowed_per_program (borrower department with Admin/Librarian/
+    'No program' fallback for blank departments).
+    """
+    parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    if borrow_type:
+        parts.append('c.borrow_type = %s')
+        params.append(borrow_type)
+    dept_clause, dept_params = _department_clause(departments, 'br', 'r')
+    if dept_clause:
+        parts.append(dept_clause)
+        params.extend(dept_params)
+    where = 'WHERE ' + ' AND '.join(parts) if parts else ''
+    return db.fetch_all(
+        '''SELECT c.borrow_date, {}, COUNT(c.circulation_id)
+           FROM circulation_records c{}
+           {} GROUP BY c.borrow_date, 2 ORDER BY c.borrow_date, 2'''.format(
+            _PROGRAM_LABEL, _program_joins(), where),
+        tuple(params) if params else None
+    )
+
+
+def overdue_trend_by_program(start_date=None, end_date=None, borrow_type=None,
+                             departments=None):
+    """Return [(due_date, program_label, count)] overdue trend split by program."""
+    parts, params = _range_clause('COALESCE(c.due_date, c.borrow_date)', start_date, end_date)
+    if borrow_type:
+        parts.append('c.borrow_type = %s')
+        params.append(borrow_type)
+    dept_clause, dept_params = _department_clause(departments, 'br', 'r')
+    if dept_clause:
+        parts.append(dept_clause)
+        params.extend(dept_params)
+    parts.append("c.transaction_status = 'overdue'")
+    return db.fetch_all(
+        '''SELECT COALESCE(c.due_date, c.borrow_date)::date, {}, COUNT(c.circulation_id)
+           FROM circulation_records c{}
+           WHERE {} GROUP BY 1, 2 ORDER BY 1, 2'''.format(
+            _PROGRAM_LABEL, _program_joins(), ' AND '.join(parts)),
+        tuple(params)
+    )
+
+
+def top_books_program_breakdown(start_date=None, end_date=None, limit=20,
+                                borrow_type=None, departments=None):
+    """Return [(title, program_label, count)] top-book borrows split by program.
+
+    Single query (no N+1): top titles crossed with the borrowing program so
+    the "Top Borrowed Books" graph can label which program each borrow came
+    from. Ordered by borrows descending.
+    """
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 20
+    limit = max(1, min(limit, 100))
+    parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    if borrow_type:
+        parts.append('c.borrow_type = %s')
+        params.append(borrow_type)
+    dept_clause, dept_params = _department_clause(departments, 'br', 'r')
+    if dept_clause:
+        parts.append(dept_clause)
+        params.extend(dept_params)
+    where = 'WHERE ' + ' AND '.join(parts) if parts else ''
+    params.append(limit)
+    return db.fetch_all(
+        '''SELECT b.title, {}, COUNT(c.circulation_id)
+           FROM circulation_records c
+           JOIN book_catalog b ON c.book_id = b.book_id{} {} GROUP BY b.title, 2
+           ORDER BY 3 DESC LIMIT %s'''.format(_PROGRAM_LABEL, _program_joins(), where),
+        tuple(params)
+    )
+
+
+def top_categories_by_program(start_date=None, end_date=None, limit=20,
+                              borrow_type=None):
+    """Return [(category, program_label, count)] borrows split by program."""
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 20
+    limit = max(1, min(limit, 100))
+    parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    if borrow_type:
+        parts.append('c.borrow_type = %s')
+        params.append(borrow_type)
+    where = 'WHERE ' + ' AND '.join(parts) if parts else ''
+    params.append(limit)
+    return db.fetch_all(
+        '''SELECT COALESCE(NULLIF(b.subject_classification, ''), 'Others'),
+                  {}, COUNT(c.circulation_id)
+           FROM circulation_records c
+           JOIN book_catalog b ON c.book_id = b.book_id{} {} GROUP BY 1, 2
+           ORDER BY 3 DESC LIMIT %s'''.format(_PROGRAM_LABEL, _program_joins(), where),
+        tuple(params)
+    )
+
+
+def fines_by_book(start_date=None, end_date=None, limit=10):
+    """Return [(title, author, total_fines, fine_count)] highest-fine books first.
+
+    Sums circulation_records.fine_amount per active-catalog title in the
+    selected borrow_date window. Only rows with fine_amount > 0 count, so
+    the "Books with Most Fines" table answers which book incurred the most
+    fines. Amounts come back as Decimal/float; callers coerce for display.
+    """
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 10
+    limit = max(1, min(limit, 50))
+    parts, params = _range_clause('c.borrow_date', start_date, end_date)
+    parts.append('c.fine_amount > 0')
+    where = 'WHERE ' + ' AND '.join(parts)
+    params.append(limit)
+    return db.fetch_all(
+        '''SELECT b.title, b.author, SUM(c.fine_amount), COUNT(c.circulation_id)
+           FROM circulation_records c
+           JOIN book_catalog b ON c.book_id = b.book_id
+           {} GROUP BY b.book_id, b.title, b.author
+           ORDER BY SUM(c.fine_amount) DESC, COUNT(c.circulation_id) DESC
+           LIMIT %s'''.format(where),
+        tuple(params)
+    )
+
+
 def top_borrowed_categories(start_date=None, end_date=None, limit=6, borrow_type=None):
     parts, params = _range_clause('c.borrow_date', start_date, end_date)
     if borrow_type:

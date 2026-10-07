@@ -67,7 +67,7 @@ def _get_dashboard_stats():
         "SELECT COUNT(*) FROM request_records WHERE request_status IN ('pending_review', 'approved')"
     )
     overdue = db.fetch_one(
-        "SELECT COUNT(*) FROM circulation_records WHERE transaction_type = 'borrow' AND transaction_status IN ('active', 'overdue') AND due_date < CURRENT_DATE"
+        "SELECT COUNT(*) FROM circulation_records WHERE transaction_type = 'borrow' AND transaction_status IN ('active', 'overdue') AND due_date::date < CURRENT_DATE"
     )
     total_titles = titles[0] if titles else 0
     total_accessions = accessions[0] if accessions else 0

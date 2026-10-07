@@ -241,7 +241,7 @@
                                                 <h3 class="font-bold text-gray-900 dark:text-white text-sm sm:text-base truncate" style="">
                                                     {{ loan[5] }}</h3>
                                                 <p class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm truncate" style="">Accession:
-                                                    {{ loan[6] }} · Due {{ loan[2] }}</p>
+                                                    {{ loan[6] }} · Due {{ loan[2]|duefmt }}</p>
                                             </div>
                                             <span
                                                 class="{% if overdue %}bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300{% else %}bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300{% endif %} text-xs px-2 py-1 rounded font-medium"
@@ -254,7 +254,7 @@
                                     <button type="button"
                                         data-title="{{ loan[5] }}"
                                         data-accession="{{ loan[6] }}"
-                                        data-due="{{ loan[2] }}"
+                                        data-due="{{ loan[2]|duefmt }}"
                                         data-type="{{ loan[3] }}"
                                         data-status="{{ loan[4] }}"
                                         onclick="openBorrowingModal(this)"

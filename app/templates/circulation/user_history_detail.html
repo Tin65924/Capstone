@@ -94,7 +94,7 @@
                             <td class="font-bold">{{ t[7] }}<div class="font-normal text-gray-500 text-xs">{{ t[8] }}</div></td>
                             <td class="font-mono text-gray-500">{{ t[9] }}</td>
                             <td class="text-gray-500">{{ t[1] }}</td>
-                            <td class="text-gray-500">{{ t[2] }}</td>
+                            <td class="text-gray-500">{{ t[2]|duefmt }}</td>
                             <td class="text-gray-500">{{ t[3] or '—' }}</td>
                             <td><span class="badge {% if t[5] == 'returned' %}badge-green{% elif t[5] == 'overdue' %}badge-red{% else %}badge-blue{% endif %}">{{ t[5] }}</span></td>
                             <td class="text-right font-bold {% if t[6] %}text-red-600{% else %}text-gray-400{% endif %}">{% if t[6] %}₱{{ '%.2f'|format(t[6]|float) }}{% else %}—{% endif %}</td>
@@ -163,7 +163,7 @@
                         <tr>
                             <td class="font-bold">{{ f[5] }}</td>
                             <td class="font-mono text-gray-500">{{ f[6] }}</td>
-                            <td class="text-gray-500">{{ f[2] }}</td>
+                            <td class="text-gray-500">{{ f[2]|duefmt }}</td>
                             <td class="text-gray-500">{{ f[3] or '—' }}</td>
                             <td class="text-right font-bold text-red-600">₱{{ '%.2f'|format(f[4]|float) if f and f|length > 4 else '—' }}</td>
                             <td class="text-right">

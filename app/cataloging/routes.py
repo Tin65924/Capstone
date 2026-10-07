@@ -168,20 +168,23 @@ def cataloging_page():
     page = max(1, page or 1)
     per_page = 20
 
-    from app.cataloging.models import COPY_STATUS_FILTERS
+    from app.cataloging.models import COPY_STATUS_FILTERS, _CATALOG_SORTS
     if copy_status not in COPY_STATUS_FILTERS:
         copy_status = ''
+    sort_by = request.args.get('sort_by', '').strip()
+    if sort_by not in _CATALOG_SORTS:
+        sort_by = ''
     if copy_status:
         from app.cataloging.models import get_books_by_copy_status_paginated
-        books, total = get_books_by_copy_status_paginated(copy_status, page, per_page)
+        books, total = get_books_by_copy_status_paginated(copy_status, page, per_page, sort_by)
     elif status_filter:
         from app.cataloging.models import get_books_by_status_paginated
-        books, total = get_books_by_status_paginated(status_filter, page, per_page)
+        books, total = get_books_by_status_paginated(status_filter, page, per_page, sort_by)
     elif query:
-        books, total = search_books_paginated(query, field, page, per_page)
+        books, total = search_books_paginated(query, field, page, per_page, sort_by)
     else:
         from app.cataloging.models import get_all_books_paginated
-        books, total = get_all_books_paginated(page, per_page)
+        books, total = get_all_books_paginated(page, per_page, sort_by)
 
     total_pages = max(1, (total + per_page - 1) // per_page)
     if page > total_pages:
@@ -190,15 +193,15 @@ def cataloging_page():
         page = total_pages
         if copy_status:
             from app.cataloging.models import get_books_by_copy_status_paginated
-            books, total = get_books_by_copy_status_paginated(copy_status, page, per_page)
+            books, total = get_books_by_copy_status_paginated(copy_status, page, per_page, sort_by)
         elif status_filter:
             from app.cataloging.models import get_books_by_status_paginated
-            books, total = get_books_by_status_paginated(status_filter, page, per_page)
+            books, total = get_books_by_status_paginated(status_filter, page, per_page, sort_by)
         elif query:
-            books, total = search_books_paginated(query, field, page, per_page)
+            books, total = search_books_paginated(query, field, page, per_page, sort_by)
         else:
             from app.cataloging.models import get_all_books_paginated
-            books, total = get_all_books_paginated(page, per_page)
+            books, total = get_all_books_paginated(page, per_page, sort_by)
 
     accessions_by_book = {}
     if books:
@@ -241,7 +244,7 @@ def cataloging_page():
     return render_template('cataloging/cataloging.html', books=books,
                            total=total, search_query=query,
                            search_field=field, status_filter=status_filter,
-                           copy_status=copy_status,
+                           copy_status=copy_status, sort_by=sort_by,
                            page=page, per_page=per_page,
                            accessions_by_book=accessions_by_book,
                            conditions_by_accession=conditions_by_accession,
@@ -825,7 +828,14 @@ def public_catalog():
         view = 'grid'
 
     current_year = datetime.now().year
-    if year_preset == 'since_this_year':
+    # Dynamic year options: current year + previous three, descending.
+    # A preset value IS the year ("2026" means published since 2026).
+    # Legacy since_* values from older links map to the same outcome.
+    year_options = [current_year - i for i in range(4)]
+    if year_preset in {str(y) for y in year_options}:
+        year_from = year_preset
+        year_to = ''
+    elif year_preset == 'since_this_year':
         year_from = str(current_year)
         year_to = ''
     elif year_preset == 'since_last_year':
@@ -878,6 +888,7 @@ def public_catalog():
                            search_query=query, search_field=field,
                            year_preset=year_preset,
                            year_from=year_from, year_to=year_to,
+                           year_options=year_options,
                            sort_by=sort_by, category=category,
                            material_type=material_type, availability=availability,
                            current_year=current_year,

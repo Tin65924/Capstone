@@ -128,6 +128,7 @@ def user_profile():
         get_reservations_by_borrower, get_notifications_by_borrower,
         count_unread_notifications, get_fines_by_borrower, get_total_fines,
         create_notification, notification_exists, expire_overdue_reservations,
+        format_due,
     )
     from app.requests.models import get_requests_by_borrower
 
@@ -219,12 +220,13 @@ def user_profile():
                         continue
                 if not hasattr(due, 'timetuple'):
                     continue
-                delta = (due - date.today()).days
+                due_day = due.date() if isinstance(due, datetime) else due
+                delta = (due_day - date.today()).days
                 if status == 'overdue' or delta < 0:
                     if not notification_exists(borrower_id, 'overdue_reminder', str(circ_id)):
                         create_notification(
                             borrower_id,
-                            f'Overdue: "{title}" was due {due}. Please return it to avoid further fines.',
+                            f'Overdue: "{title}" was due {format_due(due)}. Please return it to avoid further fines.',
                             'overdue_reminder',
                             str(circ_id),
                         )
@@ -232,7 +234,7 @@ def user_profile():
                     if not notification_exists(borrower_id, 'due_soon', str(circ_id)):
                         create_notification(
                             borrower_id,
-                            f'Reminder: "{title}" is due {due} (in {delta} day(s)).',
+                            f'Reminder: "{title}" is due {format_due(due)} (in {delta} day(s)).',
                             'due_soon',
                             str(circ_id),
                         )

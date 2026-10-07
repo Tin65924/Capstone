@@ -147,31 +147,90 @@ def _count_books(where, args):
     return row[0] if row else 0
 
 
-def get_all_books_paginated(page=1, per_page=20):
+# Staff-page sort options (allowlisted — never built from user input).
+# '' is the default title A-Z ordering. Accession sorts use the joined
+# accession string (exact for single-copy books); newest is date_added
+# with book_id breaking same-day ties.
+_CATALOG_SORTS = {
+    'title_desc': 'title DESC, author ASC, isbn ASC',
+    'accession_asc': 'accession_numbers ASC',
+    'accession_desc': 'accession_numbers DESC',
+    'newest': 'date_added DESC, book_id DESC',
+}
+
+
+def _catalog_sort_clause(sort_by):
+    """ORDER BY fragment for a sort key, or None for the default."""
+    return _CATALOG_SORTS.get(sort_by or '')
+
+
+def _relevance_order(query):
+    """(ORDER BY, params) scoring match quality for a public-catalog term.
+
+    Tiers: exact title (0) > title starts-with (1) > title word hit
+    (2) > title anywhere (3) > author (4) > isbn (5) > subject (6),
+    ties break A-Z by title. NULL columns never match a tier and fall
+    through. LIKE wildcards in the term behave as in the search itself
+    (unescaped, consistent with _filtered_where). Returns (None, ())
+    without a term — relevance means A-Z then.
+    """
+    term = (query or '').strip()
+    if not term:
+        return None, ()
+    order = (
+        'ORDER BY CASE'
+        ' WHEN LOWER(title) = LOWER(%s) THEN 0'
+        ' WHEN title ILIKE %s THEN 1'
+        ' WHEN title ILIKE %s THEN 2'
+        ' WHEN title ILIKE %s THEN 3'
+        ' WHEN author ILIKE %s THEN 4'
+        ' WHEN isbn ILIKE %s THEN 5'
+        ' WHEN subject_classification ILIKE %s THEN 6'
+        ' ELSE 7 END, title ASC, author ASC'
+    )
+    params = (term, f'{term}%', f'% {term}%', f'%{term}%',
+              f'%{term}%', f'%{term}%', f'%{term}%')
+    return order, params
+
+
+def get_all_books_paginated(page=1, per_page=20, sort_by=None):
     """Paginated active-book listing for the staff page. Same row shape
     as get_all_books; returns (rows, total)."""
     page = max(1, page or 1)
     per_page = max(1, per_page or 20)
     where = "WHERE catalog_status = 'active'"
     total = _count_books(where, ())
-    rows = db.fetch_all(
-        f'SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers '
-        f'FROM book_catalog {where} ORDER BY {DISTINCT_ORDER} LIMIT %s OFFSET %s',
-        (per_page, (page - 1) * per_page)
-    )
+    order = _catalog_sort_clause(sort_by)
+    if order is None:
+        rows = db.fetch_all(
+            f'SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers '
+            f'FROM book_catalog {where} ORDER BY {DISTINCT_ORDER} LIMIT %s OFFSET %s',
+            (per_page, (page - 1) * per_page)
+        )
+    else:
+        # DISTINCT ON requires the inner ORDER BY to start with the
+        # distinct columns, so non-default sorts wrap the deduped page
+        # query and re-sort outside (same pattern as the public catalog).
+        rows = db.fetch_all(
+            f'SELECT * FROM (SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers '
+            f'FROM book_catalog {where} ORDER BY {DISTINCT_ORDER}) AS sorted_books '
+            f'ORDER BY {order} LIMIT %s OFFSET %s',
+            (per_page, (page - 1) * per_page)
+        )
     return rows, total
 
 
-def get_books_by_status_paginated(status, page=1, per_page=20):
+def get_books_by_status_paginated(status, page=1, per_page=20, sort_by=None):
     """Paginated status listing for the staff page. Same row shape as
     get_books_by_status; returns (rows, total)."""
     page = max(1, page or 1)
     per_page = max(1, per_page or 20)
     where = 'WHERE catalog_status = %s'
     total = _count_books(where, (status,))
+    order = _catalog_sort_clause(sort_by) or 'title'
     rows = db.fetch_all(
         f'SELECT *, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog '
-        f'{where} ORDER BY title LIMIT %s OFFSET %s',
+        f'{where} ORDER BY {order} LIMIT %s OFFSET %s',
         (status, per_page, (page - 1) * per_page)
     )
     return rows, total
@@ -229,7 +288,7 @@ def get_books_by_copy_status(copy_status):
         f"FROM book_catalog WHERE book_catalog.catalog_status = 'active' AND ({condition}) ORDER BY {DISTINCT_ORDER}")
 
 
-def get_books_by_copy_status_paginated(copy_status, page=1, per_page=20):
+def get_books_by_copy_status_paginated(copy_status, page=1, per_page=20, sort_by=None):
     """Paginated problem-copy listing for the staff page. Same row shape
     as get_books_by_copy_status; returns (rows, total). Unknown filters
     return ([], 0), mirroring get_books_by_copy_status."""
@@ -240,11 +299,20 @@ def get_books_by_copy_status_paginated(copy_status, page=1, per_page=20):
     per_page = max(1, per_page or 20)
     where = f"WHERE book_catalog.catalog_status = 'active' AND ({condition})"
     total = _count_books(where, ())
-    rows = db.fetch_all(
-        f'SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers '
-        f'FROM book_catalog {where} ORDER BY {DISTINCT_ORDER} LIMIT %s OFFSET %s',
-        (per_page, (page - 1) * per_page)
-    )
+    order = _catalog_sort_clause(sort_by)
+    if order is None:
+        rows = db.fetch_all(
+            f'SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers '
+            f'FROM book_catalog {where} ORDER BY {DISTINCT_ORDER} LIMIT %s OFFSET %s',
+            (per_page, (page - 1) * per_page)
+        )
+    else:
+        rows = db.fetch_all(
+            f'SELECT * FROM (SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers '
+            f'FROM book_catalog {where} ORDER BY {DISTINCT_ORDER}) AS sorted_books '
+            f'ORDER BY {order} LIMIT %s OFFSET %s',
+            (per_page, (page - 1) * per_page)
+        )
     return rows, total
 
 
@@ -374,6 +442,12 @@ def search_books_filtered(query, field=None, year_from=None, year_to=None, sort_
             f'SELECT * FROM ({base}) AS deduped {order} LIMIT %s OFFSET %s',
             args + (per_page, offset)
         ), total
+    relevance_order, relevance_params = _relevance_order(query)
+    if relevance_order is not None:
+        return db.fetch_all(
+            f'SELECT * FROM ({base}) AS deduped {relevance_order} LIMIT %s OFFSET %s',
+            args + relevance_params + (per_page, offset)
+        ), total
     return db.fetch_all(
         f'{base} LIMIT %s OFFSET %s',
         args + (per_page, offset)
@@ -502,7 +576,7 @@ def update_book_status(book_id, status, updated_by=None):
     )
 
 
-def search_books_paginated(query, field, page, per_page):
+def search_books_paginated(query, field, page, per_page, sort_by=None):
     offset = (page - 1) * per_page
     pattern = f'%{query}%'
 
@@ -541,8 +615,15 @@ def search_books_paginated(query, field, page, per_page):
     )
     total = count_row[0] if count_row else 0
 
-    rows = db.fetch_all(
-        f'''SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog {where} ORDER BY {DISTINCT_ORDER}, date_added DESC LIMIT %s OFFSET %s''',
-        args + (per_page, offset)
-    )
+    order = _catalog_sort_clause(sort_by)
+    if order is None:
+        rows = db.fetch_all(
+            f'''SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog {where} ORDER BY {DISTINCT_ORDER}, date_added DESC LIMIT %s OFFSET %s''',
+            args + (per_page, offset)
+        )
+    else:
+        rows = db.fetch_all(
+            f'''SELECT * FROM (SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog {where} ORDER BY {DISTINCT_ORDER}, date_added DESC) AS sorted_books ORDER BY {order} LIMIT %s OFFSET %s''',
+            args + (per_page, offset)
+        )
     return rows, total

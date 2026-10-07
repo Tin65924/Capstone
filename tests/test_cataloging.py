@@ -652,6 +652,104 @@ class TestPublicCatalog:
         assert resp.status_code == 200
         assert b'Availability: Available' not in resp.data
 
+    def test_year_filter_options_are_dynamic(self, client, mock_db):
+        from datetime import datetime
+        mock_db['fetch_all'].return_value = []
+        body = client.get('/catalog').data.decode()
+        current = datetime.now().year
+        assert 'Year Published' in body
+        assert '>Year</h3>' not in body
+        for i, year in enumerate(range(current, current - 4, -1)):
+            assert f'value="{year}"' in body, year
+        positions = [body.index(f'Since {current - i}') for i in range(4)]
+        assert positions == sorted(positions)
+        assert 'Custom Year Range' in body
+        assert 'value="since_2023"' not in body
+        assert 'Any time' not in body
+
+    def test_year_preset_filters_from_year(self, client, mock_db):
+        from datetime import datetime
+        current = datetime.now().year
+        mock_db['fetch_all'].side_effect = [[], []]
+        resp = client.get(f'/catalog?year_preset={current}')
+        assert resp.status_code == 200
+        params = mock_db['fetch_all'].call_args_list[0][0][1]
+        assert current in params
+
+    def test_legacy_year_presets_still_work(self, client, mock_db):
+        from datetime import datetime
+        current = datetime.now().year
+        mock_db['fetch_all'].side_effect = [[], []]
+        resp = client.get('/catalog?year_preset=since_last_year')
+        assert resp.status_code == 200
+        params = mock_db['fetch_all'].call_args_list[0][0][1]
+        assert (current - 1) in params
+
+    def test_custom_year_range(self, client, mock_db):
+        mock_db['fetch_all'].side_effect = [[], []]
+        resp = client.get(
+            '/catalog?year_preset=custom&year_from=2000&year_to=2010')
+        assert resp.status_code == 200
+        params = mock_db['fetch_all'].call_args_list[0][0][1]
+        assert 2000 in params and 2010 in params
+
+    def test_relevance_tiers_in_order(self, mock_db):
+        from app.cataloging.models import _relevance_order
+        order, params = _relevance_order('harry')
+        tiers = [i for i in range(7)]
+        positions = [order.index(f'THEN {i}') for i in tiers]
+        assert positions == sorted(positions)
+        assert 'LOWER(title) = LOWER(%s)' in order
+        assert order.index('title ILIKE') < order.index('author ILIKE')
+        assert order.index('author ILIKE') < order.index('isbn ILIKE')
+        assert order.index('isbn ILIKE') < order.index(
+            'subject_classification ILIKE')
+        assert 'title ASC, author ASC' in order
+        assert params == ('harry', 'harry%', '% harry%', '%harry%',
+                          '%harry%', '%harry%', '%harry%')
+
+    def test_relevance_needs_a_term(self, mock_db):
+        from app.cataloging.models import _relevance_order
+        assert _relevance_order('') == (None, ())
+        assert _relevance_order(None) == (None, ())
+        assert _relevance_order('   ') == (None, ())
+
+    def test_relevance_scores_a_search(self, mock_db):
+        from app.cataloging.models import search_books_filtered
+        mock_db['fetch_one'].return_value = (0,)
+        search_books_filtered('harry', None, page=1, per_page=50)
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'ORDER BY CASE' in query
+        assert params == ('%harry%', '%harry%', '%harry%', '%harry%',
+                          'harry', 'harry%', '% harry%', '%harry%',
+                          '%harry%', '%harry%', '%harry%', 50, 0)
+
+    def test_no_query_means_alpha_not_scored(self, mock_db):
+        from app.cataloging.models import search_books_filtered
+        mock_db['fetch_one'].return_value = (0,)
+        search_books_filtered('', None, page=1, per_page=50)
+        query = mock_db['fetch_all'].call_args[0][0]
+        assert 'ORDER BY CASE' not in query
+
+    def test_explicit_sort_beats_relevance(self, mock_db):
+        from app.cataloging.models import search_books_filtered
+        mock_db['fetch_one'].return_value = (0,)
+        search_books_filtered('harry', None, page=1, per_page=50,
+                              sort_by='title')
+        query = mock_db['fetch_all'].call_args[0][0]
+        assert 'ORDER BY CASE' not in query
+        assert 'ORDER BY title ASC' in query
+
+    def test_default_search_hits_relevance_path(self, client, mock_db):
+        mock_db['fetch_all'].side_effect = [
+            SAMPLE_BOOKS,  # search_books_filtered books
+            [],            # get_distinct_categories
+        ]
+        resp = client.get('/catalog?q=harry')
+        assert resp.status_code == 200
+        query = mock_db['fetch_all'].call_args_list[0][0][0]
+        assert 'ORDER BY CASE' in query
+
     def test_book_info_found(self, client, mock_db):
         mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
         mock_db['fetch_all'].return_value = []

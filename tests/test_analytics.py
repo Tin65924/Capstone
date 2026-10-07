@@ -679,7 +679,7 @@ class TestForecastJson:
             [(1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 12), (0, 2)],
             [('Hot Title', 'Some Author', 5, 2)],
         )
-        resp = librarian_client.get('/librarian/analytics/forecast')
+        resp = librarian_client.get('/librarian/analytics/forecast?preset=all')
         assert resp.status_code == 200
         body = resp.get_json()
         assert body['daily_avg'] == 2.0
@@ -740,7 +740,8 @@ class TestForecastJson:
         from datetime import date
         trend = [(date(2026, 5, 1), 4)]
         self._payload_calls(mock_db, trend, [], [], 0, [], [])
-        body = librarian_client.get('/librarian/analytics/forecast').get_json()
+        body = librarian_client.get(
+            '/librarian/analytics/forecast?preset=all').get_json()
         assert [p[1] for p in body['projected_trend']] == [4.0] * 30
 
     def test_basis_and_generated_at(self, librarian_client, mock_db):
@@ -809,11 +810,11 @@ class TestChartJson:
     def test_chart_role_and_category_filters(self, librarian_client, mock_db):
         mock_db['fetch_all'].return_value = [('Student', 40)]
         resp = librarian_client.get(
-            '/librarian/analytics/chart?name=borrowings_by_user_type&role=Student&role=')
+            '/librarian/analytics/chart?name=borrowings_by_user_type&role=Student&role=&preset=all')
         assert resp.get_json()['filters'] == {'roles': ['Student']}
         mock_db['fetch_all'].return_value = [('Science', 2)]
         resp = librarian_client.get(
-            '/librarian/analytics/chart?name=collection_by_category&category=Science&category= ')
+            '/librarian/analytics/chart?name=collection_by_category&category=Science&category= &preset=all')
         assert resp.get_json()['filters'] == {'categories': ['Science']}
         query, params = mock_db['fetch_all'].call_args[0]
         assert 'LOWER(b.subject_classification) IN (%s)' in query
@@ -1164,14 +1165,15 @@ class TestBookAnalyticsTab:
         assert b'Book not found' in resp.data
 
     def test_tab_deep_link_script(self, librarian_client, mock_db):
-        """?tab=book reopens the tab after picker round-trips."""
+        """?tab=<name> reopens that tab after filter/export round-trips."""
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = []
         resp = librarian_client.get('/librarian/analytics')
         assert resp.status_code == 200
         assert b'book-traffic-data' in resp.data
         assert b'renderBookTraffic' in resp.data
-        assert b"get('tab') === 'book'" in resp.data
+        assert b"deepTab === 'usage'" in resp.data
+        assert b"activateRtab(deepTab)" in resp.data
 
 
 class TestBookAnalyticsJson:
@@ -1238,7 +1240,8 @@ class TestBookAnalyticsJson:
                 (date(2026, 5, 1), 'bogus', 9),
             ],
         ]
-        body = librarian_client.get('/librarian/analytics/book/data?book_id=1').get_json()
+        body = librarian_client.get(
+            '/librarian/analytics/book/data?book_id=1&preset=all').get_json()
         trends = body['status_trends']
         assert trends['dates'] == ['2026-05-01', '2026-05-02']
         by_key = {s['key']: s for s in trends['series']}
@@ -1737,3 +1740,73 @@ class TestDashboardCache:
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = []
         assert routes.compute_dashboard(None, None) == routes._compute_dashboard(None, None)
+
+
+class TestDatePresets:
+    """Overall filter offers Custom dates / This year / This month only."""
+
+    def test_month_resolves_to_calendar_month(self):
+        import calendar
+        from datetime import date
+        from app.analytics.routes import resolve_dates
+        today = date.today()
+        last_day = calendar.monthrange(today.year, today.month)[1]
+        assert resolve_dates('month', None, None) == (
+            date(today.year, today.month, 1),
+            date(today.year, today.month, last_day))
+
+    def test_month_ignores_stale_dates(self, librarian_client, mock_db):
+        import calendar
+        from datetime import date
+        mock_db['fetch_one'].side_effect = [(10,), (2,)]
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get(
+            '/librarian/analytics?preset=month&from=2020-01-01&to=2020-12-31')
+        assert resp.status_code == 200
+        today = date.today()
+        last_day = calendar.monthrange(today.year, today.month)[1]
+        expected = (date(today.year, today.month, 1),
+                    date(today.year, today.month, last_day))
+        params = mock_db['fetch_all'].call_args_list[0][0][1]
+        assert params == expected
+
+    def test_semester_still_honored_for_bookmarks(
+            self, librarian_client, mock_db):
+        from datetime import date
+        mock_db['fetch_one'].side_effect = [(10,), (2,)]
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics?preset=semester')
+        assert resp.status_code == 200
+        today = date.today()
+        if today.month >= 8:
+            expected = (date(today.year, 8, 1), date(today.year, 12, 31))
+        else:
+            expected = (date(today.year, 1, 1), date(today.year, 5, 31))
+        params = mock_db['fetch_all'].call_args_list[0][0][1]
+        assert params == expected
+
+    def test_only_three_presets_offered(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (1,)
+        mock_db['fetch_all'].return_value = []
+        body = librarian_client.get('/librarian/analytics').data.decode()
+        assert 'value="semester"' not in body
+        assert 'This semester' not in body
+        assert 'value="month"' in body
+        assert 'This month' in body
+        assert 'value="year"' in body
+        assert 'value="custom"' in body
+
+    def test_default_preset_is_this_year(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (1,)
+        mock_db['fetch_all'].return_value = []
+        body = librarian_client.get('/librarian/analytics').data.decode()
+        assert "preset: 'year'" in body
+
+    def test_tabs_persist_through_filter(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (1,)
+        mock_db['fetch_all'].return_value = []
+        body = librarian_client.get('/librarian/analytics').data.decode()
+        # Active tab mirrors into the URL so apply/reset reloads land back.
+        assert 'replaceState' in body
+        assert "'usage'" in body
+        assert 'preset=year&tab=' in body

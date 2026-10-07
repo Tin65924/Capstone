@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS circulation_records (
     transaction_type   VARCHAR(20) NOT NULL
                        CHECK (transaction_type IN ('borrow', 'return')),
     borrow_date        DATE NOT NULL,
-    due_date           DATE,
+    due_date           TIMESTAMP,
     return_date        DATE,
     fine_amount        DECIMAL(8,2) NOT NULL DEFAULT 0.00,
     fine_paid          BOOLEAN NOT NULL DEFAULT FALSE,
@@ -327,7 +327,6 @@ CREATE INDEX IF NOT EXISTS idx_requests_requester ON request_records (requester_
 CREATE INDEX IF NOT EXISTS idx_notif_recipient ON notification_log (recipient_id);
 CREATE INDEX IF NOT EXISTS idx_user_accounts_status ON user_accounts (account_status);
 CREATE INDEX IF NOT EXISTS idx_user_accounts_role ON user_accounts (role_id);
-
 -- Race guards for concurrent borrows/reserves (F2): the app checks
 -- first (SELECT-then-INSERT), but two simultaneous POSTs can both pass
 -- the check. These partial unique indexes make the loser fail with a
@@ -347,3 +346,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_active_queue_pos ON reservation_queue (book
 -- handles case, so LOWER(TRIM()) here is only a best-effort race net for
 -- exact-match double-submits — near-duplicates still rely on the app layer.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_pending_req ON request_records (requester_id, LOWER(TRIM(book_title))) WHERE request_status = 'pending_review';
+
+-- Due dates carry hours (end of day, 23:59) instead of bare dates.
+-- Midnight legacy rows keep exact semantics: every overdue/due-soon
+-- comparison in the app uses date parts (due_date::date), so old and new
+-- rows behave identically. Re-running this ALTER on an already-TIMESTAMP
+-- column is a harmless no-op, keeping run_schema idempotent.
+ALTER TABLE circulation_records ALTER COLUMN due_date TYPE TIMESTAMP USING due_date::timestamp;
