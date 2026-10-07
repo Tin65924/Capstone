@@ -12,13 +12,11 @@ from .models import (
     get_borrower_by_user, get_borrower_by_id_number, get_borrower_details,
     get_circulation_stats, get_active_loans, get_recent_transactions,
     get_loans_by_borrower,
-    get_active_loan_by_id_and_user,
     create_reservation, get_next_queue_position,
     get_active_reservation_by_book_and_borrower, get_reservation_by_id,
     get_reservations_grouped, get_reservations_by_book,
     allocate_reservation, claim_reservation, expire_reservation, next_in_queue,
     get_available_accession_by_book, create_notification,
-    get_user_active_loans, get_active_loan_by_id_and_user,
     count_allocated_reservations, count_available_accessions,
     expire_overdue_reservations, get_borrowers_for_history,
     get_full_reservation_history_by_borrower, get_user_loan_history,
@@ -366,9 +364,12 @@ def desk_borrow():
 @login_required
 @librarian_required
 def desk_return():
+    """Pure check-in: the copy is back on the shelf.
+
+    Condition reporting lives in the standalone mark-lost / mark-damaged
+    actions below — a return never flags a copy itself.
+    """
     accession_number = request.form.get('accession_number', '').strip()
-    damage_notes = request.form.get('damage_notes', '').strip() or None
-    lost_flag = request.form.get('lost') == '1'
 
     accession = get_accession_by_number(accession_number) if accession_number else None
     if not accession:
@@ -382,7 +383,7 @@ def desk_return():
 
     fine = calculate_fine(loan[0], current_app.config.get('OVERDUE_FINE_PER_DAY', 5.0),
                           current_app.config.get('OVERDUE_GRACE_DAYS', 0))
-    return_book(loan[0], fine, damage_notes, lost_flag, updated_by=current_user.id)
+    return_book(loan[0], fine, updated_by=current_user.id)
     borrower_id_for_loan = loan[3] if len(loan) > 3 else None
     if borrower_id_for_loan is not None:
         _safe_notify(
@@ -402,7 +403,7 @@ def desk_return():
     log_activity(current_user.id, f'circulation:return:{loan[0]}')
 
     waiting = next_in_queue(accession[2])
-    if waiting and len(waiting) > 2 and not lost_flag:
+    if waiting and len(waiting) > 2:
         _safe_notify(
             waiting[2],
             f'A copy ({accession_number}) was returned and is awaiting librarian allocation.',
@@ -410,12 +411,96 @@ def desk_return():
             str(waiting[0]),
         )
 
-    if lost_flag:
-        flash(f'Accession {accession_number} marked as lost.', 'success')
-    elif fine > 0:
+    if fine > 0:
         flash(f'Returned. Overdue fine: ₱{fine:.2f}.', 'success')
     else:
         flash(f'Accession {accession_number} returned.', 'success')
+    return redirect(url_for('circulation.circulation_page'))
+
+
+def _resolve_condition_accession(accession_number):
+    """Accession row for a condition action, or None (already flashed)."""
+    accession = get_accession_by_number(accession_number) if accession_number else None
+    if not accession:
+        flash('Accession not found.', 'error')
+        return None
+    return accession
+
+
+@circulation_bp.route('/librarian/circulation/accession/lost', methods=['POST'])
+@login_required
+@librarian_required
+def mark_copy_lost_route():
+    """Standalone mark-as-lost: no return required.
+
+    If the copy is on loan, the loan is closed as lost (fine still
+    computed, borrower notified) since there is nothing to check in.
+    """
+    from app.inventory.models import mark_copy_lost
+    accession_number = request.form.get('accession_number', '').strip()
+    accession = _resolve_condition_accession(accession_number)
+    if not accession:
+        return redirect(url_for('circulation.circulation_page'))
+
+    loan = get_active_loan_by_accession(accession[0])
+    if loan:
+        fine = calculate_fine(loan[0], current_app.config.get('OVERDUE_FINE_PER_DAY', 5.0),
+                              current_app.config.get('OVERDUE_GRACE_DAYS', 0))
+        try:
+            return_book(loan[0], fine, lost_flag=True, updated_by=current_user.id)
+        except Exception as e:
+            if _is_unique_violation(e):
+                flash('Another transaction just completed — please refresh and try again.', 'error')
+                return redirect(url_for('circulation.circulation_page'))
+            raise
+        borrower_id_for_loan = loan[3] if len(loan) > 3 else None
+        if borrower_id_for_loan is not None:
+            _safe_notify(
+                borrower_id_for_loan,
+                f'Copy {accession_number} was marked as lost.'
+                + (f' Overdue fine: ₱{fine:.2f}.' if fine > 0 else ''),
+                'return',
+                str(loan[0]),
+            )
+            if fine > 0:
+                _safe_notify(
+                    borrower_id_for_loan,
+                    f'Overdue fine of ₱{fine:.2f} assessed for lost copy {accession_number}. Please settle at the desk.',
+                    'fine',
+                    str(loan[0]),
+                )
+    mark_copy_lost(accession[0], checked_by=current_user.id)
+    log_activity(current_user.id, f'circulation:mark_lost:{accession[0]}')
+    if loan:
+        flash(f'Accession {accession_number} marked as lost — its loan was closed.', 'success')
+    else:
+        flash(f'Accession {accession_number} marked as lost.', 'success')
+    return redirect(url_for('circulation.circulation_page'))
+
+
+@circulation_bp.route('/librarian/circulation/accession/damaged', methods=['POST'])
+@login_required
+@librarian_required
+def mark_copy_damaged_route():
+    """Standalone mark-as-damaged: works whether or not the copy is on
+    loan. A reason is required so the cataloging table can show it."""
+    from app.inventory.models import mark_copy_damaged
+    accession_number = request.form.get('accession_number', '').strip()
+    notes = request.form.get('notes', '').strip()
+    accession = _resolve_condition_accession(accession_number)
+    if not accession:
+        return redirect(url_for('circulation.circulation_page'))
+
+    if not notes:
+        flash('A reason is required to mark a copy as damaged.', 'error')
+        return redirect(url_for('circulation.circulation_page'))
+    if len(notes) > 255:
+        flash('Damage reason is too long (max 255 characters).', 'error')
+        return redirect(url_for('circulation.circulation_page'))
+
+    mark_copy_damaged(accession[0], notes, checked_by=current_user.id)
+    log_activity(current_user.id, f'circulation:mark_damaged:{accession[0]}')
+    flash(f'Accession {accession_number} marked as damaged.', 'success')
     return redirect(url_for('circulation.circulation_page'))
 
 
@@ -808,52 +893,12 @@ def user_reserve():
 @circulation_bp.route('/user/return', methods=['POST'])
 @login_required
 def user_return():
-    circulation_id = request.form.get('circulation_id', type=int)
-    if not circulation_id:
-        flash('Invalid borrowing record.', 'error')
-        return redirect(url_for('main.user_profile'))
-
-    loan = get_active_loan_by_id_and_user(circulation_id, current_user.id)
-    if not loan or len(loan) < 6:
-        flash('Borrowing record not found or already returned.', 'error')
-        return redirect(url_for('main.user_profile'))
-
-    if len(loan) > 5 and loan[5] == 'overnight':
-        flash('Overnight books must be returned at the circulation desk for inspection.', 'error')
-        return redirect(url_for('main.user_profile'))
-
-    fine = calculate_fine(loan[0], current_app.config.get('OVERDUE_FINE_PER_DAY', 5.0),
-                          current_app.config.get('OVERDUE_GRACE_DAYS', 0))
-    return_book(loan[0], fine, updated_by=current_user.id)
-    _safe_notify(
-        loan[2],
-        'You returned your book.'
-        + (f' Overdue fine: ₱{fine:.2f}.' if fine > 0 else ' Thank you!'),
-        'return',
-        str(loan[0]),
-    )
-    if fine > 0:
-        _safe_notify(
-            loan[2],
-            f'Overdue fine of ₱{fine:.2f} assessed. Please settle at the desk.',
-            'fine',
-            str(loan[0]),
-        )
-    log_activity(current_user.id, f'circulation:user_return:{loan[0]}')
-
-    waiting = next_in_queue(loan[1])
-    if waiting:
-        _safe_notify(
-            waiting[2],
-            'A reserved copy you queued for is ready for pickup.',
-            'hold_ready',
-            str(waiting[0]),
-        )
-
-    if fine > 0:
-        flash(f'Book returned. Overdue fine: ₱{fine:.2f}.', 'success')
-    else:
-        flash('Book returned.', 'success')
+    """Desk-only returns: every return must be inspected and approved
+    by a librarian at the circulation desk, so self-service check-in is
+    disabled. The endpoint stays (instead of 404) so stale pages and
+    bookmarks degrade to guidance rather than an error.
+    """
+    flash('Please return books at the circulation desk so a librarian can inspect them.', 'info')
     return redirect(url_for('main.user_profile'))
 
 

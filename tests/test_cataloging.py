@@ -49,17 +49,25 @@ class TestCatalogingAccess:
 
 
 class TestCatalogingCRUD:
+    FULL_BOOK = {
+        'edition': '3rd',
+        'publisher': 'Test Press',
+        'year_published': '2024',
+        'isbn': '978-1234567890',
+        'subject_classification': 'Computer Science',
+        'call_number': 'QA76.6',
+    }
+
     def test_add_book_success(self, librarian_client, mock_db):
         mock_db['execute'].return_value = [(1,)]
         mock_db['fetch_one'].return_value = None
         resp = librarian_client.post('/librarian/cataloging/add', data={
             'title': 'New Book',
             'author': 'New Author',
-            'isbn': '978-1234567890',
             'material_type': 'Book',
-            'year_published': '2024',
             'accession_number': '2025-0001',
             'source': 'purchase',
+            **self.FULL_BOOK,
         })
         assert resp.status_code == 302
         assert '/librarian/cataloging' in resp.location
@@ -74,8 +82,8 @@ class TestCatalogingCRUD:
         resp = librarian_client.post('/librarian/cataloging/add', data={
             'title': 'New Book',
             'author': 'New Author',
-            'isbn': '978-1234567890',
             'material_type': 'Book',
+            **self.FULL_BOOK,
         })
         assert resp.status_code == 302
         assert '/librarian/cataloging' in resp.location
@@ -90,6 +98,7 @@ class TestCatalogingCRUD:
             'title': 'New Book',
             'author': 'New Author',
             'accession_number': '2025-0001',
+            **self.FULL_BOOK,
         })
         assert resp.status_code == 302
         assert '/librarian/cataloging' in resp.location
@@ -100,9 +109,9 @@ class TestCatalogingCRUD:
         resp = librarian_client.post('/librarian/cataloging/add', data={
             'title': 'Existing Title',
             'author': 'Existing Author',
-            'isbn': '978-1234567890',
             'accession_number': '2025-0099',
             'source': 'purchase',
+            **self.FULL_BOOK,
         })
         assert resp.status_code == 302
         assert mock_db['execute'].call_count >= 2
@@ -117,22 +126,34 @@ class TestCatalogingCRUD:
         resp = librarian_client.post('/librarian/cataloging/add', data={
             'title': 'Existing Title',
             'author': 'Existing Author',
+            **self.FULL_BOOK,
         })
         assert resp.status_code == 302
         assert all('INSERT INTO book_catalog' not in c[0][0]
                    for c in mock_db['execute'].call_args_list)
 
-    def test_add_book_dedup_blank_isbn_matches(self, librarian_client, mock_db):
-        mock_db['fetch_one'].side_effect = [None, (5,)]
-        mock_db['execute'].return_value = 1
+    def test_add_book_dedup_blank_isbn_matches(self, mock_db):
+        # ISBN is required on the form, so the blank-ISBN dedup branch
+        # (bulk import / legacy rows) is pinned at the model level.
+        from app.cataloging.models import get_book_by_title_author_isbn
+        mock_db['fetch_one'].return_value = (5,)
+        assert get_book_by_title_author_isbn('T', 'A', None) == (5,)
+        dedup_call = mock_db['fetch_one'].call_args_list[0][0]
+        assert 'isbn IS NULL' in dedup_call[0]
+
+    def test_add_book_missing_isbn_rejected(self, librarian_client, mock_db):
         resp = librarian_client.post('/librarian/cataloging/add', data={
             'title': 'No ISBN Book',
             'author': 'No ISBN Author',
+            'edition': '1st',
+            'publisher': 'Pub',
+            'year_published': '2020',
+            'subject_classification': 'Science',
+            'call_number': 'Q1',
             'accession_number': '2025-0100',
         })
         assert resp.status_code == 302
-        dedup_call = mock_db['fetch_one'].call_args_list[1][0]
-        assert 'isbn IS NULL' in dedup_call[0]
+        assert mock_db['execute'].call_count == 0
 
     def test_add_book_missing_title(self, librarian_client, mock_db):
         resp = librarian_client.post('/librarian/cataloging/add', data={
@@ -154,6 +175,7 @@ class TestCatalogingCRUD:
         resp = librarian_client.post('/librarian/cataloging/1/edit', data={
             'title': 'Updated Title',
             'author': 'Updated Author',
+            **self.FULL_BOOK,
         })
         assert resp.status_code == 302
         assert mock_db['execute'].call_count >= 1

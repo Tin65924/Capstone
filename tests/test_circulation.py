@@ -902,18 +902,16 @@ class TestUserReturn:
         assert resp.status_code == 302
         assert '/login' in resp.location
 
-    def test_returns_own_active_loan(self, student_client, mock_db):
+    def test_returns_require_desk(self, student_client, mock_db):
+        # All returns need librarian approval at the desk: self-service
+        # check-in is disabled, so even a valid daily loan writes nothing.
         mock_db['fetch_one'].side_effect = [
-            (55, 10, 1, '2026-08-02', 'active', 'daily_circulation'),  # get_active_loan_by_id_and_user
-            (date(2026, 8, 1), date(2026, 8, 2), 'daily_circulation'),   # calculate_fine due/returned/type
-            None,                                                        # no waiting reservation
+            (55, 10, 1, '2026-08-02', 'active', 'daily_circulation'),
         ]
         resp = student_client.post('/user/return', data={'circulation_id': 55})
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
-        call_args = mock_db['execute'].call_args_list[0]
-        assert 'UPDATE circulation_records' in call_args[0][0]
-        assert 'returned' in call_args[0][1]
+        assert mock_db['execute'].call_count == 0
 
     def test_overnight_self_return_blocked(self, student_client, mock_db):
         mock_db['fetch_one'].return_value = (55, 10, 1, '2026-08-02', 'active', 'overnight')
@@ -932,19 +930,14 @@ class TestUserReturn:
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
 
-    def test_return_computes_fine(self, student_client, mock_db):
-        # Self-returns are daily loans only (overnight must go to the desk),
-        # and daily loans never accrue fines — even when overdue.
+    def test_return_never_computes_fine(self, student_client, mock_db):
+        # Desk-only rule: not even an overdue daily loan is touched here.
         mock_db['fetch_one'].side_effect = [
-            (55, 10, 1, '2026-07-01', 'overdue', 'daily_circulation'),  # overdue daily loan
-            (date(2026, 7, 1), date(2026, 7, 6), 'daily_circulation'),  # 5 days late
-            None,                                                        # no waiting reservation
+            (55, 10, 1, '2026-07-01', 'overdue', 'daily_circulation'),
         ]
         resp = student_client.post('/user/return', data={'circulation_id': 55})
         assert resp.status_code == 302
-        call_args = mock_db['execute'].call_args_list[0]
-        assert 'UPDATE circulation_records' in call_args[0][0]
-        assert call_args[0][1][2] == 0
+        assert mock_db['execute'].call_count == 0
 
 
 class TestUserOverview:
@@ -969,7 +962,10 @@ class TestUserOverview:
         assert resp.status_code == 200
         assert b'Intro to Algorithms' in resp.data
         assert b'View Details' in resp.data
-        assert b'/user/return' in resp.data
+        # Desk-only returns: no self-service return form anywhere; the
+        # details modal points at the circulation desk instead.
+        assert b'/user/return' not in resp.data
+        assert b'circulation desk' in resp.data
 
     def test_profile_overnight_shows_no_return_button(self, student_client, mock_db):
         mock_db['fetch_one'].return_value = (1, 1, '2024-0001', 'CS', 'active')

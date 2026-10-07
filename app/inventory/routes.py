@@ -186,6 +186,13 @@ def damage_accession(accession_id):
         flash('Accession copy not found.', 'error')
         return redirect(url_for('inventory.inventory_page'))
 
+    if not notes:
+        flash('A reason is required to mark a copy as damaged.', 'error')
+        return redirect(url_for('inventory.inventory_page'))
+    if len(notes) > 255:
+        flash('Damage reason is too long (max 255 characters).', 'error')
+        return redirect(url_for('inventory.inventory_page'))
+
     if session_id:
         session = get_session(session_id)
         if not session or len(session) < 6 or session[1] != int(current_user.id):

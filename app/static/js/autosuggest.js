@@ -12,6 +12,9 @@
 //   used as a local pre-filter: only when it says "maybe exists" is the
 //   confirming DB query (/api/book-exists or /api/student-exists) issued. The
 //   message is only ever shown for confirmed duplicate records.
+// - Forms with data-exists-accession check the accession number on
+//   focus-out (and while typing) via GET /api/accession-exists, writing to
+//   their own data-exists-accession-msg element.
 (function () {
     'use strict';
 
@@ -341,6 +344,41 @@
         });
     }
 
+    function attachAccessionExists(form) {
+        var accInput = form.querySelector('[name="accession_number"]');
+        var msg = form.querySelector('[data-exists-accession-msg]');
+        if (!accInput || !msg) return;
+
+        function show(message) {
+            msg.textContent = message;
+            msg.classList.remove('hidden');
+        }
+        function hide() {
+            msg.classList.add('hidden');
+        }
+
+        function check() {
+            var number = accInput.value.trim();
+            if (!number) {
+                hide();
+                return;
+            }
+            fetch('/api/accession-exists?accession_number=' + encodeURIComponent(number))
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.exists) show('Accession number already exists.');
+                    else hide();
+                })
+                .catch(function () { hide(); });
+        }
+
+        // Focus-out is the required trigger; debounced typing keeps the
+        // message fresh while editing. No Bloom pre-filter exists for
+        // accessions, so the confirming query runs directly.
+        accInput.addEventListener('blur', check);
+        accInput.addEventListener('input', debounce(check, EXISTS_DEBOUNCE));
+    }
+
     function attachStudentExists(form) {
         var idInput = form.querySelector('[name="id_number"]');
         if (!idInput) return;
@@ -377,11 +415,13 @@
 
         var bookForms = document.querySelectorAll('[data-exists-book]');
         var studentForms = document.querySelectorAll('[data-exists-student]');
-        if (!bookForms.length && !studentForms.length) return;
+        var accessionForms = document.querySelectorAll('[data-exists-accession]');
+        if (!bookForms.length && !studentForms.length && !accessionForms.length) return;
 
         loadBloomFilters().then(function () {
             for (var b = 0; b < bookForms.length; b++) attachBookExists(bookForms[b]);
             for (var s = 0; s < studentForms.length; s++) attachStudentExists(studentForms[s]);
+            for (var a = 0; a < accessionForms.length; a++) attachAccessionExists(accessionForms[a]);
         });
     }
 

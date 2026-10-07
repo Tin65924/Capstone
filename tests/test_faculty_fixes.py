@@ -33,7 +33,9 @@ class TestNotifyResilience:
                 'book_id': 5, 'borrow_type': 'daily_circulation'})
         assert resp.status_code == 302
 
-    def test_user_return_ok_when_notify_fails(self, student_client, mock_db):
+    def test_user_return_is_desk_only(self, student_client, mock_db):
+        # Desk-only returns: self-service check-in writes nothing, even
+        # for a valid daily loan with notifications down.
         from datetime import date
         mock_db['fetch_one'].side_effect = [
             (55, 10, 1, '2026-08-02', 'active', 'daily_circulation'),
@@ -45,6 +47,7 @@ class TestNotifyResilience:
             resp = student_client.post('/user/return',
                                        data={'circulation_id': 55})
         assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
 
     def test_user_reserve_ok_when_notify_fails(self, student_client, mock_db):
         mock_db['fetch_one'].side_effect = [

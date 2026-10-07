@@ -436,9 +436,12 @@ def describe_activity(actor, activity):
                  'expire_reservation': 'expired reservation',
                  'user_borrow_request': 'requested book',
                  'user_borrow': 'borrowed book', 'user_reserve': 'reserved book',
-                 'user_return': 'returned loan', 'fine_paid': 'paid fine'}
+                 'user_return': 'returned loan', 'fine_paid': 'paid fine',
+                 'mark_lost': 'marked copy', 'mark_damaged': 'marked copy'}
         verb = verbs.get(m.group(1), m.group(1).replace('_', ' '))
-        return f'{who} {verb} #{m.group(2)}'
+        suffix = {'mark_lost': ' as lost',
+                  'mark_damaged': ' as damaged'}.get(m.group(1), '')
+        return f'{who} {verb} #{m.group(2)}{suffix}'
     m = re.match(r'^requests:([^:]+):(\d+)$', code)
     if m:
         return f'{who} {m.group(1).replace("_", " ")} request #{m.group(2)}'

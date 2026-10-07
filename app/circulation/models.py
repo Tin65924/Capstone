@@ -26,15 +26,25 @@ def return_book(circulation_id, fine_amount=0, damage_notes=None, lost_flag=Fals
 
 
 def is_accession_lost(accession_id):
-    """True when the latest circulation record for this copy is marked lost.
+    """True when a copy is marked lost via either channel.
 
-    Lost copies must not re-circulate: availability queries exclude them.
+    Lost can be recorded on the loan itself (circulation lost_flag, set
+    when a missing copy is reported while on loan) or standalone on the
+    copy (inventory_state 'lost', e.g. found missing from the shelf).
+    Either one blocks borrowing. Single-row shape is preserved so
+    existing callers and mocks keep working.
     """
     row = db.fetch_one(
-        '''SELECT lost_flag FROM circulation_records
-           WHERE accession_id = %s
-           ORDER BY circulation_id DESC LIMIT 1''',
-        (accession_id,)
+        '''SELECT COALESCE((
+              SELECT c.lost_flag FROM circulation_records c
+              WHERE c.accession_id = %s
+              ORDER BY c.circulation_id DESC LIMIT 1
+          ), FALSE)
+          OR COALESCE((
+              SELECT ist.inventory_state FROM inventory_status ist
+              WHERE ist.accession_id = %s
+          ), '') = 'lost' ''',
+        (accession_id, accession_id)
     )
     return bool(row and row[0])
 
@@ -145,13 +155,17 @@ def get_available_accession_by_book(book_id):
                AND EXISTS (SELECT 1 FROM reservation_queue r
                            WHERE r.book_id = a.book_id AND r.reservation_status = 'allocated')
              )
-             AND COALESCE((
-                   SELECT c3.lost_flag FROM circulation_records c3
-                   WHERE c3.accession_id = a.accession_id
-                   ORDER BY c3.circulation_id DESC LIMIT 1
-               ), FALSE) = FALSE
-           ORDER BY a.accession_id
-           LIMIT 1''',
+              AND COALESCE((
+                    SELECT c3.lost_flag FROM circulation_records c3
+                    WHERE c3.accession_id = a.accession_id
+                    ORDER BY c3.circulation_id DESC LIMIT 1
+                ), FALSE) = FALSE
+              AND COALESCE((
+                    SELECT ist.inventory_state FROM inventory_status ist
+                    WHERE ist.accession_id = a.accession_id
+                ), '') != 'lost'
+            ORDER BY a.accession_id
+            LIMIT 1''',
         (book_id,)
     )
 
@@ -169,11 +183,15 @@ def count_available_accessions(book_id):
                  WHERE c.accession_id = a.accession_id
                    AND c.transaction_status IN ('active', 'overdue')
              )
-             AND COALESCE((
-                   SELECT c3.lost_flag FROM circulation_records c3
-                   WHERE c3.accession_id = a.accession_id
-                   ORDER BY c3.circulation_id DESC LIMIT 1
-               ), FALSE) = FALSE''',
+              AND COALESCE((
+                    SELECT c3.lost_flag FROM circulation_records c3
+                    WHERE c3.accession_id = a.accession_id
+                    ORDER BY c3.circulation_id DESC LIMIT 1
+                ), FALSE) = FALSE
+              AND COALESCE((
+                    SELECT ist.inventory_state FROM inventory_status ist
+                    WHERE ist.accession_id = a.accession_id
+                ), '') != 'lost' ''',
         (book_id,)
     )
     return row[0] if row else 0

@@ -513,17 +513,36 @@
                             <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Accession Number</label>
                             <input type="text" name="accession_number" placeholder="2024-00123" required class="form-input mt-1">
                         </div>
-                        <div>
-                            <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Damage Notes (optional)</label>
-                            <textarea name="damage_notes" rows="2" placeholder="e.g. torn cover, pages missing" class="form-input mt-1 resize-none"></textarea>
-                        </div>
-                        <label class="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                            <input type="checkbox" name="lost" value="1" class="accent-red-600 w-4 h-4">
-                            Mark as lost
-                        </label>
                         <button type="submit" class="btn-ghost w-full !bg-emerald-600 !text-white hover:!bg-emerald-700">Return Book</button>
                     </form>
-                    <p class="text-xs text-gray-400 mt-4">Overdue fines are computed automatically on return.</p>
+                    <p class="text-xs text-gray-400 mt-4">Overdue fines are computed automatically on return. To flag a copy, use Copy Condition below — returns never mark copies as lost or damaged.</p>
+                </div>
+            </div>
+
+            <!-- Copy Condition -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <span class="material-symbols-outlined text-amber-600">report</span>
+                        Copy Condition
+                    </h3>
+                </div>
+                <div class="p-6">
+                    <form method="POST" class="space-y-4">
+                        <div>
+                            <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Accession Number</label>
+                            <input type="text" name="accession_number" placeholder="2024-00123" required class="form-input mt-1">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Damage Reason (required for damaged)</label>
+                            <textarea name="notes" rows="2" placeholder="e.g. torn cover, pages missing" class="form-input mt-1 resize-none"></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button type="submit" formaction="{{ url_for('circulation.mark_copy_lost_route') }}" class="btn-ghost !bg-red-600 !text-white hover:!bg-red-700">Mark Lost</button>
+                            <button type="submit" formaction="{{ url_for('circulation.mark_copy_damaged_route') }}" class="btn-ghost !bg-amber-500 !text-white hover:!bg-amber-600">Mark Damaged</button>
+                        </div>
+                    </form>
+                    <p class="text-xs text-gray-400 mt-4">Marking lost closes any active loan on the copy. Damaged copies stay borrowable; the reason shows on the cataloging table.</p>
                 </div>
             </div>
         </div>

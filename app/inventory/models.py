@@ -174,6 +174,38 @@ def count_accessions():
     return row[0] if row else 0
 
 
+def get_conditions_for_accessions(accession_ids):
+    """Condition per copy for the cataloging table: {accession_id: row}.
+
+    Row is (inventory_state or None, reason or None, circ_lost bool).
+    Lost = inventory 'lost' OR the latest loan flagged lost (legacy
+    return-path data). Damaged = inventory 'damaged'; the reason is the
+    inventory note, falling back to the latest loan damage note so
+    pre-existing return-path data still shows. Returns {} for empty/None.
+    """
+    if not accession_ids:
+        return {}
+    rows = db.fetch_all(
+        '''SELECT a.accession_id, ist.inventory_state,
+              COALESCE(ist.notes, (
+                  SELECT c.damage_notes FROM circulation_records c
+                  WHERE c.accession_id = a.accession_id
+                    AND c.damage_notes IS NOT NULL AND c.damage_notes != ''
+                  ORDER BY c.circulation_id DESC LIMIT 1
+              )),
+              COALESCE((
+                  SELECT c.lost_flag FROM circulation_records c
+                  WHERE c.accession_id = a.accession_id
+                  ORDER BY c.circulation_id DESC LIMIT 1
+              ), FALSE)
+           FROM accession_log a
+           LEFT JOIN inventory_status ist ON ist.accession_id = a.accession_id
+           WHERE a.accession_id = ANY(%s)''',
+        (list(accession_ids),)
+    ) or []
+    return {row[0]: row[1:] for row in rows if row}
+
+
 def cancel_inventory_session(session_id, updated_by=None):
     return db.execute(
         "UPDATE inventory_sessions SET session_status = 'cancelled', ended_at = %s, updated_at = NOW(), updated_by = %s WHERE session_id = %s",

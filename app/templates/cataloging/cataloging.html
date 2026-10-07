@@ -122,6 +122,8 @@
         }
         .status-active { background: #dcfce7; color: #166534; }
         .status-archived { background: #f1f5f9; color: #475569; }
+        .status-lost { background: #fee2e2; color: #991b1b; }
+        .status-damaged { background: #fef3c7; color: #92400e; }
         .search-input {
             width: 100%; padding: 0.75rem 1.25rem; background: #f8fafc;
             border: 1px solid var(--border-color); border-radius: 10px;
@@ -314,9 +316,13 @@
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if copy_status == 'overdue' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Overdue
                 </a>
-                <a href="{{ url_for('cataloging.cataloging_page', copy_status='lost_damaged') }}"
-                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if copy_status == 'lost_damaged' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
-                    Lost/Damaged
+                <a href="{{ url_for('cataloging.cataloging_page', copy_status='lost') }}"
+                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if copy_status == 'lost' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
+                    Lost
+                </a>
+                <a href="{{ url_for('cataloging.cataloging_page', copy_status='damaged') }}"
+                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if copy_status == 'damaged' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
+                    Damaged
                 </a>
                 <a href="{{ url_for('cataloging.cataloging_page', copy_status='maintenance') }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if copy_status == 'maintenance' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
@@ -412,15 +418,27 @@
                                                 <th class="px-4 py-2">Accession Number</th>
                                                 <th class="px-4 py-2">Source</th>
                                                 <th class="px-4 py-2">Date Accessioned</th>
+                                                <th class="px-4 py-2">Condition</th>
                                                 <th class="px-4 py-2">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {% for copy in copies %}
+                                            {% set cond = (conditions_by_accession or {}).get(copy[0]) %}
+                                            {% set is_lost = cond and (cond[0] == 'lost' or cond[2]) %}
+                                            {% set is_damaged = cond and cond[0] == 'damaged' and not is_lost %}
                                             <tr class="border-t border-gray-100 bg-white">
                                                 <td class="px-4 py-2 font-mono text-xs">{{ copy[1] }}</td>
                                                 <td class="px-4 py-2 text-xs">{{ copy[3] or '—' }}</td>
                                                 <td class="px-4 py-2 text-xs">{{ copy[4] }}</td>
+                                                <td class="px-4 py-2 text-xs">
+                                                    {% if is_lost %}
+                                                    <span class="status-badge status-lost">Lost</span>
+                                                    {% elif is_damaged %}
+                                                    <span class="status-badge status-damaged">Damaged</span>
+                                                    {% if cond[1] %}<div class="text-gray-500 mt-0.5 break-words normal-case">{{ cond[1] }}</div>{% endif %}
+                                                    {% else %}—{% endif %}
+                                                </td>
                                                 <td class="px-4 py-2">
                                                     <div class="flex gap-1">
                                                         <button class="p-1.5 rounded-lg border border-gray-100 hover:bg-white hover:border-primary hover:text-primary transition-all"
@@ -495,10 +513,19 @@
                             <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider p-2 border-b border-gray-200">{{ copies|length }} copy/copies</div>
                             {% if copies %}
                             {% for copy in copies %}
+                            {% set cond = (conditions_by_accession or {}).get(copy[0]) %}
+                            {% set is_lost = cond and (cond[0] == 'lost' or cond[2]) %}
+                            {% set is_damaged = cond and cond[0] == 'damaged' and not is_lost %}
                             <div class="flex items-center justify-between p-2 border-b border-gray-100 last:border-0 bg-white gap-2">
                                 <div class="min-w-0 flex-1">
                                     <div class="font-mono text-xs truncate">{{ copy[1] }}</div>
                                     <div class="text-[11px] text-gray-500 truncate">{{ copy[3] or '—' }} · {{ copy[4] }}</div>
+                                    {% if is_lost %}
+                                    <div class="mt-1"><span class="status-badge status-lost" style="font-size:10px;">Lost</span></div>
+                                    {% elif is_damaged %}
+                                    <div class="mt-1"><span class="status-badge status-damaged" style="font-size:10px;">Damaged</span></div>
+                                    {% if cond[1] %}<div class="text-[11px] text-gray-500 break-words">{{ cond[1] }}</div>{% endif %}
+                                    {% endif %}
                                 </div>
                                 <div class="flex gap-1 shrink-0">
                                     <button class="p-1.5 rounded-lg border border-gray-100 hover:border-primary hover:text-primary" data-acc-copy='{{ copy|tojson }}' onclick="editAccessionCopy(this)" title="Edit"><span class="material-symbols-outlined text-[16px]">edit</span></button>
@@ -583,20 +610,21 @@
                 {% endwith %}
             </div>
             {% endif %}
-            <form method="POST" action="{{ url_for('cataloging.add_book') }}" class="p-4 sm:p-6 space-y-4" data-exists-book>
+            <form method="POST" action="{{ url_for('cataloging.add_book') }}" class="p-4 sm:p-6 space-y-4" data-exists-book data-exists-accession>
                 <p data-exists-msg class="hidden mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm font-medium text-red-700 dark:text-red-300"></p>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div class="col-span-2">
                         <label class="form-label">Accession Number *</label>
-                        <input type="text" name="accession_number" required class="form-input" placeholder="e.g. 2025-0001">
+                        <input type="text" name="accession_number" required maxlength="30" class="form-input" placeholder="e.g. 2025-0001">
+                        <p data-exists-accession-msg class="hidden mt-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm font-medium text-red-700 dark:text-red-300"></p>
                     </div>
                     <div class="col-span-2">
                         <label class="form-label">Title *</label>
-                        <input type="text" name="title" required class="form-input" placeholder="Book title" data-suggest="book_title">
+                        <input type="text" name="title" required maxlength="255" class="form-input" placeholder="Book title" data-suggest="book_title">
                     </div>
                     <div>
                         <label class="form-label">Author *</label>
-                        <input type="text" name="author" required class="form-input" placeholder="Author name" data-suggest="book_author">
+                        <input type="text" name="author" required maxlength="150" class="form-input" placeholder="Author name" data-suggest="book_author">
                     </div>
                     <div>
                         <label class="form-label">Material Type</label>
@@ -610,24 +638,24 @@
                         </select>
                     </div>
                     <div>
-                        <label class="form-label">Edition</label>
-                        <input type="text" name="edition" class="form-input" placeholder="e.g. 3rd">
+                        <label class="form-label">Edition *</label>
+                        <input type="text" name="edition" required maxlength="30" class="form-input" placeholder="e.g. 3rd">
                     </div>
                     <div>
-                        <label class="form-label">Publisher</label>
-                        <input type="text" name="publisher" class="form-input" placeholder="Publisher name" data-suggest="book_publisher">
+                        <label class="form-label">Publisher *</label>
+                        <input type="text" name="publisher" required maxlength="150" class="form-input" placeholder="Publisher name" data-suggest="book_publisher">
                     </div>
                     <div>
-                        <label class="form-label">Year Published</label>
-                        <input type="number" name="year_published" class="form-input" placeholder="e.g. 2024" min="1000" max="9999">
+                        <label class="form-label">Year Published *</label>
+                        <input type="number" name="year_published" required class="form-input" placeholder="e.g. 2024" min="1000" max="9999">
                     </div>
                     <div>
-                        <label class="form-label">ISBN</label>
-                        <input type="text" name="isbn" class="form-input" placeholder="ISBN number" data-suggest="book_isbn">
+                        <label class="form-label">ISBN *</label>
+                        <input type="text" name="isbn" required maxlength="20" class="form-input" placeholder="ISBN number" data-suggest="book_isbn">
                     </div>
                     <div>
-                        <label class="form-label">Call Number / LOC Class.</label>
-                        <input type="text" name="call_number" class="form-input" placeholder="e.g. QA76.73">
+                        <label class="form-label">Call Number / LOC Class. *</label>
+                        <input type="text" name="call_number" required maxlength="50" class="form-input" placeholder="e.g. QA76.73">
                     </div>
                     <div>
                         <label class="form-label">Source</label>
@@ -639,8 +667,8 @@
                         </select>
                     </div>
                     <div class="col-span-2">
-                        <label class="form-label">Category</label>
-                        <input type="text" name="subject_classification" class="form-input" placeholder="e.g. Computer Science" data-suggest="book_subject">
+                        <label class="form-label">Category *</label>
+                        <input type="text" name="subject_classification" required maxlength="100" class="form-input" placeholder="e.g. Computer Science" data-suggest="book_subject">
                     </div>
                     <div class="col-span-2">
                         <label class="form-label">Description</label>
@@ -683,11 +711,11 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Title *</label>
-                        <input type="text" name="title" id="edit_title" required class="form-input" data-suggest="book_title">
+                        <input type="text" name="title" id="edit_title" required maxlength="255" class="form-input" data-suggest="book_title">
                     </div>
                     <div>
                         <label class="form-label">Author *</label>
-                        <input type="text" name="author" id="edit_author" required class="form-input" data-suggest="book_author">
+                        <input type="text" name="author" id="edit_author" required maxlength="150" class="form-input" data-suggest="book_author">
                     </div>
                     <div>
                         <label class="form-label">Material Type</label>
@@ -701,28 +729,28 @@
                         </select>
                     </div>
                     <div>
-                        <label class="form-label">Edition</label>
-                        <input type="text" name="edition" id="edit_edition" class="form-input">
+                        <label class="form-label">Edition *</label>
+                        <input type="text" name="edition" id="edit_edition" required maxlength="30" class="form-input">
                     </div>
                     <div>
-                        <label class="form-label">Publisher</label>
-                        <input type="text" name="publisher" id="edit_publisher" class="form-input" data-suggest="book_publisher">
+                        <label class="form-label">Publisher *</label>
+                        <input type="text" name="publisher" id="edit_publisher" required maxlength="150" class="form-input" data-suggest="book_publisher">
                     </div>
                     <div>
-                        <label class="form-label">Year Published</label>
-                        <input type="number" name="year_published" id="edit_year" class="form-input" min="1000" max="9999">
+                        <label class="form-label">Year Published *</label>
+                        <input type="number" name="year_published" id="edit_year" required class="form-input" min="1000" max="9999">
                     </div>
                     <div>
-                        <label class="form-label">ISBN</label>
-                        <input type="text" name="isbn" id="edit_isbn" class="form-input" data-suggest="book_isbn">
+                        <label class="form-label">ISBN *</label>
+                        <input type="text" name="isbn" id="edit_isbn" required maxlength="20" class="form-input" data-suggest="book_isbn">
                     </div>
                     <div>
-                        <label class="form-label">Call Number / LOC Class.</label>
-                        <input type="text" name="call_number" id="edit_call_number" class="form-input">
+                        <label class="form-label">Call Number / LOC Class. *</label>
+                        <input type="text" name="call_number" id="edit_call_number" required maxlength="50" class="form-input">
                     </div>
                     <div class="col-span-1 sm:col-span-2">
-                        <label class="form-label">Category</label>
-                        <input type="text" name="subject_classification" id="edit_subject" class="form-input" placeholder="e.g. Computer Science" data-suggest="book_subject">
+                        <label class="form-label">Category *</label>
+                        <input type="text" name="subject_classification" id="edit_subject" required maxlength="100" class="form-input" placeholder="e.g. Computer Science" data-suggest="book_subject">
                     </div>
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Description</label>
@@ -761,11 +789,12 @@
                 {% endwith %}
             </div>
             {% endif %}
-            <form method="POST" id="addAccessionForm" class="p-4 sm:p-6 space-y-4">
+            <form method="POST" id="addAccessionForm" class="p-4 sm:p-6 space-y-4" data-exists-accession>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Accession Number *</label>
-                        <input type="text" name="accession_number" required class="form-input" placeholder="e.g. 2025-0001">
+                        <input type="text" name="accession_number" required maxlength="30" class="form-input" placeholder="e.g. 2025-0001">
+                        <p data-exists-accession-msg class="hidden mt-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm font-medium text-red-700 dark:text-red-300"></p>
                     </div>
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Source</label>

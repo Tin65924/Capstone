@@ -241,7 +241,10 @@ class TestEnrichedWrites:
             1, '1984', 'George Orwell', None, None, None,
             None, None, None, None, 'Book', None, 'active', None)
         resp = librarian_client.post('/librarian/cataloging/1/edit', data={
-            'title': '1985', 'author': 'George Orwell'})
+            'title': '1985', 'author': 'George Orwell',
+            'edition': '1st', 'publisher': 'Pub', 'year_published': '1949',
+            'isbn': '978-0', 'subject_classification': 'Fiction',
+            'call_number': 'PR6029'})
         assert resp.status_code == 302
         inserts = self._audit_inserts(mock_db)
         assert inserts
@@ -253,7 +256,10 @@ class TestEnrichedWrites:
             1, '1984', 'George Orwell', None, None, None,
             None, None, None, None, 'Book', None, 'active', None)
         resp = librarian_client.post('/librarian/cataloging/1/edit', data={
-            'title': '1984', 'author': 'George Orwell'})
+            'title': '1984', 'author': 'George Orwell',
+            'edition': '1st', 'publisher': 'Pub', 'year_published': '1949',
+            'isbn': '978-0', 'subject_classification': 'Fiction',
+            'call_number': 'PR6029'})
         assert resp.status_code == 302
         inserts = self._audit_inserts(mock_db)
         assert inserts

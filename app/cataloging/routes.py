@@ -72,6 +72,59 @@ def _decode_csv(raw):
     return None
 
 
+# Required book fields with their DB column caps (schema.sql). Title and
+# author were always required; category, ISBN, edition, publisher, year,
+# and call number (LOC class) are required too so catalog records are
+# complete at entry. Lengths mirror the VARCHAR widths so oversized
+# input is rejected gracefully instead of 500ing on the INSERT.
+REQUIRED_BOOK_FIELDS = (
+    ('title', 'Title', 255),
+    ('author', 'Author', 150),
+    ('edition', 'Edition', 30),
+    ('publisher', 'Publisher', 150),
+    ('isbn', 'ISBN', 20),
+    ('subject_classification', 'Category', 100),
+    ('call_number', 'Call Number / LOC Class', 50),
+)
+
+
+def _validate_book_form(form):
+    """Validate add/edit book input. Returns (error, cleaned).
+
+    error is a flash-ready message (None when valid); cleaned holds
+    stripped values plus parsed year_published (int). Material type,
+    source, and description stay optional.
+    """
+    cleaned = {}
+    for field, label, max_len in REQUIRED_BOOK_FIELDS:
+        value = (form.get(field, '') or '').strip()
+        if not value:
+            return f'{label} is required.', {}
+        if len(value) > max_len:
+            return f'{label} is too long (max {max_len} characters).', {}
+        cleaned[field] = value
+    raw_year = (form.get('year_published', '') or '').strip()
+    if not raw_year:
+        return 'Year Published is required.', {}
+    try:
+        year = int(raw_year)
+    except (TypeError, ValueError):
+        return 'Year Published must be a valid year.', {}
+    if year < 1000 or year > 9999:
+        return 'Year Published must be between 1000 and 9999.', {}
+    cleaned['year_published'] = year
+    return None, cleaned
+
+
+def _validate_accession_number(accession_number):
+    """Error message for an accession number, or None when usable."""
+    if not accession_number:
+        return 'Accession number is required.'
+    if len(accession_number) > 30:
+        return 'Accession number is too long (max 30 characters).'
+    return None
+
+
 @cataloging_bp.route('/librarian/cataloging')
 @login_required
 @librarian_required
@@ -121,12 +174,22 @@ def cataloging_page():
         for row in get_accessions_for_books([book[0] for book in books]):
             accessions_by_book.setdefault(row[2], []).append(row)
 
+    from app.inventory.models import get_conditions_for_accessions
+    try:
+        all_accession_ids = [copy[0] for copies in accessions_by_book.values()
+                             for copy in copies]
+        conditions_by_accession = get_conditions_for_accessions(all_accession_ids)
+    except Exception:
+        current_app.logger.warning('condition lookup failed', exc_info=True)
+        conditions_by_accession = {}
+
     return render_template('cataloging/cataloging.html', books=books,
                            total=total, search_query=query,
                            search_field=field, status_filter=status_filter,
                            copy_status=copy_status,
                            page=page, per_page=per_page,
-                           accessions_by_book=accessions_by_book)
+                           accessions_by_book=accessions_by_book,
+                           conditions_by_accession=conditions_by_accession)
 
 
 _BOOK_EXPORT_HEADERS = [
@@ -278,20 +341,24 @@ def export_books():
 @login_required
 @librarian_required
 def add_book():
-    title = request.form.get('title', '').strip()
-    author = request.form.get('author', '').strip()
-    if not title or not author:
-        flash('Title and author are required.', 'error')
+    error, fields = _validate_book_form(request.form)
+    if error:
+        flash(error, 'error')
         return redirect(url_for('cataloging.cataloging_page', modal='addBookModal', mstatus='error'))
+    title, author = fields['title'], fields['author']
 
     accession_number = request.form.get('accession_number', '').strip()
+    acc_error = _validate_accession_number(accession_number) if accession_number else None
+    if acc_error:
+        flash(acc_error, 'error')
+        return redirect(url_for('cataloging.cataloging_page', modal='addBookModal', mstatus='error'))
     if accession_number:
         existing = get_accession_by_number(accession_number)
         if existing:
             flash(f'Accession number {accession_number} already exists.', 'error')
             return redirect(url_for('cataloging.cataloging_page', modal='addBookModal', mstatus='error'))
 
-    isbn = request.form.get('isbn', '').strip() or None
+    isbn = fields['isbn']
     existing_book = get_book_by_title_author_isbn(title, author, isbn)
     source = request.form.get('source', '').strip() or None
     if existing_book:
@@ -308,11 +375,11 @@ def add_book():
     book_id = create_book(
         title=title,
         author=author,
-        edition=request.form.get('edition', '').strip() or None,
-        publisher=request.form.get('publisher', '').strip() or None,
-        year_published=request.form.get('year_published', type=int) or None,
-        subject_classification=request.form.get('subject_classification', '').strip() or None,
-        call_number=request.form.get('call_number', '').strip() or None,
+        edition=fields['edition'],
+        publisher=fields['publisher'],
+        year_published=fields['year_published'],
+        subject_classification=fields['subject_classification'],
+        call_number=fields['call_number'],
         isbn=isbn,
         material_type=request.form.get('material_type', 'Book'),
         description=request.form.get('description', '').strip() or None,
@@ -339,23 +406,23 @@ def edit_book(book_id):
         flash('Book not found.', 'error')
         return redirect(url_for('cataloging.cataloging_page'))
 
-    title = request.form.get('title', '').strip()
-    author = request.form.get('author', '').strip()
-    if not title or not author:
-        flash('Title and author are required.', 'error')
+    error, fields = _validate_book_form(request.form)
+    if error:
+        flash(error, 'error')
         return redirect(url_for('cataloging.cataloging_page', modal='editBookModal',
                                 book_id=book_id, mstatus='error'))
+    title, author = fields['title'], fields['author']
 
     update_book(
         book_id=book_id,
         title=title,
         author=author,
-        edition=request.form.get('edition', '').strip() or None,
-        publisher=request.form.get('publisher', '').strip() or None,
-        year_published=request.form.get('year_published', type=int) or None,
-        subject_classification=request.form.get('subject_classification', '').strip() or None,
-        call_number=request.form.get('call_number', '').strip() or None,
-        isbn=request.form.get('isbn', '').strip() or None,
+        edition=fields['edition'],
+        publisher=fields['publisher'],
+        year_published=fields['year_published'],
+        subject_classification=fields['subject_classification'],
+        call_number=fields['call_number'],
+        isbn=fields['isbn'],
         material_type=request.form.get('material_type', 'Book'),
         description=request.form.get('description', '').strip() or None,
         updated_by=current_user.id,
@@ -417,8 +484,9 @@ def add_accession(book_id):
     accession_number = request.form.get('accession_number', '').strip()
     source = request.form.get('source', '').strip() or None
 
-    if not accession_number:
-        flash('Accession number is required.', 'error')
+    acc_error = _validate_accession_number(accession_number)
+    if acc_error:
+        flash(acc_error, 'error')
         return redirect(url_for('cataloging.cataloging_page', modal='addAccessionModal',
                                 action=url_for('cataloging.add_accession', book_id=book_id),
                                 mstatus='error'))
@@ -450,8 +518,9 @@ def edit_accession(accession_id):
     accession_number = request.form.get('accession_number', '').strip()
     source = request.form.get('source', '').strip() or None
 
-    if not accession_number:
-        flash('Accession number is required.', 'error')
+    acc_error = _validate_accession_number(accession_number)
+    if acc_error:
+        flash(acc_error, 'error')
         return redirect(url_for('cataloging.cataloging_page', modal='editAccessionModal', mstatus='error'))
 
     existing = get_accession_by_number(accession_number)

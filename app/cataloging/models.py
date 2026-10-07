@@ -177,22 +177,33 @@ def get_books_by_status_paginated(status, page=1, per_page=20):
     return rows, total
 
 
-COPY_STATUS_FILTERS = ('overdue', 'lost_damaged', 'maintenance')
+COPY_STATUS_FILTERS = ('overdue', 'lost', 'damaged', 'lost_damaged', 'maintenance')
 
 
 def _copy_status_condition(copy_status):
-    """EXISTS fragment for a problem-copy listing, or None when unknown."""
+    """EXISTS fragment for a problem-copy listing, or None when unknown.
+
+    'lost_damaged' is kept for older links (e.g. analytics deep-links);
+    the tabs use the separate 'lost' and 'damaged' values.
+    """
     if copy_status == 'overdue':
         return (
             "EXISTS (SELECT 1 FROM accession_log al "
             "JOIN circulation_records c ON c.accession_id = al.accession_id "
             "WHERE al.book_id = book_catalog.book_id AND c.transaction_status = 'overdue')"
         )
-    if copy_status == 'lost_damaged':
+    if copy_status in ('lost', 'lost_damaged'):
+        states = "'lost'" if copy_status == 'lost' else "'lost', 'damaged'"
         return (
             "EXISTS (SELECT 1 FROM accession_log al "
             "JOIN inventory_status i ON i.accession_id = al.accession_id "
-            "WHERE al.book_id = book_catalog.book_id AND i.inventory_state IN ('lost', 'damaged'))"
+            f"WHERE al.book_id = book_catalog.book_id AND i.inventory_state IN ({states}))"
+        )
+    if copy_status == 'damaged':
+        return (
+            "EXISTS (SELECT 1 FROM accession_log al "
+            "JOIN inventory_status i ON i.accession_id = al.accession_id "
+            "WHERE al.book_id = book_catalog.book_id AND i.inventory_state = 'damaged')"
         )
     if copy_status == 'maintenance':
         return (

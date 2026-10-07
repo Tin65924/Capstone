@@ -3,7 +3,7 @@ from datetime import date, datetime
 from flask_login import login_required, current_user
 from . import main_bp
 from .models import get_dashboard_stats, get_recent_activity, get_daily_borrows, get_attention_summary, get_admin_overview_stats
-from app.cataloging.models import get_recent_books, suggest_book_values, suggest_books_rich, get_book_by_title_author_isbn
+from app.cataloging.models import get_recent_books, suggest_book_values, suggest_books_rich, get_book_by_title_author_isbn, get_accession_by_number
 from app.auth.decorators import librarian_required, admin_required
 
 SUGGEST_FIELDS = {
@@ -507,6 +507,14 @@ def student_exists():
         return jsonify({'exists': False})
     from app.auth.models import get_user_by_id_number
     return jsonify({'exists': bool(get_user_by_id_number(id_number))})
+
+
+@main_bp.route('/api/accession-exists')
+def accession_exists():
+    accession_number = request.args.get('accession_number', '').strip()
+    if not accession_number:
+        return jsonify({'exists': False})
+    return jsonify({'exists': bool(get_accession_by_number(accession_number))})
 
 
 @main_bp.route('/librarian')
