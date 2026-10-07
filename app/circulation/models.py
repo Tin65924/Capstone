@@ -2,19 +2,19 @@ from datetime import date, datetime
 from app.database import db
 
 
-# Due dates carry hours: every new loan is due at end of day (23:59) on
-# its due date. Overdue and fine policy stay calendar-day based (date
-# parts), so this changes display precision, not lending rules.
-DUE_END_HOUR = 23
-DUE_END_MINUTE = 59
+# Due dates carry hours: every new loan is due at library closing time
+# (5:00 PM) on its due date. Overdue and fine policy stay calendar-day
+# based (date parts), so this changes display precision, not lending rules.
+DUE_END_HOUR = 17
+DUE_END_MINUTE = 0
 
 
-def end_of_day(day):
-    """Datetime at 23:59 on the given date (accepts date or datetime)."""
+def end_of_day(day, hour=DUE_END_HOUR, minute=DUE_END_MINUTE):
+    """Datetime at the given hour on the given date (library closing by
+    default; accepts date or datetime)."""
     if isinstance(day, datetime):
         day = day.date()
-    return datetime(day.year, day.month, day.day,
-                    DUE_END_HOUR, DUE_END_MINUTE)
+    return datetime(day.year, day.month, day.day, hour, minute)
 
 
 def coerce_due_day(value):
@@ -47,7 +47,7 @@ def coerce_due_day(value):
 
 
 def format_due(value):
-    """Human due display with hours: 'Aug 05, 2026 · 11:59 PM'.
+    """Human due display with hours: 'Aug 05, 2026 · 05:00 PM'.
 
     Legacy midnight rows (which never had hours) and plain dates render
     date-only; None renders as an em dash; garbage passes through as

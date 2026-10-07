@@ -1,6 +1,8 @@
 from flask import current_app
+from datetime import datetime
 from app.database import db
 import os
+import re
 
 
 def _env_default(name, fallback):
@@ -17,6 +19,9 @@ SETTING_CATEGORIES = [
     ('book', 'Book Settings', 'menu_book',
      'How many books each role may hold at once.',
      ['MAX_BORROW_LIMIT_STUDENT', 'MAX_BORROW_LIMIT_FACULTY']),
+    ('hours', 'Library Hours', 'schedule',
+     'Daily opening and closing hours. Borrowing is blocked outside open hours.',
+     ['LIBRARY_OPENING_TIME', 'LIBRARY_CLOSING_TIME']),
     ('due-dates', 'Due Date Settings', 'event',
      'Loan periods for overnight and in-library use.',
      ['OVERNIGHT_DUE_DAYS_STUDENT', 'OVERNIGHT_DUE_DAYS_FACULTY',
@@ -44,6 +49,7 @@ ADMIN_ONLY_KEYS = frozenset({'BACKUP_DAY', 'BACKUP_HOUR', 'BACKUP_KEEP',
 # without touching backup/admin-only settings.
 LIBRARIAN_EDITABLE_KEYS = frozenset({
     'MAX_BORROW_LIMIT_STUDENT', 'MAX_BORROW_LIMIT_FACULTY',
+    'LIBRARY_OPENING_TIME', 'LIBRARY_CLOSING_TIME',
     'OVERNIGHT_DUE_DAYS_STUDENT', 'OVERNIGHT_DUE_DAYS_FACULTY',
     'DAILY_CIRCULATION_DUE_DAYS',
     'OVERDUE_FINE_PER_DAY', 'OVERDUE_GRACE_DAYS',
@@ -52,10 +58,12 @@ LIBRARIAN_EDITABLE_KEYS = frozenset({
 })
 
 
-# key -> (label, kind, description). Kinds: int, float, bool.
+# key -> (label, kind, description). Kinds: int, float, bool, time.
 SETTING_DEFS = {
     'MAX_BORROW_LIMIT_STUDENT': ('Max borrows (Student)', 'int', 'Max active loans for students'),
     'MAX_BORROW_LIMIT_FACULTY': ('Max borrows (Faculty)', 'int', 'Max active loans for faculty'),
+    'LIBRARY_OPENING_TIME': ('Opening hour', 'time', 'Daily opening hour (24-hour clock)'),
+    'LIBRARY_CLOSING_TIME': ('Closing hour', 'time', 'Daily closing hour (must be after opening)'),
     'OVERNIGHT_DUE_DAYS_STUDENT': ('Overnight due days (Student)', 'int', 'Overnight loan due days for students'),
     'OVERNIGHT_DUE_DAYS_FACULTY': ('Overnight due days (Faculty)', 'int', 'Overnight loan due days for faculty'),
     'DAILY_CIRCULATION_DUE_DAYS': ('Daily circulation due days', 'int', 'Daily circulation due days (0 = same day)'),
@@ -81,6 +89,8 @@ SETTING_RANGES = {
 DEFAULTS = {
     'MAX_BORROW_LIMIT_STUDENT': '3',
     'MAX_BORROW_LIMIT_FACULTY': '5',
+    'LIBRARY_OPENING_TIME': '08:00',
+    'LIBRARY_CLOSING_TIME': '17:00',
     'OVERNIGHT_DUE_DAYS_STUDENT': '1',
     'OVERNIGHT_DUE_DAYS_FACULTY': '7',
     'DAILY_CIRCULATION_DUE_DAYS': '0',
@@ -166,8 +176,73 @@ def sync_settings_to_config(app=None):
             if kind == 'bool':
                 value = (1 if str(raw).strip().lower()
                          in ('1', 'true', 'on', 'yes') else 0)
+            elif kind == 'time':
+                value = str(raw).strip() if parse_hhmm(raw) else None
+                if value is None:
+                    continue
             else:
                 value = float(raw) if kind == 'float' else int(float(raw))
         except (TypeError, ValueError):
             continue
         app.config[key] = value
+
+
+def parse_hhmm(raw):
+    """'HH:MM' 24-hour string as (hour, minute), or None when invalid."""
+    match = re.fullmatch(r'([01]\d|2[0-3]):([0-5]\d)', (raw or '').strip())
+    if not match:
+        return None
+    return (int(match.group(1)), int(match.group(2)))
+
+
+def library_hours_from_config(config=None):
+    """Configured (opening, closing) as ((h, m), (h, m)), or None.
+
+    None means unrestricted: the keys are absent (e.g. tests, where
+    settings sync is skipped) or fail validation. Borrowing must never
+    be blocked by a missing or corrupt setting, so callers fail open.
+    """
+    cfg = config if config is not None else current_app.config
+    opening = parse_hhmm(cfg.get('LIBRARY_OPENING_TIME') or '')
+    closing = parse_hhmm(cfg.get('LIBRARY_CLOSING_TIME') or '')
+    if opening is None or closing is None or not opening < closing:
+        return None
+    return (opening, closing)
+
+
+def library_hours_label(config=None):
+    """'08:00–17:00' for messages, or None when unrestricted."""
+    hours = library_hours_from_config(config)
+    if hours is None:
+        return None
+    (oh, om), (ch, cm) = hours
+    return f'{oh:02d}:{om:02d}–{ch:02d}:{cm:02d}'
+
+
+def is_library_open(now=None, config=None):
+    """True when borrowing is allowed right now.
+
+    Open boundary inclusive, closing exclusive (at exactly 17:00 the
+    library is closed). Server-local time, consistent with the app's
+    date.today() usage elsewhere. Unconfigured → True (fail open).
+    """
+    hours = library_hours_from_config(config)
+    if hours is None:
+        return True
+    now = now or datetime.now()
+    try:
+        current = (now.hour, now.minute)
+    except (AttributeError, TypeError):
+        return True
+    return hours[0] <= current < hours[1]
+
+
+def get_closing_time(config=None):
+    """(hour, minute) for due timestamps; (17, 0) when unconfigured.
+
+    Closing alone is meaningful (unlike the open/close pair needed for
+    the open-hours gate), so only the closing value is consulted.
+    """
+    cfg = config if config is not None else current_app.config
+    parsed = parse_hhmm(cfg.get('LIBRARY_CLOSING_TIME') or '')
+    return parsed or (17, 0)

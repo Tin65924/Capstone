@@ -24,6 +24,9 @@ from .models import (
     is_book_blocked_for_daily, is_accession_lost,
     end_of_day, coerce_due_day, format_due,
 )
+from app.settings.models import (
+    is_library_open, library_hours_label, get_closing_time,
+)
 
 VALID_BORROW_TYPES = ('overnight', 'daily_circulation')
 
@@ -54,6 +57,23 @@ def _is_unique_violation(exc):
         return isinstance(exc, _pg_errors.UniqueViolation)
     except Exception:
         return False
+
+
+def _closed_response(fallback_endpoint, **kwargs):
+    """Redirect with a closed-hours message (borrowing only)."""
+    hours = library_hours_label() or 'its posted hours'
+    flash(f'The library is currently closed (open {hours}). '
+          'Borrowing is available during open hours.', 'error')
+    return redirect(url_for(fallback_endpoint, **kwargs))
+
+
+def _library_closed():
+    """True when loan creation must be refused right now.
+
+    Unconfigured hours (e.g. tests, where settings sync is skipped)
+    never block borrowing — see is_library_open.
+    """
+    return not is_library_open()
 
 
 class _DuplicateReservation(Exception):
@@ -156,7 +176,9 @@ def _compute_due_date(borrow_type, role_name):
         days = int(days)
     except (TypeError, ValueError):
         days = fallback
-    return end_of_day(date.today() + timedelta(days=days))
+    close_hour, close_minute = get_closing_time()
+    return end_of_day(date.today() + timedelta(days=days),
+                      close_hour, close_minute)
 
 
 @circulation_bp.route('/librarian/circulation')
@@ -257,7 +279,7 @@ def _loan_matches_search(loan, query):
 def _loan_is_overdue(loan, today):
     """True when an active-loan tuple is overdue (flagged or past due).
 
-    Compares calendar days so TIMESTAMP dues (end of day) and legacy
+    Compares calendar days so TIMESTAMP dues (5:00 PM closing) and legacy
     DATE rows share one policy: due today is not overdue until tomorrow.
     """
     if loan[4] == 'overdue':
@@ -295,6 +317,10 @@ def desk_borrow():
     id_number = request.form.get('id_number', '').strip()
     accession_number = request.form.get('accession_number', '').strip()
     borrow_type = request.form.get('borrow_type', '')
+
+    if _library_closed():
+        return _closed_response('circulation.circulation_page',
+                                search=id_number)
 
     if borrow_type not in VALID_BORROW_TYPES:
         flash('Invalid borrow type.', 'error')
@@ -654,6 +680,9 @@ def reservation_action(reservation_id, action):
         if reservation[5] != 'allocated':
             flash('Only allocated reservations can be claimed.', 'error')
             return redirect(url_for('circulation.reservations_page', **status_args))
+        if _library_closed():
+            return _closed_response('circulation.reservations_page',
+                                    **status_args)
         accession = get_available_accession_by_book(reservation[1])
         if not accession:
             flash('Cannot claim — no copy of this book is available to check out.', 'error')
@@ -786,6 +815,9 @@ def user_borrow():
         log_activity(current_user.id, f'circulation:user_borrow_request:{book_id}')
         flash('Overnight borrow request submitted. A librarian must approve it before the book leaves the library.', 'success')
         return redirect(url_for('cataloging.book_info', book_id=book_id))
+
+    if _library_closed():
+        return _closed_response('cataloging.book_info', book_id=book_id)
 
     accession_id = request.form.get('accession_id', type=int)
     if accession_id:

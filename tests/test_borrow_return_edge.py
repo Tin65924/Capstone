@@ -103,15 +103,15 @@ class TestDueDate:
             app.config['OVERNIGHT_DUE_DAYS_STUDENT'] = 'junk'
             app.config['OVERNIGHT_DUE_DAYS_FACULTY'] = None
             app.config['DAILY_CIRCULATION_DUE_DAYS'] = 'x'
-            # Dues carry hours (end of day): same calendar day, 23:59.
+            # Dues carry hours (library closing, 5:00 PM): same calendar day.
             assert _compute_due_date('overnight', 'Student') == datetime(
                 *(date.today() + timedelta(days=1)).timetuple()[:3],
-                23, 59)
+                17, 0)
             assert _compute_due_date('overnight', 'Faculty') == datetime(
                 *(date.today() + timedelta(days=7)).timetuple()[:3],
-                23, 59)
+                17, 0)
             assert _compute_due_date('daily_circulation', 'X') == datetime(
-                *date.today().timetuple()[:3], 23, 59)
+                *date.today().timetuple()[:3], 17, 0)
 
     def test_due_helpers(self):
         from datetime import date, datetime, timedelta
@@ -119,16 +119,16 @@ class TestDueDate:
             coerce_due_day, end_of_day, format_due)
         today = date.today()
         assert end_of_day(today) == datetime(
-            *today.timetuple()[:3], 23, 59)
-        assert coerce_due_day(datetime(2026, 8, 5, 23, 59)) == date(2026, 8, 5)
+            *today.timetuple()[:3], 17, 0)
+        assert coerce_due_day(datetime(2026, 8, 5, 17, 0)) == date(2026, 8, 5)
         assert coerce_due_day(date(2026, 8, 5)) == date(2026, 8, 5)
         assert coerce_due_day('2026-08-05 23:59:00') == date(2026, 8, 5)
         assert coerce_due_day('not-a-date') is None
         assert coerce_due_day(None) is None
         assert coerce_due_day((7,)) is None
         # Hours shown for real dues; legacy midnight rows stay date-only.
-        assert format_due(datetime(2026, 8, 5, 23, 59)) == \
-            'Aug 05, 2026 · 11:59 PM'
+        assert format_due(datetime(2026, 8, 5, 17, 0)) == \
+            'Aug 05, 2026 · 05:00 PM'
         assert format_due(date(2026, 8, 5)) == 'Aug 05, 2026'
         assert format_due(datetime(2026, 8, 5, 0, 0)) == 'Aug 05, 2026'
         assert format_due(None) == '—'

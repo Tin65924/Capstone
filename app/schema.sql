@@ -250,7 +250,9 @@ INSERT INTO library_settings (setting_key, setting_value, description) VALUES
     ('OVERDUE_GRACE_DAYS', '0', 'Grace days before fines accrue'),
     ('RESERVATION_CLAIM_DAYS', '2', 'Days to claim an allocated reservation (legacy fallback)'),
     ('RESERVATION_CLAIM_HOURS', '2', 'Hours to claim an allocated reservation (2-hour pickup window)'),
-    ('DUE_SOON_NOTIFY_DAYS', '2', 'Days before due date to send due-soon reminders')
+    ('DUE_SOON_NOTIFY_DAYS', '2', 'Days before due date to send due-soon reminders'),
+    ('LIBRARY_OPENING_TIME', '08:00', 'Daily opening hour (HH:MM, 24-hour)'),
+    ('LIBRARY_CLOSING_TIME', '17:00', 'Daily closing hour (HH:MM, 24-hour)')
 ON CONFLICT (setting_key) DO NOTHING;
 
 -- Controlled vocabulary for borrower programs (students) and departments
@@ -347,7 +349,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_active_queue_pos ON reservation_queue (book
 -- exact-match double-submits — near-duplicates still rely on the app layer.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_pending_req ON request_records (requester_id, LOWER(TRIM(book_title))) WHERE request_status = 'pending_review';
 
--- Due dates carry hours (end of day, 23:59) instead of bare dates.
+-- Due dates carry hours (library closing, 5:00 PM) instead of bare dates.
 -- Midnight legacy rows keep exact semantics: every overdue/due-soon
 -- comparison in the app uses date parts (due_date::date), so old and new
 -- rows behave identically. Re-running this ALTER on an already-TIMESTAMP

@@ -5,7 +5,7 @@ from . import settings_bp
 from .models import (SETTING_CATEGORIES, SETTING_DEFS, ADMIN_ONLY_KEYS,
                      LIBRARIAN_EDITABLE_KEYS,
                      SETTING_RANGES, get_settings_dict, update_setting,
-                     sync_settings_to_config)
+                     sync_settings_to_config, parse_hhmm)
 from app.auth.decorators import admin_required, librarian_required
 from app.auth.models import log_activity
 
@@ -25,7 +25,21 @@ def _apply_updates(allowed_keys):
     errors = []
     updated = 0
     updated_keys = []
+    pending_times = {}
     for key, (label, kind, _desc) in SETTING_DEFS.items():
+        if kind == 'time':
+            raw = request.form.get(key, '').strip()
+            if raw == '':
+                continue
+            if key not in allowed_keys:
+                errors.append(f'{label}: not editable here.')
+                continue
+            if parse_hhmm(raw) is None:
+                errors.append(
+                    f'{label}: invalid value "{raw}" (use HH:MM, 24-hour).')
+                continue
+            pending_times[key] = raw
+            continue
         if kind == 'bool':
             # Toggle switches submit getlist values (checkbox '1' when
             # on plus a hidden '0' fallback). Absent entirely means the
@@ -89,6 +103,28 @@ def _apply_updates(allowed_keys):
         update_setting(key, value, current_user.id)
         updated += 1
         updated_keys.append(key)
+    if pending_times:
+        # Opening must precede closing: resolve each side from the form
+        # when submitted, else the stored value, and write nothing unless
+        # the pair is coherent (avoids half-saved inverted hours).
+        stored = {}
+        try:
+            stored = get_settings_dict()
+        except Exception:
+            pass
+        open_raw = pending_times.get(
+            'LIBRARY_OPENING_TIME', stored.get('LIBRARY_OPENING_TIME', ''))
+        close_raw = pending_times.get(
+            'LIBRARY_CLOSING_TIME', stored.get('LIBRARY_CLOSING_TIME', ''))
+        open_t, close_t = parse_hhmm(open_raw), parse_hhmm(close_raw)
+        if open_t is None or close_t is None or not open_t < close_t:
+            errors.append(
+                'Library hours: opening time must be earlier than closing time.')
+        else:
+            for key, raw in pending_times.items():
+                update_setting(key, raw, current_user.id)
+                updated += 1
+                updated_keys.append(key)
     return updated, updated_keys, errors
 
 
