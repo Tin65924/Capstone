@@ -1,4 +1,4 @@
-"""Regression tests for separated lost/damaged copy-condition workflows.
+﻿"""Regression tests for separated lost/damaged copy-condition workflows.
 
 Return is a pure check-in now; mark-lost / mark-damaged (reason required)
 are standalone librarian actions; the cataloging copies table shows Lost
@@ -271,10 +271,10 @@ class TestAccessionPlaceholders:
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = []
         circ = librarian_client.get('/librarian/circulation').data.decode()
-        assert circ.count('placeholder="2024-00123"') >= 3
+        assert circ.count('placeholder="e.g. 000001"') >= 3
         assert '0000-0000' not in circ
         cat = librarian_client.get('/librarian/cataloging').data.decode()
-        assert 'placeholder="e.g. 2024-00123"' in cat
+        assert 'placeholder="e.g. 000001"' in cat
         assert '0000-0000' not in cat
 
 
@@ -292,3 +292,86 @@ class TestAvailabilityRespectsInventoryLost:
         assert circ.is_accession_lost(10) is True
         mock_db['fetch_one'].return_value = None
         assert circ.is_accession_lost(10) is False
+
+
+class TestLostNotes:
+    def test_circulation_lost_stores_note(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [ACC, None, None]
+        resp = librarian_client.post(
+            '/librarian/circulation/accession/lost',
+            data={'accession_number': 'ACC-1',
+                  'notes': 'left on the bus'})
+        assert resp.status_code == 302
+        inv = [c for c in mock_db['execute'].call_args_list
+               if 'inventory_status' in c[0][0]]
+        assert inv
+        assert 'left on the bus' in inv[0][0][1]
+
+    def test_inventory_lost_stores_note(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = ACC
+        resp = librarian_client.post(
+            '/librarian/inventory/accession/10/lost',
+            data={'notes': 'missing since audit'})
+        assert resp.status_code == 302
+        inv = [c for c in mock_db['execute'].call_args_list
+               if 'inventory_status' in c[0][0]]
+        assert inv
+        assert 'missing since audit' in inv[0][0][1]
+
+    def test_lost_without_note_still_works(self, librarian_client, mock_db):
+        mock_db['fetch_one'].side_effect = [ACC, None, None]
+        resp = librarian_client.post(
+            '/librarian/circulation/accession/lost',
+            data={'accession_number': 'ACC-1'})
+        assert resp.status_code == 302
+        inv = [c for c in mock_db['execute'].call_args_list
+               if 'inventory_status' in c[0][0]]
+        assert inv
+
+
+BOOK16 = (1, 'Clean Code', 'R. Martin', '1st', 'Pub', 2008, 'SE', 'C1',
+          '978', 'Book', 'Desc', 'active', '2026-01-01', '2026-05-05',
+          None, 'ACC-001')
+
+
+class TestBookReasonColumn:
+    @staticmethod
+    def _page(librarian_client, mock_db, conditions, tab='damaged'):
+        mock_db['fetch_one'].return_value = (1,)
+        mock_db['fetch_all'].side_effect = [
+            [BOOK16],
+            [(10, '250001', 1, 'purchase', '2026-01-02')],
+            conditions,
+        ]
+        return librarian_client.get(
+            f'/librarian/cataloging?copy_status={tab}').data.decode()
+
+    def test_reason_column_in_damaged_view(self, librarian_client, mock_db):
+        body = self._page(librarian_client, mock_db,
+                          [(10, 'damaged', 'torn cover', None, False)],
+                          tab='damaged')
+        assert 'Reason' in body
+        assert 'torn cover' in body
+
+    def test_reason_column_in_lost_view(self, librarian_client, mock_db):
+        body = self._page(librarian_client, mock_db,
+                          [(10, 'lost', 'left on bus', None, False)],
+                          tab='lost')
+        assert 'Reason' in body
+        assert 'left on bus' in body
+
+    def test_no_reason_column_by_default(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (1,)
+        mock_db['fetch_all'].side_effect = [
+            [BOOK16],
+            [(10, '250001', 1, 'purchase', '2026-01-02')],
+            [],
+        ]
+        body = librarian_client.get('/librarian/cataloging').data.decode()
+        assert '<th>Reason</th>' not in body
+
+    def test_empty_reason_renders_dash(self, librarian_client, mock_db):
+        body = self._page(librarian_client, mock_db,
+                          [(10, 'lost', None, None, False)],
+                          tab='lost')
+        assert 'Reason' in body

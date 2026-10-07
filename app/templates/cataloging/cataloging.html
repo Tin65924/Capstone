@@ -342,6 +342,7 @@
                             <th>Year</th>
                             <th>LOC Class.</th>
                             <th>Status</th>
+                            {% if show_reason_col %}<th>Reason</th>{% endif %}
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -371,6 +372,9 @@
                                     {{ book[11] }}
                                 </span>
                             </td>
+                            {% if show_reason_col %}
+                            <td class="text-xs text-gray-500 max-w-[220px] break-words" title="{{ reasons_by_book.get(book[0], '—') }}">{{ reasons_by_book.get(book[0], '—') }}</td>
+                            {% endif %}
                             <td>
                                 <div class="flex gap-1">
                                     <button class="p-1.5 rounded-lg border border-gray-100 hover:bg-white hover:border-primary hover:text-primary transition-all" data-book='{{ book|tojson }}' onclick="editBook(this)" title="Edit">
@@ -424,21 +428,18 @@
                                         </thead>
                                         <tbody>
                                             {% for copy in copies %}
-                                            {% set cond = (conditions_by_accession or {}).get(copy[0]) %}
-                                            {% set c_state = cond[0] if cond else none %}
-                                            {% set c_lost = cond and (c_state == 'lost' or cond[3]) %}
-                                            {% set c_reason = (cond[1] or cond[2]) if cond else none %}
-                                            {% set c_damaged = cond and (c_state == 'damaged' or (c_state is none and cond[2])) and not c_lost %}
+                                            {% set cd = (copy_conditions or {}).get(copy[0]) %}
                                             <tr class="border-t border-gray-100 bg-white">
                                                 <td class="px-4 py-2 font-mono text-xs">{{ copy[1] }}</td>
                                                 <td class="px-4 py-2 text-xs">{{ copy[3] or '—' }}</td>
                                                 <td class="px-4 py-2 text-xs">{{ copy[4] }}</td>
                                                 <td class="px-4 py-2 text-xs">
-                                                    {% if c_lost %}
+                                                    {% if cd and cd.lost %}
                                                     <span class="status-badge status-lost">Lost</span>
-                                                    {% elif c_damaged %}
+                                                    {% if cd.reason %}<div class="text-gray-500 mt-0.5 break-words normal-case">{{ cd.reason }}</div>{% endif %}
+                                                    {% elif cd and cd.damaged %}
                                                     <span class="status-badge status-damaged">Damaged</span>
-                                                    {% if c_reason %}<div class="text-gray-500 mt-0.5 break-words normal-case">{{ c_reason }}</div>{% endif %}
+                                                    {% if cd.reason %}<div class="text-gray-500 mt-0.5 break-words normal-case">{{ cd.reason }}</div>{% endif %}
                                                     {% else %}—{% endif %}
                                                 </td>
                                                 <td class="px-4 py-2">
@@ -495,6 +496,12 @@
                         <span class="status-badge shrink-0 {{ 'status-active' if book[11] == 'active' else 'status-archived' }} text-[11px]">{{ book[11] }}</span>
                     </div>
                     <p class="text-xs text-gray-500 truncate mb-2">{{ book[2] }} {% if book[5] %}· {{ book[5] }}{% endif %}</p>
+                    {% if show_reason_col %}
+                    <div class="bg-amber-50/60 rounded-lg p-2 mb-3">
+                        <div class="text-[10px] font-bold uppercase text-gray-400">Reason</div>
+                        <div class="text-[11px] text-gray-600 break-words">{{ reasons_by_book.get(book[0], '—') }}</div>
+                    </div>
+                    {% endif %}
                     <div class="grid grid-cols-2 gap-2 text-[11px] mb-3">
                         <div class="bg-gray-50 rounded-lg p-2">
                             <div class="text-[10px] font-bold uppercase text-gray-400">Accession</div>
@@ -515,20 +522,17 @@
                             <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider p-2 border-b border-gray-200">{{ copies|length }} copy/copies</div>
                             {% if copies %}
                             {% for copy in copies %}
-                            {% set cond = (conditions_by_accession or {}).get(copy[0]) %}
-                            {% set c_state = cond[0] if cond else none %}
-                            {% set c_lost = cond and (c_state == 'lost' or cond[3]) %}
-                            {% set c_reason = (cond[1] or cond[2]) if cond else none %}
-                            {% set c_damaged = cond and (c_state == 'damaged' or (c_state is none and cond[2])) and not c_lost %}
+                            {% set cd = (copy_conditions or {}).get(copy[0]) %}
                             <div class="flex items-center justify-between p-2 border-b border-gray-100 last:border-0 bg-white gap-2">
                                 <div class="min-w-0 flex-1">
                                     <div class="font-mono text-xs truncate">{{ copy[1] }}</div>
                                     <div class="text-[11px] text-gray-500 truncate">{{ copy[3] or '—' }} · {{ copy[4] }}</div>
-                                    {% if c_lost %}
+                                    {% if cd and cd.lost %}
                                     <div class="mt-1"><span class="status-badge status-lost" style="font-size:10px;">Lost</span></div>
-                                    {% elif c_damaged %}
+                                    {% if cd.reason %}<div class="text-[11px] text-gray-500 break-words">{{ cd.reason }}</div>{% endif %}
+                                    {% elif cd and cd.damaged %}
                                     <div class="mt-1"><span class="status-badge status-damaged" style="font-size:10px;">Damaged</span></div>
-                                    {% if c_reason %}<div class="text-[11px] text-gray-500 break-words">{{ c_reason }}</div>{% endif %}
+                                    {% if cd.reason %}<div class="text-[11px] text-gray-500 break-words">{{ cd.reason }}</div>{% endif %}
                                     {% endif %}
                                 </div>
                                 <div class="flex gap-1 shrink-0">
@@ -619,7 +623,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div class="col-span-2">
                         <label class="form-label">Accession Number *</label>
-                        <input type="text" name="accession_number" required maxlength="30" class="form-input" placeholder="e.g. 2024-00123">
+                        <input type="text" name="accession_number" required class="form-input" placeholder="e.g. 000001" pattern="\d{6}" maxlength="6" title="6-digit accession number (e.g. 000001)">
                         <p data-exists-accession-msg class="hidden mt-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm font-medium text-red-700 dark:text-red-300"></p>
                     </div>
                     <div class="col-span-2">
@@ -797,7 +801,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Accession Number *</label>
-                        <input type="text" name="accession_number" required maxlength="30" class="form-input" placeholder="e.g. 2024-00123">
+                        <input type="text" name="accession_number" required class="form-input" placeholder="e.g. 000001" pattern="\d{6}" maxlength="6" title="6-digit accession number (e.g. 000001)">
                         <p data-exists-accession-msg class="hidden mt-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm font-medium text-red-700 dark:text-red-300"></p>
                     </div>
                     <div class="col-span-1 sm:col-span-2">
@@ -846,7 +850,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Accession Number *</label>
-                        <input type="text" name="accession_number" id="edit_acc_number" required class="form-input" placeholder="e.g. 2024-00123">
+                        <input type="text" name="accession_number" id="edit_acc_number" required class="form-input" placeholder="e.g. 000001" pattern="\d{6}" maxlength="6" title="6-digit accession number (e.g. 000001)">
                     </div>
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Source</label>

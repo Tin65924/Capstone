@@ -373,7 +373,7 @@
                 <!-- Scanning Hero -->
                 <form method="POST" action="{{ url_for('inventory.scan_accession') }}" class="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
                     {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
-                    <input type="text" name="accession_number" class="scan-input !max-w-none sm:!max-w-[400px] flex-1 text-sm sm:text-base py-2.5 sm:py-3" placeholder="Enter Accession No. (e.g. 2024-00123)" required>
+                    <input type="text" name="accession_number" class="scan-input !max-w-none sm:!max-w-[400px] flex-1 text-sm sm:text-base py-2.5 sm:py-3" placeholder="Enter Accession No. (e.g. 000001)" required>
                     <button type="submit" class="btn-scan flex items-center justify-center gap-2 w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base shrink-0">
                         <span class="material-symbols-outlined text-[18px] sm:text-[20px]">barcode_scanner</span> Scan
                     </button>
@@ -466,9 +466,10 @@
                                             <input type="text" name="notes" required maxlength="255" placeholder="Damage reason" class="border border-gray-200 rounded-lg px-2 py-1 text-xs w-32">
                                             <button type="submit" class="text-xs font-bold text-amber-600 hover:underline whitespace-nowrap">Damaged</button>
                                         </form>
-                                        <form method="POST" action="{{ url_for('inventory.lost_accession', accession_id=row[1]) }}">
+                                        <form method="POST" action="{{ url_for('inventory.lost_accession', accession_id=row[1]) }}" class="flex gap-1 items-center">
                                             {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
-                                            <button type="submit" class="text-xs font-bold text-gray-500 hover:underline">Lost</button>
+                                            <input type="text" name="notes" maxlength="255" placeholder="Note (optional)" class="border border-gray-200 rounded-lg px-2 py-1 text-xs w-32">
+                                            <button type="submit" class="text-xs font-bold text-gray-500 hover:underline whitespace-nowrap">Lost</button>
                                         </form>
                                         </div>
                                     </td>
@@ -503,8 +504,9 @@
                                     <input type="text" name="notes" required maxlength="255" placeholder="Damage reason (required)" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs">
                                     <button type="submit" class="w-full py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold hover:bg-amber-100">Damaged</button>
                                 </form>
-                                <form method="POST" action="{{ url_for('inventory.lost_accession', accession_id=row[1]) }}">
+                                <form method="POST" action="{{ url_for('inventory.lost_accession', accession_id=row[1]) }}" class="flex flex-col gap-2">
                                     {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
+                                    <input type="text" name="notes" maxlength="255" placeholder="Note (optional)" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs">
                                     <button type="submit" class="w-full py-2 rounded-lg border border-gray-200 bg-white text-gray-600 text-xs font-bold hover:bg-gray-50">Lost</button>
                                 </form>
                             </div>
@@ -569,7 +571,7 @@
                     <p class="text-[11px] sm:text-xs text-gray-500 mb-3 sm:mb-4">Check a book's status without opening a full session.</p>
                     <form method="POST" action="{{ url_for('inventory.check_accession') }}" class="flex flex-col sm:flex-row gap-2">
                         {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
-                        <input type="text" name="accession_number" class="scan-input !text-sm sm:!text-base" style="flex: 1; padding: 0.5rem 1rem;" placeholder="Accession No." required>
+                        <input type="text" name="accession_number" class="scan-input !text-sm sm:!text-base" style="flex: 1; padding: 0.5rem 1rem;" placeholder="Accession No. (e.g. 000001)" required>
                         <button type="submit" class="bg-indigo-600 text-white px-4 py-2 sm:py-2.5 rounded-lg font-bold text-xs sm:text-sm w-full sm:w-auto">Check</button>
                     </form>
                 </div>

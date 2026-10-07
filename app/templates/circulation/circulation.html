@@ -472,7 +472,7 @@
                             {% endif %}
                             <div class="sm:col-span-2">
                                 <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Accession Number</label>
-                                <input type="text" name="accession_number" placeholder="2024-00123" required class="form-input mt-1">
+                                <input type="text" name="accession_number" placeholder="e.g. 000001" required class="form-input mt-1">
                             </div>
                             <div class="sm:col-span-2">
                                 <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Borrow Type</label>
@@ -500,6 +500,7 @@
             </div>
 
             <!-- Return Form -->
+            <div class="space-y-6 sm:space-y-8">
             <div class="card">
                 <div class="card-header">
                     <h3 class="card-title">
@@ -511,7 +512,7 @@
                     <form method="POST" action="{{ url_for('circulation.desk_return') }}" class="space-y-3">
                         <div>
                             <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Accession Number</label>
-                            <input type="text" name="accession_number" placeholder="2024-00123" required class="form-input mt-1">
+                            <input type="text" name="accession_number" placeholder="e.g. 000001" required class="form-input mt-1">
                         </div>
                         <button type="submit" class="btn-ghost w-full !bg-emerald-600 !text-white hover:!bg-emerald-700">Return Book</button>
                     </form>
@@ -531,11 +532,11 @@
                     <form method="POST" class="space-y-4">
                         <div>
                             <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Accession Number</label>
-                            <input type="text" name="accession_number" placeholder="2024-00123" required class="form-input mt-1">
+                            <input type="text" name="accession_number" placeholder="e.g. 000001" required class="form-input mt-1">
                         </div>
                         <div>
-                            <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Damage Reason (required for damaged)</label>
-                            <textarea name="notes" rows="2" placeholder="e.g. torn cover, pages missing" class="form-input mt-1 resize-none"></textarea>
+                            <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Note / Damage Reason (required for damaged)</label>
+                            <textarea name="notes" rows="2" placeholder="e.g. torn cover, pages missing" maxlength="255" class="form-input mt-1 resize-none"></textarea>
                         </div>
                         <div class="grid grid-cols-2 gap-2">
                             <button type="submit" formaction="{{ url_for('circulation.mark_copy_lost_route') }}" class="btn-ghost !bg-red-600 !text-white hover:!bg-red-700">Mark Lost</button>
@@ -544,6 +545,7 @@
                     </form>
                     <p class="text-xs text-gray-400 mt-4">Marking lost closes any active loan on the copy. Damaged copies stay borrowable; the reason shows on the cataloging table.</p>
                 </div>
+            </div>
             </div>
         </div>
 

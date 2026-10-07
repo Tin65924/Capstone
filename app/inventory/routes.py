@@ -210,9 +210,14 @@ def damage_accession(accession_id):
 @librarian_required
 def lost_accession(accession_id):
     session_id = request.form.get('session_id', type=int)
+    notes = request.form.get('notes', '').strip() or None
 
     if not get_accession_by_id(accession_id):
         flash('Accession copy not found.', 'error')
+        return redirect(url_for('inventory.inventory_page'))
+
+    if notes is not None and len(notes) > 255:
+        flash('Note is too long (max 255 characters).', 'error')
         return redirect(url_for('inventory.inventory_page'))
 
     if session_id:
@@ -221,7 +226,7 @@ def lost_accession(accession_id):
             flash('Session not found.', 'error')
             return redirect(url_for('inventory.inventory_page'))
 
-    mark_copy_lost(accession_id, session_id=session_id, checked_by=current_user.id)
+    mark_copy_lost(accession_id, notes, session_id=session_id, checked_by=current_user.id)
     log_activity(current_user.id, f'inventory:mark_lost:{accession_id}')
     flash('Marked as lost.', 'success')
     return redirect(url_for('inventory.inventory_page', session_id=session_id))

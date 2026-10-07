@@ -6,7 +6,7 @@ import csv
 SAMPLE_BOOKS = [
     (1, 'Introduction to Algorithms', 'Cormen', '3rd', 'MIT Press', 2022,
      'Computer Science', 'QA76.73', '978-0262033848', 'Book',
-     'A comprehensive textbook.', 'active', '2024-01-15', '2025-0001'),
+     'A comprehensive textbook.', 'active', '2024-01-15', '250001'),
     (2, 'Clean Code', 'Martin', '1st', 'Prentice Hall', 2008,
      'Software Engineering', 'QA76.76', '978-0132350884', 'Book',
      'A handbook of agile software craftsmanship.', 'active', '2024-02-10', '2025-0002, 2025-0003'),
@@ -33,7 +33,7 @@ class TestCatalogingAccess:
         assert resp.status_code == 200
         assert b'Cataloging' in resp.data
         assert b'Accession Number' in resp.data
-        assert b'2025-0001' in resp.data
+        assert b'250001' in resp.data
         assert b'2025-0002, 2025-0003' in resp.data
 
     def test_cataloging_admin_allowed(self, admin_client, mock_db):
@@ -65,7 +65,7 @@ class TestCatalogingCRUD:
             'title': 'New Book',
             'author': 'New Author',
             'material_type': 'Book',
-            'accession_number': '2025-0001',
+            'accession_number': '250001',
             'source': 'purchase',
             **self.FULL_BOOK,
         })
@@ -93,11 +93,11 @@ class TestCatalogingCRUD:
 
     def test_add_book_duplicate_accession(self, librarian_client, mock_db):
         mock_db['execute'].return_value = [(1,)]
-        mock_db['fetch_one'].return_value = ('2025-0001',)
+        mock_db['fetch_one'].return_value = ('250001',)
         resp = librarian_client.post('/librarian/cataloging/add', data={
             'title': 'New Book',
             'author': 'New Author',
-            'accession_number': '2025-0001',
+            'accession_number': '250001',
             **self.FULL_BOOK,
         })
         assert resp.status_code == 302
@@ -109,7 +109,7 @@ class TestCatalogingCRUD:
         resp = librarian_client.post('/librarian/cataloging/add', data={
             'title': 'Existing Title',
             'author': 'Existing Author',
-            'accession_number': '2025-0099',
+            'accession_number': '250099',
             'source': 'purchase',
             **self.FULL_BOOK,
         })
@@ -150,7 +150,7 @@ class TestCatalogingCRUD:
             'year_published': '2020',
             'subject_classification': 'Science',
             'call_number': 'Q1',
-            'accession_number': '2025-0100',
+            'accession_number': '250100',
         })
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
@@ -246,7 +246,7 @@ class TestCatalogingCRUD:
         mock_db['fetch_one'].side_effect = [SAMPLE_BOOKS[0], None]
         mock_db['execute'].return_value = 1
         resp = librarian_client.post('/librarian/cataloging/1/accession/add', data={
-            'accession_number': '2025-0001',
+            'accession_number': '250001',
             'source': 'purchase',
         })
         assert resp.status_code == 302
@@ -255,10 +255,10 @@ class TestCatalogingCRUD:
         assert 'INSERT INTO accession_log' in call_args[0][0]
 
     def test_add_accession_duplicate(self, librarian_client, mock_db):
-        mock_db['fetch_one'].side_effect = [SAMPLE_BOOKS[0], ('2025-0001',)]
+        mock_db['fetch_one'].side_effect = [SAMPLE_BOOKS[0], ('250001',)]
         mock_db['execute'].return_value = 1
         resp = librarian_client.post('/librarian/cataloging/1/accession/add', data={
-            'accession_number': '2025-0001',
+            'accession_number': '250001',
         })
         assert resp.status_code == 302
 
@@ -289,7 +289,7 @@ class TestCatalogingCopies:
     def test_edit_accession_success(self, librarian_client, mock_db):
         mock_db['fetch_one'].side_effect = [SAMPLE_ACC_ROW, None]
         resp = librarian_client.post('/librarian/cataloging/accession/21/edit', data={
-            'accession_number': 'ACC-0099',
+            'accession_number': '250099',
             'source': 'donation',
         })
         assert resp.status_code == 302
@@ -299,12 +299,12 @@ class TestCatalogingCopies:
         assert 'UPDATE accession_log' in call_args[0][0]
         assert 'updated_at' in call_args[0][0]
         assert 'updated_by' in call_args[0][0]
-        assert call_args[0][1] == ('ACC-0099', 'donation', '3', 21)
+        assert call_args[0][1] == ('250099', 'donation', '3', 21)
 
     def test_edit_accession_duplicate(self, librarian_client, mock_db):
-        mock_db['fetch_one'].side_effect = [SAMPLE_ACC_ROW, (99, 'ACC-0099', 2, 3, '2025-01-01', 'purchase')]
+        mock_db['fetch_one'].side_effect = [SAMPLE_ACC_ROW, (99, '250099', 2, 3, '2025-01-01', 'purchase')]
         resp = librarian_client.post('/librarian/cataloging/accession/21/edit', data={
-            'accession_number': 'ACC-0099',
+            'accession_number': '250099',
         })
         assert resp.status_code == 302
         assert 'modal=editAccessionModal' in resp.location
@@ -324,7 +324,7 @@ class TestCatalogingCopies:
     def test_edit_accession_not_found(self, librarian_client, mock_db):
         mock_db['fetch_one'].return_value = None
         resp = librarian_client.post('/librarian/cataloging/accession/999/edit', data={
-            'accession_number': 'ACC-0099',
+            'accession_number': '250099',
         })
         assert resp.status_code == 302
         assert all('UPDATE accession_log' not in c[0][0] for c in mock_db['execute'].call_args_list)
@@ -667,7 +667,7 @@ class TestPublicCatalog:
     def test_book_info_with_accessions(self, client, mock_db):
         mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
         mock_db['fetch_all'].side_effect = [
-            [(1, '2025-0001', 1, 4, '2025-01-10', 'purchase')],  # accessions
+            [(1, '250001', 1, 4, '2025-01-10', 'purchase')],  # accessions
             [],  # no active loans -> copy available
             [],  # borrower map
         ]
@@ -680,7 +680,7 @@ class TestPublicCatalog:
     def test_book_info_all_borrowed(self, client, mock_db):
         mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
         mock_db['fetch_all'].side_effect = [
-            [(1, '2025-0001', 1, 4, '2025-01-10', 'purchase')],  # accessions
+            [(1, '250001', 1, 4, '2025-01-10', 'purchase')],  # accessions
             [(1,)],  # active loan on accession 1 -> none available
             [(1, 1)],  # borrower map
         ]

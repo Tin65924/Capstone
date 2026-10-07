@@ -109,6 +109,38 @@ class TestRequiredBookFields:
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
 
+    def test_accession_must_be_six_digits(self, librarian_client, mock_db):
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
+        for number in ('12345', '1234567', 'ABC123', '12345a', ' 250001 ',
+                       '250001'):
+            data = dict(FULL_BOOK)
+            data['accession_number'] = number
+            resp = librarian_client.post('/librarian/cataloging/add',
+                                         data=data)
+            assert resp.status_code == 302, number
+        writes = [c for c in mock_db['execute'].call_args_list
+                  if 'INSERT INTO accession_log' in c[0][0]]
+        # Only the two valid forms (one whitespace-padded) wrote a copy.
+        assert len(writes) == 2
+
+    def test_add_accession_rejects_bad_format(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (
+            1, 'T', 'A', '1st', 'Pub', 2008, 'S', 'C1', '978', 'Book',
+            'D', 'active', '2026-01-01', None, None)
+        resp = librarian_client.post('/librarian/cataloging/1/accession/add',
+                                     data={'accession_number': 'ABC-1'})
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_edit_accession_rejects_bad_format(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (
+            21, '250015', 1, 3, '2024-01-15', 'purchase')
+        resp = librarian_client.post('/librarian/cataloging/accession/21/edit',
+                                     data={'accession_number': '12345'})
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
 
 class TestAccessionExistsApi:
     def test_exists_true(self, client, mock_db):

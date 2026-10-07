@@ -438,8 +438,13 @@ def mark_copy_lost_route():
     """
     from app.inventory.models import mark_copy_lost
     accession_number = request.form.get('accession_number', '').strip()
+    lost_notes = request.form.get('notes', '').strip() or None
     accession = _resolve_condition_accession(accession_number)
     if not accession:
+        return redirect(url_for('circulation.circulation_page'))
+
+    if lost_notes is not None and len(lost_notes) > 255:
+        flash('Note is too long (max 255 characters).', 'error')
         return redirect(url_for('circulation.circulation_page'))
 
     loan = get_active_loan_by_accession(accession[0])
@@ -469,7 +474,7 @@ def mark_copy_lost_route():
                     'fine',
                     str(loan[0]),
                 )
-    mark_copy_lost(accession[0], checked_by=current_user.id)
+    mark_copy_lost(accession[0], lost_notes, checked_by=current_user.id)
     log_activity(current_user.id, f'circulation:mark_lost:{accession[0]}')
     if loan:
         flash(f'Accession {accession_number} marked as lost — its loan was closed.', 'success')

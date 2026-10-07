@@ -15,9 +15,11 @@ def mark_copy_damaged(accession_id, notes=None, session_id=None, checked_by=None
     return upsert_inventory_record(accession_id, 'damaged', inventory_type, checked_by, session_id=session_id, notes=notes)
 
 
-def mark_copy_lost(accession_id, session_id=None, checked_by=None):
+def mark_copy_lost(accession_id, notes=None, session_id=None, checked_by=None):
+    """Flag a copy as lost, with an optional reason note (shown wherever
+    the copy condition is displayed)."""
     inventory_type = 'annual_physical' if session_id else 'realtime_scan'
-    return upsert_inventory_record(accession_id, 'lost', inventory_type, checked_by, session_id=session_id)
+    return upsert_inventory_record(accession_id, 'lost', inventory_type, checked_by, session_id=session_id, notes=notes)
 
 
 def upsert_inventory_record(accession_id, state, inventory_type, checked_by, session_id=None, notes=None):

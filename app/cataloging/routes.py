@@ -116,12 +116,43 @@ def _validate_book_form(form):
     return None, cleaned
 
 
+def _condition_display(cond):
+    """(lost, damaged, reason) display dict for one conditions row.
+
+    Row shape is (inventory_state, inv_notes, circ_damage, circ_lost).
+    Lost shows the inventory note only; damaged shows the inventory note,
+    falling back to the latest loan damage note when inventory never
+    assessed the copy. A later clean inventory state wins over an old
+    loan note. Short/None rows degrade to all-clear, never 500.
+    """
+    if not cond:
+        return {'lost': False, 'damaged': False, 'reason': None}
+    state = cond[0] if len(cond) > 0 else None
+    inv_notes = cond[1] if len(cond) > 1 else None
+    circ_damage = cond[2] if len(cond) > 2 else None
+    circ_lost = cond[3] if len(cond) > 3 else False
+    lost = state == 'lost' or bool(circ_lost)
+    if lost:
+        return {'lost': True, 'damaged': False,
+                'reason': inv_notes or None}
+    damaged = state == 'damaged' or (state is None and bool(circ_damage))
+    reason = (inv_notes or circ_damage) if damaged else None
+    return {'lost': False, 'damaged': damaged, 'reason': reason or None}
+
+
 def _validate_accession_number(accession_number):
-    """Error message for an accession number, or None when usable."""
+    """Error message for a newly entered accession number, None when usable.
+
+    Accession numbers are 6-digit sequential numbers (e.g. 000001).
+    Lookups of existing stock (borrow/return/condition/scan) accept any
+    stored value — only creation paths use this validator, so legacy
+    numbers already in the database keep working.
+    """
+    import re
     if not accession_number:
         return 'Accession number is required.'
-    if len(accession_number) > 30:
-        return 'Accession number is too long (max 30 characters).'
+    if not re.fullmatch(r'\d{6}', accession_number):
+        return 'Accession number must be exactly 6 digits (e.g. 000001).'
     return None
 
 
@@ -183,13 +214,40 @@ def cataloging_page():
         current_app.logger.warning('condition lookup failed', exc_info=True)
         conditions_by_accession = {}
 
+    copy_conditions = {
+        acc_id: _condition_display(cond)
+        for acc_id, cond in conditions_by_accession.items()
+    }
+    show_reason_col = copy_status in ('lost', 'damaged', 'lost_damaged')
+    reasons_by_book = {}
+    if show_reason_col:
+        want = ({'lost'} if copy_status == 'lost'
+                else {'damaged'} if copy_status == 'damaged'
+                else {'lost', 'damaged'})
+        for book_id, copies in accessions_by_book.items():
+            seen = []
+            for copy in copies:
+                display = copy_conditions.get(copy[0])
+                if not display:
+                    continue
+                if 'lost' in want and display['lost'] and display['reason']:
+                    if display['reason'] not in seen:
+                        seen.append(display['reason'])
+                if 'damaged' in want and display['damaged'] and display['reason']:
+                    if display['reason'] not in seen:
+                        seen.append(display['reason'])
+            reasons_by_book[book_id] = ' | '.join(seen) if seen else '—'
+
     return render_template('cataloging/cataloging.html', books=books,
                            total=total, search_query=query,
                            search_field=field, status_filter=status_filter,
                            copy_status=copy_status,
                            page=page, per_page=per_page,
                            accessions_by_book=accessions_by_book,
-                           conditions_by_accession=conditions_by_accession)
+                           conditions_by_accession=conditions_by_accession,
+                           copy_conditions=copy_conditions,
+                           reasons_by_book=reasons_by_book,
+                           show_reason_col=show_reason_col)
 
 
 _BOOK_EXPORT_HEADERS = [
