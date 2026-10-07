@@ -177,22 +177,20 @@ def count_accessions():
 def get_conditions_for_accessions(accession_ids):
     """Condition per copy for the cataloging table: {accession_id: row}.
 
-    Row is (inventory_state or None, reason or None, circ_lost bool).
-    Lost = inventory 'lost' OR the latest loan flagged lost (legacy
-    return-path data). Damaged = inventory 'damaged'; the reason is the
-    inventory note, falling back to the latest loan damage note so
-    pre-existing return-path data still shows. Returns {} for empty/None.
+    Row is (inventory_state or None, reason or None, loan_damage or None,
+    circ_lost bool). Lost = inventory 'lost' OR the latest loan flagged
+    lost (legacy return-path data). Damaged = inventory 'damaged', or —
+    when inventory never assessed the copy — damage recorded on the
+    latest loan. The reason prefers the inventory note and falls back to
+    that loan note. Returns {} for empty/None.
     """
     if not accession_ids:
         return {}
     rows = db.fetch_all(
-        '''SELECT a.accession_id, ist.inventory_state,
-              COALESCE(ist.notes, (
-                  SELECT c.damage_notes FROM circulation_records c
-                  WHERE c.accession_id = a.accession_id
-                    AND c.damage_notes IS NOT NULL AND c.damage_notes != ''
-                  ORDER BY c.circulation_id DESC LIMIT 1
-              )),
+        '''SELECT a.accession_id, ist.inventory_state, ist.notes,
+              (SELECT c.damage_notes FROM circulation_records c
+               WHERE c.accession_id = a.accession_id
+               ORDER BY c.circulation_id DESC LIMIT 1),
               COALESCE((
                   SELECT c.lost_flag FROM circulation_records c
                   WHERE c.accession_id = a.accession_id

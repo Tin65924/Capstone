@@ -437,6 +437,7 @@
                                     <th>Accession No.</th>
                                     <th>Title</th>
                                     <th>Status</th>
+                                    <th>Reason</th>
                                     <th>Last Checked</th>
                                     <th>Actions</th>
                                 </tr>
@@ -456,20 +457,24 @@
                                             {{ row[4].title() }}
                                         </span>
                                     </td>
+                                    <td class="text-gray-500 text-xs break-words max-w-[220px]">{{ row[6] or '—' }}</td>
                                         <td class="text-gray-500">{{ row[5].strftime('%b %d, %I:%M %p') if row[5] and row[5].strftime is defined else (row[5] or '') }}</td>
-                                    <td class="flex gap-2">
-                                        <form method="POST" action="{{ url_for('inventory.damage_accession', accession_id=row[1]) }}">
+                                    <td>
+                                        <div class="flex gap-2 items-center">
+                                        <form method="POST" action="{{ url_for('inventory.damage_accession', accession_id=row[1]) }}" class="flex gap-1 items-center">
                                             {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
-                                            <button type="submit" class="text-xs font-bold text-amber-600 hover:underline">Damaged</button>
+                                            <input type="text" name="notes" required maxlength="255" placeholder="Damage reason" class="border border-gray-200 rounded-lg px-2 py-1 text-xs w-32">
+                                            <button type="submit" class="text-xs font-bold text-amber-600 hover:underline whitespace-nowrap">Damaged</button>
                                         </form>
                                         <form method="POST" action="{{ url_for('inventory.lost_accession', accession_id=row[1]) }}">
                                             {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
                                             <button type="submit" class="text-xs font-bold text-gray-500 hover:underline">Lost</button>
                                         </form>
+                                        </div>
                                     </td>
                                 </tr>
                                 {% else %}
-                                <tr><td colspan="5" class="text-center text-gray-400 py-6">No scans recorded yet.</td></tr>
+                                <tr><td colspan="6" class="text-center text-gray-400 py-6">No scans recorded yet.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
@@ -491,12 +496,14 @@
                             </div>
                             <p class="text-xs text-gray-700 truncate mb-1">{{ row[3] }}</p>
                                 <p class="text-[11px] text-gray-500 mb-3">{{ row[5].strftime('%b %d, %I:%M %p') if row[5] and row[5].strftime is defined else (row[5] or '') }}</p>
-                            <div class="flex gap-2">
-                                <form method="POST" action="{{ url_for('inventory.damage_accession', accession_id=row[1]) }}" class="flex-1">
+                            {% if row[6] %}<p class="text-[11px] text-gray-500 break-words mb-3"><span class="font-bold">Reason:</span> {{ row[6] }}</p>{% endif %}
+                            <div class="flex flex-col gap-2">
+                                <form method="POST" action="{{ url_for('inventory.damage_accession', accession_id=row[1]) }}" class="flex flex-col gap-2">
                                     {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
+                                    <input type="text" name="notes" required maxlength="255" placeholder="Damage reason (required)" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs">
                                     <button type="submit" class="w-full py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold hover:bg-amber-100">Damaged</button>
                                 </form>
-                                <form method="POST" action="{{ url_for('inventory.lost_accession', accession_id=row[1]) }}" class="flex-1">
+                                <form method="POST" action="{{ url_for('inventory.lost_accession', accession_id=row[1]) }}">
                                     {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
                                     <button type="submit" class="w-full py-2 rounded-lg border border-gray-200 bg-white text-gray-600 text-xs font-bold hover:bg-gray-50">Lost</button>
                                 </form>

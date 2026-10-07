@@ -180,28 +180,49 @@ class TestCatalogConditionColumn:
     def test_lost_and_damaged_badges_with_reason(
             self, librarian_client, mock_db):
         body = self._page(librarian_client, mock_db, [
-            (10, 'damaged', 'torn cover', False),
+            (10, 'damaged', 'torn cover', None, False),
         ])
         assert 'Damaged' in body
         assert 'torn cover' in body
 
     def test_lost_badge(self, librarian_client, mock_db):
         body = self._page(librarian_client, mock_db, [
-            (10, 'lost', None, False),
+            (10, 'lost', None, None, False),
         ])
         assert 'Lost' in body
 
     def test_circ_lost_flag_counts_as_lost(
             self, librarian_client, mock_db):
         body = self._page(librarian_client, mock_db, [
-            (10, None, None, True),
+            (10, None, None, None, True),
         ])
         assert 'Lost' in body
+
+    def test_legacy_loan_damage_shows_with_reason(
+            self, librarian_client, mock_db):
+        # No inventory assessment yet, but the latest loan recorded
+        # damage: still Damaged with its reason.
+        body = self._page(librarian_client, mock_db, [
+            (10, None, None, 'water damage', False),
+        ])
+        assert 'Damaged' in body
+        assert 'water damage' in body
+
+    def test_clean_inventory_clears_old_loan_damage(
+            self, librarian_client, mock_db):
+        # A later inventory assessment of available wins over an old
+        # damage note on a previous loan.
+        body = self._page(librarian_client, mock_db, [
+            (10, 'available', None, 'old stain', False),
+        ])
+        assert '<span class="status-badge status-damaged">' not in body
+        assert '<span class="status-badge status-lost">' not in body
+        assert 'old stain' not in body
 
     def test_evil_reason_escaped(self, librarian_client, mock_db):
         evil = '<script>alert(1)</script>'
         body = self._page(librarian_client, mock_db, [
-            (10, 'damaged', evil, False),
+            (10, 'damaged', evil, None, False),
         ])
         assert evil not in body
 
@@ -211,6 +232,50 @@ class TestCatalogConditionColumn:
         body = librarian_client.get('/librarian/cataloging').data.decode()
         assert 'copy_status=lost' in body
         assert 'copy_status=damaged' in body
+
+
+class TestInventoryReasonColumn:
+    @staticmethod
+    def _history(mock_db, rows):
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].side_effect = [[], rows]
+
+    def test_reason_shown_in_history(self, librarian_client, mock_db):
+        self._history(mock_db, [
+            (1, 10, 'ACC-1', 'Some Title', 'damaged', '2026-01-05',
+             'torn cover'),
+        ])
+        body = librarian_client.get('/librarian/inventory').data.decode()
+        assert 'Reason' in body
+        assert 'torn cover' in body
+
+    def test_reason_escaped(self, librarian_client, mock_db):
+        evil = '<script>alert(1)</script>'
+        self._history(mock_db, [
+            (1, 10, 'ACC-1', 'Some Title', 'damaged', '2026-01-05', evil),
+        ])
+        body = librarian_client.get('/librarian/inventory').data.decode()
+        assert evil not in body
+
+    def test_row_damage_needs_notes(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = ACC
+        resp = librarian_client.post(
+            '/librarian/inventory/accession/10/damage', data={})
+        assert resp.status_code == 302
+        assert not any('inventory_status' in c[0][0]
+                       for c in mock_db['execute'].call_args_list)
+
+
+class TestAccessionPlaceholders:
+    def test_consistent_format_examples(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        circ = librarian_client.get('/librarian/circulation').data.decode()
+        assert circ.count('placeholder="2024-00123"') >= 3
+        assert '0000-0000' not in circ
+        cat = librarian_client.get('/librarian/cataloging').data.decode()
+        assert 'placeholder="e.g. 2024-00123"' in cat
+        assert '0000-0000' not in cat
 
 
 class TestAvailabilityRespectsInventoryLost:

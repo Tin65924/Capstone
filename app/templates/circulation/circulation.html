@@ -507,15 +507,15 @@
                         Process Return
                     </h3>
                 </div>
-                <div class="p-6">
-                    <form method="POST" action="{{ url_for('circulation.desk_return') }}" class="space-y-4">
+                <div class="p-4">
+                    <form method="POST" action="{{ url_for('circulation.desk_return') }}" class="space-y-3">
                         <div>
                             <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Accession Number</label>
                             <input type="text" name="accession_number" placeholder="2024-00123" required class="form-input mt-1">
                         </div>
                         <button type="submit" class="btn-ghost w-full !bg-emerald-600 !text-white hover:!bg-emerald-700">Return Book</button>
                     </form>
-                    <p class="text-xs text-gray-400 mt-4">Overdue fines are computed automatically on return. To flag a copy, use Copy Condition below — returns never mark copies as lost or damaged.</p>
+                    <p class="text-xs text-gray-400 mt-2">Overdue fines are computed automatically on return. To flag a copy, use Copy Condition below — returns never mark copies as lost or damaged.</p>
                 </div>
             </div>
 
