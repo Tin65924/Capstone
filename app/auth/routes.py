@@ -139,8 +139,14 @@ def google_callback():
         flash('Invalid OAuth state. Please try again.', 'error')
         return redirect(url_for('auth.login'))
 
-    expected_redirect = url_for('auth.google_callback', _external=True)
-    flow = _build_flow(expected_redirect)
+    try:
+        expected_redirect = url_for('auth.google_callback', _external=True)
+        flow = _build_flow(expected_redirect)
+    except Exception as e:
+        current_app.logger.error('OAuth callback setup failed: %s', str(e))
+        log_system_event('system:login_failed:initiate')
+        flash('Authentication is not configured. Please try again later.', 'error')
+        return redirect(url_for('auth.login'))
 
     verifier = session.pop('_oauth_code_verifier', None)
     if verifier:

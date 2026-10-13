@@ -113,6 +113,23 @@ def health():
     return jsonify({'status': 'ok'}), 200
 
 
+@main_bp.route('/health/db')
+def health_db():
+    """Deep DB check (internal monitors only). Cheap SELECT 1 via the pool.
+
+    Keep Render's healthCheckPath on /health — a transient DB blip must
+    not restart a healthy web process. Point external uptime monitors
+    here to distinguish 'web down' from 'DB unreachable'.
+    """
+    try:
+        from app.database import db
+        db.execute('SELECT 1')
+        return jsonify({'status': 'ok', 'db': 'up'}), 200
+    except Exception as e:
+        current_app.logger.warning('health/db DB check failed: %s', e)
+        return jsonify({'status': 'degraded', 'db': 'down'}), 503
+
+
 @main_bp.route('/dashboard')
 @login_required
 def dashboard():

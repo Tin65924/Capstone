@@ -828,11 +828,17 @@ def compute_book_traffic(book_id, start_date, end_date):
 def book_search_json():
     """Live title/category/accession suggestions for the Book Analytics picker."""
     q = request.args.get('q', '').strip()
-    rows = models.search_books_for_analytics(q, 10)
+    try:
+        rows = models.search_books_for_analytics(q, 10)
+    except Exception:
+        return jsonify({'results': [], 'error': 'temporarily unavailable'}), 503
     results = []
     for r in (rows or []):
-        item = {'book_id': r[0], 'title': r[1], 'author': r[2],
-                'category': r[3] if len(r) > 3 else ''}
+        try:
+            item = {'book_id': r[0], 'title': r[1], 'author': r[2],
+                    'category': r[3] if len(r) > 3 else ''}
+        except (IndexError, TypeError):
+            continue
         if len(r) > 4:
             item['year_published'] = r[4]
             item['copyright_date'] = r[4]
@@ -917,22 +923,45 @@ def _forecast_payload(start_date, end_date, preset='all', from_str='', to_str=''
     overdue_inflow = round(sum(overdue_counts) / span, 2)
     overdue_direction = _trend_direction(overdue_counts)
 
-    added = models.count_accessions(start_date, end_date)
-    additions_next_30 = int(round(added / span * 30))
+    try:
+        added = models.count_accessions(start_date, end_date) or 0
+    except Exception:
+        added = 0
+    try:
+        additions_next_30 = int(round(added / span * 30))
+    except (TypeError, ValueError, ZeroDivisionError):
+        additions_next_30 = 0
 
-    weekday_mix = models.borrowings_by_weekday(start_date, end_date) or []
-    weekday_total = sum(w[1] for w in weekday_mix)
-    busiest = max(weekday_mix, key=lambda w: w[1])[0] if weekday_total else '-'
+    try:
+        weekday_mix = models.borrowings_by_weekday(start_date, end_date) or []
+    except Exception:
+        weekday_mix = []
+    try:
+        weekday_total = sum((w[1] or 0) for w in weekday_mix if len(w) > 1)
+    except (TypeError, ValueError):
+        weekday_total = 0
+        weekday_mix = []
+    try:
+        busiest = max(weekday_mix, key=lambda w: w[1])[0] if weekday_total else '-'
+    except (TypeError, ValueError, IndexError):
+        busiest = '-'
 
     # 30-day demand projection: daily pace shaped by historical weekday
     # shares, so peaks and quiet days show instead of a flat line.
-    shares = [(w[1] / weekday_total) if weekday_total else 1 / 7 for w in weekday_mix]
+    try:
+        shares = [(w[1] / weekday_total) if weekday_total else 1 / 7 for w in weekday_mix]
+    except (TypeError, ValueError, IndexError):
+        shares = []
+        weekday_mix = []
     today = date.today()
     projected_trend = []
     for i in range(1, 31):
         day = today + timedelta(days=i)
-        if weekday_mix:
-            value = round(daily_avg * 7 * shares[day.weekday() % 7], 1)
+        if weekday_mix and shares and len(shares) >= 7:
+            try:
+                value = round(daily_avg * 7 * shares[day.weekday() % 7], 1)
+            except (IndexError, TypeError, ValueError):
+                value = round(daily_avg, 1)
         else:
             value = round(daily_avg, 1)
         projected_trend.append([day.isoformat(), value])
@@ -1033,7 +1062,12 @@ def forecast_json():
     preset = _effective_preset(request.args.get('preset'), from_str, to_str)
     preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
     start_date, end_date = resolve_dates(preset, from_str, to_str)
-    return jsonify(_forecast_payload(start_date, end_date, preset, from_str, to_str))
+    try:
+        return jsonify(_forecast_payload(start_date, end_date, preset, from_str, to_str))
+    except Exception as e:
+        from flask import current_app
+        current_app.logger.warning('forecast_json failed: %s', e)
+        return jsonify({'error': 'temporarily unavailable'}), 503
 
 
 @analytics_bp.route('/librarian/analytics/dashboard')
@@ -1203,11 +1237,16 @@ def chart_json():
     preset = _effective_preset(request.args.get('preset'), from_str, to_str)
     preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
     start_date, end_date = resolve_dates(preset, from_str, to_str)
-    return jsonify({
-        'chart': name,
-        'data': _chart_rows(_run_chart(name, start_date, end_date, request.args)),
-        'filters': _echo_chart_filters(request.args),
-    })
+    try:
+        return jsonify({
+            'chart': name,
+            'data': _chart_rows(_run_chart(name, start_date, end_date, request.args)),
+            'filters': _echo_chart_filters(request.args),
+        })
+    except Exception as e:
+        from flask import current_app
+        current_app.logger.warning('chart_json %s failed: %s', name, e)
+        return jsonify({'chart': name, 'data': [], 'error': 'temporarily unavailable'}), 503
 
 
 @analytics_bp.route('/librarian/analytics/trend_day')
@@ -1226,7 +1265,12 @@ def trend_day_json():
         return jsonify({'error': 'invalid date (use YYYY-MM-DD)'}), 400
     borrow_type = _clean_borrow_type(request.args.get('borrow_type', ''))
     departments = _clean_list(request.args.getlist('department'))
-    rows = models.borrowings_by_program_on_date(day, borrow_type, departments) or []
+    try:
+        rows = models.borrowings_by_program_on_date(day, borrow_type, departments) or []
+    except Exception as e:
+        from flask import current_app
+        current_app.logger.warning('trend_day_json failed: %s', e)
+        return jsonify({'date': day, 'total': 0, 'by_program': [], 'error': 'temporarily unavailable'}), 503
     by_program = []
     for r in rows:
         try:

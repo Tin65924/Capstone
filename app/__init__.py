@@ -91,8 +91,17 @@ def register_error_handlers(app):
                                code=401, title='Unauthorized',
                                message='Please sign in to continue.'), 401
 
+    @app.errorhandler(405)
+    def method_not_allowed(e):
+        return render_template('errors/error.html',
+                               code=405, title='Method Not Allowed',
+                               message='That action is not available here (for example, resubmitting a form with the Back button). Please go back and continue browsing.'), 405
+
     @app.errorhandler(500)
     def internal_error(e):
+        # Log the real traceback first: with debug off the browser only
+        # sees the generic page, so Render logs are the only diagnosis.
+        app.logger.exception('500 on %s', request.path)
         try:
             from app.auth.models import log_system_event
             log_system_event(f'system:error:500:{request.path[:100]}')

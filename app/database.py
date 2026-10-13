@@ -10,7 +10,7 @@ class Database:
             self.init_app(app)
 
     def init_app(self, app):
-        dsn = _with_connect_timeout(app.config['DATABASE_URL'])
+        dsn = _with_conn_params(app.config['DATABASE_URL'])
         self._pool = pool.ThreadedConnectionPool(
             minconn=1,
             maxconn=10,
@@ -19,14 +19,39 @@ class Database:
         app.teardown_appcontext(self.close_connection)
 
     def get_connection(self):
-        if 'db_conn' not in g:
-            g.db_conn = self._pool.getconn()
-        return g.db_conn
+        if 'db_conn' in g:
+            return g.db_conn
+        conn = self._pool.getconn()
+        # Validate pooled connections: Render/Neon/Supabase close idle
+        # connections, and psycopg2 does not check on checkout. A dead
+        # conn would otherwise 500 the next page navigation at random.
+        try:
+            with conn.cursor() as cur:
+                cur.execute('SELECT 1')
+            # No commit/rollback here on success: the validation SELECT
+            # joins the request's transaction, which execute() commits.
+            # (A separate rollback/commit would break transaction tests
+            # and leave nothing for the real query to clean up.)
+        except Exception:
+            try:
+                self._pool.putconn(conn, close=True)
+            except Exception:
+                pass
+            g.pop('db_conn', None)
+            conn = self._pool.getconn()
+        g.db_conn = conn
+        return conn
 
     def close_connection(self, exc=None):
         conn = g.pop('db_conn', None)
         if conn is not None:
-            self._pool.putconn(conn)
+            try:
+                if getattr(conn, 'closed', 0):
+                    self._pool.putconn(conn, close=True)
+                else:
+                    self._pool.putconn(conn)
+            except Exception:
+                pass
 
     def execute(self, query, params=None):
         conn = self.get_connection()
@@ -45,7 +70,22 @@ class Database:
                 conn.commit()
                 return cur.rowcount
         except Exception as e:
-            conn.rollback()
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            # Never return a broken connection to the pool to be reused
+            # by the next page navigation.
+            try:
+                if getattr(conn, 'closed', 0):
+                    self._pool.putconn(conn, close=True)
+                    g.pop('db_conn', None)
+            except Exception:
+                pass
+            try:
+                current_app.logger.warning('DB query failed: %s', e)
+            except Exception:
+                pass
             raise e
 
     def fetch_one(self, query, params=None):
@@ -58,22 +98,44 @@ class Database:
 db = Database()
 
 
-def _with_connect_timeout(dsn, seconds=10):
-    """Append connect_timeout so a bad DATABASE_URL fails fast.
+def _with_conn_params(dsn, seconds=10):
+    """Append connect_timeout + TCP keepalives so idle pooled connections survive.
 
-    Without this, psycopg2 can block on TCP connect for minutes per
-    attempt — on Render that looks like a hung deploy ending in a
-    port-scan timeout instead of a clear connection error in the logs.
+    Without keepalives, Render/Neon/Supabase close idle connections and
+    the next page navigation reuses the dead slot -> random 500.
     Handles both URL-style (postgresql://...) and keyword-style
-    (host=... dbname=...) DSNs; leaves an explicit value untouched.
+    (host=... dbname=...) DSNs; leaves explicit values untouched.
     """
-    if not isinstance(dsn, str) or 'connect_timeout' in dsn:
+    if not isinstance(dsn, str):
         return dsn
+    url_params = {
+        'connect_timeout': str(seconds),
+        'keepalives_idle': '60',
+        'keepalives_interval': '10',
+        'keepalives_count': '5',
+    }
+    kw_params = {
+        'connect_timeout': str(seconds),
+        'keepalives_idle': '60',
+        'keepalives_interval': '10',
+        'keepalives_count': '5',
+    }
     if '://' in dsn:
-        sep = '&' if '?' in dsn else '?'
-        return f'{dsn}{sep}connect_timeout={seconds}'
-    spacer = ' ' if dsn and not dsn.endswith(' ') else ''
-    return f'{dsn}{spacer}connect_timeout={seconds}'
+        for key, value in url_params.items():
+            if key not in dsn:
+                sep = '&' if '?' in dsn else '?'
+                dsn = f'{dsn}{sep}{key}={value}'
+        return dsn
+    for key, value in kw_params.items():
+        if key not in dsn:
+            spacer = ' ' if dsn and not dsn.endswith(' ') else ''
+            dsn = f'{dsn}{spacer}{key}={value}'
+    return dsn
+
+
+def _with_connect_timeout(dsn, seconds=10):
+    """Backwards-compatible wrapper (tests/imports may reference it)."""
+    return _with_conn_params(dsn, seconds=seconds)
 
 
 def run_schema(app):

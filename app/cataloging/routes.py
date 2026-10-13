@@ -507,7 +507,13 @@ def delete_book_route(book_id):
     if not book:
         flash('Book not found.', 'error')
         return redirect(url_for('cataloging.cataloging_page'))
-    if book[11] != 'archived':
+    try:
+        status = book[11]
+    except (IndexError, TypeError):
+        current_app.logger.warning('delete_book short row for book %s', book_id)
+        flash('Book record is unavailable. Please try again.', 'error')
+        return redirect(url_for('cataloging.cataloging_page'))
+    if status != 'archived':
         flash('Book must be archived before deletion.', 'error')
         return redirect(url_for('cataloging.cataloging_page'))
     delete_book(book_id)
@@ -526,7 +532,14 @@ def toggle_book_status(book_id):
         flash('Book not found.', 'error')
         return redirect(url_for('cataloging.cataloging_page'))
 
-    new_status = 'archived' if book[11] == 'active' else 'active'
+    try:
+        current_status = book[11]
+    except (IndexError, TypeError):
+        current_app.logger.warning('toggle_book short row for book %s', book_id)
+        flash('Book record is unavailable. Please try again.', 'error')
+        return redirect(url_for('cataloging.cataloging_page'))
+
+    new_status = 'archived' if current_status == 'active' else 'active'
     update_book_status(book_id, new_status, updated_by=current_user.id)
     log_activity(current_user.id, f'cataloging:toggle_status:{book_id}:{new_status}')
     flash(f'Book {new_status}.', 'success')
@@ -653,12 +666,15 @@ def bulk_import():
 
     rows = list(reader)
     job_id = str(uuid.uuid4())
+    now = datetime.now()
     _import_jobs[job_id] = {
         'status': 'processing',
         'total': len(rows),
         'done': 0,
         'errors': [],
         'message': None,
+        'created_at': now,
+        'updated_at': now,
     }
 
     app = _get_current_app()
@@ -709,59 +725,80 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
         total = len(rows)
 
         for i, row in enumerate(rows, start=2):
-            book_data = {}
-            for csv_col, db_col in column_map.items():
-                if db_col:
-                    book_data[db_col] = (row.get(csv_col) or '').strip()
+            try:
+                book_data = {}
+                for csv_col, db_col in column_map.items():
+                    if db_col:
+                        book_data[db_col] = (row.get(csv_col) or '').strip()
 
-            title = book_data.get('title', '')
-            author = book_data.get('author', '')
-            accession_number = book_data.get('accession_number', '')
-            if not title or not author:
-                errors.append(f'Row {i}: missing title or author')
-                with _import_lock:
-                    _import_jobs[job_id]['done'] = imported + len(errors)
-                continue
-            if not accession_number:
-                errors.append(f'Row {i}: missing accession_number')
-                with _import_lock:
-                    _import_jobs[job_id]['done'] = imported + len(errors)
-                continue
-
-            isbn = book_data.get('isbn', '')
-            existing_book = get_book_by_title_author_isbn(title, author, isbn or None)
-
-            existing_acc = get_accession_by_number(accession_number)
-            if existing_acc:
-                if existing_book and existing_acc[2] == existing_book[0]:
-                    imported += 1
+                title = book_data.get('title', '')
+                author = book_data.get('author', '')
+                accession_number = book_data.get('accession_number', '')
+                if not title or not author:
+                    errors.append(f'Row {i}: missing title or author')
                     with _import_lock:
                         _import_jobs[job_id]['done'] = imported + len(errors)
+                        _import_jobs[job_id]['updated_at'] = datetime.now()
                     continue
-                errors.append(f'Row {i}: accession number {accession_number} already exists')
-                with _import_lock:
-                    _import_jobs[job_id]['done'] = imported + len(errors)
-                continue
+                if not accession_number:
+                    errors.append(f'Row {i}: missing accession_number')
+                    with _import_lock:
+                        _import_jobs[job_id]['done'] = imported + len(errors)
+                        _import_jobs[job_id]['updated_at'] = datetime.now()
+                    continue
 
-            if existing_book:
-                book_id = existing_book[0]
-            else:
-                year_str = book_data.get('year_published', '')
-                year = int(year_str) if year_str and year_str.isdigit() else None
-                book_id = create_book(
-                    title=title,
-                    author=author,
-                    edition=book_data.get('edition') or None,
-                    publisher=book_data.get('publisher') or None,
-                    year_published=year,
-                    subject_classification=book_data.get('subject_classification') or None,
-                    call_number=book_data.get('call_number') or None,
-                    isbn=isbn or None,
-                    material_type=book_data.get('material_type', 'Book') or 'Book',
-                    description=book_data.get('description') or None,
-                )
+                isbn = book_data.get('isbn', '')
+                existing_book = get_book_by_title_author_isbn(title, author, isbn or None)
 
-            try:
+                existing_acc = get_accession_by_number(accession_number)
+                if existing_acc:
+                    try:
+                        same_book = existing_book and len(existing_acc) > 2 and existing_acc[2] == existing_book[0]
+                    except (IndexError, TypeError):
+                        same_book = False
+                    if same_book:
+                        imported += 1
+                        with _import_lock:
+                            _import_jobs[job_id]['done'] = imported + len(errors)
+                            _import_jobs[job_id]['updated_at'] = datetime.now()
+                        continue
+                    errors.append(f'Row {i}: accession number {accession_number} already exists')
+                    with _import_lock:
+                        _import_jobs[job_id]['done'] = imported + len(errors)
+                        _import_jobs[job_id]['updated_at'] = datetime.now()
+                    continue
+
+                if existing_book:
+                    try:
+                        book_id = existing_book[0]
+                    except (IndexError, TypeError):
+                        errors.append(f'Row {i}: unexpected book record shape')
+                        with _import_lock:
+                            _import_jobs[job_id]['done'] = imported + len(errors)
+                            _import_jobs[job_id]['updated_at'] = datetime.now()
+                        continue
+                else:
+                    year_str = book_data.get('year_published', '')
+                    year = int(year_str) if year_str and year_str.isdigit() else None
+                    book_id = create_book(
+                        title=title,
+                        author=author,
+                        edition=book_data.get('edition') or None,
+                        publisher=book_data.get('publisher') or None,
+                        year_published=year,
+                        subject_classification=book_data.get('subject_classification') or None,
+                        call_number=book_data.get('call_number') or None,
+                        isbn=isbn or None,
+                        material_type=book_data.get('material_type', 'Book') or 'Book',
+                        description=book_data.get('description') or None,
+                    )
+                    if book_id is None:
+                        errors.append(f'Row {i}: could not create book record')
+                        with _import_lock:
+                            _import_jobs[job_id]['done'] = imported + len(errors)
+                            _import_jobs[job_id]['updated_at'] = datetime.now()
+                        continue
+
                 source = book_data.get('source', '') or None
                 if source:
                     source = source.lower()
@@ -775,10 +812,13 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                 )
                 imported += 1
             except Exception as e:
+                # Per-row guard: background threads have no request error
+                # handler, so any DB failure must not kill the whole job.
                 errors.append(f'Row {i}: {e}')
 
             with _import_lock:
                 _import_jobs[job_id]['done'] = imported + len(errors)
+                _import_jobs[job_id]['updated_at'] = datetime.now()
 
         try:
             log_activity(user_id,
@@ -801,6 +841,7 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                 'done': total,
                 'message': message,
                 'errors': errors[:10],
+                'updated_at': datetime.now(),
             })
 
 

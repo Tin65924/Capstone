@@ -173,10 +173,23 @@ def get_role_by_name(role_name):
 
 
 def log_activity(user_id, activity, session_token=None):
-    db.execute(
-        'INSERT INTO audit_trail (user_id, activity, session_token) VALUES (%s, %s, %s)',
-        (user_id, activity, session_token)
-    )
+    """Best-effort audit: must never 500 a successful write.
+
+    Callers invoke this after the real write commits; a transient DB
+    failure here previously turned a success into a 500. Swallow and
+    warn so the redirect still happens.
+    """
+    try:
+        db.execute(
+            'INSERT INTO audit_trail (user_id, activity, session_token) VALUES (%s, %s, %s)',
+            (user_id, activity, session_token)
+        )
+    except Exception as e:
+        try:
+            from flask import current_app
+            current_app.logger.warning('log_activity failed (%s): %s', activity, e)
+        except Exception:
+            pass
 
 
 def log_system_event(activity):

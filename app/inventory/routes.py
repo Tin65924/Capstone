@@ -31,8 +31,9 @@ def inventory_page():
 
     status_summary = get_status_summary() or []
     status_counts = {}
-    for _state, _count in status_summary:
+    for _row in status_summary:
         try:
+            _state, _count = _row[0], _row[1] if len(_row) > 1 else 0
             status_counts[_state] = int(_count or 0)
         except (IndexError, TypeError, ValueError):
             continue
