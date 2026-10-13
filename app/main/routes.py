@@ -325,7 +325,7 @@ def user_notifications():
     from app.circulation.models import (
         get_borrower_by_user, get_notifications_by_borrower, count_unread_notifications
     )
-    NOTIFICATIONS_PER_PAGE = 50
+    NOTIFICATIONS_PER_PAGE = 10
     try:
         page = int(request.args.get('page', 1))
     except (TypeError, ValueError):
@@ -407,17 +407,28 @@ def user_history():
     from app.circulation.models import (
         get_borrower_by_user, get_user_loan_history,
         get_reservation_history_by_borrower, get_fines_by_borrower,
-        get_total_fines, get_notifications_by_borrower,
+        get_total_fines,
         expire_overdue_reservations,
     )
     from app.requests.models import get_requests_by_borrower
+
+    HISTORY_TABS = ('borrowing', 'fines', 'reservations', 'requests')
+    HISTORY_PER_PAGE = 10
+    tab = request.args.get('tab', 'borrowing').strip().lower()
+    if tab not in HISTORY_TABS:
+        tab = 'borrowing'
+    try:
+        page = int(request.args.get('page', 1))
+    except (TypeError, ValueError):
+        page = 1
+    if page < 1:
+        page = 1
 
     transactions = []
     my_requests = []
     reservations = []
     fines = []
     total_fines = 0
-    notifications = []
     borrower = get_borrower_by_user(current_user.id)
     if borrower:
         try:
@@ -442,17 +453,31 @@ def user_history():
         except Exception:
             fines = []
             total_fines = 0
-        try:
-            notifications = get_notifications_by_borrower(borrower[0]) or []
-        except Exception:
-            notifications = []
+    counts = {
+        'borrowing': len(transactions),
+        'fines': len(fines),
+        'reservations': len(reservations),
+        'requests': len(my_requests),
+    }
+    active_list = {
+        'borrowing': transactions,
+        'fines': fines,
+        'reservations': reservations,
+        'requests': my_requests,
+    }[tab]
+    total = len(active_list)
+    total_pages = max(1, (total + HISTORY_PER_PAGE - 1) // HISTORY_PER_PAGE)
+    if page > total_pages:
+        page = total_pages
+    start = (page - 1) * HISTORY_PER_PAGE
+    records = active_list[start:start + HISTORY_PER_PAGE]
     # History rows carry status at index 5 (see get_user_loan_history);
     # flag date-past-due actives as overdue for the badge.
     overdue_ids = _overdue_loan_ids(transactions, date.today(), status_idx=5)
     return render_template('users/user_history.html',
-                           transactions=transactions, my_requests=my_requests,
-                           reservations=reservations, fines=fines,
-                           total_fines=total_fines, notifications=notifications,
+                           tab=tab, page=page, total_pages=total_pages,
+                           total=total, counts=counts, records=records,
+                           total_fines=total_fines,
                            overdue_ids=overdue_ids)
 
 

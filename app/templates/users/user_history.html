@@ -108,10 +108,19 @@
                         returns, and book requests.</p>
                 </div>
 
+                <!-- History tabs -->
+                <div class="flex flex-wrap gap-2 mb-6 sm:mb-8">
+                    <a href="?tab=borrowing" class="px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-colors {% if tab == 'borrowing' %}bg-primary text-white{% else %}bg-white dark:bg-[#1a2235] text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}">Borrowings &amp; Returns <span class="opacity-70">({{ counts.borrowing }})</span></a>
+                    <a href="?tab=fines" class="px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-colors {% if tab == 'fines' %}bg-primary text-white{% else %}bg-white dark:bg-[#1a2235] text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}">Fines <span class="opacity-70">({{ counts.fines }})</span></a>
+                    <a href="?tab=reservations" class="px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-colors {% if tab == 'reservations' %}bg-primary text-white{% else %}bg-white dark:bg-[#1a2235] text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}">Reservation History <span class="opacity-70">({{ counts.reservations }})</span></a>
+                    <a href="?tab=requests" class="px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-colors {% if tab == 'requests' %}bg-primary text-white{% else %}bg-white dark:bg-[#1a2235] text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}">Book Requests <span class="opacity-70">({{ counts.requests }})</span></a>
+                </div>
+
+                {% if tab == 'borrowing' %}
                 <!-- Borrowings & Returns -->
                 <h2 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-2 sm:mb-3" style="">Borrowings &amp; Returns</h2>
                 <div class="space-y-3 sm:space-y-4 mb-8 sm:mb-10">
-                    {% for record in transactions %}
+                    {% for record in records %}
                     {% set returned = record[5] == 'returned' %}
                     {% set overdue = record[0] in (overdue_ids or []) %}
                     <div
@@ -139,7 +148,9 @@
                     <p class="text-gray-500 dark:text-gray-400">No borrowings yet.</p>
                     {% endfor %}
                 </div>
+                {% endif %}
 
+                {% if tab == 'fines' %}
                 <!-- Fines -->
                 <h2 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-2 sm:mb-3 mt-8 sm:mt-10" style="">Fines</h2>
                 <div class="bg-white dark:bg-[#1a2235] p-4 sm:p-6 rounded-xl border border-gray-100 dark:border-gray-700 mb-8 sm:mb-10">
@@ -148,7 +159,7 @@
                         <p class="text-lg font-bold {% if total_fines %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">₱{{ '%.2f'|format((total_fines or 0)|float) }}</p>
                     </div>
                     <div class="space-y-3 mt-4">
-                        {% for fine in fines %}
+                        {% for fine in records %}
                         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-gray-100 dark:border-gray-800 pt-3">
                             <div class="min-w-0">
                                 <h3 class="text-sm font-bold text-gray-900 dark:text-white truncate">{{ fine[5] }}</h3>
@@ -161,12 +172,14 @@
                         {% endfor %}
                     </div>
                 </div>
+                {% endif %}
 
+                {% if tab == 'reservations' %}
                 <!-- Reservations -->
                 <h2 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-2 sm:mb-3" style="">Reservation History</h2>
                 <p class="text-xs text-gray-400 mb-3">Showing active reservations only — claimed and expired entries are removed automatically.</p>
                 <div class="space-y-3 sm:space-y-4 mb-8 sm:mb-10">
-                    {% for res in reservations %}
+                    {% for res in records %}
                     <div class="bg-white dark:bg-[#1a2235] p-4 sm:p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                         <div class="min-w-0 flex-1">
                             <h3 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white truncate">{{ res[5] }}</h3>
@@ -179,11 +192,13 @@
                     <p class="text-gray-500 dark:text-gray-400">No reservations yet.</p>
                     {% endfor %}
                 </div>
+                {% endif %}
 
+                {% if tab == 'requests' %}
                 <!-- Book Requests -->
                 <h2 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-2 sm:mb-3" style="">Book Requests</h2>
                 <div class="space-y-3 sm:space-y-4">
-                    {% for req in my_requests %}
+                    {% for req in records %}
                     <div
                         class="bg-white dark:bg-[#1a2235] p-4 sm:p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                         <div class="min-w-0 flex-1">
@@ -207,22 +222,19 @@
                     <p class="text-gray-500 dark:text-gray-400">No book requests yet.</p>
                     {% endfor %}
                 </div>
+                {% endif %}
 
-                <!-- Notification History -->
-                <h2 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-2 sm:mb-3 mt-8 sm:mt-10" style="">Notification History</h2>
-                <div class="space-y-3 sm:space-y-4">
-                    {% for notif in notifications %}
-                    <div class="bg-white dark:bg-[#1a2235] p-4 sm:p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-                        <div class="min-w-0 flex-1">
-                            <h3 class="text-sm font-bold text-gray-900 dark:text-white leading-snug">{{ notif[1] }}</h3>
-                            <p class="text-gray-500 dark:text-gray-400 text-xs mt-1">{{ notif[4] }}</p>
-                        </div>
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold shrink-0 {% if notif[2] == 'overdue_reminder' or notif[2] == 'fine' %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400{% elif notif[2] in ('hold_ready', 'due_soon') %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400{% else %}bg-gray-100 text-gray-600 dark:text-gray-300{% endif %}">{{ notif[2]|replace('_', ' ')|title }}</span>
-                    </div>
-                    {% else %}
-                    <p class="text-gray-500 dark:text-gray-400">No notifications yet.</p>
-                    {% endfor %}
+                {% if total_pages > 1 %}
+                <div class="mt-6 flex items-center justify-center gap-3 text-sm">
+                    {% if page > 1 %}
+                    <a href="?tab={{ tab }}&page={{ page - 1 }}" class="px-4 py-2 font-bold text-primary border border-primary rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20">Prev</a>
+                    {% endif %}
+                    <span class="text-gray-500 dark:text-gray-400">Page {{ page }} of {{ total_pages }}</span>
+                    {% if page < total_pages %}
+                    <a href="?tab={{ tab }}&page={{ page + 1 }}" class="px-4 py-2 font-bold text-primary border border-primary rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20">Next</a>
+                    {% endif %}
                 </div>
+                {% endif %}
             </div>
         </main>
     </div>
