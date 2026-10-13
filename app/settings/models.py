@@ -1,8 +1,25 @@
 from flask import current_app
-from datetime import datetime
+from datetime import datetime, date, timedelta, timezone
 from app.database import db
 import os
 import re
+
+
+# Library wall-clock: Asia/Manila (UTC+8, no DST). Render servers run on
+# UTC, so datetime.now()/date.today() are ~8h behind the Philippines —
+# 1:33 PM in the library reads as 5:33 AM UTC and looks "closed".
+# Fixed offset avoids a tzdata dependency on Windows/Render.
+PHT = timezone(timedelta(hours=8), name='PHT')
+
+
+def library_now():
+    """Current wall-clock time in the library (Philippine time)."""
+    return datetime.now(PHT)
+
+
+def library_today():
+    """Current calendar date in the library (Philippine time)."""
+    return library_now().date()
 
 
 def _env_default(name, fallback):
@@ -223,13 +240,14 @@ def is_library_open(now=None, config=None):
     """True when borrowing is allowed right now.
 
     Open boundary inclusive, closing exclusive (at exactly 17:00 the
-    library is closed). Server-local time, consistent with the app's
-    date.today() usage elsewhere. Unconfigured → True (fail open).
+    library is closed). Philippine wall-clock time, so a UTC-hosted
+    server (e.g. Render) still gates on Manila hours. Unconfigured
+    → True (fail open).
     """
     hours = library_hours_from_config(config)
     if hours is None:
         return True
-    now = now or datetime.now()
+    now = now or library_now()
     try:
         current = (now.hour, now.minute)
     except (AttributeError, TypeError):

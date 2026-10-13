@@ -26,6 +26,7 @@ from .models import (
 )
 from app.settings.models import (
     is_library_open, library_hours_label, get_closing_time,
+    library_now, library_today,
 )
 
 VALID_BORROW_TYPES = ('overnight', 'daily_circulation')
@@ -154,12 +155,12 @@ def _claim_window():
             days = int(days)
         except (TypeError, ValueError):
             days = 2
-        return datetime.now() + timedelta(days=days), f'{days} day(s)'
+        return library_now().replace(tzinfo=None) + timedelta(days=days), f'{days} day(s)'
     try:
         hours = float(hours)
     except (TypeError, ValueError):
         hours = 2
-    return datetime.now() + timedelta(hours=hours), f'{hours:g} hour(s)'
+    return library_now().replace(tzinfo=None) + timedelta(hours=hours), f'{hours:g} hour(s)'
 
 
 def _compute_due_date(borrow_type, role_name):
@@ -177,7 +178,7 @@ def _compute_due_date(borrow_type, role_name):
     except (TypeError, ValueError):
         days = fallback
     close_hour, close_minute = get_closing_time()
-    return end_of_day(date.today() + timedelta(days=days),
+    return end_of_day(library_today() + timedelta(days=days),
                       close_hour, close_minute)
 
 
@@ -205,7 +206,7 @@ def circulation_page():
             borrow_date = ''
     table_search = request.args.get('q', '').strip()
 
-    today_val = date.today()
+    today_val = library_today()
     due_soon_cutoff = today_val + timedelta(days=2)
 
     # One status per active loan so badges, counts, and the status filter

@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from app.database import db
+from app.settings.models import library_today
 
 
 # Due dates carry hours: every new loan is due at library closing time
@@ -79,7 +80,7 @@ def borrow_book(book_id, accession_id, borrower_id, processed_by, borrow_type, d
             borrow_date, due_date, transaction_status)
            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)''',
         (book_id, accession_id, borrower_id, processed_by, borrow_type, 'borrow',
-         date.today(), due_date, 'active')
+         library_today(), due_date, 'active')
     )
 
 
@@ -91,7 +92,7 @@ def return_book(circulation_id, fine_amount=0, damage_notes=None, lost_flag=Fals
                updated_at = NOW(), updated_by = %s
            WHERE circulation_id = %s
              AND transaction_status IN ('active', 'overdue')''',
-        ('returned', date.today(), fine_amount, damage_notes, lost_flag, updated_by, circulation_id)
+        ('returned', library_today(), fine_amount, damage_notes, lost_flag, updated_by, circulation_id)
     )
 
 
@@ -295,7 +296,7 @@ def calculate_fine(circulation_id, overdue_rate=5.0, grace_days=0):
     due_day = coerce_due_day(due_date)
     if due_day is None:
         return 0
-    returned_day = coerce_due_day(return_date) if return_date else date.today()
+    returned_day = coerce_due_day(return_date) if return_date else library_today()
     if returned_day is None:
         return 0
     try:
@@ -331,7 +332,7 @@ def get_overdue_loans():
 
 def get_due_within_days(days=2):
     from datetime import timedelta
-    target = date.today() + timedelta(days=days)
+    target = library_today() + timedelta(days=days)
     return db.fetch_all(
         "SELECT * FROM circulation_records WHERE due_date::date = (%s)::date AND transaction_status = 'active'",
         (target,)
