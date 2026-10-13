@@ -179,6 +179,12 @@ def get_recent_activity(limit=5):
 
 
 def get_daily_borrows(days=6):
+    from datetime import date, timedelta
+    try:
+        days = int(days)
+    except (TypeError, ValueError):
+        days = 6
+    days = max(1, min(days, 31))
     rows = db.fetch_all(
         '''SELECT DATE(borrow_date) AS d, COUNT(*) AS cnt
            FROM circulation_records
@@ -188,4 +194,20 @@ def get_daily_borrows(days=6):
            ORDER BY d''',
         (days,)
     )
-    return [(row[0], row[1]) for row in rows or []]
+    if not rows:
+        return []
+    # Zero-fill quiet days so the axis always spans the trailing window.
+    # Keys tolerate DATEs, datetimes, and ISO strings (mocked/test rows).
+    by_day = {}
+    for row in rows or []:
+        try:
+            key = row[0].isoformat()[:10] if hasattr(row[0], 'isoformat') else str(row[0])[:10]
+            by_day[key] = by_day.get(key, 0) + int(row[1] or 0)
+        except (IndexError, TypeError, ValueError):
+            continue
+    today = date.today()
+    filled = []
+    for back in range(days - 1, -1, -1):
+        day = today - timedelta(days=back)
+        filled.append((day, by_day.get(day.isoformat(), 0)))
+    return filled

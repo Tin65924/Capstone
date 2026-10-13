@@ -129,6 +129,50 @@
         .animate-in {
             animation: fadeIn 0.4s ease-out forwards;
         }
+
+        /* Borrowing trends chart */
+        .trend-dot {
+            cursor: pointer;
+            transition: transform 0.12s ease;
+            transform-box: fill-box;
+            transform-origin: center;
+        }
+        .trend-dot:hover, .trend-dot:focus {
+            transform: scale(1.6);
+            outline: none;
+        }
+        #trend-tip {
+            position: fixed;
+            z-index: 120;
+            pointer-events: none;
+            background: #0f172a;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 6px 10px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+            opacity: 0;
+            transition: opacity 0.1s ease;
+            white-space: nowrap;
+        }
+        #trend-tip.show { opacity: 1; }
+        .trend-info-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 9999px;
+            border: 1px solid var(--border-color);
+            color: #94a3b8;
+            background: #fff;
+            cursor: pointer;
+            transition: background 0.12s ease, color 0.12s ease;
+            flex-shrink: 0;
+        }
+        .trend-info-btn:hover { background: #eef2ff; color: #4f46e5; border-color: #c7d2fe; }
+        .trend-info-btn .material-symbols-outlined { font-size: 15px; }
     </style>
 </head>
 <body>
@@ -282,30 +326,54 @@
         </div>
 
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 sm:gap-8 animate-in" style="animation-delay: 0.2s;">
-            <div class="card">
-                <h3 class="font-bold text-base sm:text-lg mb-3 sm:mb-4 flex items-center gap-2">
-                    <span class="material-symbols-outlined text-primary">analytics</span> Borrowing Trends
+            <div class="card" id="borrowing-trends-card">
+                <h3 class="font-bold text-base sm:text-lg mb-1 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">analytics</span>
+                    <span class="mr-auto">Borrowing Trends</span>
+                    <button type="button" class="trend-info-btn" data-trend-info title="About this chart" aria-label="About the Borrowing Trends chart"><span class="material-symbols-outlined">info</span></button>
                 </h3>
-                <div class="h-40 sm:h-48 w-full bg-gray-50 rounded-lg flex items-end justify-between p-4 sm:p-6 overflow-hidden">
-                    {% if daily %}
-                        {% set max_val = daily|map(attribute=1)|max %}
-                        {% for d, cnt in daily %}
-                        <div class="w-8 rounded-t {% if loop.index == 6 %}bg-indigo-600{% elif loop.index == 5 %}bg-indigo-500{% elif loop.index == 4 %}bg-indigo-400{% elif loop.index == 3 %}bg-indigo-400{% elif loop.index == 2 %}bg-indigo-300{% else %}bg-indigo-200{% endif %}"
-                             style="height: {{ (cnt / max_val * 80)|round|int + 10 }}%"></div>
-                        {% endfor %}
-                    {% else %}
-                        {% for i in range(6) %}
-                        <div class="w-8 bg-indigo-200 rounded-t h-[20%]"></div>
-                        {% endfor %}
-                    {% endif %}
-                </div>
-                <div class="flex justify-between mt-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest px-2">
-                    {% for d, cnt in daily %}
-                    <span>{{ d.strftime('%a') if d.strftime is defined else d }}</span>
-                    {% else %}
-                    <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+                <p class="text-[11px] text-gray-400 mb-3">Daily checkouts over the last {{ daily|length }} days. Hover any point for details.</p>
+                {% if daily %}
+                {% set tmax = daily|map(attribute=1)|max %}
+                {% set ymax = tmax if tmax > 0 else 1 %}
+                {% set n = daily|length %}
+                {% set ML = 38 %}{% set base = 178 %}{% set plotW = 510 %}{% set plotH = 164 %}
+                {% set step = (plotW / (n - 1)) if n > 1 else 0 %}
+                {% set ns = namespace(pts=[]) %}
+                {% for d, cnt in daily %}
+                {% set ns.pts = ns.pts + [[ML + loop.index0 * step, base - (cnt / ymax * plotH)]] %}
+                {% endfor %}
+                {% set mid = ((ymax / 2)|round|int) %}
+                <svg viewBox="0 0 560 220" class="w-full h-44 sm:h-52" role="img" aria-label="Borrowing trends line chart">
+                    <line x1="38" y1="14" x2="38" y2="178" stroke="#e2e8f0"/>
+                    <line x1="38" y1="178" x2="548" y2="178" stroke="#e2e8f0"/>
+                    {% for tv in [0, ymax] %}
+                    {% set ty = base - (tv / ymax * plotH) %}
+                    <line x1="38" y1="{{ '%.1f'|format(ty) }}" x2="548" y2="{{ '%.1f'|format(ty) }}" stroke="{{ '#cbd5e1' if tv == 0 else '#eef2f7' }}"/>
+                    <text x="31" y="{{ '%.1f'|format(ty + 3.5) }}" text-anchor="end" font-size="10" fill="#94a3b8">{{ tv }}</text>
                     {% endfor %}
+                    {% if mid > 0 and mid < ymax %}
+                    {% set my = base - (mid / ymax * plotH) %}
+                    <line x1="38" y1="{{ '%.1f'|format(my) }}" x2="548" y2="{{ '%.1f'|format(my) }}" stroke="#eef2f7"/>
+                    <text x="31" y="{{ '%.1f'|format(my + 3.5) }}" text-anchor="end" font-size="10" fill="#94a3b8">{{ mid }}</text>
+                    {% endif %}
+                    <path d="{% for p in ns.pts %}{{ 'M' if loop.first else 'L' }}{{ '%.1f'|format(p[0]) }} {{ '%.1f'|format(p[1]) }} {% endfor %}L{{ '%.1f'|format(ns.pts[-1][0]) }} 178 L{{ '%.1f'|format(ns.pts[0][0]) }} 178 Z" fill="#4f46e518"/>
+                    <path d="{% for p in ns.pts %}{{ 'M' if loop.first else 'L' }}{{ '%.1f'|format(p[0]) }} {{ '%.1f'|format(p[1]) }} {% endfor %}" fill="none" stroke="#4f46e5" stroke-width="2.5" stroke-linecap="round"/>
+                    {% for d, cnt in daily %}
+                    {% set wd = d.strftime('%a') if d.strftime is defined else d %}
+                    {% set iso = d.isoformat() if d.isoformat is defined else d %}
+                    <text x="{{ '%.1f'|format(ns.pts[loop.index0][0]) }}" y="198" text-anchor="middle" font-size="10" fill="#94a3b8">{{ wd }}</text>
+                    <circle class="trend-dot" cx="{{ '%.1f'|format(ns.pts[loop.index0][0]) }}" cy="{{ '%.1f'|format(ns.pts[loop.index0][1]) }}" r="5" fill="#4f46e5" stroke="#fff" stroke-width="2" data-date="{{ iso }}" data-count="{{ cnt }}" tabindex="0" role="img" aria-label="{{ wd }}: {{ cnt }} borrowings"><title>{{ wd }}: {{ cnt }} borrowings</title></circle>
+                    {% endfor %}
+                </svg>
+                <div class="mt-2 text-right">
+                    <a href="{{ url_for('analytics.analytics_page', tab='library') }}" class="text-[11px] font-bold text-primary hover:underline">Full trend in Analytics →</a>
                 </div>
+                {% else %}
+                <div class="h-44 sm:h-52 w-full bg-gray-50 rounded-lg flex items-center justify-center">
+                    <p class="text-sm text-gray-400 font-medium">No borrowings recorded in the last 6 days.</p>
+                </div>
+                {% endif %}
             </div>
 
             <div class="card">
@@ -333,6 +401,32 @@
             </div>
         </div>
     </main>
+<div id="trend-tip" role="tooltip"></div>
+<!-- Borrowing trends info modal -->
+<div id="trendInfoModal" class="hidden fixed inset-0 z-[100] items-center justify-center p-4">
+    <div class="absolute inset-0 bg-slate-900/60" data-trend-info-close></div>
+    <div class="relative bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="trendInfoTitle">
+        <div class="flex items-center gap-2 px-4 py-3 border-b border-slate-200">
+            <span class="material-symbols-outlined text-indigo-600">info</span>
+            <h3 id="trendInfoTitle" class="text-sm font-extrabold text-slate-900 mr-auto">Borrowing Trends</h3>
+            <button type="button" data-trend-info-close title="Close" aria-label="Close chart information"
+                class="inline-flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors" style="width:30px;height:30px;"><span class="material-symbols-outlined" style="font-size:18px;">close</span></button>
+        </div>
+        <div class="p-4 max-h-[65vh] overflow-y-auto text-[13px] leading-relaxed text-slate-600">
+            <h4 class="text-[11px] font-extrabold uppercase tracking-wide text-slate-400">Definition</h4>
+            <p class="mt-1">Daily checkout volume — how many books left the shelves each day over the last 6 days.</p>
+            <h4 class="text-[11px] font-extrabold uppercase tracking-wide text-slate-400 mt-3">How to interpret</h4>
+            <p class="mt-1">Rising lines mean growing demand. Zeros on open days can signal closures or quiet days — compare weekdays with weekdays, not weekends.</p>
+            <h4 class="text-[11px] font-extrabold uppercase tracking-wide text-slate-400 mt-3">How it&rsquo;s calculated</h4>
+            <p class="mt-1">Loans with a borrow transaction type, grouped by borrow date over the trailing 6 days. Days without loans are shown as 0 so the axis stays complete.</p>
+            <h4 class="text-[11px] font-extrabold uppercase tracking-wide text-slate-400 mt-3">Example</h4>
+            <p class="mt-1">If Monday to Wednesday read 4, 9, then 2 checkouts, Tuesday was the busiest day — worth an extra hand on the desk next Tuesday.</p>
+            <div class="mt-4 text-right">
+                <a href="{{ url_for('analytics.analytics_page', tab='library') }}" class="text-[11px] font-bold text-primary hover:underline">Full trend in Analytics →</a>
+            </div>
+        </div>
+    </div>
+</div>
 <script>
 (function() {
     var openBtn = document.getElementById('mobile-sidebar-open');
@@ -344,7 +438,57 @@
     if (openBtn) openBtn.addEventListener('click', open);
     if (closeBtn) closeBtn.addEventListener('click', close);
     if (backdrop) backdrop.addEventListener('click', close);
-    document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && drawer && !drawer.classList.contains('hidden')) close(); });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeTrendInfo();
+            if (drawer && !drawer.classList.contains('hidden')) close();
+        }
+    });
+
+    /* Borrowing trends: hover tooltips + info modal. */
+    var trendTip = document.getElementById('trend-tip');
+    function showTrendTip(dot, x, y) {
+        if (!trendTip || !dot) return;
+        var count = parseInt(dot.getAttribute('data-count'), 10) || 0;
+        var label = dot.getAttribute('aria-label') || (dot.getAttribute('data-date') + ': ' + count);
+        trendTip.textContent = label;
+        trendTip.classList.add('show');
+        var w = trendTip.offsetWidth || 160, h = trendTip.offsetHeight || 30;
+        var left = Math.min(x + 14, window.innerWidth - w - 10);
+        var top = Math.max(y - h - 12, 8);
+        trendTip.style.left = Math.max(left, 8) + 'px';
+        trendTip.style.top = top + 'px';
+    }
+    function hideTrendTip() { if (trendTip) trendTip.classList.remove('show'); }
+    document.querySelectorAll('#borrowing-trends-card .trend-dot').forEach(function (dot) {
+        dot.addEventListener('mousemove', function (e) { showTrendTip(dot, e.clientX, e.clientY); });
+        dot.addEventListener('mouseleave', hideTrendTip);
+        dot.addEventListener('focus', function () {
+            var r = dot.getBoundingClientRect();
+            showTrendTip(dot, r.left + r.width / 2, r.top);
+        });
+        dot.addEventListener('blur', hideTrendTip);
+    });
+    var trendInfoModal = document.getElementById('trendInfoModal');
+    function openTrendInfo() {
+        if (!trendInfoModal) return;
+        hideTrendTip();
+        trendInfoModal.classList.remove('hidden');
+        trendInfoModal.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+    }
+    function closeTrendInfo() {
+        if (!trendInfoModal || trendInfoModal.classList.contains('hidden')) return;
+        trendInfoModal.classList.add('hidden');
+        trendInfoModal.classList.remove('flex');
+        if (drawer && drawer.classList.contains('hidden')) document.body.style.overflow = '';
+    }
+    document.querySelectorAll('[data-trend-info]').forEach(function (btn) {
+        btn.addEventListener('click', openTrendInfo);
+    });
+    document.querySelectorAll('[data-trend-info-close]').forEach(function (el) {
+        el.addEventListener('click', closeTrendInfo);
+    });
 })();
 </script>
 </body>

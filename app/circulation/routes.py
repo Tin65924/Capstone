@@ -32,7 +32,7 @@ from app.settings.models import (
 VALID_BORROW_TYPES = ('overnight', 'daily_circulation')
 
 VALID_LOAN_TYPE_FILTERS = ('all', 'overnight', 'daily_circulation')
-VALID_LOAN_STATUS_FILTERS = ('all', 'overdue', 'due_soon')
+VALID_LOAN_STATUS_FILTERS = ('all', 'overdue', 'due_soon', 'borrowed')
 
 
 def _safe_notify(borrower_id, message, notif_type, ref):
@@ -261,6 +261,7 @@ def circulation_page():
         modal_filter_count=modal_filter_count,
         overdue_count=sum(1 for flag in loan_flags.values() if flag == 'overdue'),
         due_soon_count=sum(1 for flag in loan_flags.values() if flag == 'due_soon'),
+        borrowed_count=sum(1 for flag in loan_flags.values() if flag == 'borrowed'),
         recent=recent,
         search=search,
         borrower=borrower,
