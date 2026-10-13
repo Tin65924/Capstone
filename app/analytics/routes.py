@@ -1210,6 +1210,37 @@ def chart_json():
     })
 
 
+@analytics_bp.route('/librarian/analytics/trend_day')
+@login_required
+@librarian_required
+def trend_day_json():
+    """Per-program borrowing breakdown for one calendar day as JSON.
+
+    Drill-down for the Borrowings Trend dots: clicking a trend point
+    shows how many borrowings each program made on that date.
+    """
+    day = request.args.get('date', '').strip()
+    try:
+        datetime.strptime(day, '%Y-%m-%d')
+    except (TypeError, ValueError):
+        return jsonify({'error': 'invalid date (use YYYY-MM-DD)'}), 400
+    borrow_type = _clean_borrow_type(request.args.get('borrow_type', ''))
+    departments = _clean_list(request.args.getlist('department'))
+    rows = models.borrowings_by_program_on_date(day, borrow_type, departments) or []
+    by_program = []
+    for r in rows:
+        try:
+            by_program.append([r[0] if len(r) > 0 else 'No program',
+                               int(r[1] or 0) if len(r) > 1 else 0])
+        except (IndexError, TypeError, ValueError):
+            continue
+    return jsonify({
+        'date': day,
+        'total': sum(c for _, c in by_program),
+        'by_program': by_program,
+    })
+
+
 @analytics_bp.route('/librarian/analytics/kpi')
 @login_required
 @librarian_required

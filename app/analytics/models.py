@@ -520,6 +520,32 @@ def borrowings_trend_by_program(start_date=None, end_date=None, borrow_type=None
     )
 
 
+def borrowings_by_program_on_date(day, borrow_type=None, departments=None):
+    """Return [(program_label, count)] borrowings on one calendar day split by program.
+
+    Powers the Borrowings Trend dot drill-down: clicking a trend point
+    shows which programs borrowed on that date. Same program_label logic
+    as borrowings_trend_by_program. `day` is 'YYYY-MM-DD'; the ::date
+    cast keeps TIMESTAMP and legacy DATE rows comparable.
+    """
+    parts = ['c.borrow_date::date = %s::date']
+    params = [day]
+    if borrow_type:
+        parts.append('c.borrow_type = %s')
+        params.append(borrow_type)
+    dept_clause, dept_params = _department_clause(departments, 'b', 'r')
+    if dept_clause:
+        parts.append(dept_clause)
+        params.extend(dept_params)
+    return db.fetch_all(
+        '''SELECT {}, COUNT(c.circulation_id)
+           FROM circulation_records c{}
+           WHERE {} GROUP BY 1 ORDER BY 2 DESC'''.format(
+            _PROGRAM_LABEL, _program_joins(), ' AND '.join(parts)),
+        tuple(params)
+    )
+
+
 def overdue_trend_by_program(start_date=None, end_date=None, borrow_type=None,
                              departments=None):
     """Return [(due_date, program_label, count)] overdue trend split by program."""

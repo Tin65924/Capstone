@@ -790,6 +790,22 @@
         </div>
     </div>
 
+    <!-- Trend-day drill-down modal: clicking a Borrowings Trend dot shows
+         that date's borrowings split by program. z-index sits above the
+         chart-expand modal (z-100) and the status filter modal (z-110)
+         so it stays on top when the trend is expanded. -->
+    <div id="trendDayModal" class="hidden fixed inset-0 z-[130] items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-900/60" onclick="closeTrendDayModal()"></div>
+        <div class="relative bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="trendDayTitle">
+            <div class="flex items-center gap-2 px-4 py-3 border-b border-slate-200">
+                <h3 id="trendDayTitle" class="text-sm font-extrabold text-slate-900 mr-auto">Borrowings</h3>
+                <button type="button" onclick="closeTrendDayModal()" title="Close" aria-label="Close day details"
+                    class="chart-expand-btn" style="width:30px;height:30px;"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <div id="trendDayBody" class="p-4 max-h-[60vh] overflow-y-auto"></div>
+        </div>
+    </div>
+
     <!-- Server-side dashboard payload -->
     <script type="application/json" id="dashboard-data">{{ dashboard | tojson }}</script>
     <script type="application/json" id="book-traffic-data">{{ traffic | tojson }}</script>
@@ -798,6 +814,7 @@
     <script>
         const EXPORT_URL = '{{ url_for("analytics.export_report") }}';
         const DASHBOARD_URL = '{{ url_for("analytics.dashboard_json") }}';
+        const TREND_DAY_URL = '{{ url_for("analytics.trend_day_json") }}';
         const REQUESTS_URL = '{{ url_for("requests.list_requests") }}';
         function reqTitleSearchLink(row) { return REQUESTS_URL + '?status=all&search=' + encodeURIComponent(row[0]); }
         const BOOK_SEARCH_URL = '{{ url_for("analytics.book_search_json") }}';
@@ -1171,7 +1188,7 @@ function syncGlobalFilterCustomDates() {
             if (!rows.length) { el.innerHTML = '<div class="text-xs text-slate-400 py-8 text-center">No trend data.</div>'; return; }
             var o = { xLabel: 'Date', yLabel: 'Borrowings', unit: 'borrowings' };
             if (typeof opts === 'string') { o.yLabel = opts; o.unit = opts.toLowerCase(); }
-            else if (opts) { if (opts.xLabel) o.xLabel = opts.xLabel; if (opts.yLabel) o.yLabel = opts.yLabel; if (opts.unit) o.unit = opts.unit; }
+            else if (opts) { if (opts.xLabel) o.xLabel = opts.xLabel; if (opts.yLabel) o.yLabel = opts.yLabel; if (opts.unit) o.unit = opts.unit; if (opts.drilldown) o.drilldown = opts.drilldown; }
             var W = 600, H = 268, ML = 48, MR = 14, MT = 12, MB = 46;
             var plotW = W - ML - MR, plotH = H - MT - MB;
             var base = MT + plotH;
@@ -1188,7 +1205,22 @@ function syncGlobalFilterCustomDates() {
             var fx = pts.length ? pts[pts.length - 1][0] : ML, fy = base - (avg / yMax) * plotH;
             var dots = pts.map(function (p, i) {
                 var tip = escapeHtml(String(rows[i][0])) + ': ' + rNum(rows[i][1]) + ' ' + escapeHtml(o.unit);
-                return '<circle class="line-dot" data-idx="' + i + '" cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="4.5" fill="' + color + '" stroke="#fff" stroke-width="1.5"><title>' + tip + '</title></circle>';
+                // Drill-down (Borrowings Trend only): dots carry their date
+                // so a delegated click handler can open the per-program
+                // modal. Attributes survive cloneNode, so dots inside the
+                // expanded modal work too. The transparent halo widens the
+                // click target without changing the look.
+                var drill = '';
+                if (o.drilldown) {
+                    drill = ' data-date="' + escapeHtml(String(rows[i][0]).slice(0, 10)) + '" data-drill="' + escapeHtml(o.drilldown) + '"'
+                        + ' tabindex="0" role="button" aria-label="Show borrowings by program on ' + escapeHtml(String(rows[i][0]).slice(0, 10)) + '"'
+                        + ' style="cursor:pointer"';
+                }
+                var halo = o.drilldown
+                    ? '<circle class="line-dot line-dot-hit" data-idx="' + i + '"' + drill + ' cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="10" fill="transparent"></circle>'
+                    : '';
+                return halo
+                    + '<circle class="line-dot" data-idx="' + i + '"' + drill + ' cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="4.5" fill="' + color + '" stroke="#fff" stroke-width="1.5"><title>' + tip + '</title></circle>';
             }).join('');
             // Y gridlines + tick labels (Borrowings / count axis)
             var yTicks = '', ticks = 4, ti;
@@ -1256,7 +1288,7 @@ function syncGlobalFilterCustomDates() {
         }
 
         function paintTrendCharts(rows) {
-            lineChart(document.getElementById('trend-line'), rows, '#2563eb', { xLabel: 'Date', yLabel: 'Borrowings', unit: 'borrowings' });
+            lineChart(document.getElementById('trend-line'), rows, '#2563eb', { xLabel: 'Date', yLabel: 'Borrowings', unit: 'borrowings', drilldown: 'borrowings' });
             hbars(document.getElementById('peak-bars'), rows.slice(-7).map(function (r) { return [String(r[0]).slice(5), r[1]]; }), 'bg-blue-600');
         }
 
@@ -2112,6 +2144,7 @@ function syncGlobalFilterCustomDates() {
             else if (cid === 'overdue-dept-bars') hbars(box, cap(U.overdue_by_department), 'bg-red-500', EXPAND_FULL_CAP);
             else if (cid === 'borrowers-dept-bars') hbars(box, cap(U.borrowers_by_department), 'bg-green-600', EXPAND_FULL_CAP);
             else if (cid === 'peak-bars') hbars(box, cap(L.trend || []).map(function (r) { return [String(r[0]).slice(5), r[1]]; }), 'bg-blue-600', EXPAND_FULL_CAP);
+            else if (cid === 'trend-line') lineChart(box, cap(L.trend), '#2563eb', { xLabel: 'Date', yLabel: 'Borrowings', unit: 'borrowings', drilldown: 'borrowings' });
             else if (cid === 'req-top-titles') hbars(box, cap(R.top_titles), 'bg-blue-600', EXPAND_FULL_CAP, reqTitleSearchLink);
             else if (cid === 'req-by-program') hbars(box, cap(R.by_program), 'bg-violet-600', EXPAND_FULL_CAP);
             else if (cid === 'req-role-split') paintReqRoleSplitInto(box, cap(R.by_role));
@@ -2140,6 +2173,88 @@ function syncGlobalFilterCustomDates() {
                 document.body.style.overflow = '';
             }
         }
+
+        /* ============ Borrowings Trend dot drill-down ==================
+           Clicking a trend dot opens #trendDayModal with that date's
+           borrowings split by program. Dots are found via document-level
+           delegation on data-drill attributes (which survive the
+           cloneNode used by the expand modal), so dots work identically
+           on the card and inside the expanded view. */
+        function renderTrendDayBody(day, json) {
+            var body = document.getElementById('trendDayBody');
+            if (!body) return;
+            var rows = (json && json.by_program) || [];
+            var total = (json && typeof json.total === 'number')
+                ? json.total
+                : rows.reduce(function (a, r) { return a + (Number(r[1]) || 0); }, 0);
+            var head = '<div class="flex items-baseline gap-2 mb-3"><span class="text-2xl font-extrabold text-slate-900">'
+                + rNum(total) + '</span><span class="text-xs text-slate-500">borrowing' + (total === 1 ? '' : 's')
+                + ' on ' + escapeHtml(day) + '</span></div>';
+            if (!rows.length) {
+                body.innerHTML = head + '<div class="text-xs text-slate-400 py-4 text-center">No borrowings recorded on this date.</div>';
+                return;
+            }
+            body.innerHTML = head + '<div id="trend-day-bars" role="list" aria-label="Borrowings by program"></div>'
+                + '<p class="text-[10px] text-slate-400 mt-3">Share = program borrowings ÷ day total × 100.</p>';
+            hbars(document.getElementById('trend-day-bars'), rows, 'bg-blue-600', 50);
+        }
+
+        function openTrendDayModal(day) {
+            if (!day) return;
+            var modal = document.getElementById('trendDayModal');
+            var body = document.getElementById('trendDayBody');
+            if (!modal || !body) return;
+            document.getElementById('trendDayTitle').textContent = 'Borrowings on ' + day;
+            body.innerHTML = '<div class="text-xs text-slate-400 py-8 text-center">Loading breakdown…</div>';
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+            fetch(TREND_DAY_URL + '?date=' + encodeURIComponent(day))
+                .then(function (r) {
+                    if (!r.ok) throw new Error('status ' + r.status);
+                    return r.json();
+                })
+                .then(function (json) { renderTrendDayBody(day, json); })
+                .catch(function () {
+                    body.innerHTML = '<div class="text-xs text-red-500 py-8 text-center">Could not load the breakdown. Please try again.</div>';
+                });
+        }
+
+        function closeTrendDayModal() {
+            var modal = document.getElementById('trendDayModal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            // Keep the page locked only while another modal is still open.
+            var expand = document.getElementById('chartExpandModal');
+            if ((!expand || expand.classList.contains('hidden')) &&
+                document.getElementById('mobile-sidebar') &&
+                document.getElementById('mobile-sidebar').classList.contains('hidden')) {
+                document.body.style.overflow = '';
+            }
+        }
+
+        document.addEventListener('click', function (e) {
+            var dot = e.target && e.target.closest
+                ? e.target.closest('.line-dot[data-drill="borrowings"]')
+                : null;
+            if (!dot) return;
+            openTrendDayModal(dot.getAttribute('data-date'));
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                var tm = document.getElementById('trendDayModal');
+                if (tm && !tm.classList.contains('hidden')) closeTrendDayModal();
+                return;
+            }
+            if ((e.key === 'Enter' || e.key === ' ') && document.activeElement && document.activeElement.closest) {
+                var dot = document.activeElement.closest('.line-dot[data-drill="borrowings"]');
+                if (dot && (e.target === dot || dot.contains(e.target))) {
+                    e.preventDefault();
+                    openTrendDayModal(dot.getAttribute('data-date'));
+                }
+            }
+        });
 
         function initChartExpand() {
             // Chart/table containers whose cards become expandable. Donut
@@ -2185,6 +2300,11 @@ function syncGlobalFilterCustomDates() {
             });
             document.addEventListener('keydown', function (e) {
                 if (e.key === 'Escape') {
+                    // The trend-day modal sits above the expand modal — it
+                    // closes itself via its own listener; don't close the
+                    // expand view underneath it.
+                    var tm = document.getElementById('trendDayModal');
+                    if (tm && !tm.classList.contains('hidden')) return;
                     var modal = document.getElementById('chartExpandModal');
                     if (modal && !modal.classList.contains('hidden')) closeChartExpand();
                 }
