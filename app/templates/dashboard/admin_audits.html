@@ -48,6 +48,20 @@
         .audit-hbar-row:hover { background: #f8fafc; }
         .audit-dot { cursor: pointer; }
         .audit-dot:hover { stroke: #fff; stroke-width: 2; }
+        /* ---- Per-card info buttons + documentation modal ---- */
+        .audit-info-btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 22px; height: 22px; border-radius: 9999px;
+            border: 1px solid #e2e8f0; color: #94a3b8; background: #fff;
+            cursor: pointer; flex-shrink: 0;
+            transition: background .12s ease, color .12s ease, border-color .12s ease;
+        }
+        .audit-info-btn:hover { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+        .audit-info-btn .material-symbols-outlined { font-size: 14px; }
+        .audit-info-btn.tile { position: absolute; top: 8px; right: 8px; }
+        #auditInfoBody h4 { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #64748b; margin: 14px 0 4px; }
+        #auditInfoBody h4:first-child { margin-top: 0; }
+        #auditInfoBody p { font-size: 13px; color: #475569; line-height: 1.6; }
     </style>
 </head>
 <body>
@@ -209,6 +223,24 @@
             </div>
         </div>
     </main>
+<!-- Audit metric info modal: per-card documentation opened from the info
+     icon on each KPI tile and chart header. Only rendered with the stats
+     block it documents. -->
+{% if stats %}
+<div id="auditInfoModal" class="hidden fixed inset-0 z-[100] items-center justify-center p-4">
+    <div class="absolute inset-0 bg-slate-900/60" data-audit-info-close></div>
+    <div class="relative bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="auditInfoTitle">
+        <div class="flex items-center gap-2 px-4 py-3 border-b border-slate-200">
+            <span class="material-symbols-outlined text-blue-600">info</span>
+            <h3 id="auditInfoTitle" class="text-sm font-extrabold text-slate-900 mr-auto">About this metric</h3>
+            <button type="button" data-audit-info-close title="Close" aria-label="Close metric information"
+                class="inline-flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors" style="width:30px;height:30px;"><span class="material-symbols-outlined" style="font-size:18px;">close</span></button>
+        </div>
+        <div id="auditInfoBody" class="p-4 max-h-[65vh] overflow-y-auto"></div>
+        </div>
+    </div>
+</div>
+{% endif %}
 <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
 <script>
 (function() {
@@ -232,6 +264,163 @@
     paint('chart-roles', AuditCharts.donut, stats.logins_by_role,
         { centerSub: 'sign-ins', unit: 'sign-ins' });
 })();
+</script>
+<script>
+{% if stats %}
+/* ============ Audit metric info panels =========================
+   Every KPI tile and chart header gets an info button that opens a
+   short documentation panel for that metric: what it measures, how
+   to read it, how it is calculated, and a worked example, plus
+   source / range / caveats where relevant. Content mirrors the
+   audit-stats aggregation behind this page. */
+var AUDIT_INFO = {
+    'kpi-logins-today': { t: 'Logins Today',
+        def: 'Successful sign-ins recorded today (server date).',
+        interp: 'Compare against a typical weekday to spot unusual quiet or busy days at a glance.',
+        calc: 'Counts login and first-login events dated today within the analytics window.',
+        ex: '4 logins by mid-morning on a normal Monday is routine; 0 by noon is worth a check.',
+        src: 'audit_trail sign-in events.' },
+    'kpi-logins-7d': { t: 'Logins · 7 Days',
+        def: 'Successful sign-ins from the last 7 days.',
+        interp: 'A rolling-week pulse of system usage — falling weeks can precede support questions about access.',
+        calc: 'Login and first-login events less than 7 days old.',
+        ex: '10 logins this week against 25 last week means usage more than halved.',
+        src: 'audit_trail sign-in events.' },
+    'kpi-active-now': { t: 'Active Now',
+        def: 'Users whose most recent session event is a sign-in (no later sign-out).',
+        interp: 'A live headcount of who is likely in the system right now; the tile names up to 5 of them.',
+        calc: 'Per user, the latest sign-in is compared with the latest sign-out; sign-in wins count as active.',
+        ex: 'Active now 10 during class hours is normal; 10 at 3 AM deserves a look.',
+        src: 'audit_trail sign-in / sign-out events.',
+        caveat: 'Heuristic, not enforced sessions — a closed browser without sign-out still counts until that user signs out.' },
+    'kpi-failed-logins': { t: 'Failed Sign-ins',
+        def: 'Rejected sign-in attempts in the analytics window.',
+        interp: 'Occasional failures are mistyped passwords; a sudden cluster can mean credential stuffing or an account problem.',
+        calc: 'Counts system:login_failed events in the window.',
+        ex: '25 failures in 30 days is background noise; 25 in one hour is an incident.',
+        src: 'audit_trail failure events.' },
+    'kpi-denials': { t: 'Access Denials',
+        def: 'Blocked attempts to open pages the account may not access.',
+        interp: 'Low counts are healthy curiosity or stale bookmarks; repeated denials for one user suggest a role problem.',
+        calc: 'Counts security:denied events in the window.',
+        ex: '1 denial in 30 days needs no action; daily denials from staff point at wrong role assignments.' },
+    'kpi-server-errors': { t: 'Server Errors',
+        def: 'Logged 500-level failures in the analytics window.',
+        interp: 'Any non-zero count deserves a look at the top-error-paths card below — users hit these pages and saw an error.',
+        calc: 'Counts system:error:500 events in the window.',
+        ex: '8 errors all on one path means a single broken page, not eight separate bugs.',
+        src: 'Server-side 500 handler audit rows.' },
+    'chart-logins-day': { t: 'Sign-ins per Day',
+        def: 'Successful sign-ins per day over the last 14 days.',
+        interp: 'Weekday humps with weekend dips are healthy; a flat zero on a class day is the signal to chase.',
+        calc: 'Login and first-login events grouped by date, zero-filled so quiet days still draw.',
+        ex: 'Monday 22 against Sunday 1 shows the expected academic-week rhythm.',
+        range: 'Trailing 14 days, independent of the 30-day KPI window.' },
+    'chart-errors-day': { t: 'Errors per Day',
+        def: 'Failed sign-ins plus server errors per day over the last 14 days.',
+        interp: 'Tall bars name the bad days; cross-check them against the top-error-paths card and the sign-in line.',
+        calc: 'Failed sign-ins and 500 errors grouped by date, zero-filled.',
+        ex: 'Oct 01 with 13 errors while sign-ins dip suggests users tried, failed, and gave up.',
+        range: 'Trailing 14 days, independent of the 30-day KPI window.' },
+    'chart-categories': { t: 'Activity by Category',
+        def: 'Audit events grouped into functional buckets (top 8).',
+        interp: 'Dominant slices show what the system is mostly used for; unexpected slices (e.g. big Server errors) redirect attention.',
+        calc: 'Each activity code maps to one bucket — sign-ins, sign-outs, user management, cataloging, backups, and more; routine circulation and request events are excluded upstream.',
+        ex: 'Sign-ins 65 (27.5%) with User management next means the fortnight was login- and admin-heavy.',
+        src: 'audit_trail minus circulation and requests noise.',
+        caveat: 'Only the top 8 buckets draw; the long tail is folded out of view.' },
+    'chart-roles': { t: 'Sign-ins by Role',
+        def: 'Successful sign-ins split by account role.',
+        interp: 'Shows which population actually logs in — an Admin-heavy mix on a student system would be odd.',
+        calc: 'Login and first-login events grouped by the role on the account; missing roles bucket as Unknown.',
+        ex: 'Admin 23 (35.4%) of sign-ins means over a third of logins are administrators.',
+        src: 'audit_trail sign-ins joined to accounts and roles.' },
+    'top-error-paths': { t: 'Top Pages Causing Server Errors',
+        def: 'Request paths extracted from server-error events, ranked (top 5).',
+        interp: 'Fix from the top down — the first path caused the most user-facing failures.',
+        calc: 'The path segment of each system:error:500 event, counted and ranked.',
+        ex: 'One path at 5x is where to reproduce the bug first.',
+        src: 'Server-side 500 handler audit rows.',
+        caveat: 'Paths are where the error surfaced, which can differ from the underlying cause.' }
+};
+
+function openAuditInfo(id) {
+    var info = AUDIT_INFO[id];
+    if (!info) return;
+    document.getElementById('auditInfoTitle').textContent = info.t || 'About this metric';
+    var sections = [['Definition', info.def], ['How to interpret', info.interp],
+        ["How it's calculated", info.calc], ['Example', info.ex],
+        ['Data source', info.src], ['Date range', info.range], ['Limitations', info.caveat]];
+    var html = '';
+    sections.forEach(function (s) {
+        if (!s[1]) return;
+        html += '<h4>' + escapeAuditHtml(s[0]) + '</h4><p>' + escapeAuditHtml(s[1]) + '</p>';
+    });
+    document.getElementById('auditInfoBody').innerHTML = html || '<p>No documentation available.</p>';
+    var modal = document.getElementById('auditInfoModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.body.style.overflow = 'hidden';
+}
+
+function escapeAuditHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str === null || str === undefined ? '' : String(str);
+    return div.innerHTML;
+}
+
+function closeAuditInfo() {
+    var modal = document.getElementById('auditInfoModal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    if (document.getElementById('mobile-sidebar') &&
+        document.getElementById('mobile-sidebar').classList.contains('hidden')) {
+        document.body.style.overflow = '';
+    }
+}
+
+function initAuditInfo() {
+    Object.keys(AUDIT_INFO).forEach(function (id) {
+        var host = document.getElementById(id);
+        if (!host || host.querySelector('[data-audit-info]')) return;
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'audit-info-btn';
+        btn.title = 'About this metric';
+        btn.setAttribute('aria-label', 'About this metric');
+        btn.setAttribute('data-audit-info', id);
+        btn.innerHTML = '<span class="material-symbols-outlined">info</span>';
+        var h3 = host.querySelector('h3');
+        if (h3) {
+            h3.classList.add('flex', 'items-center', 'gap-2');
+            btn.classList.add('ml-auto');
+            h3.appendChild(btn);
+        } else {
+            // KPI tile: pin to the corner so the stat layout is untouched.
+            host.style.position = 'relative';
+            btn.classList.add('tile');
+            host.appendChild(btn);
+        }
+    });
+}
+
+document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('[data-audit-info]') : null;
+    if (!b) return;
+    openAuditInfo(b.getAttribute('data-audit-info'));
+});
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+        var m = document.getElementById('auditInfoModal');
+        if (m && !m.classList.contains('hidden')) closeAuditInfo();
+    }
+});
+document.querySelectorAll('[data-audit-info-close]').forEach(function (el) {
+    el.addEventListener('click', closeAuditInfo);
+});
+initAuditInfo();
+{% endif %}
 </script>
 <script>
 (function() {
