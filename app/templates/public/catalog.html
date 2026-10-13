@@ -491,12 +491,12 @@
             </button>
         </div>
         <div class="overflow-y-auto space-y-1.5 text-[13px] pr-1">
-            <button type="button" onclick="selectCategory('')"
+            <button type="button" data-cat="" onclick="selectCategory(this.dataset.cat)"
                 class="w-full flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded px-2 py-1.5 text-left">
                 <span class="text-slate-700 dark:text-slate-300">All categories</span>
             </button>
             {% for cat in categories %}
-            <button type="button" onclick="selectCategory('{{ cat }}')"
+            <button type="button" data-cat="{{ cat|e }}" onclick="selectCategory(this.dataset.cat)"
                 class="w-full flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded px-2 py-1.5 text-left">
                 <span class="text-slate-700 dark:text-slate-300">{{ cat }}</span>
             </button>
@@ -527,12 +527,33 @@
         document.body.style.overflow = '';
     }
     function selectCategory(value) {
+        // Sidebar only renders the first 5 categories + All, so values beyond
+        // those have no matching radio. Check it when present, otherwise inject
+        // a hidden checked radio so the full list actually filters.
+        var form = document.getElementById('filter-form');
         var radios = document.querySelectorAll('#filter-form input[name="category"]');
+        var matched = false;
         for (var i = 0; i < radios.length; i++) {
-            radios[i].checked = (radios[i].value === value);
+            var on = (radios[i].value === value);
+            radios[i].checked = on;
+            if (on) matched = true;
+        }
+        if (!matched && form) {
+            var extra = form.querySelector('input[data-extra-category="1"]');
+            if (!extra) {
+                extra = document.createElement('input');
+                extra.type = 'radio';
+                extra.name = 'category';
+                extra.setAttribute('data-extra-category', '1');
+                extra.style.display = 'none';
+                extra.checked = true;
+                form.appendChild(extra);
+            }
+            extra.value = value;
+            extra.checked = true;
         }
         closeCategoryModal();
-        document.getElementById('filter-form').submit();
+        if (form) form.submit();
     }
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {

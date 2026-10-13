@@ -108,8 +108,10 @@ def _program_joins():
 
 def overdue_by_department(start_date=None, end_date=None, departments=None):
     """Overdue loans grouped by department (real split, not a mix reuse)."""
+    # Matches circulation/Overview: active-but-past-due counts as overdue
+    # because nothing ever flips transaction_status to 'overdue' automatically.
     parts, params = _range_clause('c.borrow_date', start_date, end_date)
-    parts.append("c.transaction_status = 'overdue'")
+    parts.append("(c.transaction_status = 'overdue' OR (c.transaction_status = 'active' AND c.due_date::date < CURRENT_DATE))")
     clause, cparams = _department_clause(departments, 'b', 'r')
     if clause:
         parts.append(clause)
@@ -155,7 +157,7 @@ def department_summary(start_date=None, end_date=None, departments=None):
         '''SELECT {},
                   COUNT(c.circulation_id) as borrowings,
                   COUNT(DISTINCT c.borrower_id) as borrowers,
-                  SUM(CASE WHEN c.transaction_status = 'overdue'
+                   SUM(CASE WHEN c.transaction_status = 'overdue' OR (c.transaction_status = 'active' AND c.due_date::date < CURRENT_DATE)
                            THEN 1 ELSE 0 END) as overdue
            FROM circulation_records c{} {} GROUP BY 1 ORDER BY borrowings DESC'''.format(
             _PROGRAM_LABEL, _program_joins(), where),
@@ -333,15 +335,22 @@ def count_total_copies():
 
 
 def count_circulation_status(start_date=None, end_date=None, borrow_type=None):
-    """Return [(transaction_status, count)] for active/returned/overdue."""
+    """Return [(transaction_status, count)] for active/returned/overdue.
+
+    Active-but-past-due counts as 'overdue' (nothing ever flips the status
+    automatically; circulation/Overview uses the same rule), so 'active'
+    means still out but not yet due and the two buckets stay exclusive.
+    """
     parts, params = _range_clause('borrow_date', start_date, end_date)
     if borrow_type:
         parts.append('borrow_type = %s')
         params.append(borrow_type)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
-        '''SELECT transaction_status, COUNT(*)
-           FROM circulation_records {} GROUP BY transaction_status'''.format(where),
+        '''SELECT CASE WHEN transaction_status = 'overdue' OR (transaction_status = 'active'
+                          AND due_date::date < CURRENT_DATE)
+                       THEN 'overdue' ELSE transaction_status END, COUNT(*)
+           FROM circulation_records {} GROUP BY 1'''.format(where),
         tuple(params) if params else None
     )
 
@@ -474,7 +483,9 @@ def overdue_trend(start_date=None, end_date=None, borrow_type=None,
                  ' JOIN roles r ON u.role_id = r.role_id')
         parts.append(dept_clause)
         params.extend(dept_params)
-    parts.append("c.transaction_status = 'overdue'")
+    # Include active-but-past-due: nothing flips status to 'overdue' automatically,
+    # circulation/Overview counts past-due loans even while still 'active'.
+    parts.append("(c.transaction_status = 'overdue' OR (c.transaction_status = 'active' AND c.due_date::date < CURRENT_DATE))")
     return db.fetch_all(
         '''SELECT COALESCE(c.due_date, c.borrow_date)::date, COUNT(*) FROM circulation_records c{}
            WHERE {} GROUP BY 1 ORDER BY 1'''.format(joins, ' AND '.join(parts)),
@@ -520,7 +531,7 @@ def overdue_trend_by_program(start_date=None, end_date=None, borrow_type=None,
     if dept_clause:
         parts.append(dept_clause)
         params.extend(dept_params)
-    parts.append("c.transaction_status = 'overdue'")
+    parts.append("(c.transaction_status = 'overdue' OR (c.transaction_status = 'active' AND c.due_date::date < CURRENT_DATE))")
     return db.fetch_all(
         '''SELECT COALESCE(c.due_date, c.borrow_date)::date, {}, COUNT(c.circulation_id)
            FROM circulation_records c{}
@@ -688,7 +699,8 @@ def circulation_overview(start_date=None, end_date=None, departments=None):
 
     overdue = db.fetch_one(
         'SELECT COUNT(*) FROM circulation_records{} {}'.format(
-            joins, _and("transaction_status = 'overdue'")),
+            joins, _and("(transaction_status = 'overdue' OR (transaction_status = 'active'"
+                        " AND due_date::date < CURRENT_DATE))")),
         p)
     avg_loan = db.fetch_one(
         'SELECT AVG(return_date - borrow_date) FROM circulation_records{} {}'.format(
@@ -964,7 +976,8 @@ def book_traffic_overview(book_id, start_date=None, end_date=None):
             _and("transaction_status = 'active'")), p)
     overdue = db.fetch_one(
         'SELECT COUNT(*) FROM circulation_records {}'.format(
-            _and("transaction_status = 'overdue'")), p)
+            _and("(transaction_status = 'overdue' OR (transaction_status = 'active'"
+                 " AND due_date::date < CURRENT_DATE))")), p)
     returned = db.fetch_one(
         'SELECT COUNT(*) FROM circulation_records {}'.format(
             _and("transaction_status = 'returned'")), p)
@@ -1153,9 +1166,9 @@ def book_status_trends(book_id, start_date=None, end_date=None):
            FROM circulation_records c WHERE {} AND c.transaction_type = 'return'
            GROUP BY day
            UNION ALL
-           SELECT c.borrow_date AS day, 'overdue' AS status, COUNT(*)
-           FROM circulation_records c WHERE {} AND c.transaction_status = 'overdue'
-           GROUP BY day
+            SELECT c.borrow_date AS day, 'overdue' AS status, COUNT(*)
+            FROM circulation_records c WHERE {} AND (c.transaction_status = 'overdue' OR (c.transaction_status = 'active' AND c.due_date::date < CURRENT_DATE))
+            GROUP BY day
            UNION ALL
            SELECT r.request_date::date AS day, r.reservation_status AS status, COUNT(*)
            FROM reservation_queue r WHERE {}
