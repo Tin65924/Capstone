@@ -1242,7 +1242,7 @@ def trend_day_json():
 
 
 DRILLDOWN_TYPES = frozenset({
-    'overdue_day', 'category', 'title_demand', 'title_fines',
+    'overdue_day', 'category', 'title_fines',
     'request_day', 'request_title',
 })
 
@@ -1250,7 +1250,6 @@ DRILLDOWN_TYPES = frozenset({
 _DRILLDOWN_UNITS = {
     'overdue_day': 'overdue items',
     'category': 'borrowings',
-    'title_demand': 'active loans',
     'title_fines': 'fines',
     'request_day': 'requests',
     'request_title': 'requests',
@@ -1302,9 +1301,6 @@ def drilldown_json():
             title = 'Borrowings · ' + key
             rows = models.category_borrowings_by_program(
                 key, start_date, end_date) or []
-        elif drill_type == 'title_demand':
-            title = 'Active loans · ' + key
-            rows = models.active_loans_by_program_for_title(key) or []
         elif drill_type == 'title_fines':
             title = 'Fines · ' + key
             rows = models.fines_by_program_for_title(

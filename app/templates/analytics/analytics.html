@@ -1347,8 +1347,7 @@ function syncGlobalFilterCustomDates() {
         function paintHighDemand(rows) {
             var hd = document.getElementById('high-demand-body');
             if (hd) hd.innerHTML = (rows || []).map(function (r, i) {
-                var dt = ' data-drill="title_demand" data-title="' + escapeHtml(r[0]) + '" tabindex="0" role="button" aria-label="Show active loans by program for ' + escapeHtml(r[0]) + '" style="cursor:pointer"';
-                return '<tr class="border-b last:border-0"' + dt + '><td class="py-2">' + (i + 1) + '</td><td class="py-2 font-semibold">' + escapeHtml(r[0]) + '</td><td class="py-2 text-slate-500">' + escapeHtml(r[1]) + '</td><td class="py-2 text-right font-bold">' + rNum(r[2]) + '</td></tr>';
+                return '<tr class="border-b last:border-0"><td class="py-2">' + (i + 1) + '</td><td class="py-2 font-semibold">' + escapeHtml(r[0]) + '</td><td class="py-2 text-slate-500">' + escapeHtml(r[1]) + '</td><td class="py-2 text-right font-bold">' + rNum(r[2]) + '</td></tr>';
             }).join('') || '<tr><td colspan="4" class="py-6 text-center text-slate-400">No active demand.</td></tr>';
         }
 
@@ -2309,12 +2308,6 @@ function syncGlobalFilterCustomDates() {
                 var c = el.getAttribute('data-category');
                 if (!c) return;
                 openProgramModal('Borrowings · ' + c, DRILLDOWN_URL + '?type=category&category=' + encodeURIComponent(c) + drillRangeParams(), 'borrowings', 'in ' + c);
-                return;
-            }
-            if (kind === 'title_demand') {
-                var t = el.getAttribute('data-title');
-                if (!t) return;
-                openProgramModal('Active loans · ' + t, DRILLDOWN_URL + '?type=title_demand&title=' + encodeURIComponent(t), 'active loans', 'for ' + t);
                 return;
             }
             if (kind === 'title_fines') {

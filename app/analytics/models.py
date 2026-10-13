@@ -573,7 +573,7 @@ def category_borrowings_by_program(category, start_date=None, end_date=None,
     click). Category matches the card's label expression, so 'Others'
     covers blank classifications. Period-scoped like the card.
     """
-    parts = ["COALESCE(NULLIF(b.subject_classification, ''), 'Others') = %s"]
+    parts = ["COALESCE(NULLIF(bk.subject_classification, ''), 'Others') = %s"]
     params = [category]
     range_parts, range_params = _range_clause('c.borrow_date', start_date,
                                              end_date)
@@ -585,7 +585,7 @@ def category_borrowings_by_program(category, start_date=None, end_date=None,
     return db.fetch_all(
         '''SELECT {}, COUNT(c.circulation_id)
            FROM circulation_records c
-           JOIN book_catalog b ON c.book_id = b.book_id{}
+           JOIN book_catalog bk ON c.book_id = bk.book_id{}
            WHERE {} GROUP BY 1 ORDER BY 2 DESC'''.format(
             _PROGRAM_LABEL, _program_joins(), ' AND '.join(parts)),
         tuple(params)
@@ -598,7 +598,7 @@ def fines_by_program_for_title(title, start_date=None, end_date=None):
     Powers the Books with Most Fines row drill-down. Same window and
     fine_amount > 0 rule as fines_by_book.
     """
-    parts = ['b.title = %s', 'c.fine_amount > 0']
+    parts = ['bk.title = %s', 'c.fine_amount > 0']
     params = [title]
     range_parts, range_params = _range_clause('c.borrow_date', start_date,
                                              end_date)
@@ -607,28 +607,10 @@ def fines_by_program_for_title(title, start_date=None, end_date=None):
     return db.fetch_all(
         '''SELECT {}, SUM(c.fine_amount), COUNT(c.circulation_id)
            FROM circulation_records c
-           JOIN book_catalog b ON c.book_id = b.book_id{}
+           JOIN book_catalog bk ON c.book_id = bk.book_id{}
            WHERE {} GROUP BY 1 ORDER BY 2 DESC'''.format(
             _PROGRAM_LABEL, _program_joins(), ' AND '.join(parts)),
         tuple(params)
-    )
-
-
-def active_loans_by_program_for_title(title):
-    """Return [(program_label, count)] current active loans for one title by program.
-
-    Powers the High-Demand Titles row drill-down. Same active/overdue
-    scope as high_demand_titles (current demand, not period borrows).
-    """
-    return db.fetch_all(
-        '''SELECT {}, COUNT(c.circulation_id)
-           FROM circulation_records c
-           JOIN book_catalog b ON c.book_id = b.book_id{}
-           WHERE b.title = %s
-             AND c.transaction_status IN ('active', 'overdue')
-           GROUP BY 1 ORDER BY 2 DESC'''.format(
-            _PROGRAM_LABEL, _program_joins()),
-        (title,)
     )
 
 

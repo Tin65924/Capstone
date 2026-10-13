@@ -41,7 +41,6 @@ class TestDrilldownValidation:
     def test_segment_types_need_key(self, librarian_client, mock_db):
         """Validates category/title types reject a missing key."""
         for dtype, param in (('category', 'category'),
-                             ('title_demand', 'title'),
                              ('title_fines', 'title'),
                              ('request_title', 'title')):
             resp = librarian_client.get(BASE + '?type=' + dtype)
@@ -94,18 +93,23 @@ class TestDrilldownData:
         query, params = mock_db['fetch_all'].call_args[0]
         assert 'circulation_records' in query and 'book_catalog' in query
         assert params[0] == 'Science'
+        # No duplicate table alias: borrowers keep `b`, catalog uses `bk`
+        # (duplicate `b` was a 500 in production).
+        assert 'JOIN book_catalog bk' in query
+        assert 'JOIN borrowers b ' in query
+        assert 'JOIN book_catalog b ' not in query
 
-    def test_title_demand(self, librarian_client, mock_db):
-        """Validates demand breakdown scopes to active loans."""
-        mock_db['fetch_all'].return_value = [('BSCS', 3)]
-        resp = librarian_client.get(BASE + '?type=title_demand&title=Java')
+    def test_date_filter_scopes_breakdown(self, librarian_client, mock_db):
+        """Validates the page date filter bounds the breakdown query."""
+        mock_db['fetch_all'].return_value = [('BSCS', 5)]
+        resp = librarian_client.get(
+            BASE + '?type=category&category=Science&preset=custom'
+            '&from=2026-10-01&to=2026-10-31')
         assert resp.status_code == 200
-        payload = resp.get_json()
-        assert payload['unit'] == 'active loans'
-        assert payload['total'] == 3
-        query, params = mock_db['fetch_all'].call_args[0]
-        assert 'active' in query
-        assert params[0] == 'Java'
+        params = mock_db['fetch_all'].call_args[0][1]
+        assert params[0] == 'Science'
+        flat = ' '.join(str(p) for p in params)
+        assert '2026-10-01' in flat and '2026-10-31' in flat
 
     def test_title_fines_money(self, librarian_client, mock_db):
         """Validates fine amounts stay decimal with fines unit."""
@@ -117,6 +121,9 @@ class TestDrilldownData:
         assert payload['unit'] == 'fines'
         assert payload['total'] == 17.5
         assert payload['by_program'] == [['BSCS', 12.5], ['BSIT', 5.0]]
+        query = mock_db['fetch_all'].call_args[0][0]
+        assert 'JOIN book_catalog bk' in query
+        assert 'JOIN book_catalog b ' not in query
 
     def test_request_title(self, librarian_client, mock_db):
         """Validates per-title request breakdown is pending-scoped."""
@@ -130,6 +137,12 @@ class TestDrilldownData:
         assert 'request_records' in query
         assert 'pending_review' in query
         assert params[0] == 'Java'
+
+    def test_title_demand_removed(self, librarian_client, mock_db):
+        """Validates High-Demand has no drill-down (not necessary there)."""
+        resp = librarian_client.get(BASE + '?type=title_demand&title=Java')
+        assert resp.status_code == 400
+        assert mock_db['fetch_all'].call_count == 0
 
     def test_empty_segment(self, librarian_client, mock_db):
         """Validates an empty breakdown returns total 0."""
@@ -150,9 +163,10 @@ class TestDrilldownPageWiring:
         assert 'openProgramModal' in body
         for kind in ("drilldown: 'overdue'", "drilldown: 'requests'",
                      "'data-drill', 'category'",
-                     'data-drill="title_demand"', 'data-drill="title_fines"',
+                     'data-drill="title_fines"',
                      'data-drill="request_title"',
                      "kind === 'overdue'", "kind === 'category'",
                      "kind === 'title_fines'", "kind === 'request_title'",
                      'annotatePeakBarsInto', 'annotateTopCats'):
             assert kind in body, kind
+        assert 'title_demand' not in body
