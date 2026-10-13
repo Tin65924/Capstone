@@ -194,6 +194,27 @@
         .chart-expand-btn:hover { background: #f1f5f9; color: #1e3a8a; border-color: #cbd5e1; }
         .chart-expand-btn .material-symbols-outlined { font-size: 16px; }
 
+        /* ---- Metric info buttons (per-card documentation) ---- */
+        .metric-info-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 9999px;
+            border: 1px solid #e2e8f0;
+            color: #94a3b8;
+            background: #fff;
+            cursor: pointer;
+            transition: background .12s ease, color .12s ease, border-color .12s ease;
+            flex-shrink: 0;
+        }
+        .metric-info-btn:hover { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+        .metric-info-btn .material-symbols-outlined { font-size: 15px; }
+        #metricInfoBody h4 { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #64748b; margin: 14px 0 4px; }
+        #metricInfoBody h4:first-child { margin-top: 0; }
+        #metricInfoBody p { font-size: 13px; color: #475569; line-height: 1.6; }
+
         /* ---- Expanded modal: bigger charts/tables ---- */
         #chartExpandBody > div { border: none !important; padding: 0 !important; }
         #chartExpandBody table { font-size: 13px; }
@@ -661,7 +682,7 @@
                             <p class="text-[10px] text-slate-400 mb-2">Most borrowed titles in the selected period.</p>
                             <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[380px]">
                                 <thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-2">#</th><th class="py-2 pr-2">Title</th><th class="py-2 text-right">Borrows</th></tr></thead>
-                                <tbody>
+                                <tbody id="book-top-util-body">
                                     {% for r in top_utilized %}
                                     <tr class="border-b last:border-0">
                                         <td class="py-2 pr-2 font-bold">{{ loop.index }}</td>
@@ -803,6 +824,23 @@
                     class="chart-expand-btn" style="width:30px;height:30px;"><span class="material-symbols-outlined">close</span></button>
             </div>
             <div id="trendDayBody" class="p-4 max-h-[60vh] overflow-y-auto"></div>
+        </div>
+    </div>
+
+    <!-- Metric info modal: per-card documentation panel opened from the
+         info icon in each analytics card header. z-index sits above the
+         chart-expand (z-100), status filter (z-110), and drill-down
+         (z-130) modals so it stays on top everywhere. -->
+    <div id="metricInfoModal" class="hidden fixed inset-0 z-[140] items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-900/60" onclick="closeMetricInfo()"></div>
+        <div class="relative bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="metricInfoTitle">
+            <div class="flex items-center gap-2 px-4 py-3 border-b border-slate-200">
+                <span class="material-symbols-outlined text-blue-600">info</span>
+                <h3 id="metricInfoTitle" class="text-sm font-extrabold text-slate-900 mr-auto">About this metric</h3>
+                <button type="button" onclick="closeMetricInfo()" title="Close" aria-label="Close metric information"
+                    class="chart-expand-btn" style="width:30px;height:30px;"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <div id="metricInfoBody" class="p-4 max-h-[65vh] overflow-y-auto"></div>
         </div>
     </div>
 
@@ -2120,6 +2158,307 @@ function syncGlobalFilterCustomDates() {
             });
         })();
 
+        /* ================= Metric info panels ========================
+           Every analytics card header gets an info button that opens a
+           short documentation panel for that metric: what it measures,
+           how to read it, how it is calculated, and a worked example,
+           plus source / range / caveats where relevant. Content mirrors
+           the actual queries behind each card. */
+        var METRIC_INFO = {
+            'donut-category': { t: 'Collection by Category',
+                def: 'Active catalog titles grouped by subject classification.',
+                interp: 'Larger slices show the most-collected subjects. Thin or missing slices reveal collection gaps worth acquiring into.',
+                calc: 'Distinct active titles counted per category; blank classifications are grouped as Others.',
+                ex: 'If Science holds 120 of 400 active titles, it is 30% of the collection.',
+                src: 'book_catalog (active titles only).' },
+            'donut-status': { t: 'Copies by Status',
+                def: 'Physical copies grouped by current availability state.',
+                interp: 'A high Borrowed or Overdue share signals collection pressure; Lost / Damaged counts flag replacement needs.',
+                calc: 'Available, Borrowed, Overdue, Reserved, Lost / Damaged, and Maintenance buckets. Reserved copies are held by waiting or allocated reservations; loans flagged lost count as lost/damaged.',
+                ex: 'If 45 of 300 copies are borrowed, collection utilization is 15%.',
+                src: 'Accession log, circulation loans, reservation queue, and inventory states.' },
+            'recent-collection-body': { t: 'Recent Collection Status',
+                def: 'The most recently accessioned copies with their live availability state.',
+                interp: 'Spot-check what is new and whether it is on the shelf, on loan, or flagged. Use the search and status filter to find specific copies.',
+                calc: 'Newest accessions first; the card previews 10 rows and the expanded view shows more.',
+                ex: 'A copy accessioned yesterday showing Borrowed means it went out almost immediately — a demand signal.',
+                src: 'Accession log joined with catalog, inventory states, and active loans.',
+                caveat: 'Preview only — open the expanded view or the catalog for the full list.' },
+            'attention-list': { t: 'Items Requiring Attention',
+                def: 'Shortcut counts for copies that need staff action right now.',
+                interp: 'Any non-zero Overdue or Lost / Damaged row needs follow-up. Each row links to the filtered catalog.',
+                calc: 'Same buckets as Copies by Status: overdue loans, lost/damaged flags, and inventory-missing copies.',
+                ex: 'Overdue Copies showing 6 means six loans need reminder or desk action today.',
+                src: 'Circulation loans and inventory states.' },
+            'trend-line': { t: 'Borrowings Trend',
+                def: 'Daily borrow counts across the selected period.',
+                interp: 'Rising stretches mean growing demand; dips often reflect weekends or closures. Staff the desk around the peaks.',
+                calc: 'Loans grouped by borrow date. The dashed line is a trailing-average forecast — a smoothing aid, not a prediction.',
+                ex: '10 borrows on Oct 1 versus 2 on Oct 2 means Oct 1 was a 5x busier day.',
+                range: 'Covers the dashboard selected period; changing the date filter recomputes the line.',
+                caveat: 'Sparse periods with a single active day flatten the line. Tip: click any dot for the per-program breakdown.' },
+            'donut-topcats': { t: 'Top Borrowed Categories',
+                def: 'The most-borrowed subjects in the selected period (top 6).',
+                interp: 'Leading categories show where reader demand concentrates; consider acquisition boosts there.',
+                calc: 'Loan counts per subject classification; blank classifications grouped as Others.',
+                ex: 'Fiction with 40 of 100 period borrows accounts for 40% of demand.',
+                range: 'Respects the selected dashboard period.',
+                caveat: 'Tip: click a slice or legend item for the per-program breakdown.' },
+            'peak-bars': { t: 'Peak Borrowing Periods',
+                def: 'Daily borrow totals for the most recent days in the period.',
+                interp: 'The tallest bars are the busiest recent days — compare them to spot weekly rhythms.',
+                calc: 'The same daily counts as the Borrowings Trend, showing the last 7 days.',
+                ex: 'A Monday bar of 12 against a Sunday bar of 2 shows the weekly swing.',
+                range: 'Trailing days of the selected period.',
+                caveat: 'Tip: click a bar for the per-program breakdown of that date.' },
+            'high-demand-body': { t: 'Likely High-Demand Titles',
+                def: 'Titles with the most active and overdue loans right now (top 5).',
+                interp: 'High active counts mean copies are tied up; consider extra copies, shorter loans, or reminder nudges.',
+                calc: 'Active plus overdue loans per active-catalog title within the period borrow window, ranked highest first.',
+                ex: 'A title with 4 of its 5 copies out on loan is under real pressure.',
+                caveat: 'Ranks current borrowing pressure as a short-term demand signal, not a guaranteed forecast.' },
+            'overdue-line': { t: 'Overdue Trend',
+                def: 'Daily overdue counts grouped by due date.',
+                interp: 'Spikes show when items became overdue. A level that never falls means reminders are not clearing the backlog.',
+                calc: 'Items grouped by due date (legacy rows without one fall back to borrow date). Active-but-past-due loans count as overdue. The dashed line is a trailing-average aid, not a prediction.',
+                ex: '5 items due Oct 6 still out on Oct 10 appear as overdue from Oct 7 onward.',
+                range: 'Covers the dashboard selected period.',
+                caveat: 'Nothing flips a loan to overdue automatically — the rule mirrors the circulation desk. Tip: click any dot for the per-program breakdown.' },
+            'insights-list': { t: 'Forecast Summary / Insights',
+                def: 'Auto-generated reading of the period headline numbers.',
+                interp: 'Treat each line as a starting point for action (acquire, remind, staff) rather than a conclusion.',
+                calc: 'Built from total borrowings, return rate, top category, overdue count, and average loan duration.',
+                ex: 'An insight pairing high borrowings with a low return rate points at reminders, not acquisitions.',
+                caveat: 'Summarizes this dashboard data only — there are no external benchmarks behind it.' },
+            'recent-circ-body': { t: 'Recent Circulation Activity',
+                def: 'The latest circulation transactions (preview of 8).',
+                interp: 'A day-to-day pulse of checkouts and returns across the desk.',
+                calc: 'Newest transactions first; the expanded view and the circulation page show the full log.',
+                ex: 'Three checkouts of the same title in one morning hints at class-driven demand.',
+                src: 'circulation_records.',
+                caveat: 'Preview only — open the expanded view for more rows.' },
+            'req-top-titles': { t: 'Top Requested Titles',
+                def: 'The most-requested books not yet in the collection (top 10).',
+                interp: 'Repeated requests for a title make it an acquisition candidate. Each bar links to the filtered requests queue.',
+                calc: 'Pending-review requests only, grouped by requested title.',
+                ex: 'A title requested 8 times by different borrowers justifies a purchase order.',
+                range: 'Pending requests within the selected period.',
+                caveat: 'Approved and rejected requests are excluded.' },
+            'req-role-split': { t: 'Student vs Faculty Request Demand',
+                def: 'Pending requests per title split into Student, Faculty, and Other staff.',
+                interp: 'See whose demand drives each title — course reserves skew student, research skews faculty.',
+                calc: 'Pending-only counts per title by requester role; bar widths are shares of that title total.',
+                ex: '7 student against 1 faculty request suggests a class reading list.',
+                range: 'Pending requests within the selected period.',
+                caveat: 'Tip: click a title row for the per-program breakdown.' },
+            'req-trend-line': { t: 'Requests Over Time',
+                def: 'Daily book-request volume across the selected period.',
+                interp: 'Spikes often follow new courses or reading lists; flat stretches mean steady state.',
+                calc: 'Pending plus rejected requests grouped by request date — rejected demand is kept visible so denied need is not hidden.',
+                ex: '6 requests on Sep 1 against a daily average of 1 marks the semester-start surge.',
+                range: 'Covers the dashboard selected period.',
+                caveat: 'Tip: click any dot for the per-program breakdown of that date.' },
+            'req-by-program': { t: 'Requests by Program',
+                def: 'Pending book requests grouped by borrower program.',
+                interp: 'Shows which programs request the most — align acquisitions with the heaviest requesters.',
+                calc: 'Pending-only counts; program is the borrower department, falling back to staff role, else No program.',
+                ex: 'BSCS with 12 of 30 pending requests drives 40% of request demand.',
+                range: 'Pending requests within the selected period.' },
+            'trend-program-lines': { t: 'Borrowings Trend by Program',
+                def: 'Daily borrows split by program for the busiest programs.',
+                interp: 'Compare program rhythms side by side; a flat zero line means that program borrowed nothing that day.',
+                calc: 'Per-date, per-program counts, zero-filled; capped at the top 6 programs by total so the chart stays readable.',
+                ex: 'BSCS peaking every Monday while BSIT peaks midweek reveals different class schedules.',
+                range: 'Covers the dashboard selected period.',
+                caveat: 'Only the 6 busiest programs draw lines; smaller programs still count in totals.' },
+            'overdue-program-lines': { t: 'Overdue Trend by Program',
+                def: 'Daily overdue items split by program for the busiest programs.',
+                interp: 'Pinpoints which programs accumulate overdue items — aim reminders there first.',
+                calc: 'Same overdue rule and due-date grouping as the Overdue Trend, split per program and capped at the top 6.',
+                ex: 'A program holding half the overdue line deserves a targeted reminder run.',
+                range: 'Covers the dashboard selected period.',
+                caveat: 'Only the 6 busiest programs draw lines.' },
+            'top-books-program-list': { t: 'Top Books by Program',
+                def: 'Top borrowed titles labeled with their top borrowing program or programs.',
+                interp: 'See which programs drive each title — useful for reserve planning and duplicate-copy decisions.',
+                calc: 'Title-by-program borrow counts, top pairs first; each title shows up to its top 2 programs.',
+                ex: 'A programming title tagged BSCS (14) was borrowed 14 times by BSCS borrowers.',
+                range: 'Respects the selected dashboard period.' },
+            'fines-body': { t: 'Books with Most Fines',
+                def: 'Books ranked by total overdue fines incurred in the borrow-date window (top 10).',
+                interp: 'High totals point at chronic lateness on that title — follow up with its borrowers.',
+                calc: 'SUM of fine_amount plus the fine record count per title; only rows with fines above zero count.',
+                ex: '₱150 across 6 records averages ₱25 per late return of that title.',
+                range: 'Loans borrowed within the selected period.',
+                caveat: 'Fines follow the per-day rate and grace settings; rate changes apply forward. Tip: click a row for the per-program split.' },
+            'dept-bars': { t: 'Borrowings by Department / Program',
+                def: 'Total borrows per program with each program share of the total.',
+                interp: 'Leading programs are the heaviest library users — prioritize their reading lists and reserves.',
+                calc: 'Loan counts per borrower program. Share = program borrowings ÷ total borrowings × 100.',
+                ex: 'BSCS with 60 of 200 borrows holds a 30% share.',
+                range: 'Selected period; follows the department filter (shares use the scoped total when filtered).' },
+            'borrowers-dept-bars': { t: 'Active Borrowers by Department',
+                def: 'Distinct borrowers per program in the selected period.',
+                interp: 'Breadth of reach: compare against borrowings to separate many-casual-borrower programs from few-heavy-borrower ones.',
+                calc: 'COUNT(DISTINCT borrower) per program — repeat borrowers count once.',
+                ex: '20 borrowers making 100 borrows means 5 borrows each on average.',
+                range: 'Selected period; follows the department filter.' },
+            'overdue-dept-bars': { t: 'Overdue Items by Department',
+                def: 'Overdue loans grouped by program.',
+                interp: 'High bars name the programs to target with reminders and desk follow-ups.',
+                calc: 'Same overdue rule as elsewhere: flagged overdue plus active-but-past-due loans.',
+                ex: 'A program bar of 9 overdue items against 30 borrows is a 30% lateness rate.',
+                range: 'Selected period; follows the department filter.' },
+            'dept-leaderboard-body': { t: 'Department Leaderboard',
+                def: 'One row per program: borrowings, distinct borrowers, overdue items, and share.',
+                interp: 'Compare programs at a glance — high borrowings with high overdue suggests reminders; low borrowings suggests outreach.',
+                calc: 'A single query produces every column; share uses the period total (scoped total when the department filter applies).',
+                ex: 'BSCS 60 borrows · 20 borrowers · 3 overdue · 30% reads as broad, healthy use.',
+                range: 'Selected period; follows the department filter.' },
+            'top-books-list': { t: 'Top Borrowed Books in Selected Departments',
+                def: 'Most-borrowed titles in scope (top 5), each labeled with its top borrowing program.',
+                interp: 'Confirms which titles the filtered departments actually use.',
+                calc: 'Top 5 titles by borrow count plus the per-title program split underneath.',
+                ex: 'A title with 14 borrows tagged BSCS is carried by that program.',
+                range: 'Selected period; follows the department filter.' },
+            'donut-usertype': { t: 'Borrowings by User Type',
+                def: 'Borrows grouped by account role (Student, Faculty, staff).',
+                interp: 'The role mix shows who the collection serves most — student-heavy means course-driven demand.',
+                calc: 'Loan counts per role name; the center shows the scoped total.',
+                ex: '170 student of 200 borrows means 85% student-driven circulation.',
+                range: 'Selected period; follows the department filter.' },
+            'usage-trend-program-lines': { t: 'Department Borrowings Trend by Program',
+                def: 'Daily borrows per program within the department filter selection.',
+                interp: 'Track the filtered programs day by day; an empty selection means all programs.',
+                calc: 'Same per-date, per-program counts as the library trend, scoped to the selected departments and capped at 6 lines.',
+                ex: 'Selecting BSCS alone draws only the BSCS rhythm.',
+                range: 'Selected period; follows the department filter.' },
+            'usage-overdue-program-lines': { t: 'Department Overdue Trend by Program',
+                def: 'Daily overdue items per program within the department filter selection.',
+                interp: 'Watch whether filtered programs clear their overdue backlog over time.',
+                calc: 'Same overdue rule, scoped to the selected departments and capped at 6 lines.',
+                ex: 'A falling line after a reminder run shows the nudge worked.',
+                range: 'Selected period; follows the department filter.' },
+            'book-status-lines': { t: 'Book Status Trends',
+                def: 'Daily borrowed and returned counts plus the reservation queue for the selected book.',
+                interp: 'See this title circulation rhythm and whether the queue is building faster than copies free up.',
+                calc: 'Per-status daily series, zero-filled; reservation lines are dated by request date. Use the status filter to isolate lines.',
+                ex: 'Borrowed spiking while the queue line climbs means demand outruns supply.',
+                range: 'Selected book within the selected period.' },
+            'book-trend': { t: 'Book Borrowings Trend',
+                def: 'Daily borrows of the selected book in the period.',
+                interp: 'Spikes usually mean assignment-driven demand — a cue for reserves or extra copies.',
+                calc: 'Per-day borrow counts for this book only.',
+                ex: '8 borrows in one week against 1 the week before marks a class assignment.',
+                range: 'Selected book within the selected period.' },
+            'book-program': { t: 'Book Borrowings by Program',
+                def: 'The selected book borrows split by borrower program.',
+                interp: 'Shows exactly which classes use this title.',
+                calc: 'Borrow counts per program using the shared program label (department, else staff role, else No program).',
+                ex: '12 of 15 borrows from BSCS means one program carries this title.',
+                range: 'Selected book within the selected period.' },
+            'book-usertype': { t: 'Book Borrowings by User Type',
+                def: 'The selected book borrows split by account role.',
+                interp: 'Student-heavy uptake suggests course use; faculty uptake suggests research use.',
+                calc: 'Borrow counts per role name for this book only.',
+                ex: '14 student against 1 faculty borrow points at a class text.',
+                range: 'Selected book within the selected period.' },
+            'book-recent-body': { t: 'Recent Activity for This Book',
+                def: 'The latest 10 transactions for the selected book.',
+                interp: 'Who borrowed it last, when it is due, and its current state.',
+                calc: 'Newest first, capped at 10 rows.',
+                ex: 'Three active rows with the same due week means the copies return together.',
+                src: 'circulation_records for this book.',
+                caveat: 'Latest 10 only — full history lives on the circulation pages.' },
+            'book-top-util-body': { t: 'Top 10 Utilized Books',
+                def: 'The most-borrowed active titles in the selected period.',
+                interp: 'The working core of the collection — protect these with enough copies.',
+                calc: 'Borrow counts per active title, top 10.',
+                ex: 'A title borrowed 25 times in a month earns its shelf space twice over.',
+                range: 'Selected period.' },
+            'book-top-under-body': { t: 'Top 10 Underutilized Books',
+                def: 'Active titles with zero borrows in the selected period.',
+                interp: 'Weeding or promotion candidates — but check seasonality before pulling a title.',
+                calc: 'Active titles with no matching loans in the window, alphabetical, top 10.',
+                ex: 'A semestral text idle this month may surge next term.',
+                range: 'Zero borrows in this period only — not never borrowed.',
+                caveat: 'Absence here (empty table) is good news: everything circulated.' }
+        };
+
+        function openMetricInfo(cid) {
+            var info = METRIC_INFO[cid];
+            if (!info) return;
+            document.getElementById('metricInfoTitle').textContent = info.t || 'About this metric';
+            var sections = [['Definition', info.def], ['How to interpret', info.interp],
+                ["How it's calculated", info.calc], ['Example', info.ex],
+                ['Data source', info.src], ['Date range', info.range], ['Limitations', info.caveat]];
+            var html = '';
+            sections.forEach(function (s) {
+                if (!s[1]) return;
+                html += '<h4>' + escapeHtml(s[0]) + '</h4><p>' + escapeHtml(s[1]) + '</p>';
+            });
+            document.getElementById('metricInfoBody').innerHTML = html || '<p>No documentation available.</p>';
+            var modal = document.getElementById('metricInfoModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeMetricInfo() {
+            var modal = document.getElementById('metricInfoModal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            var expand = document.getElementById('chartExpandModal');
+            var drill = document.getElementById('trendDayModal');
+            if ((!expand || expand.classList.contains('hidden')) &&
+                (!drill || drill.classList.contains('hidden')) &&
+                document.getElementById('mobile-sidebar') &&
+                document.getElementById('mobile-sidebar').classList.contains('hidden')) {
+                document.body.style.overflow = '';
+            }
+        }
+
+        function initMetricInfo() {
+            Object.keys(METRIC_INFO).forEach(function (cid) {
+                var container = document.getElementById(cid);
+                if (!container) return;
+                var card = container.closest('div.bg-white');
+                if (!card || card.querySelector('[data-metric="' + cid + '"]')) return;
+                var h3 = card.querySelector('h3');
+                if (!h3) return;
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'metric-info-btn';
+                btn.title = 'About this metric';
+                btn.setAttribute('aria-label', 'About this metric');
+                btn.setAttribute('data-metric', cid);
+                btn.innerHTML = '<span class="material-symbols-outlined">info</span>';
+                var host = (h3.parentElement && h3.parentElement !== card) ? h3.parentElement : null;
+                if (!host) {
+                    // Bare h3 header: wrap it with the button in a flex row
+                    // (same pattern as the expand buttons).
+                    host = document.createElement('div');
+                    host.className = 'flex items-center justify-between gap-2 mb-2';
+                    h3.classList.remove('mb-1', 'mb-2');
+                    card.insertBefore(host, h3);
+                    host.appendChild(h3);
+                }
+                host.appendChild(btn);
+            });
+        }
+
+        document.addEventListener('click', function (e) {
+            var b = e.target && e.target.closest ? e.target.closest('[data-metric]') : null;
+            if (!b) return;
+            openMetricInfo(b.getAttribute('data-metric'));
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                var m = document.getElementById('metricInfoModal');
+                if (m && !m.classList.contains('hidden')) closeMetricInfo();
+            }
+        });
         /* ================= Expand-to-modal (all tabs, pie/donut cards out) ===
            Every non-pie graph/table card gets an expand (open_in_full)
            button that pops the whole card + its data into #chartExpandModal.
@@ -2345,6 +2684,10 @@ function syncGlobalFilterCustomDates() {
         });
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
+                // The metric-info modal sits above all others — it closes
+                // itself via its own listener; don't close anything beneath.
+                var mi = document.getElementById('metricInfoModal');
+                if (mi && !mi.classList.contains('hidden')) return;
                 var tm = document.getElementById('trendDayModal');
                 if (tm && !tm.classList.contains('hidden')) closeTrendDayModal();
                 return;
@@ -2402,9 +2745,11 @@ function syncGlobalFilterCustomDates() {
             });
             document.addEventListener('keydown', function (e) {
                 if (e.key === 'Escape') {
-                    // The trend-day modal sits above the expand modal — it
-                    // closes itself via its own listener; don't close the
-                    // expand view underneath it.
+                    // The trend-day and metric-info modals sit above the
+                    // expand modal — they close themselves via their own
+                    // listeners; don't close the expand view underneath.
+                    var mi2 = document.getElementById('metricInfoModal');
+                    if (mi2 && !mi2.classList.contains('hidden')) return;
                     var tm = document.getElementById('trendDayModal');
                     if (tm && !tm.classList.contains('hidden')) return;
                     var modal = document.getElementById('chartExpandModal');
@@ -2417,6 +2762,7 @@ function syncGlobalFilterCustomDates() {
         updateUsageDeptLabel();
         renderBookTraffic();
         initChartExpand();
+        initMetricInfo();
         // Deep-link: ?tab=<collection|library|usage|book> reopens the tab,
         // so filter applies, exports, and picker round-trips stay put.
         try {
