@@ -16,6 +16,9 @@ BOOK = (1, 'T', 'A', '', '', None, '', '', '', '', '', 'active',
 
 class TestDeskBorrow:
     def test_ids_both_bogus(self, librarian_client, mock_db):
+        """Validates ids both bogus `/librarian/circulation/borrow` as librarian (expects 302) [TestDeskBorrow / borrow return edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         mock_db['fetch_one'].return_value = None
         resp = librarian_client.post(
             '/librarian/circulation/borrow',
@@ -24,6 +27,9 @@ class TestDeskBorrow:
         assert resp.status_code == 302
 
     def test_short_borrower_row(self, librarian_client, mock_db):
+        """Validates short borrower row `/librarian/circulation/borrow` as librarian (expects 302) [TestDeskBorrow / borrow return edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         mock_db['fetch_one'].side_effect = [(5,), None, None, None]
         resp = librarian_client.post(
             '/librarian/circulation/borrow',
@@ -32,6 +38,9 @@ class TestDeskBorrow:
         assert resp.status_code == 302
 
     def test_blocked_borrower(self, librarian_client, mock_db):
+        """Validates blocked borrower `/librarian/circulation/borrow` as librarian (expects 302) [TestDeskBorrow / borrow return edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         mock_db['fetch_one'].return_value = (5, 'S1', 'BSIS', 'blocked',
                                              'Ann', 1, 'Student')
         resp = librarian_client.post(
@@ -41,6 +50,9 @@ class TestDeskBorrow:
         assert resp.status_code == 302
 
     def test_archived_book(self, librarian_client, mock_db):
+        """Validates archived book `/librarian/circulation/borrow` as librarian (expects 302) [TestDeskBorrow / borrow return edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         book = (1, 'T', 'A', '', '', None, '', '', '', '', '', 'archived',
                 '2026-01-01', None, None)
         mock_db['fetch_one'].side_effect = [DETAIL, ACC, book]
@@ -51,6 +63,9 @@ class TestDeskBorrow:
         assert resp.status_code == 302
 
     def test_lost_copy(self, librarian_client, mock_db):
+        """Validates lost copy `/librarian/circulation/borrow` as librarian (expects 302) [TestDeskBorrow / borrow return edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         mock_db['fetch_one'].side_effect = [DETAIL, ACC, BOOK, (1,)]
         resp = librarian_client.post(
             '/librarian/circulation/borrow',
@@ -61,6 +76,9 @@ class TestDeskBorrow:
 
 class TestDeskReturn:
     def test_short_loan_row(self, librarian_client, mock_db):
+        """Validates short loan row `/librarian/circulation/return` as librarian (expects 302) [TestDeskReturn / borrow return edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         mock_db['fetch_one'].side_effect = [ACC, (7,), None, None]
         resp = librarian_client.post(
             '/librarian/circulation/return',
@@ -68,6 +86,9 @@ class TestDeskReturn:
         assert resp.status_code == 302
 
     def test_evil_damage_notes(self, librarian_client, mock_db):
+        """Validates evil damage notes `/librarian/circulation/return` as librarian (expects 302) [TestDeskReturn / borrow return edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         loan = (7, 1, 5, '2026-01-01', '2026-01-02', 'daily_circulation',
                 'borrow', '2026-01-01', '2026-01-01', 0.0, 'active')
         mock_db['fetch_one'].side_effect = [ACC, loan, None, (0,)]
@@ -78,6 +99,9 @@ class TestDeskReturn:
         assert resp.status_code == 302
 
     def test_huge_damage_notes(self, librarian_client, mock_db):
+        """Validates huge damage notes `/librarian/circulation/return` as librarian (expects 302) [TestDeskReturn / borrow return edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         loan = (7, 1, 5, '2026-01-01', '2026-01-02', 'daily_circulation',
                 'borrow', '2026-01-01', '2026-01-01', 0.0, 'active')
         mock_db['fetch_one'].side_effect = [ACC, loan, None, (0,)]
@@ -88,6 +112,9 @@ class TestDeskReturn:
         assert resp.status_code == 302
 
     def test_lost_flag_no_loan(self, librarian_client, mock_db):
+        """Validates lost flag no loan `/librarian/circulation/return` as librarian (expects 302) [TestDeskReturn / borrow return edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         mock_db['fetch_one'].side_effect = [ACC, None]
         resp = librarian_client.post(
             '/librarian/circulation/return',
@@ -97,6 +124,9 @@ class TestDeskReturn:
 
 class TestDueDate:
     def test_garbage_config(self, app):
+        """Validates garbage config [TestDueDate / borrow return edge cases].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         from app.circulation.routes import _compute_due_date
         from datetime import date, datetime, timedelta
         with app.test_request_context():
@@ -114,6 +144,9 @@ class TestDueDate:
                 *date.today().timetuple()[:3], 17, 0)
 
     def test_due_helpers(self):
+        """Validates due helpers [TestDueDate / borrow return edge cases].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         from datetime import date, datetime, timedelta
         from app.circulation.models import (
             coerce_due_day, end_of_day, format_due)

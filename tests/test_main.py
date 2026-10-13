@@ -3,12 +3,18 @@
 
 class TestLandingPage:
     def test_index_public(self, client, mock_db):
+        """Validates index public `/` (expects 200) [TestLandingPage / main].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = client.get('/')
         assert resp.status_code == 200
         assert b'MCST' in resp.data or b'library' in resp.data.lower() or b'Library' in resp.data
 
     def test_index_shows_new_arrivals(self, client, mock_db):
+        """Validates index shows new arrivals `/` (expects 200) [TestLandingPage / main].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = [
             (1, 'New Book Title', 'Author Name', None, None, 2025,
              None, None, None, 'Book', None, 'active', '2025-01-01'),
@@ -20,26 +26,41 @@ class TestLandingPage:
 
 class TestDashboard:
     def test_dashboard_unauthenticated_redirects(self, client):
+        """Validates dashboard unauthenticated redirects `/dashboard` (expects 302) [TestDashboard / main].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = client.get('/dashboard')
         assert resp.status_code == 302
         assert '/login' in resp.location
 
     def test_dashboard_redirects_student_to_profile(self, student_client):
+        """Validates dashboard redirects student to profile `/dashboard` as student (expects 302) [TestDashboard / main].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         resp = student_client.get('/dashboard')
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
     def test_dashboard_redirects_faculty_to_profile(self, faculty_client):
+        """Validates dashboard redirects faculty to profile `/dashboard` as faculty (expects 302) [TestDashboard / main].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         resp = faculty_client.get('/dashboard')
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
     def test_dashboard_redirects_librarian_to_profile(self, librarian_client):
+        """Validates dashboard redirects librarian to profile `/dashboard` as librarian (expects 302) [TestDashboard / main].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         resp = librarian_client.get('/dashboard')
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
     def test_dashboard_redirects_admin_to_profile(self, admin_client):
+        """Validates dashboard redirects admin to profile `/dashboard` as admin (expects 302) [TestDashboard / main].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         resp = admin_client.get('/dashboard')
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
@@ -47,49 +68,76 @@ class TestDashboard:
 
 class TestUserProfile:
     def test_profile_unauthenticated_redirects(self, client):
+        """Validates profile unauthenticated redirects `/user/profile` (expects 302) [TestUserProfile / main].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = client.get('/user/profile')
         assert resp.status_code == 302
         assert '/login' in resp.location
 
     def test_profile_student_allowed(self, student_client, mock_db):
+        """Validates profile student allowed `/user/profile` as student (expects 200) [TestUserProfile / main].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = (1, 'student@mcst.edu.ph', 'Student', 'Test Student')
         resp = student_client.get('/user/profile')
         assert resp.status_code == 200
 
     def test_profile_faculty_allowed(self, faculty_client, mock_db):
+        """Validates profile faculty allowed `/user/profile` as faculty (expects 200) [TestUserProfile / main].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = (2, 'faculty@mcst.edu.ph', 'Faculty', 'Test Faculty')
         resp = faculty_client.get('/user/profile')
         assert resp.status_code == 200
 
     def test_profile_librarian_allowed(self, librarian_client, mock_db):
+        """Validates profile librarian allowed `/user/profile` as librarian (expects 200) [TestUserProfile / main].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = (3, 'librarian@mcst.edu.ph', 'Librarian', 'Test Librarian')
         resp = librarian_client.get('/user/profile')
         assert resp.status_code == 200
 
     def test_profile_admin_allowed(self, admin_client, mock_db):
+        """Validates profile admin allowed `/user/profile` as admin (expects 200) [TestUserProfile / main].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = (4, 'admin@mcst.edu.ph', 'Admin', 'Test Admin')
         resp = admin_client.get('/user/profile')
         assert resp.status_code == 200
 
     def test_profile_does_not_show_admin_tools(self, admin_client, mock_db):
+        """Validates profile does not show admin tools `/user/profile` as admin [TestUserProfile / main].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = (4, 'admin@mcst.edu.ph', 'Admin', 'Test Admin')
         resp = admin_client.get('/user/profile')
         assert b'Backup' not in resp.data
         assert b'Cataloging' not in resp.data
 
     def test_profile_shows_admin_dashboard_button(self, admin_client, mock_db):
+        """Validates profile shows admin dashboard button `/user/profile` as admin [TestUserProfile / main].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = (4, 'admin@mcst.edu.ph', 'Admin', 'Test Admin')
         resp = admin_client.get('/user/profile')
         assert b'Admin Dashboard' in resp.data
         assert b'Librarian Dashboard' in resp.data
 
     def test_profile_shows_librarian_dashboard_button(self, librarian_client, mock_db):
+        """Validates profile shows librarian dashboard button `/user/profile` as librarian [TestUserProfile / main].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = (3, 'librarian@mcst.edu.ph', 'Librarian', 'Test Librarian')
         resp = librarian_client.get('/user/profile')
         assert b'Librarian Dashboard' in resp.data
         assert b'Admin Dashboard' not in resp.data
 
     def test_profile_student_has_no_dashboard_buttons(self, student_client, mock_db):
+        """Validates profile student has no dashboard buttons `/user/profile` as student [TestUserProfile / main].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = (1, 'student@mcst.edu.ph', 'Student', 'Test Student')
         resp = student_client.get('/user/profile')
         assert b'Admin Dashboard' not in resp.data
@@ -98,52 +146,82 @@ class TestUserProfile:
 
 class TestUserHistory:
     def test_history_unauthenticated_redirects(self, client):
+        """Validates history unauthenticated redirects `/user/history` (expects 302) [TestUserHistory / main].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = client.get('/user/history')
         assert resp.status_code == 302
         assert '/login' in resp.location
 
     def test_history_authenticated_allowed(self, student_client):
+        """Validates history authenticated allowed `/user/history` as student (expects 200) [TestUserHistory / main].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         resp = student_client.get('/user/history')
         assert resp.status_code == 200
 
     def test_history_admin_allowed(self, admin_client):
+        """Validates history admin allowed `/user/history` as admin (expects 200) [TestUserHistory / main].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         resp = admin_client.get('/user/history')
         assert resp.status_code == 200
 
 
 class TestRoleDashboards:
     def test_librarian_dashboard_librarian_allowed(self, librarian_client, mock_db):
+        """Validates librarian dashboard librarian allowed `/librarian` as librarian (expects 200) [TestRoleDashboards / main].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = librarian_client.get('/librarian')
         assert resp.status_code == 200
 
     def test_librarian_dashboard_admin_allowed(self, admin_client, mock_db):
+        """Validates librarian dashboard admin allowed `/librarian` as admin (expects 200) [TestRoleDashboards / main].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get('/librarian')
         assert resp.status_code == 200
         assert b'Admin Dashboard' in resp.data
 
     def test_librarian_dashboard_student_forbidden(self, student_client):
+        """Validates librarian dashboard student forbidden `/librarian` as student (expects 302) [TestRoleDashboards / main].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         resp = student_client.get('/librarian')
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
     def test_admin_dashboard_admin_allowed(self, admin_client, mock_db):
+        """Validates admin dashboard admin allowed `/admin` as admin (expects 200) [TestRoleDashboards / main].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get('/admin')
         assert resp.status_code == 200
 
     def test_admin_dashboard_librarian_forbidden(self, librarian_client):
+        """Validates admin dashboard librarian forbidden `/admin` as librarian (expects 302) [TestRoleDashboards / main].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         resp = librarian_client.get('/admin')
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
     def test_admin_dashboard_student_forbidden(self, student_client):
+        """Validates admin dashboard student forbidden `/admin` as student (expects 302) [TestRoleDashboards / main].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         resp = student_client.get('/admin')
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
     def test_admin_dashboard_unauthenticated_redirects(self, client):
+        """Validates admin dashboard unauthenticated redirects `/admin` (expects 302) [TestRoleDashboards / main].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = client.get('/admin')
         assert resp.status_code == 302
         assert '/login' in resp.location
@@ -154,6 +232,9 @@ class TestDashboardAttention:
     GROUPS = [(1, 'T', 'A', 10, 3, 2, 0, 0)]
 
     def test_attention_counts(self, mock_db):
+        """Validates attention counts [TestDashboardAttention / main].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.main.models import get_attention_summary
         mock_db['fetch_one'].side_effect = [(10,), (3,), (1,)]
         mock_db['fetch_all'].side_effect = [self.PENDING, self.GROUPS]
@@ -163,6 +244,9 @@ class TestDashboardAttention:
         }
 
     def test_dashboard_stats_extended(self, mock_db):
+        """Validates dashboard stats extended [TestDashboardAttention / main].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.main.models import get_dashboard_stats
         mock_db['fetch_one'].side_effect = [(100,), (250,), (10,), (4,), (3,)]
         mock_db['fetch_all'].side_effect = [self.GROUPS, [], [(7,)]]
@@ -174,6 +258,9 @@ class TestDashboardAttention:
         assert stats['total_collection'] == 100
 
     def test_waiting_reservations_skips_bad_rows(self, mock_db):
+        """Validates waiting reservations skips bad rows [TestDashboardAttention / main].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.main.models import count_waiting_reservations
         mock_db['fetch_all'].return_value = [
             (1, 'T', 'A', 10, 3, 2, 0, 0), ('short',), (1, 'T', 'A', 1, 'x', 0, 0, 0),
@@ -181,7 +268,11 @@ class TestDashboardAttention:
         assert count_waiting_reservations() == 5
 
     def test_stats_bypassed_without_app_context(self, mock_db):
-        """Direct model calls (no app context) always hit the DB so unit
+        """Validates stats bypassed without app context [TestDashboardAttention / main].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data).
+
+Direct model calls (no app context) always hit the DB so unit
         tests stay deterministic and never leak cached values."""
         from app.main.models import get_dashboard_stats
         mock_db['fetch_one'].side_effect = [(100,), (250,), (10,), (4,), (3,)]
@@ -194,7 +285,11 @@ class TestDashboardAttention:
         assert second['total_titles'] == 1
 
     def test_stats_cached_in_requests(self, app, mock_db):
-        """Inside a non-testing request the second call is served from
+        """Validates stats cached in requests [TestDashboardAttention / main].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data).
+
+Inside a non-testing request the second call is served from
         cache (no extra DB hits) until cleared."""
         from app.main.models import get_dashboard_stats, clear_stats_cache
         clear_stats_cache()
@@ -219,6 +314,9 @@ class TestDashboardAttention:
             clear_stats_cache()
 
     def test_librarian_dashboard_shows_panel(self, librarian_client, mock_db):
+        """Validates librarian dashboard shows panel `/librarian` as librarian (expects 200) [TestDashboardAttention / main].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].side_effect = [
             (100,), (250,), (10,), (4,), (3,), (10,), (3,), (1,),
         ]
@@ -241,6 +339,9 @@ class TestDashboardAttention:
         assert b'/librarian/users' in resp.data
 
     def test_dashboard_all_clear_state(self, librarian_client, mock_db):
+        """Validates dashboard all clear state `/librarian` as librarian (expects 200) [TestDashboardAttention / main].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = []
         resp = librarian_client.get('/librarian')
@@ -248,6 +349,9 @@ class TestDashboardAttention:
         assert b'All clear' in resp.data
 
     def test_admin_dashboard_shows_panel(self, admin_client, mock_db):
+        """Validates admin dashboard shows panel `/admin` as admin (expects 200) [TestDashboardAttention / main].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get('/admin')

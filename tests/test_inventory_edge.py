@@ -21,15 +21,24 @@ class TestEmptyDb:
         mock_db['execute'].return_value = []
 
     def test_page_empty(self, librarian_client, mock_db):
+        """Validates page empty `/librarian/inventory` as librarian (expects 200) [TestEmptyDb / inventory edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates inventory counts/actions are wrong."""
         self._empty(mock_db)
         assert librarian_client.get('/librarian/inventory').status_code == 200
 
     def test_page_none_models(self, librarian_client, mock_db):
+        """Validates page none models `/librarian/inventory` as librarian (expects 200) [TestEmptyDb / inventory edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates inventory counts/actions are wrong."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = None
         assert librarian_client.get('/librarian/inventory').status_code == 200
 
     def test_short_session_row(self, librarian_client, mock_db):
+        """Validates short session row `/librarian/inventory?session_id=1` as librarian (expects 200) [TestEmptyDb / inventory edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates inventory counts/actions are wrong."""
         mock_db['fetch_one'].return_value = (1, 3)
         mock_db['fetch_all'].return_value = []
         assert librarian_client.get(
@@ -43,6 +52,9 @@ class TestHostileParams:
         mock_db['fetch_all'].return_value = []
 
     def test_page_params(self, librarian_client, mock_db):
+        """Validates page params as librarian (expects 200) [TestHostileParams / inventory edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates inventory counts/actions are wrong."""
         self._ok(mock_db)
         for url in ('/librarian/inventory?page=abc',
                     '/librarian/inventory?page=-5',
@@ -53,6 +65,9 @@ class TestHostileParams:
             assert librarian_client.get(url).status_code == 200, url
 
     def test_complete_variants(self, librarian_client, mock_db):
+        """Validates complete variants as librarian (expects 302) [TestHostileParams / inventory edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates inventory counts/actions are wrong."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = []
         for url in ('/librarian/inventory/session/999/complete',
@@ -61,11 +76,17 @@ class TestHostileParams:
             assert librarian_client.post(url).status_code == 302, url
 
     def test_complete_short_row(self, librarian_client, mock_db):
+        """Validates complete short row `/librarian/inventory/session/1/complete` as librarian (expects 302) [TestHostileParams / inventory edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates inventory counts/actions are wrong."""
         mock_db['fetch_one'].return_value = (1, 3)
         assert librarian_client.post(
             '/librarian/inventory/session/1/complete').status_code == 302
 
     def test_scan_hostile(self, librarian_client, mock_db):
+        """Validates scan hostile `/librarian/inventory/scan` as librarian (expects 302) [TestHostileParams / inventory edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates inventory counts/actions are wrong."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = []
         for data in ({}, {'accession_number': ''},
@@ -77,6 +98,9 @@ class TestHostileParams:
                 '/librarian/inventory/scan', data=data).status_code == 302, data
 
     def test_check_hostile(self, librarian_client, mock_db):
+        """Validates check hostile `/librarian/inventory/check` as librarian (expects 302) [TestHostileParams / inventory edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates inventory counts/actions are wrong."""
         mock_db['fetch_one'].return_value = None
         for data in ({}, {'accession_number': 'NOPE'},
                      {'accession_number': 'X' * 2000}):
@@ -84,6 +108,9 @@ class TestHostileParams:
                 '/librarian/inventory/check', data=data).status_code == 302, data
 
     def test_damage_lost_missing(self, librarian_client, mock_db):
+        """Validates damage lost missing as librarian (expects 302) [TestHostileParams / inventory edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates inventory counts/actions are wrong."""
         mock_db['fetch_one'].return_value = None
         for url in ('/librarian/inventory/accession/999/damage',
                     '/librarian/inventory/accession/999/lost',
@@ -92,12 +119,18 @@ class TestHostileParams:
                 url, data={'notes': 'x'}).status_code == 302, url
 
     def test_damage_huge_notes(self, librarian_client, mock_db):
+        """Validates damage huge notes `/librarian/inventory/accession/10/damage` as librarian (expects 302) [TestHostileParams / inventory edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates inventory counts/actions are wrong."""
         mock_db['fetch_one'].return_value = ACC
         assert librarian_client.post(
             '/librarian/inventory/accession/10/damage',
             data={'notes': 'x' * 10000}).status_code == 302
 
     def test_export_variants(self, librarian_client, mock_db):
+        """Validates export variants as librarian (expects 302) [TestHostileParams / inventory edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates inventory counts/actions are wrong."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = []
         for url in ('/librarian/inventory/session/999/export',
@@ -107,6 +140,9 @@ class TestHostileParams:
 
 class TestXss:
     def test_evil_scan_rows(self, librarian_client, mock_db):
+        """Validates evil scan rows `/librarian/inventory` as librarian [TestXss / inventory edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates inventory counts/actions are wrong."""
         evil = '<script>alert(1)</script>'
         row = (1, 10, evil, evil, 'available', '2026-01-05', evil)
         mock_db['fetch_one'].return_value = (0,)
@@ -115,6 +151,9 @@ class TestXss:
         assert evil not in body
 
     def test_string_dates(self, librarian_client, mock_db):
+        """Validates string dates `/librarian/inventory` as librarian (expects 200) [TestXss / inventory edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates inventory counts/actions are wrong."""
         mock_db['fetch_one'].return_value = None
         row = (1, 10, 'ACC-1', 'T', 'available', '2026-01-05', '')
         mock_db['fetch_all'].side_effect = [[], [row], [(0,)]]
@@ -123,12 +162,18 @@ class TestXss:
 
 class TestAuth:
     def test_anon(self, client):
+        """Validates anon `/librarian/inventory` (expects 302) [TestAuth / inventory edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates inventory counts/actions are wrong."""
         assert client.get('/librarian/inventory').status_code == 302
         assert client.post('/librarian/inventory/scan').status_code == 302
         assert client.post(
             '/librarian/inventory/accession/1/lost').status_code == 302
 
     def test_student_blocked(self, student_client, mock_db):
+        """Validates student blocked `/librarian/inventory` as student (expects 302) [TestAuth / inventory edge cases].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates inventory counts/actions are wrong."""
         assert student_client.get('/librarian/inventory').status_code == 302
         resp = student_client.post('/librarian/inventory/scan',
                                    data={'accession_number': 'X'})
@@ -138,4 +183,7 @@ class TestAuth:
         assert writes == []
 
     def test_faculty_blocked(self, faculty_client):
+        """Validates faculty blocked `/librarian/inventory` as faculty (expects 302) [TestAuth / inventory edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates inventory counts/actions are wrong."""
         assert faculty_client.get('/librarian/inventory').status_code == 302

@@ -299,10 +299,7 @@ def set_dashboard_cache(filter_params, payload, generated_by=None):
 # Approximations (documented, not silent):
 #   - "Condition" buckets are derived from inventory_state + lost_flag since
 #     there is no condition column: available -> New/Excellent,
-#     borrowed -> Very Good, missing -> Good/Fair split, damaged -> Fair,
-#     lost -> Poor.
-#   - "Under Maintenance" maps to inventory_state = 'missing' (closest
-#     existing bucket); there is no maintenance table.
+#     borrowed -> Very Good, damaged -> Fair, lost -> Poor.
 #   - "Peak periods by hour" is served as borrowings by day because
 #     borrow_date is a DATE with no time-of-day column.
 # ---------------------------------------------------------------------------
@@ -382,7 +379,7 @@ def copies_by_status_summary(start_date=None, end_date=None, borrow_type=None):
     """Return [(status, copies)] for the Copies-by-Status chart/export.
 
     Available = active-catalog copies minus borrowed, overdue, reserved,
-    lost/damaged (including lost-flagged loans) and missing (maintenance)
+    and lost/damaged (including lost-flagged loans and missing)
     copies, floored at zero. This matches ``compute_dashboard`` in
     ``app/analytics/routes.py`` so the KPI card and chart agree.
     """
@@ -409,12 +406,10 @@ def copies_by_status_summary(start_date=None, end_date=None, borrow_type=None):
         lost_flagged = int(lost_flagged_row[0]) if lost_flagged_row else 0
     except (IndexError, TypeError, ValueError):
         lost_flagged = 0
-    lost_damaged = inv.get('lost', 0) + inv.get('damaged', 0) + lost_flagged
-    maintenance = inv.get('missing', 0)
-    available = max(total - borrowed - overdue - reserved - lost_damaged - maintenance, 0)
+    lost_damaged = inv.get('lost', 0) + inv.get('damaged', 0) + inv.get('missing', 0) + lost_flagged
+    available = max(total - borrowed - overdue - reserved - lost_damaged, 0)
     return [('Available', available), ('Borrowed', borrowed), ('Reserved', reserved),
-            ('Overdue', overdue), ('Lost / Damaged', lost_damaged),
-            ('Under Maintenance', maintenance)]
+            ('Overdue', overdue), ('Lost / Damaged', lost_damaged)]
 
 
 def collection_by_category(start_date=None, end_date=None, categories=None):

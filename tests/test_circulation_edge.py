@@ -15,20 +15,32 @@ LOAN = (7, 1, 5, '2026-01-01', '2026-01-02', 'daily_circulation', 'borrow',
 
 class TestUserReturn:
     def test_missing_id(self, student_client):
+        """Validates missing id `/user/return` as student (expects 302) [TestUserReturn / circulation edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         assert student_client.post('/user/return', data={}).status_code == 302
 
     def test_other_users_loan(self, student_client, mock_db):
+        """Validates other users loan `/user/return` as student (expects 302) [TestUserReturn / circulation edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         mock_db['fetch_one'].return_value = None
         assert student_client.post(
             '/user/return', data={'circulation_id': 7}).status_code == 302
 
     def test_huge_id(self, student_client, mock_db):
+        """Validates huge id `/user/return` as student (expects 302) [TestUserReturn / circulation edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         mock_db['fetch_one'].return_value = None
         assert student_client.post(
             '/user/return',
             data={'circulation_id': 999999999}).status_code == 302
 
     def test_overnight_blocked(self, student_client, mock_db):
+        """Validates overnight blocked `/user/return` as student (expects 302) [TestUserReturn / circulation edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         loan = (7, 1, 5, '2026-01-01', '2026-01-02', 'overnight', 'borrow',
                 '2026-01-01', '2026-01-01', 0.0, 'active')
         mock_db['fetch_one'].return_value = loan
@@ -36,6 +48,9 @@ class TestUserReturn:
             '/user/return', data={'circulation_id': 7}).status_code == 302
 
     def test_short_loan_row(self, student_client, mock_db):
+        """Validates short loan row `/user/return` as student (expects 302) [TestUserReturn / circulation edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         mock_db['fetch_one'].return_value = (7,)
         assert student_client.post(
             '/user/return', data={'circulation_id': 7}).status_code == 302
@@ -43,6 +58,9 @@ class TestUserReturn:
 
 class TestPayFine:
     def test_wrong_borrower(self, librarian_client, mock_db):
+        """Validates wrong borrower `/librarian/users/4/fines/9/pay` as librarian (expects 302) [TestPayFine / circulation edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         mock_db['fetch_one'].side_effect = [(4, 'a@x.ph', 'Student', 'N'),
                                             (5, 1, 'S1', 'BSIS', 'a', None,
                                              None, None),
@@ -51,6 +69,9 @@ class TestPayFine:
         assert resp.status_code == 302
 
     def test_zero_fine(self, librarian_client, mock_db):
+        """Validates zero fine `/librarian/users/4/fines/9/pay` as librarian (expects 302) [TestPayFine / circulation edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         mock_db['fetch_one'].side_effect = [(4, 'a@x.ph', 'Student', 'N'),
                                             (5, 1, 'S1', 'BSIS', 'a', None,
                                              None, None),
@@ -59,6 +80,9 @@ class TestPayFine:
             '/librarian/users/4/fines/9/pay').status_code == 302
 
     def test_already_paid(self, librarian_client, mock_db):
+        """Validates already paid `/librarian/users/4/fines/9/pay` as librarian (expects 302) [TestPayFine / circulation edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         mock_db['fetch_one'].side_effect = [(4, 'a@x.ph', 'Student', 'N'),
                                             (5, 1, 'S1', 'BSIS', 'a', None,
                                              None, None),
@@ -67,6 +91,9 @@ class TestPayFine:
             '/librarian/users/4/fines/9/pay').status_code == 302
 
     def test_missing_user_or_fine(self, librarian_client, mock_db):
+        """Validates missing user or fine `/librarian/users/999/fines/1/pay` as librarian (expects 302) [TestPayFine / circulation edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         mock_db['fetch_one'].side_effect = [None]
         assert librarian_client.post(
             '/librarian/users/999/fines/1/pay').status_code == 302
@@ -76,6 +103,9 @@ class TestPayFine:
             '/librarian/users/4/fines/1/pay').status_code == 302
 
     def test_student_cannot_pay(self, student_client, mock_db):
+        """Validates student cannot pay `/librarian/users/1/fines/1/pay` as student (expects 302) [TestPayFine / circulation edge cases].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         resp = student_client.post('/librarian/users/1/fines/1/pay')
         assert resp.status_code == 302
         writes = [c[0][0] for c in mock_db['execute'].call_args_list
@@ -85,11 +115,17 @@ class TestPayFine:
 
 class TestFineCalc:
     def test_negative_days_zero(self, mock_db):
+        """Validates negative days zero [TestFineCalc / circulation edge cases].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         from app.circulation.models import calculate_fine
         mock_db['fetch_one'].return_value = None
         assert calculate_fine(7, 5.0, 0) == 0.0
 
     def test_garbage_config(self, mock_db):
+        """Validates garbage config [TestFineCalc / circulation edge cases].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         from app.circulation.models import calculate_fine
         mock_db['fetch_one'].return_value = None
         assert calculate_fine(7, 'junk', 'junk') == 0.0
@@ -97,12 +133,18 @@ class TestFineCalc:
 
 class TestHistory:
     def test_list_hostile_search(self, librarian_client, mock_db):
+        """Validates list hostile search as librarian (expects 200) [TestHistory / circulation edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         mock_db['fetch_all'].return_value = []
         for url in ('/librarian/users/history?q=' + 'x' * 2000,
                     '/librarian/users/history?q=<script>alert(1)</script>'):
             assert librarian_client.get(url).status_code == 200, url[:60]
 
     def test_evil_history_rows(self, librarian_client, mock_db):
+        """Validates evil history rows `/librarian/users/history` as librarian [TestHistory / circulation edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         evil = '<script>alert(1)</script>'
         mock_db['fetch_all'].return_value = [(1, evil, 'e@x.ph', 'Student')]
         mock_db['fetch_one'].return_value = (1, 'e@x.ph', 'Student', 'N')
@@ -110,6 +152,9 @@ class TestHistory:
         assert evil not in body
 
     def test_detail_none_models(self, librarian_client, mock_db):
+        """Validates detail none models `/librarian/users/4/history` as librarian (expects 302) [TestHistory / circulation edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = None
         assert librarian_client.get(
@@ -118,11 +163,17 @@ class TestHistory:
 
 class TestCirculationPage:
     def test_none_models(self, librarian_client, mock_db):
+        """Validates none models `/librarian/circulation` as librarian (expects 200) [TestCirculationPage / circulation edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = None
         assert librarian_client.get('/librarian/circulation').status_code == 200
 
     def test_evil_loan_rows(self, librarian_client, mock_db):
+        """Validates evil loan rows `/librarian/circulation` as librarian [TestCirculationPage / circulation edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         evil = '<img src=x onerror=alert(1)>'
         row = (7, '2026-01-01', '2026-01-02', 'overnight', 'active', evil,
                1, evil, 'ACC-1', 5)
@@ -132,6 +183,9 @@ class TestCirculationPage:
         assert evil not in body
 
     def test_desk_borrow_blocked_archived(self, librarian_client, mock_db):
+        """Validates desk borrow blocked archived `/librarian/circulation/borrow` as librarian (expects 302) [TestCirculationPage / circulation edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         book = (1, 'T', 'A', '', '', None, '', '', '', '', '', 'archived',
                 '2026-01-01', None, None)
         mock_db['fetch_one'].side_effect = [

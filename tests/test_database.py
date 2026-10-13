@@ -28,6 +28,9 @@ def _cursor_mock(conn, description, fetchall_result=None):
 
 class TestExecuteTransactions:
     def test_select_commits_to_release_locks(self, app):
+        """Validates select commits to release locks [TestExecuteTransactions / database].
+    If fails: likely model SQL changed (SELECT).
+    Failure indicates database is broken for this case (users see wrong page, blocked action, or bad data)."""
         db, pool = _db_with_fake_pool()
         conn = MagicMock()
         pool.getconn.return_value = conn
@@ -38,6 +41,9 @@ class TestExecuteTransactions:
         conn.rollback.assert_not_called()
 
     def test_write_commits(self, app):
+        """Validates write commits [TestExecuteTransactions / database].
+    If fails: likely model SQL changed (UPDATE).
+    Failure indicates database is broken for this case (users see wrong page, blocked action, or bad data)."""
         db, pool = _db_with_fake_pool()
         conn = MagicMock()
         pool.getconn.return_value = conn
@@ -49,6 +55,9 @@ class TestExecuteTransactions:
         conn.rollback.assert_not_called()
 
     def test_error_rolls_back_without_commit(self, app):
+        """Validates error rolls back without commit [TestExecuteTransactions / database].
+    If fails: likely model SQL changed (UPDATE).
+    Failure indicates database is broken for this case (users see wrong page, blocked action, or bad data)."""
         db, pool = _db_with_fake_pool()
         conn = MagicMock()
         pool.getconn.return_value = conn
@@ -75,6 +84,9 @@ class TestInitDbSchemaGate:
         return patcher
 
     def test_schema_runs_by_default(self, app):
+        """Validates schema runs by default [TestInitDbSchemaGate / database].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates database is broken for this case (users see wrong page, blocked action, or bad data)."""
         from unittest.mock import patch
         from app import database
         patcher = self._pause_init_db_patch()
@@ -87,6 +99,9 @@ class TestInitDbSchemaGate:
             patcher.start()
 
     def test_schema_skipped_when_flagged(self, app):
+        """Validates schema skipped when flagged [TestInitDbSchemaGate / database].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates database is broken for this case (users see wrong page, blocked action, or bad data)."""
         from unittest.mock import patch
         from app import database
         patcher = self._pause_init_db_patch()
@@ -100,4 +115,7 @@ class TestInitDbSchemaGate:
             patcher.start()
 
     def test_flag_defaults_off(self, app):
+        """Validates flag defaults off [TestInitDbSchemaGate / database].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates database is broken for this case (users see wrong page, blocked action, or bad data)."""
         assert app.config.get('SKIP_SCHEMA_SYNC') is False

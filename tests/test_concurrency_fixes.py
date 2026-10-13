@@ -18,6 +18,9 @@ def _flashes(client):
 
 class TestQueuePositionRetry:
     def test_collision_retries_then_succeeds(self, student_client, mock_db):
+        """Validates collision retries then succeeds `/user/reserve` as student (expects 302) [TestQueuePositionRetry / concurrency fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
+    Failure indicates concurrency fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].side_effect = [
             BOOK,
             BORROWER,
@@ -48,6 +51,9 @@ class TestQueuePositionRetry:
         assert inserts[1][0][1] == (5, 1, 2)
 
     def test_duplicate_reservation_is_friendly_block(self, student_client, mock_db):
+        """Validates duplicate reservation is friendly block `/user/reserve` as student (expects 302) [TestQueuePositionRetry / concurrency fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
+    Failure indicates concurrency fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         existing = (9, 5, 1, 1, '2026-08-01 10:00:00', 'waiting', None)
         mock_db['fetch_one'].side_effect = [
             BOOK,
@@ -69,6 +75,9 @@ class TestQueuePositionRetry:
 
 class TestAllocateOverbooking:
     def test_overbooking_refused(self, librarian_client, mock_db):
+        """Validates overbooking refused `/librarian/reservations/9/allocate` as librarian (expects 302) [TestAllocateOverbooking / concurrency fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates concurrency fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].side_effect = [
             (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),  # reservation
             ACC,                                                   # available copy
@@ -88,6 +97,9 @@ class TestAllocateOverbooking:
                    for msg in _flashes(librarian_client))
 
     def test_count_available_accessions_sql(self, mock_db):
+        """Validates count available accessions sql [TestAllocateOverbooking / concurrency fixes].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates concurrency fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.circulation.models import count_available_accessions
         mock_db['fetch_one'].return_value = (2,)
         assert count_available_accessions(5) == 2
@@ -100,6 +112,9 @@ class TestAllocateOverbooking:
 
 class TestClaimCompensation:
     def test_failed_claim_returns_orphan_loan(self, librarian_client, mock_db):
+        """Validates failed claim returns orphan loan `/librarian/reservations/9/claim` as librarian [TestClaimCompensation / concurrency fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates concurrency fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         orphan = (77, 5, 10, 2, 1, 'overnight', 'borrow', '2026-08-01',
                   '2026-08-03', None, 0, None, False, 'active')
         mock_db['fetch_one'].side_effect = [
@@ -142,6 +157,9 @@ class TestUserDailyQueueParity:
         ]
 
     def test_daily_blocked_by_others_queue(self, student_client, mock_db):
+        """Validates daily blocked by others queue `/user/borrow` as student (expects 302) [TestUserDailyQueueParity / concurrency fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
+    Failure indicates concurrency fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         other = (7, 5, 99, 1, '2026-08-01 10:00:00', 'waiting', None)
         self._daily_mocks(mock_db, other)
         resp = student_client.post('/user/borrow', data={
@@ -154,6 +172,9 @@ class TestUserDailyQueueParity:
                    for msg in _flashes(student_client))
 
     def test_daily_allowed_when_first_waiter_is_self(self, student_client, mock_db):
+        """Validates daily allowed when first waiter is self `/user/borrow` as student (expects 302) [TestUserDailyQueueParity / concurrency fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
+    Failure indicates concurrency fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mine = (7, 5, 1, 1, '2026-08-01 10:00:00', 'waiting', None)
         self._daily_mocks(mock_db, mine)
         resp = student_client.post('/user/borrow', data={
@@ -166,6 +187,9 @@ class TestUserDailyQueueParity:
 
 class TestSchemaRaceNets:
     def test_partial_unique_indexes_present(self):
+        """Validates partial unique indexes present [TestSchemaRaceNets / concurrency fixes].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates concurrency fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         import pathlib
         schema = pathlib.Path('app/schema.sql').read_text()
         assert 'uq_active_queue_pos' in schema

@@ -16,6 +16,9 @@ def _borrower(mock_db, bid=5):
 
 class TestLengthLimits:
     def test_overlong_title_rejected(self, student_client, mock_db):
+        """Validates overlong title rejected `/user/request-book` as student (expects 302) [TestLengthLimits / user request edge cases].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
+    Failure indicates request/procurement workflow is broken."""
         _borrower(mock_db)
         resp = student_client.post('/user/request-book',
                                    data={'book-title': 'T' * 256})
@@ -25,6 +28,9 @@ class TestLengthLimits:
         assert writes == []
 
     def test_overlong_author_rejected(self, student_client, mock_db):
+        """Validates overlong author rejected `/user/request-book` as student (expects 302) [TestLengthLimits / user request edge cases].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
+    Failure indicates request/procurement workflow is broken."""
         _borrower(mock_db)
         resp = student_client.post('/user/request-book',
                                    data={'book-title': 'T',
@@ -35,6 +41,9 @@ class TestLengthLimits:
         assert writes == []
 
     def test_boundary_lengths_accepted(self, student_client, mock_db):
+        """Validates boundary lengths accepted `/user/request-book` as student (expects 302) [TestLengthLimits / user request edge cases].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
+    Failure indicates request/procurement workflow is broken."""
         _borrower(mock_db)
         resp = student_client.post('/user/request-book',
                                    data={'book-title': 'T' * 255,
@@ -47,6 +56,9 @@ class TestLengthLimits:
 
 class TestDuplicates:
     def test_case_variant_blocked(self, student_client, mock_db):
+        """Validates case variant blocked `/user/request-book` as student (expects 302) [TestDuplicates / user request edge cases].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
+    Failure indicates request/procurement workflow is broken."""
         _borrower(mock_db)
         mock_db['fetch_all'].return_value = [('clean code',)]
         resp = student_client.post('/user/request-book',
@@ -57,6 +69,9 @@ class TestDuplicates:
         assert writes == []
 
     def test_abbreviation_blocked(self, student_client, mock_db):
+        """Validates abbreviation blocked `/user/request-book` as student (expects 302) [TestDuplicates / user request edge cases].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
+    Failure indicates request/procurement workflow is broken."""
         _borrower(mock_db)
         mock_db['fetch_all'].return_value = [('Introduction to Programming',)]
         resp = student_client.post('/user/request-book',
@@ -75,6 +90,9 @@ class TestDisplayStates:
         return student_client.get('/user/request-book').data.decode()
 
     def test_all_statuses(self, student_client, mock_db):
+        """Validates all statuses as student [TestDisplayStates / user request edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates request/procurement workflow is broken."""
         rows = [(1, 'A', 'Au', s, '2026-01-05', None)
                 for s in ('pending_review', 'approved', 'rejected',
                           'procured', 'existing_in_collection')]
@@ -84,20 +102,32 @@ class TestDisplayStates:
             assert label in body, label
 
     def test_short_rows(self, student_client, mock_db):
+        """Validates short rows as student [TestDisplayStates / user request edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates request/procurement workflow is broken."""
         body = self._page(student_client, mock_db, [(1,)])
         assert 'My Requests' in body
 
     def test_none_rows(self, student_client, mock_db):
+        """Validates none rows `/user/request-book` as student (expects 200) [TestDisplayStates / user request edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates request/procurement workflow is broken."""
         mock_db['fetch_one'].return_value = (5,)
         mock_db['fetch_all'].return_value = None
         assert student_client.get('/user/request-book').status_code == 200
 
     def test_string_dates(self, student_client, mock_db):
+        """Validates string dates as student [TestDisplayStates / user request edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates request/procurement workflow is broken."""
         rows = [(1, 'A', 'Au', 'pending_review', 'Jan 5', None)]
         body = self._page(student_client, mock_db, rows)
         assert 'Jan 5' in body
 
     def test_xss_everywhere(self, student_client, mock_db):
+        """Validates xss everywhere as student [TestDisplayStates / user request edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates request/procurement workflow is broken."""
         evil = '<script>alert(1)</script>'
         rows = [(1, evil, evil, 'rejected', '2026-01-05', evil)]
         body = self._page(student_client, mock_db, rows)

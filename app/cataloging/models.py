@@ -236,7 +236,7 @@ def get_books_by_status_paginated(status, page=1, per_page=20, sort_by=None):
     return rows, total
 
 
-COPY_STATUS_FILTERS = ('overdue', 'lost', 'damaged', 'lost_damaged', 'maintenance')
+COPY_STATUS_FILTERS = ('overdue', 'lost', 'damaged', 'lost_damaged')
 
 
 def _copy_status_condition(copy_status):
@@ -263,12 +263,6 @@ def _copy_status_condition(copy_status):
             "EXISTS (SELECT 1 FROM accession_log al "
             "JOIN inventory_status i ON i.accession_id = al.accession_id "
             "WHERE al.book_id = book_catalog.book_id AND i.inventory_state = 'damaged')"
-        )
-    if copy_status == 'maintenance':
-        return (
-            "EXISTS (SELECT 1 FROM accession_log al "
-            "JOIN inventory_status i ON i.accession_id = al.accession_id "
-            "WHERE al.book_id = book_catalog.book_id AND i.inventory_state = 'missing')"
         )
     return None
 

@@ -13,11 +13,17 @@ ITEM = (3, 7, 'for_ordering', '2026-01-05', None, None, None, None, None,
 
 class TestEmptyDb:
     def test_page_empty(self, librarian_client, mock_db):
+        """Validates page empty `/librarian/procurement` as librarian (expects 200) [TestEmptyDb / procurement edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates request/procurement workflow is broken."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = []
         assert librarian_client.get('/librarian/procurement').status_code == 200
 
     def test_none_items(self, librarian_client, mock_db):
+        """Validates none items `/librarian/procurement` as librarian (expects 200) [TestEmptyDb / procurement edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates request/procurement workflow is broken."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = None
         assert librarian_client.get('/librarian/procurement').status_code == 200
@@ -25,30 +31,45 @@ class TestEmptyDb:
 
 class TestCardFields:
     def test_title_author_positions(self, librarian_client, mock_db):
+        """Validates title author positions `/librarian/procurement` as librarian [TestCardFields / procurement edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates request/procurement workflow is broken."""
         mock_db['fetch_all'].return_value = [ITEM]
         body = librarian_client.get('/librarian/procurement').data.decode()
         assert 'Data Science' in body
         assert 'J. Grus' in body
 
     def test_short_row(self, librarian_client, mock_db):
+        """Validates short row `/librarian/procurement` as librarian (expects 200) [TestCardFields / procurement edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates request/procurement workflow is broken."""
         mock_db['fetch_all'].return_value = [(3, 7, 'ordered')]
         assert librarian_client.get('/librarian/procurement').status_code == 200
 
 
 class TestUpdateStatus:
     def test_bogus_status(self, librarian_client, mock_db):
+        """Validates bogus status `/librarian/procurement/3/update-status` as librarian (expects 302) [TestUpdateStatus / procurement edge cases].
+    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    Failure indicates request/procurement workflow is broken."""
         resp = librarian_client.post('/librarian/procurement/3/update-status',
                                      data={'order_status': 'drop_table'})
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
 
     def test_missing_status(self, librarian_client, mock_db):
+        """Validates missing status `/librarian/procurement/3/update-status` as librarian (expects 302) [TestUpdateStatus / procurement edge cases].
+    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    Failure indicates request/procurement workflow is broken."""
         resp = librarian_client.post('/librarian/procurement/3/update-status',
                                      data={})
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
 
     def test_missing_record(self, librarian_client, mock_db):
+        """Validates missing record `/librarian/procurement/999/update-status` as librarian (expects 302) [TestUpdateStatus / procurement edge cases].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates request/procurement workflow is broken."""
         mock_db['fetch_all'].return_value = []
         before = mock_db['execute'].call_count
         resp = librarian_client.post('/librarian/procurement/999/update-status',
@@ -59,12 +80,18 @@ class TestUpdateStatus:
         assert updates == []
 
     def test_huge_id(self, librarian_client, mock_db):
+        """Validates huge id `/librarian/procurement/999999999/update-status` as librarian (expects 302) [TestUpdateStatus / procurement edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates request/procurement workflow is broken."""
         mock_db['fetch_all'].return_value = []
         assert librarian_client.post(
             '/librarian/procurement/999999999/update-status',
             data={'order_status': 'ordered'}).status_code == 302
 
     def test_each_valid_status(self, librarian_client, mock_db):
+        """Validates each valid status `/librarian/procurement/3/update-status` as librarian (expects 302) [TestUpdateStatus / procurement edge cases].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates request/procurement workflow is broken."""
         from app.procurement.models import VALID_STATUSES
         for st in VALID_STATUSES:
             mock_db['fetch_all'].return_value = [ITEM]
@@ -77,6 +104,9 @@ class TestUpdateStatus:
 
 class TestXss:
     def test_evil_fields(self, librarian_client, mock_db):
+        """Validates evil fields `/librarian/procurement` as librarian [TestXss / procurement edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates request/procurement workflow is broken."""
         evil = '<script>alert(1)</script>'
         row = (3, 7, 'ordered', '2026-01-05', None, None, evil, None,
                None, evil, evil)
@@ -87,11 +117,17 @@ class TestXss:
 
 class TestAuth:
     def test_anon(self, client):
+        """Validates anon `/librarian/procurement` (expects 302) [TestAuth / procurement edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates request/procurement workflow is broken."""
         assert client.get('/librarian/procurement').status_code == 302
         assert client.post(
             '/librarian/procurement/1/update-status').status_code == 302
 
     def test_student_blocked(self, student_client, mock_db):
+        """Validates student blocked `/librarian/procurement` as student (expects 302) [TestAuth / procurement edge cases].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates request/procurement workflow is broken."""
         assert student_client.get('/librarian/procurement').status_code == 302
         resp = student_client.post('/librarian/procurement/1/update-status',
                                    data={'order_status': 'ordered'})
@@ -101,4 +137,7 @@ class TestAuth:
         assert writes == []
 
     def test_faculty_blocked(self, faculty_client):
+        """Validates faculty blocked `/librarian/procurement` as faculty (expects 302) [TestAuth / procurement edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates request/procurement workflow is broken."""
         assert faculty_client.get('/librarian/procurement').status_code == 302

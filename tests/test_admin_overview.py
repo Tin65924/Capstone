@@ -10,6 +10,9 @@ def _admin_ok(mock_db):
 
 class TestAdminOverviewStats:
     def test_keys_and_role_mapping(self, mock_db):
+        """Validates keys and role mapping [TestAdminOverviewStats / admin overview].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         from app.main.models import get_admin_overview_stats
         mock_db['fetch_one'].side_effect = [(42,), (3,), (120,), (350,)]
         mock_db['fetch_all'].return_value = [
@@ -29,6 +32,9 @@ class TestAdminOverviewStats:
         }
 
     def test_skips_bad_role_rows(self, mock_db):
+        """Validates skips bad role rows [TestAdminOverviewStats / admin overview].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         from app.main.models import get_admin_overview_stats
         mock_db['fetch_one'].side_effect = [(10,), (0,), (5,), (9,)]
         mock_db['fetch_all'].return_value = [
@@ -39,6 +45,9 @@ class TestAdminOverviewStats:
         assert stats['active_faculty'] == 0
 
     def test_queries_use_placeholders(self, mock_db):
+        """Validates queries use placeholders [TestAdminOverviewStats / admin overview].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         from app.auth import models as auth_models
         mock_db['fetch_one'].return_value = (1,)
         mock_db['fetch_all'].return_value = []
@@ -69,6 +78,9 @@ class TestAdminDashboardRoute:
         ]
 
     def test_admin_allowed_renders_governance(self, admin_client, mock_db):
+        """Validates admin allowed renders governance `/admin` as admin (expects 200) [TestAdminDashboardRoute / admin overview].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         self._mock_overview(mock_db)
         resp = admin_client.get('/admin')
         assert resp.status_code == 200
@@ -83,6 +95,9 @@ class TestAdminDashboardRoute:
         assert b'Audit Logs' in resp.data
 
     def test_backup_card_shows_auto_schedule(self, admin_client, mock_db, app):
+        """Validates backup card shows auto schedule `/admin` as admin (expects 200) [TestAdminDashboardRoute / admin overview].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         self._mock_overview(mock_db)
         from app.backup.scheduler import next_scheduled_backup
         day = app.config.get('BACKUP_DAY', 1)
@@ -96,28 +111,44 @@ class TestAdminDashboardRoute:
         assert expected.encode() in resp.data
 
     def test_backup_filename_cannot_overflow_card(self, admin_client, mock_db):
-        """Long backup filenames must wrap/truncate, not overlap the card."""
+        """Validates backup filename cannot overflow card `/admin` as admin (expects 200) [TestAdminDashboardRoute / admin overview].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates dashboard/stats shown to staff are wrong.
+
+Long backup filenames must wrap/truncate, not overlap the card."""
         self._mock_overview(mock_db)
         resp = admin_client.get('/admin')
         assert resp.status_code == 200
         assert b'break-all' in resp.data
 
     def test_admin_sidebar_has_audit_link(self, admin_client, mock_db):
+        """Validates admin sidebar has audit link `/admin` as admin [TestAdminDashboardRoute / admin overview].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         self._mock_overview(mock_db)
         resp = admin_client.get('/admin')
         assert b'/admin/audits' in resp.data
 
     def test_librarian_forbidden(self, librarian_client):
+        """Validates librarian forbidden `/admin` as librarian (expects 302) [TestAdminDashboardRoute / admin overview].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         resp = librarian_client.get('/admin')
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
     def test_student_forbidden(self, student_client):
+        """Validates student forbidden `/admin` as student (expects 302) [TestAdminDashboardRoute / admin overview].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         resp = student_client.get('/admin')
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
     def test_unauthenticated_redirects(self, client):
+        """Validates unauthenticated redirects `/admin` (expects 302) [TestAdminDashboardRoute / admin overview].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = client.get('/admin')
         assert resp.status_code == 302
         assert '/login' in resp.location
@@ -125,6 +156,9 @@ class TestAdminDashboardRoute:
 
 class TestAdminAuditsRoute:
     def test_admin_allowed_renders(self, admin_client, mock_db):
+        """Validates admin allowed renders `/admin/audits` as admin (expects 200) [TestAdminAuditsRoute / admin overview].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         mock_db['fetch_all'].return_value = [
             (1, 'Boss Admin', 'boss@mcst.edu.ph', 'Admin',
              'backup:created:f.sql', '2026-01-01'),
@@ -137,6 +171,9 @@ class TestAdminAuditsRoute:
         assert b'mobile-sidebar' in resp.data
 
     def test_timestamp_formatted(self, admin_client, mock_db):
+        """Validates timestamp formatted `/admin/audits` as admin (expects 200) [TestAdminAuditsRoute / admin overview].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         from datetime import datetime
         mock_db['fetch_all'].return_value = [
             (1, 'Boss Admin', 'boss@mcst.edu.ph', 'Admin',
@@ -148,6 +185,9 @@ class TestAdminAuditsRoute:
         assert b'2026-03-05 14:30:00' not in resp.data
 
     def test_deleted_user_shows_system(self, admin_client, mock_db):
+        """Validates deleted user shows system `/admin/audits` as admin (expects 200) [TestAdminAuditsRoute / admin overview].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         from datetime import datetime
         mock_db['fetch_all'].return_value = [
             (9, None, None, None, 'login', datetime(2026, 3, 5, 9, 0)),
@@ -157,6 +197,9 @@ class TestAdminAuditsRoute:
         assert b'System' in resp.data
 
     def test_search_filters(self, admin_client, mock_db):
+        """Validates search filters `/admin/audits?q=backup` as admin (expects 200) [TestAdminAuditsRoute / admin overview].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get('/admin/audits?q=backup')
         assert resp.status_code == 200
@@ -167,6 +210,9 @@ class TestAdminAuditsRoute:
         assert b'No entries match' in resp.data
 
     def test_limit_clamped(self, admin_client, mock_db):
+        """Validates limit clamped `/admin/audits?limit=9999` as admin (expects 200) [TestAdminAuditsRoute / admin overview].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get('/admin/audits?limit=9999')
         assert resp.status_code == 200
@@ -181,6 +227,9 @@ class TestAdminAuditsRoute:
         assert params[-1] == 50
 
     def test_empty_state(self, admin_client, mock_db):
+        """Validates empty state `/admin/audits` as admin (expects 200) [TestAdminAuditsRoute / admin overview].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get('/admin/audits')
         assert resp.status_code == 200
@@ -189,6 +238,9 @@ class TestAdminAuditsRoute:
 
 class TestAuditTabs:
     def test_staff_tab_filters_roles(self, mock_db):
+        """Validates staff tab filters roles [TestAuditTabs / admin overview].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         from app.auth.models import get_audit_logs
         mock_db['fetch_all'].return_value = []
         get_audit_logs(limit=25, tab='staff')
@@ -199,6 +251,9 @@ class TestAuditTabs:
         assert params == ('circulation:%', 'requests:%', 25)
 
     def test_members_and_system_tabs(self, mock_db):
+        """Validates members and system tabs [TestAuditTabs / admin overview].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         from app.auth.models import get_audit_logs
         mock_db['fetch_all'].return_value = []
         get_audit_logs(tab='members')
@@ -211,6 +266,9 @@ class TestAuditTabs:
         assert 'a.user_id IS NULL' in query
 
     def test_all_and_invalid_tab_have_no_role_filter(self, mock_db):
+        """Validates all and invalid tab have no role filter [TestAuditTabs / admin overview].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         from app.auth.models import get_audit_logs
         mock_db['fetch_all'].return_value = []
         get_audit_logs(tab='all')
@@ -224,6 +282,9 @@ class TestAuditTabs:
         assert 'role_name IN' not in query
 
     def test_tab_combines_with_search(self, mock_db):
+        """Validates tab combines with search [TestAuditTabs / admin overview].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         from app.auth.models import get_audit_logs
         mock_db['fetch_all'].return_value = []
         get_audit_logs(limit=10, search='backup', tab='staff')
@@ -234,6 +295,9 @@ class TestAuditTabs:
         assert params == ('circulation:%', 'requests:%', '%backup%', 10)
 
     def test_route_staff_tab(self, admin_client, mock_db):
+        """Validates route staff tab `/admin/audits?tab=staff` as admin (expects 200) [TestAuditTabs / admin overview].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get('/admin/audits?tab=staff')
         assert resp.status_code == 200
@@ -244,6 +308,9 @@ class TestAuditTabs:
         assert b'name="tab" value="staff"' in resp.data
 
     def test_route_invalid_tab_falls_back(self, admin_client, mock_db):
+        """Validates route invalid tab falls back `/admin/audits?tab=bogus` as admin (expects 200) [TestAuditTabs / admin overview].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get('/admin/audits?tab=bogus')
         assert resp.status_code == 200
@@ -252,6 +319,9 @@ class TestAuditTabs:
         assert 'role_name IN' not in query
 
     def test_route_search_keeps_tab(self, admin_client, mock_db):
+        """Validates route search keeps tab `/admin/audits?tab=system&q=login` as admin (expects 200) [TestAuditTabs / admin overview].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get('/admin/audits?tab=system&q=login')
         assert resp.status_code == 200
@@ -262,15 +332,24 @@ class TestAuditTabs:
         assert b'tab=system' in resp.data
 
     def test_librarian_forbidden(self, librarian_client):
+        """Validates librarian forbidden `/admin/audits` as librarian (expects 302) [TestAuditTabs / admin overview].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         resp = librarian_client.get('/admin/audits')
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
     def test_student_forbidden(self, student_client):
+        """Validates student forbidden `/admin/audits` as student (expects 302) [TestAuditTabs / admin overview].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         resp = student_client.get('/admin/audits')
         assert resp.status_code == 302
 
     def test_unauthenticated_redirects(self, client):
+        """Validates unauthenticated redirects `/admin/audits` (expects 302) [TestAuditTabs / admin overview].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = client.get('/admin/audits')
         assert resp.status_code == 302
         assert '/login' in resp.location
@@ -278,6 +357,9 @@ class TestAuditTabs:
 
 class TestStatsEdges:
     def test_weird_role_rows(self, admin_client, mock_db):
+        """Validates weird role rows `/admin` as admin (expects 200) [TestStatsEdges / admin overview].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         mock_db['fetch_one'].return_value = (5,)
         mock_db['fetch_all'].side_effect = [
             [(None, 3), ('Student', -2), ('X', 'junk'), ('Y',)],
@@ -286,6 +368,9 @@ class TestStatsEdges:
         assert admin_client.get('/admin').status_code == 200
 
     def test_short_pending_activity(self, admin_client, mock_db):
+        """Validates short pending activity `/admin` as admin (expects 200) [TestStatsEdges / admin overview].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].side_effect = [
             [], [(9,)], [(7,)],
@@ -296,6 +381,9 @@ class TestStatsEdges:
 
 class TestBackupStates:
     def test_failed_backup_banner(self, admin_client, mock_db):
+        """Validates failed backup banner `/admin` as admin (expects 200) [TestBackupStates / admin overview].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         _admin_ok(mock_db)
         mock_db['fetch_all'].side_effect = [
             [], [],
@@ -307,6 +395,9 @@ class TestBackupStates:
         assert admin_client.get('/admin').status_code == 200
 
     def test_evil_filename_and_error(self, admin_client, mock_db):
+        """Validates evil filename and error `/admin` as admin [TestBackupStates / admin overview].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         evil = '<script>alert(1)</script>'
         _admin_ok(mock_db)
         row = (1, evil, 100, 'failed', 'manual', evil, '2026-01-01')
@@ -315,6 +406,9 @@ class TestBackupStates:
         assert evil not in body
 
     def test_short_backup_rows(self, admin_client, mock_db):
+        """Validates short backup rows `/admin` as admin (expects 200) [TestBackupStates / admin overview].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         _admin_ok(mock_db)
         mock_db['fetch_all'].side_effect = [[], [], [(1,)], [(1,)]]
         assert admin_client.get('/admin').status_code == 200
@@ -322,6 +416,9 @@ class TestBackupStates:
 
 class TestScheduler:
     def test_garbage_config(self):
+        """Validates garbage config [TestScheduler / admin overview].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         from app.backup.scheduler import next_scheduled_backup
         for day, hour in ((None, None), ('x', 'y'), (-5, 99),
                           (0, -1), (31, 25), ('15', '9')):
@@ -329,6 +426,9 @@ class TestScheduler:
             assert isinstance(nxt, datetime)
 
     def test_december_rollover(self):
+        """Validates december rollover [TestScheduler / admin overview].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         from app.backup.scheduler import next_scheduled_backup
         now = datetime(2026, 12, 20, 10, 0)
         nxt = next_scheduled_backup(1, 2, now=now)
@@ -337,6 +437,9 @@ class TestScheduler:
 
 class TestDescribeActivity:
     def test_garbage(self):
+        """Validates garbage [TestDescribeActivity / admin overview].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         from app.auth.models import describe_activity
         for actor, code in ((None, None), ('', ''), ('A', 'nonsense xyz'),
                             ('A', 'approved_user:notanid'),
@@ -346,6 +449,9 @@ class TestDescribeActivity:
             assert isinstance(out, str)
 
     def test_evil_audit_renders_escaped(self, admin_client, mock_db):
+        """Validates evil audit renders escaped `/admin/audits` as admin [TestDescribeActivity / admin overview].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         evil = '<img src=x onerror=alert(1)>'
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].side_effect = [
@@ -356,5 +462,8 @@ class TestDescribeActivity:
         assert evil not in body
 
     def test_audit_wildcard_search(self, admin_client, mock_db):
+        """Validates audit wildcard search `/admin/audits?q=%_` as admin (expects 200) [TestDescribeActivity / admin overview].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates dashboard/stats shown to staff are wrong."""
         _admin_ok(mock_db)
         assert admin_client.get('/admin/audits?q=%_').status_code == 200

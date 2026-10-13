@@ -8,26 +8,41 @@ UPDATE_URL = '/admin/settings/update'
 
 class TestSettingsAccess:
     def test_settings_unauthenticated_redirects(self, client):
+        """Validates settings unauthenticated redirects (expects 302) [TestSettingsAccess / settings].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = client.get(SETTINGS_URL)
         assert resp.status_code == 302
         assert '/login' in resp.location
 
     def test_settings_student_forbidden(self, student_client):
+        """Validates settings student forbidden as student (expects 302) [TestSettingsAccess / settings].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         resp = student_client.get(SETTINGS_URL)
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
     def test_settings_faculty_forbidden(self, faculty_client):
+        """Validates settings faculty forbidden as faculty (expects 302) [TestSettingsAccess / settings].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         resp = faculty_client.get(SETTINGS_URL)
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
     def test_settings_librarian_forbidden(self, librarian_client):
+        """Validates settings librarian forbidden as librarian (expects 302) [TestSettingsAccess / settings].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         resp = librarian_client.get(SETTINGS_URL)
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
     def test_settings_admin_allowed(self, admin_client, mock_db):
+        """Validates settings admin allowed as admin (expects 200) [TestSettingsAccess / settings].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get(SETTINGS_URL)
         assert resp.status_code == 200
@@ -39,6 +54,9 @@ class TestSettingsAccess:
         assert b'MAX_BORROW_LIMIT_STUDENT' not in resp.data
 
     def test_librarian_settings_renders_for_admin(self, admin_client, mock_db):
+        """Validates librarian settings renders for admin `/librarian/settings` as admin (expects 200) [TestSettingsAccess / settings].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get('/librarian/settings')
         assert resp.status_code == 200
@@ -46,6 +64,9 @@ class TestSettingsAccess:
         assert b'BACKUP_DAY' not in resp.data
 
     def test_legacy_url_unauthenticated_redirects(self, client):
+        """Validates legacy url unauthenticated redirects `/librarian/settings` (expects 302) [TestSettingsAccess / settings].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = client.get('/librarian/settings')
         assert resp.status_code == 302
         assert '/login' in resp.location
@@ -53,6 +74,9 @@ class TestSettingsAccess:
 
 class TestSettingsCategories:
     def test_sidebar_lists_only_admin_category(self, admin_client, mock_db):
+        """Validates sidebar lists only admin category as admin (expects 200) [TestSettingsCategories / settings].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get(SETTINGS_URL)
         assert resp.status_code == 200
@@ -62,6 +86,9 @@ class TestSettingsCategories:
             assert title not in resp.data
 
     def test_category_sections_rendered(self, admin_client, mock_db):
+        """Validates category sections rendered as admin (expects 200) [TestSettingsCategories / settings].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get(SETTINGS_URL)
         assert resp.status_code == 200
@@ -71,25 +98,39 @@ class TestSettingsCategories:
             assert b'id="' + anchor + b'"' not in resp.data
 
     def test_no_page_header_block(self, admin_client, mock_db):
-        """The old h1 page header was removed in favor of the sidebar."""
+        """Validates no page header block as admin (expects 200) [TestSettingsCategories / settings].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data).
+
+The old h1 page header was removed in favor of the sidebar."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get(SETTINGS_URL)
         assert resp.status_code == 200
         assert b'Changes apply immediately to new loans' not in resp.data
 
     def test_top_navbar_removed_on_settings(self, admin_client, mock_db):
+        """Validates top navbar removed on settings as admin (expects 200) [TestSettingsCategories / settings].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get(SETTINGS_URL)
         assert resp.status_code == 200
         assert b'mobile-menu-btn' not in resp.data
 
     def test_top_navbar_kept_elsewhere(self, client, mock_db):
-        """The base navbar block override must not leak to other pages."""
+        """Validates top navbar kept elsewhere `/login` (expects 200) [TestSettingsCategories / settings].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed).
+
+The base navbar block override must not leak to other pages."""
         resp = client.get('/login')
         assert resp.status_code == 200
         assert b'mobile-menu-btn' in resp.data
 
     def test_every_setting_appears_exactly_once(self, admin_client, mock_db):
+        """Validates every setting appears exactly once as admin (expects 200) [TestSettingsCategories / settings].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get(SETTINGS_URL)
         assert resp.status_code == 200
@@ -104,11 +145,17 @@ class TestSettingsCategories:
             assert b'name="' + key + b'"' not in resp.data
 
     def test_categories_cover_all_defs(self):
+        """Validates categories cover all defs [TestSettingsCategories / settings].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.settings.models import SETTING_CATEGORIES, SETTING_DEFS
         grouped = [k for _, _, _, _, keys in SETTING_CATEGORIES for k in keys]
         assert sorted(grouped) == sorted(SETTING_DEFS.keys())
 
     def test_cancel_returns_to_admin_dashboard(self, admin_client, mock_db):
+        """Validates cancel returns to admin dashboard as admin (expects 200) [TestSettingsCategories / settings].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get(SETTINGS_URL)
         assert resp.status_code == 200
@@ -118,6 +165,9 @@ class TestSettingsCategories:
         assert b'href="/librarian">Cancel</a>' not in resp.data
 
     def test_renders_admin_sidebar_not_librarian(self, admin_client, mock_db):
+        """Validates renders admin sidebar not librarian as admin (expects 200) [TestSettingsCategories / settings].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get(SETTINGS_URL)
         assert resp.status_code == 200
@@ -128,6 +178,9 @@ class TestSettingsCategories:
 
 class TestUpdateSettings:
     def test_update_valid_backup_day(self, admin_client, mock_db):
+        """Validates update valid backup day as admin (expects 302) [TestUpdateSettings / settings].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         with patch('app.backup.scheduler.reschedule') as mock_resched:
             resp = admin_client.post(UPDATE_URL, data={
@@ -142,7 +195,11 @@ class TestUpdateSettings:
         mock_resched.assert_called_once()
 
     def test_update_rejects_circulation_keys(self, admin_client, mock_db):
-        """Circulation constants have no admin UI surface — not updatable."""
+        """Validates update rejects circulation keys as admin (expects 302) [TestUpdateSettings / settings].
+    If fails: likely unexpected DB write (validation/pre-check bypassed); model SQL changed (UPDATE).
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data).
+
+Circulation constants have no admin UI surface — not updatable."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.post(UPDATE_URL, data={
             'MAX_BORROW_LIMIT_STUDENT': '4',
@@ -151,24 +208,36 @@ class TestUpdateSettings:
         assert mock_db['execute'].call_count == 0
 
     def test_update_rejects_day_out_of_range(self, admin_client, mock_db):
+        """Validates update rejects day out of range as admin (expects 302) [TestUpdateSettings / settings].
+    If fails: likely unexpected DB write (validation/pre-check bypassed); model SQL changed (UPDATE).
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.post(UPDATE_URL, data={'BACKUP_DAY': '99'})
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
 
     def test_update_rejects_hour_out_of_range(self, admin_client, mock_db):
+        """Validates update rejects hour out of range as admin (expects 302) [TestUpdateSettings / settings].
+    If fails: likely unexpected DB write (validation/pre-check bypassed); model SQL changed (UPDATE).
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.post(UPDATE_URL, data={'BACKUP_HOUR': '25'})
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
 
     def test_update_rejects_zero_keep(self, admin_client, mock_db):
+        """Validates update rejects zero keep as admin (expects 302) [TestUpdateSettings / settings].
+    If fails: likely unexpected DB write (validation/pre-check bypassed); model SQL changed (UPDATE).
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.post(UPDATE_URL, data={'BACKUP_KEEP': '0'})
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
 
     def test_update_rejects_decimal_int(self, admin_client, mock_db):
+        """Validates update rejects decimal int as admin (expects 302) [TestUpdateSettings / settings].
+    If fails: likely unexpected DB write (validation/pre-check bypassed); model SQL changed (UPDATE).
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.post(UPDATE_URL, data={
             'MAX_BORROW_LIMIT_STUDENT': '2.5',
@@ -177,6 +246,9 @@ class TestUpdateSettings:
         assert mock_db['execute'].call_count == 0
 
     def test_update_rejects_zero_limit(self, admin_client, mock_db):
+        """Validates update rejects zero limit as admin (expects 302) [TestUpdateSettings / settings].
+    If fails: likely unexpected DB write (validation/pre-check bypassed); model SQL changed (UPDATE).
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.post(UPDATE_URL, data={
             'MAX_BORROW_LIMIT_STUDENT': '0',
@@ -185,6 +257,9 @@ class TestUpdateSettings:
         assert mock_db['execute'].call_count == 0
 
     def test_update_rejects_negative(self, admin_client, mock_db):
+        """Validates update rejects negative as admin (expects 302) [TestUpdateSettings / settings].
+    If fails: likely unexpected DB write (validation/pre-check bypassed); model SQL changed (UPDATE).
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.post(UPDATE_URL, data={
             'OVERDUE_FINE_PER_DAY': '-5',
@@ -193,6 +268,9 @@ class TestUpdateSettings:
         assert mock_db['execute'].call_count == 0
 
     def test_update_rejects_decimal_backup_day(self, admin_client, mock_db):
+        """Validates update rejects decimal backup day as admin (expects 302) [TestUpdateSettings / settings].
+    If fails: likely unexpected DB write (validation/pre-check bypassed); model SQL changed (UPDATE).
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.post(UPDATE_URL, data={
             'BACKUP_DAY': '2.5',
@@ -201,6 +279,9 @@ class TestUpdateSettings:
         assert mock_db['execute'].call_count == 0
 
     def test_update_student_forbidden(self, student_client, mock_db):
+        """Validates update student forbidden as student (expects 302) [TestUpdateSettings / settings].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         resp = student_client.post(UPDATE_URL, data={
             'MAX_BORROW_LIMIT_STUDENT': '9',
         })
@@ -213,6 +294,9 @@ class TestUpdateSettings:
         assert params[1] == 'security:denied:settings.update_settings'
 
     def test_update_librarian_forbidden(self, librarian_client, mock_db):
+        """Validates update librarian forbidden as librarian (expects 302) [TestUpdateSettings / settings].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         resp = librarian_client.post(UPDATE_URL, data={
             'MAX_BORROW_LIMIT_STUDENT': '9',
         })
@@ -227,6 +311,9 @@ class TestUpdateSettings:
 
 class TestFlashDismiss:
     def test_flash_renders_dismiss_markup(self, admin_client, mock_db):
+        """Validates flash renders dismiss markup as admin (expects 200) [TestFlashDismiss / settings].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched; model SQL changed (UPDATE).
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.post(UPDATE_URL, data={
             'MAX_BORROW_LIMIT_STUDENT': '4',
@@ -238,11 +325,17 @@ class TestFlashDismiss:
 
 class TestResetDbRemoved:
     def test_reset_route_gone(self, admin_client):
+        """Validates reset route gone `/admin/reset-db` as admin (expects 404) [TestResetDbRemoved / settings].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         assert 'reset_db' not in admin_client.application.view_functions
         resp = admin_client.get('/admin/reset-db')
         assert resp.status_code == 404
 
     def test_no_reset_link_in_admin_sidebar(self, admin_client, mock_db):
+        """Validates no reset link in admin sidebar `/admin` as admin (expects 200) [TestResetDbRemoved / settings].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].side_effect = [(10,), (0,), (5,), (9,)]
         mock_db['fetch_all'].side_effect = [[], [], [], []]
         resp = admin_client.get('/admin')
@@ -251,6 +344,9 @@ class TestResetDbRemoved:
         assert b'reset-db' not in resp.data
 
     def test_settings_link_in_librarian_sidebar(self, librarian_client, mock_db):
+        """Validates settings link in librarian sidebar `/librarian` as librarian (expects 200) [TestResetDbRemoved / settings].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].side_effect = [
             (100,), (250,), (10,), (4,), (3,), (10,), (3,), (1,),
         ]
@@ -267,6 +363,9 @@ class TestResetDbRemoved:
 
 class TestRestoreToggle:
     def test_toggle_renders_checked_by_default(self, admin_client, mock_db):
+        """Validates toggle renders checked by default as admin (expects 200) [TestRestoreToggle / settings].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get(SETTINGS_URL)
         assert resp.status_code == 200
@@ -276,6 +375,9 @@ class TestRestoreToggle:
         assert b'value="1" checked' in resp.data
 
     def test_toggle_renders_unchecked_when_off(self, admin_client, mock_db):
+        """Validates toggle renders unchecked when off as admin (expects 200) [TestRestoreToggle / settings].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = [
             ('BACKUP_RESTORE_ENABLED', '0', '', None),
         ]
@@ -287,6 +389,9 @@ class TestRestoreToggle:
         assert b'type="hidden"' in resp.data
 
     def test_update_toggle_on(self, admin_client, mock_db):
+        """Validates update toggle on as admin (expects 302) [TestRestoreToggle / settings].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         with patch('app.backup.scheduler.reschedule'):
             resp = admin_client.post(UPDATE_URL, data={
@@ -299,6 +404,9 @@ class TestRestoreToggle:
         assert first[0][1][1] == '1'
 
     def test_update_toggle_off(self, admin_client, mock_db):
+        """Validates update toggle off as admin (expects 302) [TestRestoreToggle / settings].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         with patch('app.backup.scheduler.reschedule'):
             resp = admin_client.post(UPDATE_URL, data={
@@ -311,7 +419,11 @@ class TestRestoreToggle:
 
     def test_update_toggle_checkbox_plus_hidden_submission(self, admin_client,
                                                            mock_db):
-        """A real browser submits checkbox '1' + hidden '0' — stays on."""
+        """Validates update toggle checkbox plus hidden submission as admin (expects 302) [TestRestoreToggle / settings].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data).
+
+A real browser submits checkbox '1' + hidden '0' — stays on."""
         mock_db['fetch_all'].return_value = []
         with patch('app.backup.scheduler.reschedule'):
             resp = admin_client.post(UPDATE_URL, data={
@@ -323,6 +435,9 @@ class TestRestoreToggle:
         assert first[0][1][1] == '1'
 
     def test_update_toggle_rejects_garbage(self, admin_client, mock_db):
+        """Validates update toggle rejects garbage as admin (expects 302) [TestRestoreToggle / settings].
+    If fails: likely unexpected DB write (validation/pre-check bypassed); model SQL changed (UPDATE).
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.post(UPDATE_URL, data={
             'BACKUP_RESTORE_ENABLED': 'maybe',
@@ -332,7 +447,11 @@ class TestRestoreToggle:
 
     def test_update_toggle_absent_leaves_value_alone(self, admin_client,
                                                      mock_db):
-        """A form without the toggle must not flip restore off."""
+        """Validates update toggle absent leaves value alone as admin (expects 302) [TestRestoreToggle / settings].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data).
+
+A form without the toggle must not flip restore off."""
         mock_db['fetch_all'].return_value = []
         with patch('app.backup.scheduler.reschedule'):
             resp = admin_client.post(UPDATE_URL, data={'BACKUP_DAY': '15'})
@@ -342,6 +461,9 @@ class TestRestoreToggle:
         assert keys == ['BACKUP_DAY']
 
     def test_is_restore_enabled(self, mock_db):
+        """Validates is restore enabled [TestRestoreToggle / settings].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.settings.models import is_restore_enabled
         mock_db['fetch_one'].return_value = None  # empty table → default on
         assert is_restore_enabled() is True
@@ -361,6 +483,9 @@ class TestUpdateHostile:
         mock_db['fetch_all'].return_value = []
 
     def test_unknown_and_empty(self, admin_client, mock_db):
+        """Validates unknown and empty `/admin/settings/update` as admin (expects 302) [TestUpdateHostile / settings].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         self._defs(mock_db)
         for data in ({}, {'NOPE': '1'}, {'BACKUP_DAY': ''},
                      {'BACKUP_DAY': '   '}):
@@ -368,6 +493,9 @@ class TestUpdateHostile:
                                      data=data).status_code == 302, data
 
     def test_numeric_edges(self, admin_client, mock_db):
+        """Validates numeric edges `/admin/settings/update` as admin (expects 302) [TestUpdateHostile / settings].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         self._defs(mock_db)
         for data in ({'BACKUP_DAY': '29'}, {'BACKUP_DAY': '0'},
                      {'BACKUP_HOUR': '24'}, {'BACKUP_HOUR': '-1'},
@@ -383,6 +511,9 @@ class TestUpdateHostile:
                                      data=data).status_code == 302, data
 
     def test_xss_value_flashed_escaped(self, admin_client, mock_db):
+        """Validates xss value flashed escaped `/admin/settings/update` as admin (expects 200) [TestUpdateHostile / settings].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         self._defs(mock_db)
         evil = '<script>alert(1)</script>'
         resp = admin_client.post('/admin/settings/update',
@@ -392,6 +523,9 @@ class TestUpdateHostile:
         assert evil not in resp.data.decode()
 
     def test_all_valid_at_once(self, admin_client, mock_db):
+        """Validates all valid at once `/admin/settings/update` as admin (expects 302) [TestUpdateHostile / settings].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         self._defs(mock_db)
         resp = admin_client.post('/admin/settings/update',
                                  data={'BACKUP_DAY': '5', 'BACKUP_HOUR': '3',
@@ -406,15 +540,24 @@ class TestUpdateHostile:
                                           'BACKUP_KEEP']
 
     def test_faculty_forbidden(self, faculty_client, mock_db):
+        """Validates faculty forbidden `/admin/settings/update` as faculty (expects 302) [TestUpdateHostile / settings].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         assert faculty_client.post('/admin/settings/update',
                                    data={'BACKUP_DAY': '5'}).status_code == 302
 
     def test_get_on_update_rejected(self, admin_client):
+        """Validates get on update rejected `/admin/settings/update` as admin (expects 405) [TestUpdateHostile / settings].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         assert admin_client.get('/admin/settings/update').status_code == 405
 
 
 class TestSyncEdges:
     def test_junk_db_values(self, app):
+        """Validates junk db values [TestSyncEdges / settings].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.settings import models as m
         samb = [(k, v) for k, v in
                 [('BACKUP_DAY', 'junk'), ('BACKUP_HOUR', None),
@@ -433,6 +576,9 @@ class TestSyncEdges:
         assert app.config['MAX_BORROW_LIMIT_STUDENT'] == 2
 
     def test_restore_flag_variants(self, mock_db):
+        """Validates restore flag variants [TestSyncEdges / settings].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.settings.models import is_restore_enabled
         for raw, expected in ((None, True), ('0', False), ('OFF', False),
                               ('no', False), ('yes', True), ('', True),
@@ -441,6 +587,9 @@ class TestSyncEdges:
             assert is_restore_enabled() is expected, raw
 
     def test_missing_keys_use_defaults(self, mock_db):
+        """Validates missing keys use defaults [TestSyncEdges / settings].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.settings.models import get_setting, get_settings_dict
         mock_db['fetch_all'].return_value = []
         mock_db['fetch_one'].return_value = None
@@ -450,11 +599,17 @@ class TestSyncEdges:
 
 class TestPageEdges:
     def test_empty_settings_table(self, admin_client, mock_db):
+        """Validates empty settings table `/admin/settings` as admin (expects 200) [TestPageEdges / settings].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = []
         assert admin_client.get('/admin/settings').status_code == 200
 
     def test_evil_stored_values_escaped(self, admin_client, mock_db):
+        """Validates evil stored values escaped `/admin/settings` as admin [TestPageEdges / settings].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates settings is broken for this case (users see wrong page, blocked action, or bad data)."""
         evil = '"><img src=x onerror=alert(1)>'
         mock_db['fetch_all'].return_value = [('BACKUP_DAY', evil, 'd', None)]
         mock_db['fetch_one'].return_value = None

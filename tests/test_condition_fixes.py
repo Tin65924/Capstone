@@ -22,7 +22,11 @@ def _non_audit_writes(mock_db):
 class TestPureReturn:
     def test_return_ignores_legacy_lost_damage_fields(
             self, librarian_client, mock_db):
-        """Old return payloads (lost checkbox, damage notes) now behave
+        """Validates return ignores legacy lost damage fields `/librarian/circulation/return` as librarian (expects 302) [TestPureReturn / condition fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data).
+
+Old return payloads (lost checkbox, damage notes) now behave
         as a plain check-in: loan closed, copy NOT flagged."""
         mock_db['fetch_one'].side_effect = [
             ACC,
@@ -47,6 +51,9 @@ class TestPureReturn:
 
     def test_return_page_has_condition_card_not_lost_checkbox(
             self, librarian_client, mock_db):
+        """Validates return page has condition card not lost checkbox `/librarian/circulation` as librarian [TestPureReturn / condition fixes].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = []
         body = librarian_client.get('/librarian/circulation').data.decode()
@@ -57,6 +64,9 @@ class TestPureReturn:
 
 class TestMarkLost:
     def test_lost_with_loan_closes_it(self, librarian_client, mock_db):
+        """Validates lost with loan closes it `/librarian/circulation/accession/lost` as librarian (expects 302) [TestMarkLost / condition fixes].
+    If fails: likely model SQL changed (UPDATE).
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].side_effect = [
             ACC,
             LOAN,
@@ -73,6 +83,9 @@ class TestMarkLost:
         assert any('inventory_status' in s for s in stmts)
 
     def test_lost_without_loan(self, librarian_client, mock_db):
+        """Validates lost without loan `/librarian/circulation/accession/lost` as librarian (expects 302) [TestMarkLost / condition fixes].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].side_effect = [ACC, None, None]
         resp = librarian_client.post(
             '/librarian/circulation/accession/lost',
@@ -83,6 +96,9 @@ class TestMarkLost:
         assert any('inventory_status' in s for s in stmts)
 
     def test_lost_missing_accession(self, librarian_client, mock_db):
+        """Validates lost missing accession `/librarian/circulation/accession/lost` as librarian (expects 302) [TestMarkLost / condition fixes].
+    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = None
         resp = librarian_client.post(
             '/librarian/circulation/accession/lost',
@@ -93,6 +109,9 @@ class TestMarkLost:
 
 class TestMarkDamaged:
     def test_reason_required(self, librarian_client, mock_db):
+        """Validates reason required `/librarian/circulation/accession/damaged` as librarian (expects 302) [TestMarkDamaged / condition fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = ACC
         resp = librarian_client.post(
             '/librarian/circulation/accession/damaged',
@@ -102,6 +121,9 @@ class TestMarkDamaged:
                        for c in mock_db['execute'].call_args_list)
 
     def test_reason_too_long(self, librarian_client, mock_db):
+        """Validates reason too long `/librarian/circulation/accession/damaged` as librarian (expects 302) [TestMarkDamaged / condition fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = ACC
         resp = librarian_client.post(
             '/librarian/circulation/accession/damaged',
@@ -111,6 +133,9 @@ class TestMarkDamaged:
                        for c in mock_db['execute'].call_args_list)
 
     def test_damaged_ok(self, librarian_client, mock_db):
+        """Validates damaged ok `/librarian/circulation/accession/damaged` as librarian (expects 302) [TestMarkDamaged / condition fixes].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].side_effect = [ACC, None]
         resp = librarian_client.post(
             '/librarian/circulation/accession/damaged',
@@ -120,6 +145,9 @@ class TestMarkDamaged:
         assert any('inventory_status' in s for s in stmts)
 
     def test_damaged_missing_accession(self, librarian_client, mock_db):
+        """Validates damaged missing accession `/librarian/circulation/accession/damaged` as librarian (expects 302) [TestMarkDamaged / condition fixes].
+    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = None
         resp = librarian_client.post(
             '/librarian/circulation/accession/damaged',
@@ -130,6 +158,9 @@ class TestMarkDamaged:
 
 class TestConditionAuth:
     def test_student_blocked(self, student_client, mock_db):
+        """Validates student blocked as student (expects 302) [TestConditionAuth / condition fixes].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         for url in ('/librarian/circulation/accession/lost',
                     '/librarian/circulation/accession/damaged'):
             resp = student_client.post(
@@ -139,6 +170,9 @@ class TestConditionAuth:
         assert _non_audit_writes(mock_db) == []
 
     def test_faculty_blocked(self, faculty_client, mock_db):
+        """Validates faculty blocked as faculty (expects 302) [TestConditionAuth / condition fixes].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         for url in ('/librarian/circulation/accession/lost',
                     '/librarian/circulation/accession/damaged'):
             resp = faculty_client.post(
@@ -148,6 +182,9 @@ class TestConditionAuth:
         assert _non_audit_writes(mock_db) == []
 
     def test_anon_blocked(self, client):
+        """Validates anon blocked (expects 302) [TestConditionAuth / condition fixes].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         for url in ('/librarian/circulation/accession/lost',
                     '/librarian/circulation/accession/damaged'):
             resp = client.post(
@@ -158,6 +195,9 @@ class TestConditionAuth:
 
 class TestInventoryDamageReason:
     def test_notes_required(self, librarian_client, mock_db):
+        """Validates notes required `/librarian/inventory/accession/10/damage` as librarian (expects 302) [TestInventoryDamageReason / condition fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = ACC
         resp = librarian_client.post(
             '/librarian/inventory/accession/10/damage', data={'notes': ''})
@@ -179,6 +219,9 @@ class TestCatalogConditionColumn:
 
     def test_lost_and_damaged_badges_with_reason(
             self, librarian_client, mock_db):
+        """Validates lost and damaged badges with reason as librarian [TestCatalogConditionColumn / condition fixes].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         body = self._page(librarian_client, mock_db, [
             (10, 'damaged', 'torn cover', None, False),
         ])
@@ -186,6 +229,9 @@ class TestCatalogConditionColumn:
         assert 'torn cover' in body
 
     def test_lost_badge(self, librarian_client, mock_db):
+        """Validates lost badge as librarian [TestCatalogConditionColumn / condition fixes].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         body = self._page(librarian_client, mock_db, [
             (10, 'lost', None, None, False),
         ])
@@ -193,6 +239,9 @@ class TestCatalogConditionColumn:
 
     def test_circ_lost_flag_counts_as_lost(
             self, librarian_client, mock_db):
+        """Validates circ lost flag counts as lost as librarian [TestCatalogConditionColumn / condition fixes].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         body = self._page(librarian_client, mock_db, [
             (10, None, None, None, True),
         ])
@@ -202,6 +251,9 @@ class TestCatalogConditionColumn:
             self, librarian_client, mock_db):
         # No inventory assessment yet, but the latest loan recorded
         # damage: still Damaged with its reason.
+        """Validates legacy loan damage shows with reason as librarian [TestCatalogConditionColumn / condition fixes].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         body = self._page(librarian_client, mock_db, [
             (10, None, None, 'water damage', False),
         ])
@@ -212,6 +264,9 @@ class TestCatalogConditionColumn:
             self, librarian_client, mock_db):
         # A later inventory assessment of available wins over an old
         # damage note on a previous loan.
+        """Validates clean inventory clears old loan damage as librarian [TestCatalogConditionColumn / condition fixes].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         body = self._page(librarian_client, mock_db, [
             (10, 'available', None, 'old stain', False),
         ])
@@ -220,6 +275,9 @@ class TestCatalogConditionColumn:
         assert 'old stain' not in body
 
     def test_evil_reason_escaped(self, librarian_client, mock_db):
+        """Validates evil reason escaped as librarian [TestCatalogConditionColumn / condition fixes].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         evil = '<script>alert(1)</script>'
         body = self._page(librarian_client, mock_db, [
             (10, 'damaged', evil, None, False),
@@ -227,6 +285,9 @@ class TestCatalogConditionColumn:
         assert evil not in body
 
     def test_split_filter_tabs(self, librarian_client, mock_db):
+        """Validates split filter tabs `/librarian/cataloging` as librarian [TestCatalogConditionColumn / condition fixes].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = []
         body = librarian_client.get('/librarian/cataloging').data.decode()
@@ -241,6 +302,9 @@ class TestInventoryReasonColumn:
         mock_db['fetch_all'].side_effect = [[], rows]
 
     def test_reason_shown_in_history(self, librarian_client, mock_db):
+        """Validates reason shown in history `/librarian/inventory` as librarian [TestInventoryReasonColumn / condition fixes].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         self._history(mock_db, [
             (1, 10, 'ACC-1', 'Some Title', 'damaged', '2026-01-05',
              'torn cover'),
@@ -250,6 +314,9 @@ class TestInventoryReasonColumn:
         assert 'torn cover' in body
 
     def test_reason_escaped(self, librarian_client, mock_db):
+        """Validates reason escaped `/librarian/inventory` as librarian [TestInventoryReasonColumn / condition fixes].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         evil = '<script>alert(1)</script>'
         self._history(mock_db, [
             (1, 10, 'ACC-1', 'Some Title', 'damaged', '2026-01-05', evil),
@@ -258,6 +325,9 @@ class TestInventoryReasonColumn:
         assert evil not in body
 
     def test_row_damage_needs_notes(self, librarian_client, mock_db):
+        """Validates row damage needs notes `/librarian/inventory/accession/10/damage` as librarian (expects 302) [TestInventoryReasonColumn / condition fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = ACC
         resp = librarian_client.post(
             '/librarian/inventory/accession/10/damage', data={})
@@ -268,6 +338,9 @@ class TestInventoryReasonColumn:
 
 class TestAccessionPlaceholders:
     def test_consistent_format_examples(self, librarian_client, mock_db):
+        """Validates consistent format examples `/librarian/circulation` as librarian [TestAccessionPlaceholders / condition fixes].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = []
         circ = librarian_client.get('/librarian/circulation').data.decode()
@@ -280,6 +353,9 @@ class TestAccessionPlaceholders:
 
 class TestAvailabilityRespectsInventoryLost:
     def test_lost_in_availability_sql(self, mock_db):
+        """Validates lost in availability sql [TestAvailabilityRespectsInventoryLost / condition fixes].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.circulation import models as circ
         mock_db['fetch_one'].return_value = None
         circ.get_available_accession_by_book(1)
@@ -287,6 +363,9 @@ class TestAvailabilityRespectsInventoryLost:
         assert 'inventory_state' in query
 
     def test_is_lost_covers_inventory(self, mock_db):
+        """Validates is lost covers inventory [TestAvailabilityRespectsInventoryLost / condition fixes].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.circulation import models as circ
         mock_db['fetch_one'].return_value = (True,)
         assert circ.is_accession_lost(10) is True
@@ -296,6 +375,9 @@ class TestAvailabilityRespectsInventoryLost:
 
 class TestLostNotes:
     def test_circulation_lost_stores_note(self, librarian_client, mock_db):
+        """Validates circulation lost stores note `/librarian/circulation/accession/lost` as librarian (expects 302) [TestLostNotes / condition fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].side_effect = [ACC, None, None]
         resp = librarian_client.post(
             '/librarian/circulation/accession/lost',
@@ -308,6 +390,9 @@ class TestLostNotes:
         assert 'left on the bus' in inv[0][0][1]
 
     def test_inventory_lost_stores_note(self, librarian_client, mock_db):
+        """Validates inventory lost stores note `/librarian/inventory/accession/10/lost` as librarian (expects 302) [TestLostNotes / condition fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = ACC
         resp = librarian_client.post(
             '/librarian/inventory/accession/10/lost',
@@ -319,6 +404,9 @@ class TestLostNotes:
         assert 'missing since audit' in inv[0][0][1]
 
     def test_lost_without_note_still_works(self, librarian_client, mock_db):
+        """Validates lost without note still works `/librarian/circulation/accession/lost` as librarian (expects 302) [TestLostNotes / condition fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].side_effect = [ACC, None, None]
         resp = librarian_client.post(
             '/librarian/circulation/accession/lost',
@@ -347,6 +435,9 @@ class TestBookReasonColumn:
             f'/librarian/cataloging?copy_status={tab}').data.decode()
 
     def test_reason_column_in_damaged_view(self, librarian_client, mock_db):
+        """Validates reason column in damaged view as librarian [TestBookReasonColumn / condition fixes].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         body = self._page(librarian_client, mock_db,
                           [(10, 'damaged', 'torn cover', None, False)],
                           tab='damaged')
@@ -354,6 +445,9 @@ class TestBookReasonColumn:
         assert 'torn cover' in body
 
     def test_reason_column_in_lost_view(self, librarian_client, mock_db):
+        """Validates reason column in lost view as librarian [TestBookReasonColumn / condition fixes].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         body = self._page(librarian_client, mock_db,
                           [(10, 'lost', 'left on bus', None, False)],
                           tab='lost')
@@ -361,6 +455,9 @@ class TestBookReasonColumn:
         assert 'left on bus' in body
 
     def test_no_reason_column_by_default(self, librarian_client, mock_db):
+        """Validates no reason column by default `/librarian/cataloging` as librarian [TestBookReasonColumn / condition fixes].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = (1,)
         mock_db['fetch_all'].side_effect = [
             [BOOK16],
@@ -371,6 +468,9 @@ class TestBookReasonColumn:
         assert '<th>Reason</th>' not in body
 
     def test_empty_reason_renders_dash(self, librarian_client, mock_db):
+        """Validates empty reason renders dash as librarian [TestBookReasonColumn / condition fixes].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates condition fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         body = self._page(librarian_client, mock_db,
                           [(10, 'lost', None, None, False)],
                           tab='lost')

@@ -14,6 +14,9 @@ def _row(backup_id=1, filename='library_backup_20260101_020000.sql',
 
 class TestCreateBackup:
     def test_writes_file_and_returns_size(self, app, tmp_path, monkeypatch):
+        """Validates writes file and returns size [TestCreateBackup / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import utils as backup_utils
         monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))
         monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
@@ -39,6 +42,9 @@ class TestCreateBackup:
                 assert 'shell' not in kwargs
 
     def test_no_shell_in_call_args(self, app, tmp_path, monkeypatch):
+        """Validates no shell in call args [TestCreateBackup / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import utils as backup_utils
         monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))
         monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
@@ -59,7 +65,11 @@ class TestCreateBackup:
                 assert cmd[0] == 'pg_dump'
 
     def test_dump_uses_clean_replace_flags(self, app, tmp_path, monkeypatch):
-        """Dumps must DROP existing objects so a restore truly replaces data."""
+        """Validates dump uses clean replace flags [TestCreateBackup / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk).
+
+Dumps must DROP existing objects so a restore truly replaces data."""
         from app.backup import utils as backup_utils
         monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))
         monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
@@ -80,7 +90,11 @@ class TestCreateBackup:
                 assert '--if-exists' in cmd
 
     def test_restore_uses_atomic_flags(self, app, tmp_path, monkeypatch):
-        """Restore must be single-transaction + ON_ERROR_STOP (no false success)."""
+        """Validates restore uses atomic flags [TestCreateBackup / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk).
+
+Restore must be single-transaction + ON_ERROR_STOP (no false success)."""
         from app.backup import utils as backup_utils
         monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))
         monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
@@ -99,7 +113,11 @@ class TestCreateBackup:
                 assert 'ON_ERROR_STOP=1' in cmd
 
     def test_restore_bounds_lock_waits(self, app, tmp_path, monkeypatch):
-        """Restore must not wait forever on another session's table lock."""
+        """Validates restore bounds lock waits [TestCreateBackup / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk).
+
+Restore must not wait forever on another session's table lock."""
         from app.backup import utils as backup_utils
         monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))
         monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
@@ -116,13 +134,16 @@ class TestCreateBackup:
                 assert "SET lock_timeout = '120s'" in cmd
 
     def test_restore_precleans_before_replay(self, app, tmp_path, monkeypatch):
-        """Older dumps must replay when the live schema grew FKs since.
+        """Validates restore precleans before replay [TestCreateBackup / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk).
+
+Older dumps must replay when the live schema grew FKs since.
 
         Regression: pg_dump --clean only drops objects known at backup
         time, so replaying a pre-updated_by dump died on
         DROP CONSTRAINT user_accounts_pkey ("other objects depend on it").
-        A CASCADE pre-clean must run before --file in the same call.
-        """
+        A CASCADE pre-clean must run before --file in the same call."""
         from app.backup import utils as backup_utils
         monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))
         monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
@@ -144,6 +165,9 @@ class TestCreateBackup:
                 assert 'public' in cmd[clean_idx]
 
     def test_raises_with_stderr_on_failure(self, app, tmp_path, monkeypatch):
+        """Validates raises with stderr on failure [TestCreateBackup / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import utils as backup_utils
         monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))
         monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
@@ -158,6 +182,9 @@ class TestCreateBackup:
                     backup_utils.create_backup()
 
     def test_missing_tool_raises_friendly_error(self, app, tmp_path, monkeypatch):
+        """Validates missing tool raises friendly error [TestCreateBackup / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import utils as backup_utils
         monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))
         monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
@@ -168,6 +195,9 @@ class TestCreateBackup:
                     backup_utils.create_backup()
 
     def test_resolve_blocks_traversal(self, app, tmp_path, monkeypatch):
+        """Validates resolve blocks traversal [TestCreateBackup / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import utils as backup_utils
         monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))
         with app.app_context():
@@ -175,7 +205,11 @@ class TestCreateBackup:
                 backup_utils.resolve_backup_path('../../etc/passwd')
 
     def test_subprocess_never_inherits_stdin(self, app, tmp_path, monkeypatch):
-        """pg_dump must not block on a password prompt with no terminal."""
+        """Validates subprocess never inherits stdin [TestCreateBackup / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk).
+
+pg_dump must not block on a password prompt with no terminal."""
         from app.backup import utils as backup_utils
         monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))
         monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
@@ -198,6 +232,9 @@ class TestCreateBackup:
 
     def test_create_timeout_removes_partial_file(self, app, tmp_path,
                                                  monkeypatch):
+        """Validates create timeout removes partial file [TestCreateBackup / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import utils as backup_utils
         monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))
         monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
@@ -220,6 +257,9 @@ class TestCreateBackup:
 
 class TestResolveTool:
     def test_env_override_wins(self, tmp_path, monkeypatch):
+        """Validates env override wins [TestResolveTool / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup.utils import resolve_tool
         exe = tmp_path / 'pg_dump.exe'
         exe.write_text('x')
@@ -227,18 +267,27 @@ class TestResolveTool:
         assert resolve_tool('pg_dump', 'PG_DUMP') == str(exe)
 
     def test_bad_env_override_explains(self, tmp_path, monkeypatch):
+        """Validates bad env override explains [TestResolveTool / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup.utils import resolve_tool
         monkeypatch.setenv('PG_DUMP', str(tmp_path / 'missing.exe'))
         with pytest.raises(RuntimeError, match='PG_DUMP'):
             resolve_tool('pg_dump', 'PG_DUMP')
 
     def test_path_hit(self, monkeypatch):
+        """Validates path hit [TestResolveTool / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import utils as backup_utils
         monkeypatch.delenv('PG_DUMP', raising=False)
         with patch.object(backup_utils.shutil, 'which', return_value='/usr/bin/pg_dump'):
             assert backup_utils.resolve_tool('pg_dump', 'PG_DUMP') == '/usr/bin/pg_dump'
 
     def test_windows_fallback_prefers_newest(self, monkeypatch):
+        """Validates windows fallback prefers newest [TestResolveTool / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import utils as backup_utils
         monkeypatch.delenv('PG_DUMP', raising=False)
         monkeypatch.setattr(backup_utils.os, 'name', 'nt')
@@ -251,6 +300,9 @@ class TestResolveTool:
             assert backup_utils.resolve_tool('pg_dump', 'PG_DUMP').endswith('18\\bin\\pg_dump.exe')
 
     def test_missing_tool_guidance(self, monkeypatch):
+        """Validates missing tool guidance [TestResolveTool / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import utils as backup_utils
         monkeypatch.delenv('PG_DUMP', raising=False)
         with patch.object(backup_utils.shutil, 'which', return_value=None), \
@@ -261,6 +313,9 @@ class TestResolveTool:
 
 class TestBackupStats:
     def test_failed_latest_is_not_healthy(self):
+        """Validates failed latest is not healthy [TestBackupStats / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup.routes import _backup_stats
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         failed = _row(2, 'manual_backup_failed.sql', None, 'failed', 'manual', now)
@@ -272,6 +327,9 @@ class TestBackupStats:
         assert stats['total_size'] == 100
 
     def test_recent_completed_is_healthy(self):
+        """Validates recent completed is healthy [TestBackupStats / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup.routes import _backup_stats
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         stats = _backup_stats([_row(1, 'f.sql', 50, 'completed', 'manual', now)])
@@ -281,6 +339,9 @@ class TestBackupStats:
 
 class TestBackupModels:
     def test_get_logs_order_and_fields(self, mock_db):
+        """Validates get logs order and fields [TestBackupModels / backup].
+    If fails: likely model SQL changed (SELECT).
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import models
         mock_db['fetch_all'].return_value = [_row(2), _row(1)]
         rows = models.get_backup_logs()
@@ -289,6 +350,9 @@ class TestBackupModels:
         assert 'ORDER BY created_at DESC' in mock_db['fetch_all'].call_args[0][0]
 
     def test_log_backup_insert(self, mock_db):
+        """Validates log backup insert [TestBackupModels / backup].
+    If fails: likely model SQL changed (INSERT INTO).
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import models
         mock_db['fetch_one'].return_value = (7,)
         assert models.log_backup('f.sql', 10, 'manual') == 7
@@ -297,6 +361,9 @@ class TestBackupModels:
         assert params[0] == 'f.sql'
 
     def test_stale_backups_offset(self, mock_db):
+        """Validates stale backups offset [TestBackupModels / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import models
         models.get_stale_backups(12)
         query, params = mock_db['fetch_all'].call_args[0]
@@ -304,6 +371,9 @@ class TestBackupModels:
         assert params == (12,)
 
     def test_delete_old_backups_keeps_newest(self, app, tmp_path, monkeypatch, mock_db):
+        """Validates delete old backups keeps newest [TestBackupModels / backup].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (DELETE FROM).
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import scheduler
         monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))
         old_file = tmp_path / 'library_backup_old.sql'
@@ -327,6 +397,9 @@ class TestBackupModels:
 
 class TestBackupRoutes:
     def test_page_requires_admin(self, client, student_client, librarian_client, mock_db):
+        """Validates page requires admin `/admin/backup` (expects 302) [TestBackupRoutes / backup].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         resp = client.get('/admin/backup')
         assert resp.status_code == 302
         resp = student_client.get('/admin/backup')
@@ -336,6 +409,9 @@ class TestBackupRoutes:
         assert resp.status_code == 302
 
     def test_page_renders_history(self, admin_client, mock_db):
+        """Validates page renders history `/admin/backup` as admin (expects 200) [TestBackupRoutes / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         mock_db['fetch_all'].return_value = [_row()]
         resp = admin_client.get('/admin/backup')
         assert resp.status_code == 200
@@ -343,12 +419,18 @@ class TestBackupRoutes:
         assert b'Run Backup Now' in resp.data
 
     def test_page_empty_state(self, admin_client, mock_db):
+        """Validates page empty state `/admin/backup` as admin (expects 200) [TestBackupRoutes / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         mock_db['fetch_all'].return_value = []
         resp = admin_client.get('/admin/backup')
         assert resp.status_code == 200
         assert b'No backups yet' in resp.data
 
     def test_page_warns_when_latest_failed(self, admin_client, mock_db):
+        """Validates page warns when latest failed `/admin/backup` as admin (expects 200) [TestBackupRoutes / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         now = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=123456)
         mock_db['fetch_all'].return_value = [
             _row(2, 'manual_backup_failed.sql', None, 'failed', 'manual', now),
@@ -362,7 +444,11 @@ class TestBackupRoutes:
         assert now.strftime('%Y-%m-%d %H:%M').encode() in resp.data
 
     def test_create_route_starts_async_and_completes(self, admin_client, mock_db):
-        """POST returns at once with an in_progress row; the worker finishes it."""
+        """Validates create route starts async and completes `/admin/backup/create` as admin (expects 302) [TestBackupRoutes / backup].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
+    Failure indicates backup/restore safety net is broken (data-loss risk).
+
+POST returns at once with an in_progress row; the worker finishes it."""
         from app.backup import jobs as jobs_mod
         # Guard lookup finds nothing running; the INSERT returns id 3.
         mock_db['fetch_one'].side_effect = [None, (3,)]
@@ -388,7 +474,11 @@ class TestBackupRoutes:
         assert 'f.sql' in params
 
     def test_create_returns_without_waiting_for_worker(self, admin_client, mock_db):
-        """The response must not block on pg_dump (true background thread)."""
+        """Validates create returns without waiting for worker `/admin/backup/create` as admin (expects 302) [TestBackupRoutes / backup].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
+    Failure indicates backup/restore safety net is broken (data-loss risk).
+
+The response must not block on pg_dump (true background thread)."""
         import threading
         import time
         from app.backup import jobs as jobs_mod
@@ -420,6 +510,9 @@ class TestBackupRoutes:
         assert updates and 'completed' in updates[0][0][1]
 
     def test_create_route_failure_flips_row_to_failed(self, admin_client, mock_db):
+        """Validates create route failure flips row to failed `/admin/backup/create` as admin (expects 302) [TestBackupRoutes / backup].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         mock_db['fetch_one'].side_effect = [None, (3,)]
         with patch('app.backup.jobs.create_backup',
                    side_effect=RuntimeError('boom')), \
@@ -435,7 +528,11 @@ class TestBackupRoutes:
         assert any('boom' in str(p) for p in params)
 
     def test_create_refused_while_busy(self, admin_client, mock_db):
-        """A second backup while one runs redirects — no second row."""
+        """Validates create refused while busy `/admin/backup/create` as admin (expects 302) [TestBackupRoutes / backup].
+    If fails: likely model SQL changed (INSERT INTO).
+    Failure indicates backup/restore safety net is broken (data-loss risk).
+
+A second backup while one runs redirects — no second row."""
         import threading
         release = threading.Event()
 
@@ -459,6 +556,9 @@ class TestBackupRoutes:
             _wait_for_idle()
 
     def test_download_serves_file(self, admin_client, mock_db, tmp_path, app):
+        """Validates download serves file `/admin/backup/1/download` as admin (expects 200) [TestBackupRoutes / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         target = tmp_path / 'library_backup_20260101_020000.sql'
         target.write_text('dump')
         mock_db['fetch_one'].return_value = _row()
@@ -468,6 +568,9 @@ class TestBackupRoutes:
         assert resp.data == b'dump'
 
     def test_download_missing_file_redirects(self, admin_client, mock_db, tmp_path):
+        """Validates download missing file redirects `/admin/backup/1/download` as admin (expects 302) [TestBackupRoutes / backup].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         mock_db['fetch_one'].return_value = _row()
         with patch('app.backup.routes.resolve_backup_path',
                    return_value=str(tmp_path / 'gone.sql')):
@@ -475,6 +578,9 @@ class TestBackupRoutes:
         assert resp.status_code == 302
 
     def test_restore_starts_async_then_replaces(self, admin_client, mock_db):
+        """Validates restore starts async then replaces `/admin/backup/1/restore` as admin (expects 302) [TestBackupRoutes / backup].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         mock_db['fetch_one'].side_effect = [('1',), _row(), None, _row(), (5,)]
         with patch('app.backup.jobs.create_backup',
                    return_value=('safety.sql', 9)) as mk, \
@@ -490,6 +596,9 @@ class TestBackupRoutes:
         assert any('backup:restored:' in a for a in acts)
 
     def test_restore_refuses_failed_backup(self, admin_client, mock_db):
+        """Validates restore refuses failed backup `/admin/backup/1/restore` as admin (expects 302) [TestBackupRoutes / backup].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         mock_db['fetch_one'].return_value = _row(status='failed')
         with patch('app.backup.jobs.create_backup') as mk:
             resp = admin_client.post('/admin/backup/1/restore')
@@ -497,6 +606,9 @@ class TestBackupRoutes:
         mk.assert_not_called()
 
     def test_restore_aborts_without_safety_net(self, admin_client, mock_db):
+        """Validates restore aborts without safety net `/admin/backup/1/restore` as admin (expects 302) [TestBackupRoutes / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import jobs as jobs_mod
         mock_db['fetch_one'].side_effect = [('1',), _row(), None, _row()]
         with patch('app.backup.jobs.create_backup',
@@ -510,7 +622,11 @@ class TestBackupRoutes:
         assert jobs_mod.recent_finished_job()['status'] == 'failed'
 
     def test_restore_psql_failure_recorded_on_job(self, admin_client, mock_db):
-        """A mid-restore psql error surfaces on the finished job, never success."""
+        """Validates restore psql failure recorded on job `/admin/backup/1/restore` as admin (expects 302) [TestBackupRoutes / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk).
+
+A mid-restore psql error surfaces on the finished job, never success."""
         from app.backup import jobs as jobs_mod
         mock_db['fetch_one'].side_effect = [('1',), _row(), None, _row(), (5,)]
         mock_db['fetch_all'].return_value = []
@@ -531,6 +647,9 @@ class TestBackupRoutes:
 
 class TestScheduler:
     def test_job_registered_on_start(self, app):
+        """Validates job registered on start [TestScheduler / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import scheduler as sched
         with patch('apscheduler.schedulers.background.BackgroundScheduler') as cls:
             inst = cls.return_value
@@ -543,12 +662,19 @@ class TestScheduler:
             assert inst.add_job.call_args[1]['id'] == 'monthly_backup'
 
     def test_start_skipped_in_testing(self, app):
+        """Validates start skipped in testing [TestScheduler / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import scheduler as sched
         app.config['TESTING'] = True
         assert sched.start_scheduler(app) is None
 
     def test_schedule_values_clamped(self, app):
-        """Typo'd BACKUP_DAY/HOUR must not silently disable backups."""
+        """Validates schedule values clamped [TestScheduler / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk).
+
+Typo'd BACKUP_DAY/HOUR must not silently disable backups."""
         from app.backup import scheduler as sched
         with patch('apscheduler.schedulers.background.BackgroundScheduler') as cls:
             inst = cls.return_value
@@ -562,6 +688,9 @@ class TestScheduler:
             assert kwargs['hour'] == 23
 
     def test_schedule_garbage_falls_back(self, app):
+        """Validates schedule garbage falls back [TestScheduler / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import scheduler as sched
         with patch('apscheduler.schedulers.background.BackgroundScheduler') as cls:
             inst = cls.return_value
@@ -575,6 +704,9 @@ class TestScheduler:
             assert kwargs['hour'] == 2
 
     def test_scheduled_run_logs_scheduled_type(self, app, mock_db):
+        """Validates scheduled run logs scheduled type [TestScheduler / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import scheduler as sched
         mock_db['fetch_one'].return_value = (1,)
         mock_db['fetch_all'].return_value = []
@@ -584,6 +716,9 @@ class TestScheduler:
         assert 'scheduled' in params
 
     def test_scheduled_failure_logs_failed(self, app, mock_db):
+        """Validates scheduled failure logs failed [TestScheduler / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import scheduler as sched
         with patch('app.backup.utils.create_backup', side_effect=RuntimeError('x')):
             sched.run_scheduled_backup(app)
@@ -591,30 +726,45 @@ class TestScheduler:
         assert 'failed' in params
 
     def test_next_backup_this_month(self):
+        """Validates next backup this month [TestScheduler / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from datetime import datetime
         from app.backup import scheduler as sched
         nxt = sched.next_scheduled_backup(20, 2, now=datetime(2026, 9, 10, 12, 0))
         assert (nxt.year, nxt.month, nxt.day, nxt.hour) == (2026, 9, 20, 2)
 
     def test_next_backup_rolls_to_next_month(self):
+        """Validates next backup rolls to next month [TestScheduler / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from datetime import datetime
         from app.backup import scheduler as sched
         nxt = sched.next_scheduled_backup(1, 2, now=datetime(2026, 9, 10, 12, 0))
         assert (nxt.year, nxt.month, nxt.day, nxt.hour) == (2026, 10, 1, 2)
 
     def test_next_backup_rolls_year(self):
+        """Validates next backup rolls year [TestScheduler / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from datetime import datetime
         from app.backup import scheduler as sched
         nxt = sched.next_scheduled_backup(1, 2, now=datetime(2026, 12, 15, 12, 0))
         assert (nxt.year, nxt.month, nxt.day, nxt.hour) == (2027, 1, 1, 2)
 
     def test_next_backup_clamps_day(self):
+        """Validates next backup clamps day [TestScheduler / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from datetime import datetime
         from app.backup import scheduler as sched
         nxt = sched.next_scheduled_backup(99, 99, now=datetime(2026, 9, 10, 12, 0))
         assert (nxt.month, nxt.day, nxt.hour) == (9, 28, 23)
 
     def test_reschedule_noop_without_running_scheduler(self, app):
+        """Validates reschedule noop without running scheduler [TestScheduler / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import scheduler as sched
         assert sched.reschedule(app) is False
 
@@ -653,6 +803,9 @@ def _in_progress_row(**overrides):
 class TestBackupJobs:
     def test_create_and_restore_require_admin(self, client, student_client,
                                               librarian_client, mock_db):
+        """Validates create and restore require admin `/admin/backup/create` (expects 302) [TestBackupJobs / backup].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         resp = client.post('/admin/backup/create')
         assert resp.status_code == 302
         resp = student_client.post('/admin/backup/create')
@@ -667,7 +820,11 @@ class TestBackupJobs:
         assert resp.status_code == 302
 
     def test_restore_refuses_in_progress_row(self, admin_client, mock_db):
-        """An in_progress history row is not restorable."""
+        """Validates restore refuses in progress row `/admin/backup/9/restore` as admin (expects 302) [TestBackupJobs / backup].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates backup/restore safety net is broken (data-loss risk).
+
+An in_progress history row is not restorable."""
         mock_db['fetch_one'].return_value = _in_progress_row()
         with patch('app.backup.jobs.create_backup') as mk:
             resp = admin_client.post('/admin/backup/9/restore')
@@ -675,12 +832,19 @@ class TestBackupJobs:
         mk.assert_not_called()
 
     def test_restore_missing_backup(self, admin_client, mock_db):
+        """Validates restore missing backup `/admin/backup/9/restore` as admin (expects 302) [TestBackupJobs / backup].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         mock_db['fetch_one'].return_value = None
         resp = admin_client.post('/admin/backup/9/restore')
         assert resp.status_code == 302
 
     def test_stale_in_progress_reaped(self, admin_client, mock_db):
-        """A worker that died hours ago must not block new backups forever."""
+        """Validates stale in progress reaped `/admin/backup/create` as admin (expects 302) [TestBackupJobs / backup].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates backup/restore safety net is broken (data-loss risk).
+
+A worker that died hours ago must not block new backups forever."""
         stale = _in_progress_row(created=datetime(2026, 9, 18, 2, 0, 0))
         mock_db['fetch_one'].side_effect = [stale, (3,)]
         with patch('app.backup.jobs.create_backup',
@@ -696,6 +860,9 @@ class TestBackupJobs:
         assert failed
 
     def test_page_has_no_progress_modal(self, admin_client, mock_db):
+        """Validates page has no progress modal `/admin/backup` as admin (expects 200) [TestBackupJobs / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         mock_db['fetch_all'].return_value = [_row()]
         mock_db['fetch_one'].return_value = None
         resp = admin_client.get('/admin/backup')
@@ -707,6 +874,9 @@ class TestBackupJobs:
         assert b'restore-modal-' not in resp.data
 
     def test_backup_form_posts_to_create_endpoint(self, admin_client, mock_db):
+        """Validates backup form posts to create endpoint `/admin/backup` as admin (expects 200) [TestBackupJobs / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         mock_db['fetch_all'].return_value = []
         mock_db['fetch_one'].return_value = None
         resp = admin_client.get('/admin/backup')
@@ -714,6 +884,9 @@ class TestBackupJobs:
         assert b'action="/admin/backup/create"' in resp.data
 
     def test_restore_uses_plain_forms(self, admin_client, mock_db):
+        """Validates restore uses plain forms `/admin/backup` as admin (expects 200) [TestBackupJobs / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         mock_db['fetch_all'].return_value = [_row()]
         mock_db['fetch_one'].return_value = None
         resp = admin_client.get('/admin/backup')
@@ -721,6 +894,9 @@ class TestBackupJobs:
         assert b'action="/admin/backup/1/restore"' in resp.data
 
     def test_page_shows_in_progress_state(self, admin_client, mock_db):
+        """Validates page shows in progress state `/admin/backup` as admin (expects 200) [TestBackupJobs / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         running = _in_progress_row()
         mock_db['fetch_all'].return_value = [running, _row()]
         mock_db['fetch_one'].return_value = running
@@ -733,6 +909,9 @@ class TestBackupJobs:
         assert b'action="/admin/backup/1/restore"' not in resp.data
 
     def test_page_shows_recent_failure_banner(self, admin_client, mock_db):
+        """Validates page shows recent failure banner `/admin/backup/create` as admin (expects 200) [TestBackupJobs / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import jobs as jobs_mod
         mock_db['fetch_one'].return_value = _row()
         mock_db['fetch_all'].return_value = []
@@ -750,6 +929,9 @@ class TestBackupJobs:
 
 class TestBackupStatsInProgress:
     def test_newest_in_progress_ignored_for_health(self):
+        """Validates newest in progress ignored for health [TestBackupStatsInProgress / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup.routes import _backup_stats
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         running = _in_progress_row(created=now)
@@ -761,6 +943,9 @@ class TestBackupStatsInProgress:
         assert stats['last'][0] == 1
 
     def test_only_in_progress_means_no_last(self):
+        """Validates only in progress means no last [TestBackupStatsInProgress / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup.routes import _backup_stats
         stats = _backup_stats([_in_progress_row()])
         assert stats['count'] == 0
@@ -770,6 +955,9 @@ class TestBackupStatsInProgress:
 
 class TestBackupModelsStatus:
     def test_get_in_progress_uses_bound_param(self, mock_db):
+        """Validates get in progress uses bound param [TestBackupModelsStatus / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import models
         mock_db['fetch_one'].return_value = None
         assert models.get_in_progress_backup() is None
@@ -778,6 +966,9 @@ class TestBackupModelsStatus:
         assert params == ('in_progress',)
 
     def test_update_backup_status_completed(self, mock_db):
+        """Validates update backup status completed [TestBackupModelsStatus / backup].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import models
         models.update_backup_status(9, 'completed', filename='f.sql',
                                     size_bytes=10)
@@ -789,6 +980,9 @@ class TestBackupModelsStatus:
         assert params == ('completed', 'f.sql', 10, 9)
 
     def test_update_backup_status_failed(self, mock_db):
+        """Validates update backup status failed [TestBackupModelsStatus / backup].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import models
         models.update_backup_status(9, 'failed', error_msg='boom')
         query, params = mock_db['execute'].call_args[0]
@@ -797,6 +991,9 @@ class TestBackupModelsStatus:
 
     def test_retention_skips_in_progress(self, app, tmp_path, monkeypatch,
                                          mock_db):
+        """Validates retention skips in progress [TestBackupModelsStatus / backup].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (DELETE FROM).
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import scheduler
         monkeypatch.setitem(app.config, 'BACKUP_DIR', str(tmp_path))
         keep_file = tmp_path / 'library_backup_new.sql'
@@ -819,6 +1016,9 @@ class TestRestoreToggle:
 
     def test_page_shows_restore_form_when_enabled(self, admin_client,
                                                   mock_db):
+        """Validates page shows restore form when enabled `/admin/backup` as admin (expects 200) [TestRestoreToggle / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         mock_db['fetch_all'].return_value = [_row()]
         mock_db['fetch_one'].return_value = None  # empty settings ? on
         resp = admin_client.get('/admin/backup')
@@ -828,6 +1028,9 @@ class TestRestoreToggle:
         assert b'restore disabled in Library Settings' not in resp.data
 
     def test_page_greys_restore_when_disabled(self, admin_client, mock_db):
+        """Validates page greys restore when disabled `/admin/backup` as admin (expects 200) [TestRestoreToggle / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         mock_db['fetch_all'].return_value = [_row()]
         with patch('app.backup.routes.is_restore_enabled', return_value=False):
             resp = admin_client.get('/admin/backup')
@@ -841,6 +1044,9 @@ class TestRestoreToggle:
         assert b'/admin/backup/1/download' in resp.data
 
     def test_restore_refused_when_disabled(self, admin_client, mock_db):
+        """Validates restore refused when disabled `/admin/backup/1/restore` as admin (expects 302) [TestRestoreToggle / backup].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         with patch('app.backup.routes.is_restore_enabled', return_value=False), \
              patch('app.backup.jobs.create_backup') as mk:
             resp = admin_client.post('/admin/backup/1/restore')
@@ -850,7 +1056,11 @@ class TestRestoreToggle:
 
     def test_restore_redirect_carries_started_signal(self, admin_client,
                                                      mock_db):
-        """The POST redirects with ?restore_started= so the outcome modal
+        """Validates restore redirect carries started signal `/admin/backup/1/restore` as admin (expects 302) [TestRestoreToggle / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk).
+
+The POST redirects with ?restore_started= so the outcome modal
         opens exactly once on the reloaded page."""
         from app.backup import jobs as jobs_mod
         mock_db['fetch_one'].side_effect = [('1',), _row(), None, _row(),
@@ -870,7 +1080,11 @@ class TestRestoreToggle:
 
 class TestRestoreConfirmModal:
     def test_confirm_modal_states_consequences(self, admin_client, mock_db):
-        """Modal 1 of 2 must spell out what restoring will do."""
+        """Validates confirm modal states consequences `/admin/backup` as admin (expects 200) [TestRestoreConfirmModal / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates backup/restore safety net is broken (data-loss risk).
+
+Modal 1 of 2 must spell out what restoring will do."""
         mock_db['fetch_all'].return_value = [_row()]
         mock_db['fetch_one'].return_value = None
         resp = admin_client.get('/admin/backup')
@@ -884,7 +1098,11 @@ class TestRestoreConfirmModal:
 
     def test_result_modal_opens_once_after_restore_post(self, admin_client,
                                                         mock_db):
-        """Modal 2 of 2 opens on the redirected load and names the file."""
+        """Validates result modal opens once after restore post `/admin/backup?restore_started=library_backup_20260101_020000.sql` as admin (expects 200) [TestRestoreConfirmModal / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates backup/restore safety net is broken (data-loss risk).
+
+Modal 2 of 2 opens on the redirected load and names the file."""
         mock_db['fetch_all'].return_value = [_row()]
         mock_db['fetch_one'].return_value = None
         resp = admin_client.get(
@@ -898,6 +1116,9 @@ class TestRestoreConfirmModal:
 
     def test_result_modal_stays_closed_otherwise(self, admin_client,
                                                  mock_db):
+        """Validates result modal stays closed otherwise `/admin/backup` as admin (expects 200) [TestRestoreConfirmModal / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         mock_db['fetch_all'].return_value = [_row()]
         mock_db['fetch_one'].return_value = None
         resp = admin_client.get('/admin/backup')
@@ -930,6 +1151,9 @@ class TestRestorePreservesHistory:
                 and len(c[0][1]) == 6]
 
     def test_worker_rerecords_newer_rows(self, admin_client, mock_db):
+        """Validates worker rerecords newer rows `/admin/backup/1/restore` as admin (expects 302) [TestRestorePreservesHistory / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import jobs as jobs_mod
         old, new, safety = self._old_and_new()
         # Gate setting, route lookup, busy guard, worker lookup, safety log.
@@ -955,6 +1179,9 @@ class TestRestorePreservesHistory:
 
     def test_worker_failed_restore_does_not_reinsert(self, admin_client,
                                                      mock_db):
+        """Validates worker failed restore does not reinsert `/admin/backup/1/restore` as admin (expects 302) [TestRestorePreservesHistory / backup].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         from app.backup import jobs as jobs_mod
         old, new, _ = self._old_and_new()
         mock_db['fetch_one'].side_effect = [('1',), old, None, old, (6,)]
@@ -972,7 +1199,11 @@ class TestRestorePreservesHistory:
         assert self._reinserted_filenames(mock_db) == []
 
     def test_reconcile_failure_keeps_job_done(self, admin_client, mock_db):
-        """History bookkeeping must never fail a good restore."""
+        """Validates reconcile failure keeps job done `/admin/backup/1/restore` as admin (expects 302) [TestRestorePreservesHistory / backup].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates backup/restore safety net is broken (data-loss risk).
+
+History bookkeeping must never fail a good restore."""
         from app.backup import jobs as jobs_mod
         old, new, _ = self._old_and_new()
         mock_db['fetch_one'].side_effect = [('1',), old, None, old, (6,)]
@@ -993,6 +1224,9 @@ class TestRestorePreservesHistory:
 class TestDeleteBackup:
     def test_page_shows_delete_button_on_every_row(self, admin_client,
                                                    mock_db):
+        """Validates page shows delete button on every row `/admin/backup` as admin (expects 200) [TestDeleteBackup / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         mock_db['fetch_all'].return_value = [
             _row(),
             _row(2, 'manual_backup_failed.sql', None, 'failed'),
@@ -1004,6 +1238,9 @@ class TestDeleteBackup:
         assert b'data-delete-url="/admin/backup/2/delete"' in resp.data
 
     def test_delete_modals_state_consequences(self, admin_client, mock_db):
+        """Validates delete modals state consequences `/admin/backup` as admin (expects 200) [TestDeleteBackup / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         mock_db['fetch_all'].return_value = [_row()]
         mock_db['fetch_one'].return_value = None
         resp = admin_client.get('/admin/backup')
@@ -1017,6 +1254,9 @@ class TestDeleteBackup:
 
     def test_delete_removes_file_and_row(self, admin_client, mock_db,
                                          tmp_path):
+        """Validates delete removes file and row `/admin/backup/1/delete` as admin (expects 200) [TestDeleteBackup / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched; wrong/absent SQL call or placeholder mismatch.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         target = tmp_path / 'library_backup_20260101_020000.sql'
         target.write_text('dump')
         mock_db['fetch_one'].return_value = _row()
@@ -1036,12 +1276,18 @@ class TestDeleteBackup:
         assert any('backup:deleted:' in a for a in acts)
 
     def test_delete_missing_row_404(self, admin_client, mock_db):
+        """Validates delete missing row 404 `/admin/backup/9/delete` as admin (expects 404) [TestDeleteBackup / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         mock_db['fetch_one'].return_value = None
         resp = admin_client.post('/admin/backup/9/delete')
         assert resp.status_code == 404
         assert 'not found' in resp.get_json()['error'].lower()
 
     def test_delete_refused_while_job_running(self, admin_client, mock_db):
+        """Validates delete refused while job running `/admin/backup/1/delete` as admin (expects 409) [TestDeleteBackup / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         mock_db['fetch_one'].return_value = _row()
         with patch('app.backup.routes.jobs.active_job',
                    return_value={'status': 'running'}):
@@ -1051,6 +1297,9 @@ class TestDeleteBackup:
 
     def test_delete_missing_file_still_removes_row(self, admin_client,
                                                    mock_db, tmp_path):
+        """Validates delete missing file still removes row `/admin/backup/1/delete` as admin (expects 200) [TestDeleteBackup / backup].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched; wrong/absent SQL call or placeholder mismatch.
+    Failure indicates backup/restore safety net is broken (data-loss risk)."""
         mock_db['fetch_one'].return_value = _row()
         with patch('app.backup.routes.resolve_backup_path',
                    return_value=str(tmp_path / 'gone.sql')), \

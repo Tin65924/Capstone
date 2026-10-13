@@ -12,10 +12,16 @@ USER = (4, 'a@x.ph', 'Student', 'Ann')
 
 class TestOpenRedirect:
     def test_safe_next_helper(self):
+        """Validates safe next helper [TestOpenRedirect / users edge cases].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates user management/profile is broken."""
         from app.auth.routes import _safe_next_url
         assert _safe_next_url.__name__ == '_safe_next_url'
 
     def test_evil_next_rejected(self, client):
+        """Validates evil next rejected [TestOpenRedirect / users edge cases].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         from app.auth.routes import _safe_next_url
         from flask import Flask
         app = Flask(__name__)
@@ -35,6 +41,9 @@ class TestOpenRedirect:
 
 class TestRoleChange:
     def test_bogus_role_rejected(self, admin_client, mock_db):
+        """Validates bogus role rejected `/admin/users/4/role` as admin (expects 302) [TestRoleChange / users edge cases].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates user management/profile is broken."""
         mock_db['fetch_one'].return_value = USER
         mock_db['fetch_all'].return_value = [(1, 'Student')]
         before = mock_db['execute'].call_count
@@ -47,10 +56,16 @@ class TestRoleChange:
         assert updates == []
 
     def test_missing_role_param(self, admin_client, mock_db):
+        """Validates missing role param `/admin/users/4/role` as admin (expects 302) [TestRoleChange / users edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates user management/profile is broken."""
         assert admin_client.post('/admin/users/4/role',
                                  data={}).status_code == 302
 
     def test_missing_user(self, admin_client, mock_db):
+        """Validates missing user `/admin/users/999/role` as admin (expects 302) [TestRoleChange / users edge cases].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates user management/profile is broken."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = [(1, 'Student')]
         before = mock_db['execute'].call_count
@@ -69,6 +84,9 @@ class TestMissingUsers:
         mock_db['fetch_all'].return_value = []
 
     def test_actions_missing(self, admin_client, mock_db):
+        """Validates actions missing `/librarian/users/999/approve` as admin (expects 302) [TestMissingUsers / users edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates user management/profile is broken."""
         self._none(mock_db)
         for url in ('/admin/users/999/toggle-status',
                     '/admin/users/999/archive',
@@ -78,6 +96,9 @@ class TestMissingUsers:
             '/librarian/users/999/approve').status_code == 302
 
     def test_huge_ids(self, admin_client, mock_db):
+        """Validates huge ids as admin (expects 302) [TestMissingUsers / users edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates user management/profile is broken."""
         self._none(mock_db)
         for url in ('/admin/users/999999999/archive',
                     '/admin/users/999999999/role'):
@@ -87,6 +108,9 @@ class TestMissingUsers:
 
 class TestUsersList:
     def test_hostile_params(self, admin_client, mock_db):
+        """Validates hostile params as admin (expects 200) [TestUsersList / users edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates user management/profile is broken."""
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = []
         for url in ('/librarian/users?q=' + 'x' * 2000,
@@ -96,6 +120,9 @@ class TestUsersList:
             assert admin_client.get(url).status_code == 200, url[:60]
 
     def test_evil_rows(self, admin_client, mock_db):
+        """Validates evil rows `/librarian/users` as admin [TestUsersList / users edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates user management/profile is broken."""
         evil = '<script>alert(1)</script>'
         row = (9, evil, 'Student', evil, 'e@x.ph', 'active', '2026-01-01')
         mock_db['fetch_one'].return_value = (0,)
@@ -104,6 +131,9 @@ class TestUsersList:
         assert evil not in body
 
     def test_none_rows(self, admin_client, mock_db):
+        """Validates none rows `/librarian/users` as admin (expects 200) [TestUsersList / users edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates user management/profile is broken."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = None
         assert admin_client.get('/librarian/users').status_code == 200
@@ -111,6 +141,9 @@ class TestUsersList:
 
 class TestDepartments:
     def test_add_hostile(self, librarian_client, mock_db):
+        """Validates add hostile `/librarian/departments/add` as librarian (expects 302) [TestDepartments / users edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates user management/profile is broken."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = []
         for data in ({}, {'name': ''}, {'name': 'X' * 500},
@@ -121,6 +154,9 @@ class TestDepartments:
                 '/librarian/departments/add', data=data).status_code == 302
 
     def test_delete_missing(self, admin_client, mock_db):
+        """Validates delete missing `/admin/departments/999/delete` as admin (expects 302) [TestDepartments / users edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates user management/profile is broken."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = []
         assert admin_client.post(
@@ -129,6 +165,9 @@ class TestDepartments:
 
 class TestEditUser:
     def test_evil_name(self, admin_client, mock_db):
+        """Validates evil name `/admin/users/4/edit` as admin (expects 302) [TestEditUser / users edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates user management/profile is broken."""
         profile = (4, 'e@x.ph', 'Student', 'Old', None, None, 'BSIS')
         mock_db['fetch_one'].return_value = profile
         mock_db['fetch_all'].return_value = [('BSIS',)]
@@ -139,12 +178,18 @@ class TestEditUser:
         assert resp.status_code == 302
 
     def test_missing_user(self, admin_client, mock_db):
+        """Validates missing user `/admin/users/999/edit` as admin (expects 302) [TestEditUser / users edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates user management/profile is broken."""
         mock_db['fetch_one'].return_value = None
         assert admin_client.post(
             '/admin/users/999/edit',
             data={'full_name': 'X'}).status_code == 302
 
     def test_huge_input(self, admin_client, mock_db):
+        """Validates huge input `/admin/users/4/edit` as admin (expects 302) [TestEditUser / users edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates user management/profile is broken."""
         mock_db['fetch_one'].return_value = None
         resp = admin_client.post(
             '/admin/users/4/edit',
@@ -155,12 +200,18 @@ class TestEditUser:
 
 class TestAuthMatrix:
     def test_librarian_cannot_touch_admin_routes(self, librarian_client):
+        """Validates librarian cannot touch admin routes as librarian (expects 302) [TestAuthMatrix / users edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates user management/profile is broken."""
         for url in ('/admin/users/1/archive', '/admin/users/1/role',
                     '/admin/users/1/delete', '/admin/users/1/edit',
                     '/admin/departments/1/delete'):
             assert librarian_client.post(url).status_code == 302, url
 
     def test_student_cannot_touch_any(self, student_client, mock_db):
+        """Validates student cannot touch any as student (expects 302) [TestAuthMatrix / users edge cases].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates user management/profile is broken."""
         for url in ('/librarian/users/1/approve',
                     '/admin/users/1/archive'):
             assert student_client.post(url).status_code == 302, url

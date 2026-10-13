@@ -165,3 +165,22 @@ def mock_oauth_flow():
         mock_flow = MagicMock()
         mock_build.return_value = mock_flow
         yield mock_flow
+
+
+# ---------------------------------------------------------------------------
+# Failure notes: show each test's troubleshooting note when it fails
+# ---------------------------------------------------------------------------
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Attach the test docstring (Validates / If fails / Indicates) to failure output."""
+    outcome = yield
+    report = outcome.get_result()
+    if report.when == "call" and report.failed:
+        doc = getattr(item.obj, "__doc__", None)
+        if doc:
+            note = doc.strip()
+            if note:
+                try:
+                    report.longrepr.addsection("Test note", note)
+                except Exception:
+                    pass

@@ -5,12 +5,18 @@ import re
 
 class TestIdNumberPatterns:
     def test_student_accepts_valid(self):
+        """Validates student accepts valid [TestIdNumberPatterns / id formats].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates id formats is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.auth.models import is_valid_id_number
         assert is_valid_id_number('2024-00123', 'Student')
         assert is_valid_id_number('2000-00000', 'Student')
         assert is_valid_id_number('2099-99999', 'Student')
 
     def test_student_rejects_bad(self):
+        """Validates student rejects bad [TestIdNumberPatterns / id formats].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates id formats is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.auth.models import is_valid_id_number
         assert not is_valid_id_number('2024-0012', 'Student')   # too short
         assert not is_valid_id_number('2024-001234', 'Student')  # too long
@@ -21,12 +27,18 @@ class TestIdNumberPatterns:
         assert not is_valid_id_number('', 'Student')
 
     def test_faculty_accepts_valid(self):
+        """Validates faculty accepts valid [TestIdNumberPatterns / id formats].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates id formats is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.auth.models import is_valid_id_number
         assert is_valid_id_number('123456789', 'Faculty')
         assert is_valid_id_number('000000000', 'Faculty')
         assert is_valid_id_number('  123456789  ', 'Faculty')  # stripped
 
     def test_faculty_rejects_bad(self):
+        """Validates faculty rejects bad [TestIdNumberPatterns / id formats].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates id formats is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.auth.models import is_valid_id_number
         assert not is_valid_id_number('FAC-00123', 'Faculty')  # no prefix allowed
         assert not is_valid_id_number('2024-00123', 'Faculty')
@@ -36,11 +48,17 @@ class TestIdNumberPatterns:
         assert not is_valid_id_number('', 'Faculty')
 
     def test_librarian_accepts_valid(self):
+        """Validates librarian accepts valid [TestIdNumberPatterns / id formats].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates id formats is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.auth.models import is_valid_id_number
         assert is_valid_id_number('LIB-00123', 'Librarian')
         assert is_valid_id_number('lib-00001', 'Librarian')
 
     def test_librarian_rejects_bad(self):
+        """Validates librarian rejects bad [TestIdNumberPatterns / id formats].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates id formats is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.auth.models import is_valid_id_number
         assert not is_valid_id_number('LIB-0012', 'Librarian')
         assert not is_valid_id_number('LIB-001234', 'Librarian')
@@ -48,11 +66,17 @@ class TestIdNumberPatterns:
         assert not is_valid_id_number('', 'Librarian')
 
     def test_admin_accepts_valid(self):
+        """Validates admin accepts valid [TestIdNumberPatterns / id formats].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates id formats is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.auth.models import is_valid_id_number
         for valid in ('1', '2', '9', '10'):
             assert is_valid_id_number(valid, 'Admin')
 
     def test_admin_rejects_bad(self):
+        """Validates admin rejects bad [TestIdNumberPatterns / id formats].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates id formats is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.auth.models import is_valid_id_number
         for bad in ('0', '00', '11', '100', '', '01', '  '):
             assert not is_valid_id_number(bad, 'Admin')
@@ -62,7 +86,11 @@ class TestIdNumberPatterns:
 
 class TestIdNumberExamplesMatchPatterns:
     def test_examples_are_valid_for_their_role(self):
-        """The example shown in error flashes must itself pass validation."""
+        """Validates examples are valid for their role [TestIdNumberExamplesMatchPatterns / id formats].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates id formats is broken for this case (users see wrong page, blocked action, or bad data).
+
+The example shown in error flashes must itself pass validation."""
         from app.auth.models import ID_NUMBER_EXAMPLES, is_valid_id_number
         example_values = {
             'Student': '2024-00123',
@@ -75,6 +103,9 @@ class TestIdNumberExamplesMatchPatterns:
             assert value in ID_NUMBER_EXAMPLES[role]
 
     def test_faculty_example_is_plain_nine_digits(self):
+        """Validates faculty example is plain nine digits [TestIdNumberExamplesMatchPatterns / id formats].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates id formats is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.auth.models import ID_NUMBER_EXAMPLES
         assert 'FAC-' not in ID_NUMBER_EXAMPLES['Faculty']
         assert '000000000' in ID_NUMBER_EXAMPLES['Faculty']
@@ -82,6 +113,9 @@ class TestIdNumberExamplesMatchPatterns:
 
 class TestIdNumberMaxLengths:
     def test_max_lengths_match_canonical_sizes(self):
+        """Validates max lengths match canonical sizes [TestIdNumberMaxLengths / id formats].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates id formats is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.auth.models import ID_NUMBER_MAX_LENGTHS
         assert ID_NUMBER_MAX_LENGTHS == {
             'Student': 10,    # 0000-00000
@@ -91,6 +125,9 @@ class TestIdNumberMaxLengths:
         }
 
     def test_valid_values_fit_max_length(self):
+        """Validates valid values fit max length [TestIdNumberMaxLengths / id formats].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates id formats is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.auth.models import ID_NUMBER_MAX_LENGTHS
         valid = {
             'Student': '2024-00123',
@@ -102,6 +139,9 @@ class TestIdNumberMaxLengths:
             assert len(value) <= ID_NUMBER_MAX_LENGTHS[role]
 
     def test_role_select_template_enforces_limits(self, client):
+        """Validates role select template enforces limits `/login/role-select` (expects 200) [TestIdNumberMaxLengths / id formats].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         with client.session_transaction() as sess:
             sess['_google_oauth_data'] = {
                 'email': 't@mcst.edu.ph',
@@ -118,6 +158,9 @@ class TestIdNumberMaxLengths:
         assert 'idInput.maxLength' in body or 'idInput.maxlength' in body.lower() or 'maxLength' in body
 
     def test_role_select_rejects_overlong_student_id(self, client, mock_db):
+        """Validates role select rejects overlong student id `/login/role-select` (expects 200) [TestIdNumberMaxLengths / id formats].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched; unexpected DB write (validation/pre-check bypassed).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         with client.session_transaction() as sess:
             sess['_google_oauth_data'] = {
                 'email': 't@mcst.edu.ph',
@@ -134,6 +177,9 @@ class TestIdNumberMaxLengths:
         assert mock_db['execute'].call_count == 0
 
     def test_role_select_rejects_overlong_faculty_id(self, client, mock_db):
+        """Validates role select rejects overlong faculty id `/login/role-select` (expects 200) [TestIdNumberMaxLengths / id formats].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched; unexpected DB write (validation/pre-check bypassed).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         with client.session_transaction() as sess:
             sess['_google_oauth_data'] = {
                 'email': 'f@mcst.edu.ph',
@@ -152,6 +198,9 @@ class TestIdNumberMaxLengths:
 
 class TestLandingNewArrivalsClickable:
     def test_new_arrivals_link_to_book(self, client, mock_db):
+        """Validates new arrivals link to book `/` (expects 200) [TestLandingNewArrivalsClickable / id formats].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates id formats is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = [
             (42, 'Clickable Title', 'Some Author', None, None, 2025,
              None, None, None, 'Book', None, 'active', '2025-01-01'),
@@ -162,6 +211,9 @@ class TestLandingNewArrivalsClickable:
         assert b'Clickable Title' in resp.data
 
     def test_profile_has_no_locked_message(self, student_client, mock_db):
+        """Validates profile has no locked message `/user/profile` as student (expects 200) [TestLandingNewArrivalsClickable / id formats].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates id formats is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = (
             1, 's@mcst.edu.ph', 'Student', 'Stu', 5,
             '2024-00123', 'BSIS', None, 'active')

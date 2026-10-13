@@ -25,20 +25,32 @@ class TestEmptyDb:
         mock_db['execute'].return_value = []
 
     def test_public_catalog_empty(self, client, mock_db):
+        """Validates public catalog empty `/catalog` (expects 200) [TestEmptyDb / catalog edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates catalog data or listing/sort is wrong."""
         self._empty(mock_db)
         assert client.get('/catalog').status_code == 200
 
     def test_book_missing_redirects(self, client, mock_db):
+        """Validates book missing redirects `/book/999999` (expects 302) [TestEmptyDb / catalog edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates catalog data or listing/sort is wrong."""
         self._empty(mock_db)
         resp = client.get('/book/999999')
         assert resp.status_code == 302
         assert '/catalog' in resp.location
 
     def test_librarian_catalog_empty(self, librarian_client, mock_db):
+        """Validates librarian catalog empty `/librarian/cataloging` as librarian (expects 200) [TestEmptyDb / catalog edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         self._empty(mock_db)
         assert librarian_client.get('/librarian/cataloging').status_code == 200
 
     def test_export_empty(self, librarian_client, mock_db):
+        """Validates export empty `/librarian/cataloging/export?format=csv` as librarian (expects 200) [TestEmptyDb / catalog edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         self._empty(mock_db)
         assert librarian_client.get(
             '/librarian/cataloging/export?format=csv').status_code == 200
@@ -51,6 +63,9 @@ class TestHostileParams:
         mock_db['fetch_all'].return_value = []
 
     def test_public_filters(self, client, mock_db):
+        """Validates public filters (expects 200) [TestHostileParams / catalog edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates catalog data or listing/sort is wrong."""
         self._ok(mock_db)
         urls = ['/catalog?q=' + 'x' * 4000,
                 '/catalog?q=<script>alert(1)</script>',
@@ -66,6 +81,9 @@ class TestHostileParams:
             assert client.get(url).status_code == 200, url[:70]
 
     def test_staff_filters(self, librarian_client, mock_db):
+        """Validates staff filters as librarian [TestHostileParams / catalog edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         self._ok(mock_db)
         urls = ['/librarian/cataloging?q=' + 'y' * 3000,
                 '/librarian/cataloging?status=bogus',
@@ -80,6 +98,9 @@ class TestHostileParams:
             assert resp.status_code in (200, 404), (url, resp.status_code)
 
     def test_book_variants(self, client, mock_db):
+        """Validates book variants `/book/999999999` (expects 302) [TestHostileParams / catalog edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates catalog data or listing/sort is wrong."""
         self._ok(mock_db)
         mock_db['fetch_one'].return_value = None
         assert client.get('/book/999999999').status_code == 302
@@ -92,6 +113,9 @@ class TestWrites:
         mock_db['fetch_all'].return_value = []
 
     def test_add_book_validation(self, librarian_client, mock_db):
+        """Validates add book validation `/librarian/cataloging/add` as librarian (expects 302) [TestWrites / catalog edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         self._ok(mock_db)
         assert librarian_client.post(
             '/librarian/cataloging/add', data={}).status_code == 302
@@ -100,12 +124,18 @@ class TestWrites:
             data={'title': '', 'author': ''}).status_code == 302
 
     def test_edit_missing_book(self, librarian_client, mock_db):
+        """Validates edit missing book `/librarian/cataloging/999999/edit` as librarian (expects 302) [TestWrites / catalog edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         self._ok(mock_db)
         assert librarian_client.post(
             '/librarian/cataloging/999999/edit',
             data={'title': 'X'}).status_code == 302
 
     def test_delete_active_book_refused(self, librarian_client, mock_db):
+        """Validates delete active book refused `/librarian/cataloging/1/delete` as librarian (expects 302) [TestWrites / catalog edge cases].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = ACTIVE_BOOK
         resp = librarian_client.post('/librarian/cataloging/1/delete')
         assert resp.status_code == 302
@@ -113,17 +143,26 @@ class TestWrites:
         assert not any('DELETE' in q for q in world)
 
     def test_delete_archived_book(self, librarian_client, mock_db):
+        """Validates delete archived book `/librarian/cataloging/2/delete` as librarian (expects 302) [TestWrites / catalog edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = ARCHIVED_BOOK
         assert librarian_client.post(
             '/librarian/cataloging/2/delete').status_code == 302
 
     def test_toggle_bogus_status(self, librarian_client, mock_db):
+        """Validates toggle bogus status `/librarian/cataloging/1/status` as librarian (expects 302) [TestWrites / catalog edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = ACTIVE_BOOK
         assert librarian_client.post(
             '/librarian/cataloging/1/status',
             data={'status': 'drop_table'}).status_code == 302
 
     def test_accession_missing_fields(self, librarian_client, mock_db):
+        """Validates accession missing fields `/librarian/cataloging/1/accession/add` as librarian (expects 302) [TestWrites / catalog edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         self._ok(mock_db)
         assert librarian_client.post(
             '/librarian/cataloging/1/accession/add',
@@ -137,6 +176,9 @@ class TestWrites:
 
 class TestXss:
     def test_evil_book_on_catalog(self, client, mock_db):
+        """Validates evil book on catalog `/catalog` [TestXss / catalog edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates catalog data or listing/sort is wrong."""
         evil = '<script>alert(1)</script>'
         row = (1, evil, evil, '', '', None, '', '', '', '', '', 'active',
                '2026-01-01', None, None)
@@ -146,6 +188,9 @@ class TestXss:
         assert evil not in body
 
     def test_evil_book_on_detail(self, client, mock_db):
+        """Validates evil book on detail `/book/1` [TestXss / catalog edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates catalog data or listing/sort is wrong."""
         evil = '<img src=x onerror=alert(1)>'
         row = (1, evil, evil, '', '', None, '', '', '', '', '', 'active',
                '2026-01-01', None, None)
@@ -157,6 +202,9 @@ class TestXss:
 
 class TestAuth:
     def test_anon_staff_blocked(self, client):
+        """Validates anon staff blocked `/catalog` (expects 302) [TestAuth / catalog edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         for url in ('/librarian/cataloging', '/book/1'):
             if url.startswith('/librarian'):
                 resp = client.get(url)
@@ -166,6 +214,9 @@ class TestAuth:
         assert client.get('/book/1').status_code in (200, 302)
 
     def test_student_cannot_write(self, student_client, mock_db):
+        """Validates student cannot write `/librarian/cataloging/add` as student (expects 302) [TestAuth / catalog edge cases].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = []
         for url in ('/librarian/cataloging',
@@ -184,6 +235,9 @@ class TestAuth:
 
 class TestYearFilterHardening:
     def test_garbage_years_ignored(self, client, mock_db):
+        """Validates garbage years ignored `/catalog?year_from=abc&year_to=--` (expects 200) [TestYearFilterHardening / catalog edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates catalog data or listing/sort is wrong."""
         mock_db['fetch_all'].return_value = []
         mock_db['fetch_one'].return_value = (0,)
         resp = client.get('/catalog?year_from=abc&year_to=--')
@@ -192,6 +246,9 @@ class TestYearFilterHardening:
         assert 'year_published' not in query
 
     def test_valid_years_applied(self, client, mock_db):
+        """Validates valid years applied `/catalog?year_from=2000&year_to=2020` (expects 200) [TestYearFilterHardening / catalog edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates catalog data or listing/sort is wrong."""
         mock_db['fetch_all'].return_value = []
         mock_db['fetch_one'].return_value = (0,)
         assert client.get('/catalog?year_from=2000&year_to=2020').status_code == 200
@@ -202,6 +259,9 @@ class TestYearFilterHardening:
 
 class TestNoneGuards:
     def test_book_detail_none_accessions(self, client, mock_db):
+        """Validates book detail none accessions `/book/1` (expects 200) [TestNoneGuards / catalog edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates catalog data or listing/sort is wrong."""
         book = (1, 'T', 'A', '', '', None, '', '', '', '', '', 'active',
                 '2026-01-01', None, None)
         mock_db['fetch_one'].return_value = book
@@ -209,6 +269,9 @@ class TestNoneGuards:
         assert client.get('/book/1').status_code == 200
 
     def test_loan_helpers_tolerate_none(self, mock_db):
+        """Validates loan helpers tolerate none [TestNoneGuards / catalog edge cases].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates catalog data or listing/sort is wrong."""
         from app.circulation.models import (
             get_active_loan_accession_ids_by_book,
             get_active_loan_borrower_user_ids_by_book,
@@ -218,6 +281,9 @@ class TestNoneGuards:
         assert get_active_loan_borrower_user_ids_by_book(1) == {}
 
     def test_accession_helpers_tolerate_none(self, mock_db):
+        """Validates accession helpers tolerate none [TestNoneGuards / catalog edge cases].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         from app.cataloging.models import (
             get_accessions_by_book, get_accessions_for_books)
         mock_db['fetch_all'].return_value = None
@@ -235,6 +301,9 @@ def _book15(title='Educated'):
 
 class TestAvailabilityIndices:
     def test_public_card_uses_trailing_availability_cols(self, client, mock_db):
+        """Validates public card uses trailing availability cols `/catalog?category=Autobiography` [TestAvailabilityIndices / catalog edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates catalog data or listing/sort is wrong."""
         mock_db['fetch_all'].side_effect = [[_book15() + ('available', 1)],
                                             [('Autobiography',)]]
         mock_db['fetch_one'].return_value = (0,)
@@ -243,6 +312,9 @@ class TestAvailabilityIndices:
         assert 'No copies available' not in body
 
     def test_public_card_borrowed_state(self, client, mock_db):
+        """Validates public card borrowed state `/catalog?category=Autobiography` [TestAvailabilityIndices / catalog edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates catalog data or listing/sort is wrong."""
         mock_db['fetch_all'].side_effect = [[_book15() + ('borrowed', 0)],
                                             [('Autobiography',)]]
         mock_db['fetch_one'].return_value = (0,)
@@ -250,6 +322,9 @@ class TestAvailabilityIndices:
         assert 'No copies available' in body
 
     def test_staff_accession_column(self, librarian_client, mock_db):
+        """Validates staff accession column `/librarian/cataloging` as librarian [TestAvailabilityIndices / catalog edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_all'].side_effect = [[_book15() + ('ACC-001',)],
                                             []]
         body = librarian_client.get('/librarian/cataloging').data.decode()
@@ -258,6 +333,9 @@ class TestAvailabilityIndices:
         assert 'title="2026-05-05 10:00:00"' not in body
 
     def test_export_accession_column(self, librarian_client, mock_db):
+        """Validates export accession column `/librarian/cataloging/export?format=csv` as librarian (expects 200) [TestAvailabilityIndices / catalog edge cases].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_all'].return_value = [_book15() + ('ACC-001,ACC-002',)]
         resp = librarian_client.get('/librarian/cataloging/export?format=csv')
         assert resp.status_code == 200
@@ -268,6 +346,9 @@ class TestAvailabilityIndices:
 
 class TestBorrowerColumnOrder:
     def test_no_select_star(self, mock_db):
+        """Validates no select star [TestBorrowerColumnOrder / catalog edge cases].
+    If fails: likely model SQL changed (SELECT).
+    Failure indicates catalog data or listing/sort is wrong."""
         from app.circulation.models import (
             get_borrower_by_user, get_borrower_by_id_number)
         mock_db['fetch_one'].return_value = None
@@ -280,6 +361,9 @@ class TestBorrowerColumnOrder:
         assert 'SELECT *' not in q
 
     def test_active_borrower_passes_gate(self, student_client, mock_db):
+        """Validates active borrower passes gate `/user/borrow` as student (expects 302) [TestBorrowerColumnOrder / catalog edge cases].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates catalog data or listing/sort is wrong."""
         borrower = (5, 1, 'S1', 'BSIS', '0917', 'active', None, None)
         mock_db['fetch_one'].side_effect = [_book15(), borrower, None,
                                             None, (0,), (1,)]

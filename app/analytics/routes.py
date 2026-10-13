@@ -376,11 +376,10 @@ def _compute_dashboard(start_date, end_date, departments=None):
 
     borrowed = status.get('active', 0)
     overdue = status.get('overdue', 0)
-    lost_damaged = inv_lost + inv_damaged + lost_flagged
-    maintenance = inv_missing
+    lost_damaged = inv_lost + inv_damaged + inv_missing + lost_flagged
     # Unified with models.copies_by_status_summary: reserved copies are not
     # available, and lost-flagged loans count as lost/damaged.
-    available = max(total_copies - borrowed - overdue - reserved - lost_damaged - maintenance, 0)
+    available = max(total_copies - borrowed - overdue - reserved - lost_damaged, 0)
 
     if isinstance(departments, str):
         departments = [departments]
@@ -520,8 +519,8 @@ def _compute_dashboard(start_date, end_date, departments=None):
         ['New / Excellent', inv.get('available', 0)],
         ['Very Good', inv.get('borrowed', 0)],
         ['Good', 0],
-        ['Fair', inv.get('damaged', 0) + inv.get('missing', 0)],
-        ['Poor', inv.get('lost', 0) + lost_flagged],
+        ['Fair', inv.get('damaged', 0)],
+        ['Poor', inv.get('lost', 0) + inv_missing + lost_flagged],
     ]
     if sum(c[1] for c in condition) == 0 and total_copies:
         condition[0][1] = available
@@ -536,7 +535,6 @@ def _compute_dashboard(start_date, end_date, departments=None):
             'reserved': reserved,
             'overdue': overdue,
             'lost_damaged': lost_damaged,
-            'maintenance': maintenance,
             'by_category': by_category,
             'condition': condition,
             'cond_total': cond_total,

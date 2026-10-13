@@ -18,27 +18,45 @@ class TestEmptyDb:
         mock_db['execute'].return_value = []
 
     def test_public_index_empty(self, client, mock_db):
+        """Validates public index empty `/` (expects 200) [TestEmptyDb / main edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         self._empty(mock_db)
         assert client.get('/').status_code == 200
 
     def test_librarian_home_empty(self, librarian_client, mock_db):
+        """Validates librarian home empty `/librarian` as librarian (expects 200) [TestEmptyDb / main edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         self._empty(mock_db)
         assert librarian_client.get('/librarian').status_code == 200
 
     def test_admin_home_empty(self, admin_client, mock_db):
+        """Validates admin home empty `/admin` as admin (expects 200) [TestEmptyDb / main edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         self._empty(mock_db)
         assert admin_client.get('/admin').status_code == 200
 
     def test_user_home_empty(self, student_client, mock_db):
+        """Validates user home empty `/user/profile` as student (expects 200) [TestEmptyDb / main edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         self._empty(mock_db)
         assert student_client.get('/user/profile').status_code == 200
 
     def test_history_notifications_empty(self, student_client, mock_db):
+        """Validates history notifications empty `/user/history` as student (expects 200) [TestEmptyDb / main edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         self._empty(mock_db)
         assert student_client.get('/user/history').status_code == 200
         assert student_client.get('/user/notifications').status_code == 200
 
     def test_api_empty(self, client, mock_db):
+        """Validates api empty (expects 200) [TestEmptyDb / main edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         self._empty(mock_db)
         for url in ('/api/bloom',
                     '/api/suggestions?field=book_title&q=clean',
@@ -54,6 +72,9 @@ class TestHostileParams:
         mock_db['fetch_all'].return_value = []
 
     def test_suggestions_bad_field(self, client, mock_db):
+        """Validates suggestions bad field (expects 200) [TestHostileParams / main edge cases].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         self._ok(mock_db)
         for url in ('/api/suggestions?field=drop_table&q=clean',
                     '/api/suggestions?field=book_title&q=x',
@@ -66,6 +87,9 @@ class TestHostileParams:
                 resp.get_json().get('suggestions'), list)
 
     def test_existence_endpoints(self, client, mock_db):
+        """Validates existence endpoints (expects 200) [TestHostileParams / main edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         self._ok(mock_db)
         for url in ('/api/book-exists', '/api/book-exists?title=T',
                     '/api/student-exists', '/api/student-exists?id_number=',
@@ -73,6 +97,9 @@ class TestHostileParams:
             assert client.get(url).status_code == 200, url[:60]
 
     def test_audits_params(self, admin_client, mock_db):
+        """Validates audits params as admin (expects 200) [TestHostileParams / main edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         self._ok(mock_db)
         for url in ('/admin/audits?limit=abc', '/admin/audits?limit=-5',
                     '/admin/audits?limit=999999', '/admin/audits?tab=bogus',
@@ -81,6 +108,9 @@ class TestHostileParams:
             assert admin_client.get(url).status_code == 200, url[:80]
 
     def test_notification_ids(self, student_client, mock_db):
+        """Validates notification ids `/user/notifications/999999/read` as student (expects 302) [TestHostileParams / main edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         self._ok(mock_db)
         mock_db['fetch_one'].return_value = (9,)
         assert student_client.post(
@@ -88,6 +118,9 @@ class TestHostileParams:
         assert student_client.post('/user/notifications/read-all').status_code == 302
 
     def test_next_redirect_guards(self, student_client, mock_db):
+        """Validates next redirect guards `/user/notifications/read-all` as student (expects 302) [TestHostileParams / main edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = (9,)
         for nxt in ('https://evil.com', '//evil.com', 'javascript:alert(1)',
                     '/user/profile'):
@@ -101,6 +134,9 @@ class TestHostileParams:
                 assert 'evil' not in loc and 'javascript' not in loc, loc
 
     def test_profile_update_validation(self, student_client, mock_db):
+        """Validates profile update validation `/user/profile/update` as student [TestHostileParams / main edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         self._ok(mock_db)
         base = {'full_name': 'Test Student'}
         cases = [
@@ -118,17 +154,26 @@ class TestHostileParams:
 
 class TestNoBorrower:
     def test_admin_profile_without_borrower(self, admin_client, mock_db):
+        """Validates admin profile without borrower `/user/profile` as admin (expects 200) [TestNoBorrower / main edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = []
         assert admin_client.get('/user/profile').status_code == 200
 
     def test_notify_without_borrower(self, admin_client, mock_db):
+        """Validates notify without borrower `/user/notifications/read-all` as admin (expects 302) [TestNoBorrower / main edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = None
         assert admin_client.post('/user/notifications/read-all').status_code == 302
 
 
 class TestXss:
     def test_evil_arrival_on_index(self, client, mock_db):
+        """Validates evil arrival on index `/` [TestXss / main edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         evil = '<script>alert(1)</script>'
         mock_db['fetch_all'].return_value = [(1, evil, 'A', 'E', 'P', 2020,
                                               'S', 'C', 'I', 'B', 'D', 1, 'x')]
@@ -136,6 +181,9 @@ class TestXss:
         assert evil not in body
 
     def test_evil_name_in_admin(self, admin_client, mock_db):
+        """Validates evil name in admin `/admin` as admin [TestXss / main edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         evil = '<img src=x onerror=alert(1)>'
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = [(9, evil, 'e@x.ph', 'Student',
@@ -144,6 +192,9 @@ class TestXss:
         assert evil not in body
 
     def test_evil_search_echo_in_audits(self, admin_client, mock_db):
+        """Validates evil search echo in audits `/admin/audits?q=<script>alert(1)</script>` as admin [TestXss / main edge cases].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         self_ok = (0,)
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = []
@@ -154,6 +205,9 @@ class TestXss:
 
 class TestAuth:
     def test_anon_redirects(self, client, mock_db):
+        """Validates anon redirects `/` (expects 302) [TestAuth / main edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         for url in ('/dashboard', '/user/profile', '/user/history',
                     '/user/notifications', '/librarian', '/admin',
                     '/admin/audits'):
@@ -165,18 +219,30 @@ class TestAuth:
             assert client.get(url).status_code == 200, url
 
     def test_student_cannot_see_staff_homes(self, student_client):
+        """Validates student cannot see staff homes as student (expects 302) [TestAuth / main edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         for url in ('/librarian', '/admin', '/admin/audits'):
             resp = student_client.get(url)
             assert resp.status_code == 302, url
             assert '/user/profile' in resp.location, url
 
     def test_faculty_cannot_see_admin(self, faculty_client):
+        """Validates faculty cannot see admin `/admin` as faculty (expects 302) [TestAuth / main edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         assert faculty_client.get('/admin').status_code == 302
 
     def test_librarian_cannot_see_admin(self, librarian_client):
+        """Validates librarian cannot see admin `/admin` as librarian (expects 302) [TestAuth / main edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         assert librarian_client.get('/admin').status_code == 302
 
     def test_librarian_can_see_own_home(self, librarian_client, mock_db):
+        """Validates librarian can see own home `/librarian` as librarian (expects 200) [TestAuth / main edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = []
         assert librarian_client.get('/librarian').status_code == 200
@@ -184,6 +250,9 @@ class TestAuth:
 
 class TestDeeperEdges:
     def test_malformed_loan_rows(self, student_client, mock_db):
+        """Validates malformed loan rows `/user/profile` as student (expects 200) [TestDeeperEdges / main edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].side_effect = [(5,), (1,), (0,), (0,)]
         mock_db['fetch_all'].side_effect = [
             [(1,)],  # get_borrower_by_user -> short row
@@ -193,6 +262,9 @@ class TestDeeperEdges:
         assert student_client.get('/user/profile').status_code == 200
 
     def test_bad_due_date_string(self, student_client, mock_db):
+        """Validates bad due date string `/user/profile` as student (expects 200) [TestDeeperEdges / main edge cases].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].side_effect = [(5,), (1,), (0,), (0,)]
         mock_db['fetch_all'].side_effect = [
             [(5,)],
@@ -202,6 +274,9 @@ class TestDeeperEdges:
         assert student_client.get('/user/profile').status_code == 200
 
     def test_stored_xss_round_trip(self, student_client, mock_db):
+        """Validates stored xss round trip `/user/profile/update` as student (expects 302) [TestDeeperEdges / main edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         evil = '<script>alert(1)</script>'
         profile = (1, 'e@x.ph', 'Student', 'Old', 5, 'S1', 'BSIS')
         mock_db['fetch_one'].side_effect = [profile, profile]
@@ -216,6 +291,9 @@ class TestDeeperEdges:
         assert evil not in body
 
     def test_profile_update_success(self, student_client, mock_db):
+        """Validates profile update success `/user/profile/update` as student (expects 302) [TestDeeperEdges / main edge cases].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         profile = (1, 'e@x.ph', 'Student', 'Old', 5, 'S1', 'BSIS')
         mock_db['fetch_one'].return_value = profile
         mock_db['fetch_all'].return_value = [('BSIS',)]
@@ -228,6 +306,9 @@ class TestDeeperEdges:
         assert any('UPDATE' in q for q in queries)
 
     def test_phone_boundaries(self, student_client, mock_db):
+        """Validates phone boundaries `/user/profile/update` as student (expects 302) [TestDeeperEdges / main edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         profile = (1, 'e@x.ph', 'Student', 'Old', None, None, None)
         mock_db['fetch_one'].return_value = profile
         for phone in ('+63917', '1' * 21):
@@ -238,18 +319,27 @@ class TestDeeperEdges:
 
     def test_dashboard_redirects_per_role(self, student_client,
                                           librarian_client, admin_client):
+        """Validates dashboard redirects per role as student (expects 302) [TestDeeperEdges / main edge cases].
+    If fails: likely RBAC decorator or role mock wrong.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         for c in (student_client, librarian_client, admin_client):
             resp = c.get('/dashboard')
             assert resp.status_code == 302
             assert resp.location.endswith('/user/profile')
 
     def test_student_program_suggest(self, client, mock_db):
+        """Validates student program suggest `/api/suggestions?field=student_program&q=bs` (expects 200) [TestDeeperEdges / main edge cases].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_all'].return_value = [('BSIS',)]
         resp = client.get('/api/suggestions?field=student_program&q=bs')
         assert resp.status_code == 200
         assert resp.get_json() == {'suggestions': ['BSIS']}
 
     def test_read_single_notification_evil_next(self, student_client, mock_db):
+        """Validates read single notification evil next `/user/notifications/7/read` as student (expects 302) [TestDeeperEdges / main edge cases].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = (9,)
         resp = student_client.post('/user/notifications/7/read',
                                    data={'next': 'https://evil.com/x'})

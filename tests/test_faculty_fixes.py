@@ -19,6 +19,9 @@ class TestNotifyResilience:
     """F1: a failing notification must not turn a good write into a 500."""
 
     def test_user_borrow_ok_when_notify_fails(self, student_client, mock_db):
+        """Validates user borrow ok when notify fails `/user/borrow` as student (expects 302) [TestNotifyResilience / faculty fixes].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates faculty fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].side_effect = [
             BOOK_ACTIVE,
             BORROWER_ACTIVE,
@@ -36,6 +39,9 @@ class TestNotifyResilience:
     def test_user_return_is_desk_only(self, student_client, mock_db):
         # Desk-only returns: self-service check-in writes nothing, even
         # for a valid daily loan with notifications down.
+        """Validates user return is desk only `/user/return` as student (expects 302) [TestNotifyResilience / faculty fixes].
+    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    Failure indicates faculty fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         from datetime import date
         mock_db['fetch_one'].side_effect = [
             (55, 10, 1, '2026-08-02', 'active', 'daily_circulation'),
@@ -50,6 +56,9 @@ class TestNotifyResilience:
         assert mock_db['execute'].call_count == 0
 
     def test_user_reserve_ok_when_notify_fails(self, student_client, mock_db):
+        """Validates user reserve ok when notify fails `/user/reserve` as student (expects 302) [TestNotifyResilience / faculty fixes].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates faculty fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].side_effect = [
             BOOK_ACTIVE,
             BORROWER_ACTIVE,
@@ -68,6 +77,9 @@ class TestUniqueViolationRetry:
     """F2: a lost race surfaces as a friendly retry, not a 500."""
 
     def test_daily_borrow_conflict_is_retry(self, student_client, mock_db):
+        """Validates daily borrow conflict is retry `/user/borrow` as student (expects 302) [TestUniqueViolationRetry / faculty fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates faculty fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         from psycopg2 import errors as pg_errors
         mock_db['fetch_one'].side_effect = [
             BOOK_ACTIVE,
@@ -88,6 +100,9 @@ class TestDailyReservationGuard:
 
     def test_daily_blocked_by_pending_reservation(
             self, faculty_client, mock_db):
+        """Validates daily blocked by pending reservation `/user/borrow` as faculty (expects 302) [TestDailyReservationGuard / faculty fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
+    Failure indicates faculty fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].side_effect = [
             BOOK_ACTIVE,
             (2, 2, '2024-0002', 'CS', 'active'),
@@ -109,6 +124,9 @@ class TestAllocateClaimGuards:
 
     def test_allocate_blocked_inactive_borrower(
             self, librarian_client, mock_db):
+        """Validates allocate blocked inactive borrower `/librarian/reservations/9/allocate` as librarian (expects 302) [TestAllocateClaimGuards / faculty fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates faculty fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].side_effect = [
             (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),
             ACC,
@@ -121,6 +139,9 @@ class TestAllocateClaimGuards:
 
     def test_allocate_blocked_archived_book(
             self, librarian_client, mock_db):
+        """Validates allocate blocked archived book `/librarian/reservations/9/allocate` as librarian (expects 302) [TestAllocateClaimGuards / faculty fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates faculty fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].side_effect = [
             (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),
             ACC,
@@ -132,6 +153,9 @@ class TestAllocateClaimGuards:
 
     def test_claim_blocked_inactive_borrower(
             self, librarian_client, mock_db):
+        """Validates claim blocked inactive borrower `/librarian/reservations/9/claim` as librarian (expects 302) [TestAllocateClaimGuards / faculty fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates faculty fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].side_effect = [
             (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated',
              '2026-08-03 10:00:00'),
@@ -148,6 +172,9 @@ class TestProfileValidation:
     """F5: overlong names/departments are rejected before touching the DB."""
 
     def test_overlong_name_rejected(self, student_client, mock_db):
+        """Validates overlong name rejected `/user/profile/update` as student (expects 302) [TestProfileValidation / faculty fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates faculty fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].return_value = (
             1, 'e@x.ph', 'Student', 'Old', 5, 'S1', 'BSIS')
         resp = student_client.post('/user/profile/update',
@@ -158,6 +185,9 @@ class TestProfileValidation:
         assert writes == []
 
     def test_failed_update_is_graceful(self, student_client, mock_db):
+        """Validates failed update is graceful `/user/profile/update` as student (expects 302) [TestProfileValidation / faculty fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates faculty fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         profile = (1, 'e@x.ph', 'Student', 'Old', 5, 'S1', 'BSIS')
         mock_db['fetch_one'].side_effect = [profile, profile]
         mock_db['execute'].side_effect = [
@@ -171,6 +201,9 @@ class TestFacultySignupAtomicity:
     """F3: borrower-insert failure leaves no orphan pending user."""
 
     def test_faculty_borrower_failure_cleans_up(self, client, mock_db):
+        """Validates faculty borrower failure cleans up `/login/role-select` (expects 200) [TestFacultySignupAtomicity / faculty fixes].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (DELETE FROM).
+    Failure indicates faculty fixes is broken for this case (users see wrong page, blocked action, or bad data)."""
         with client.session_transaction() as sess:
             sess['_google_oauth_data'] = {
                 'email': 'faculty@mcst.edu.ph',

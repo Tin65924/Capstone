@@ -34,6 +34,9 @@ class TestAuditStats:
         ]
 
     def test_kpis(self, mock_db):
+        """Validates kpis [TestAuditStats / audit activity].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_all'].return_value = self._sample_rows()
         stats = get_audit_stats(today=TODAY)
         assert stats['window_days'] == 30
@@ -45,6 +48,9 @@ class TestAuditStats:
         assert stats['server_errors'] == 1
 
     def test_active_now_needs_login_after_logout(self, mock_db):
+        """Validates active now needs login after logout [TestAuditStats / audit activity].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_all'].return_value = self._sample_rows()
         stats = get_audit_stats(today=TODAY)
         # Ann (no logout) and Bob (login newer than logout) are active;
@@ -54,6 +60,9 @@ class TestAuditStats:
         assert stats['active_users'][1] == ['Bob', 'Student']
 
     def test_daily_buckets(self, mock_db):
+        """Validates daily buckets [TestAuditStats / audit activity].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_all'].return_value = self._sample_rows()
         stats = get_audit_stats(today=TODAY)
         assert len(stats['logins_per_day']) == 14
@@ -63,6 +72,9 @@ class TestAuditStats:
         assert stats['logins_per_day'][-1] == ['Sep 24', 2]
 
     def test_categories_roles_and_paths(self, mock_db):
+        """Validates categories roles and paths [TestAuditStats / audit activity].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_all'].return_value = self._sample_rows()
         stats = get_audit_stats(today=TODAY)
         by_cat = dict(stats['by_category'])
@@ -74,6 +86,9 @@ class TestAuditStats:
         assert stats['top_error_paths'] == [['/admin/backup', 1]]
 
     def test_empty_table(self, mock_db):
+        """Validates empty table [TestAuditStats / audit activity].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_all'].return_value = []
         stats = get_audit_stats(today=TODAY)
         assert stats['total_events'] == 0
@@ -84,12 +99,18 @@ class TestAuditStats:
         assert stats['top_error_paths'] == []
 
     def test_malformed_rows_skipped(self, mock_db):
+        """Validates malformed rows skipped [TestAuditStats / audit activity].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_all'].return_value = [None, ('only',), ('login',)]
         stats = get_audit_stats(today=TODAY)
         assert stats['total_events'] == 3
         assert stats['logins_today'] == 0
 
     def test_string_timestamps(self, mock_db):
+        """Validates string timestamps [TestAuditStats / audit activity].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_all'].return_value = [
             _row('login', '2026-09-24 10:00:00', 1, 'Ann', 'Librarian'),
         ]
@@ -97,6 +118,9 @@ class TestAuditStats:
         assert stats['logins_today'] == 1
 
     def test_query_shape(self, mock_db):
+        """Validates query shape [TestAuditStats / audit activity].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates audit trail is incomplete (compliance gap)."""
         mock_db['fetch_all'].return_value = []
         get_audit_stats(days=7, limit=100, today=TODAY)
         query, params = mock_db['fetch_all'].call_args[0]
@@ -163,6 +187,9 @@ class TestDescribeActivity:
     ]
 
     def test_cases(self):
+        """Validates cases [TestDescribeActivity / audit activity].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates audit trail is incomplete (compliance gap)."""
         for actor, code, expected in self.CASES:
             assert describe_activity(actor, code) == expected, code
 
@@ -170,6 +197,9 @@ class TestDescribeActivity:
 class TestAuditStatsRoute:
     def test_page_renders_kpis_charts_and_descriptions(
             self, admin_client, mock_db):
+        """Validates page renders kpis charts and descriptions `/admin/audits` as admin (expects 200) [TestAuditStatsRoute / audit activity].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_all'].side_effect = [
             [(1, 'Ann', 'a@x', 'Librarian', 'login',
               datetime(2026, 9, 24, 9, 0))],
@@ -190,6 +220,9 @@ class TestAuditStatsRoute:
         assert b'>login<' in resp.data
 
     def test_stats_failure_keeps_table(self, admin_client, mock_db):
+        """Validates stats failure keeps table `/admin/audits` as admin (expects 200) [TestAuditStatsRoute / audit activity].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_all'].side_effect = [
             [(1, 'Ann', 'a@x', 'Librarian', 'login',
               datetime(2026, 9, 24, 9, 0))],
@@ -201,6 +234,9 @@ class TestAuditStatsRoute:
         assert b'kpi-logins-today' not in resp.data
 
     def test_page_wires_chart_axes_and_hover(self, admin_client, mock_db):
+        """Validates page wires chart axes and hover `/admin/audits` as admin (expects 200) [TestAuditStatsRoute / audit activity].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates audit trail is incomplete (compliance gap)."""
         mock_db['fetch_all'].side_effect = [[], []]
         resp = admin_client.get('/admin/audits')
         assert resp.status_code == 200
@@ -217,12 +253,18 @@ class TestAuditChartsJs:
                 'static' / 'js' / 'charts.js').read_text()
 
     def test_line_has_xy_axes(self):
+        """Validates line has xy axes [TestAuditChartsJs / audit activity].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates audit trail is incomplete (compliance gap)."""
         js = self._js()
         assert 'xLabel' in js
         assert 'yLabel' in js
         assert 'text-anchor' in js
 
     def test_renderers_are_hoverable(self):
+        """Validates renderers are hoverable [TestAuditChartsJs / audit activity].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates audit trail is incomplete (compliance gap)."""
         js = self._js()
         assert 'audit-chart-tip' in js
         assert '<title>' in js
@@ -237,6 +279,9 @@ class TestEnrichedWrites:
                 if 'INSERT INTO audit_trail' in c[0][0]]
 
     def test_edit_book_logs_title_change(self, librarian_client, mock_db):
+        """Validates edit book logs title change `/librarian/cataloging/1/edit` as librarian (expects 302) [TestEnrichedWrites / audit activity].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = (
             1, '1984', 'George Orwell', None, None, None,
             None, None, None, None, 'Book', None, 'active', None)
@@ -252,6 +297,9 @@ class TestEnrichedWrites:
 
     def test_edit_book_unchanged_title_keeps_legacy(
             self, librarian_client, mock_db):
+        """Validates edit book unchanged title keeps legacy `/librarian/cataloging/1/edit` as librarian (expects 302) [TestEnrichedWrites / audit activity].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = (
             1, '1984', 'George Orwell', None, None, None,
             None, None, None, None, 'Book', None, 'active', None)
@@ -266,6 +314,9 @@ class TestEnrichedWrites:
         assert inserts[0][0][1][1] == 'cataloging:edit_book:1'
 
     def test_approve_includes_target_name(self, admin_client, mock_db):
+        """Validates approve includes target name `/librarian/users/5/approve` as admin (expects 302) [TestEnrichedWrites / audit activity].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates audit trail is incomplete (compliance gap)."""
         mock_db['fetch_one'].return_value = (
             5, 'a@mcst.edu.ph', 'Student', 'Ann Cruz', 'pending')
         resp = admin_client.post('/librarian/users/5/approve')
@@ -275,6 +326,9 @@ class TestEnrichedWrites:
         assert inserts[0][0][1][1] == 'approved_user:5:Ann Cruz'
 
     def test_change_role_enriched(self, admin_client, mock_db):
+        """Validates change role enriched `/admin/users/5/role` as admin (expects 302) [TestEnrichedWrites / audit activity].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates audit trail is incomplete (compliance gap)."""
         mock_db['fetch_one'].return_value = (
             5, 'a@mcst.edu.ph', 'Member', 'Ann Cruz', 'active')
         mock_db['fetch_all'].return_value = [(3, 'Librarian')]
@@ -286,6 +340,9 @@ class TestEnrichedWrites:
             'changed_role:5:Member~>Librarian:Ann Cruz'
 
     def test_settings_update_lists_keys(self, admin_client, mock_db):
+        """Validates settings update lists keys `/admin/settings/update` as admin (expects 302) [TestEnrichedWrites / audit activity].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates audit trail is incomplete (compliance gap)."""
         mock_db['fetch_all'].return_value = []
         with patch('app.backup.scheduler.reschedule'):
             resp = admin_client.post('/admin/settings/update', data={

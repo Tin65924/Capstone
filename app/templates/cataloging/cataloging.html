@@ -325,10 +325,6 @@
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if copy_status == 'damaged' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Damaged
                 </a>
-                <a href="{{ url_for('cataloging.cataloging_page', copy_status='maintenance', sort_by=sort_by) }}"
-                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if copy_status == 'maintenance' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
-                    Maintenance
-                </a>
                 <form method="GET" action="{{ url_for('cataloging.cataloging_page') }}" class="ml-auto shrink-0 pl-2">
                     <input type="hidden" name="q" value="{{ search_query }}">
                     <input type="hidden" name="field" value="{{ search_field }}">

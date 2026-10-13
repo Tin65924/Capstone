@@ -1637,19 +1637,17 @@ function syncGlobalFilterCustomDates() {
                 + kpiCard('person', 'Borrowed Copies', rNum(C.borrowed), '', 'bg-violet-50')
                 + kpiCard('bookmark', 'Reserved Copies', rNum(C.reserved), 'waiting / allocated', 'bg-amber-50')
                 + kpiCard('schedule', 'Overdue Copies', rNum(C.overdue), 'require follow-up', 'bg-red-50')
-                + kpiCard('warning', 'Lost / Damaged', rNum(C.lost_damaged), 'inventory + flags', 'bg-red-50')
-                + kpiCard('build', 'Under Maintenance', rNum(C.maintenance), 'inventory missing', 'bg-blue-50');
+                + kpiCard('warning', 'Lost / Damaged', rNum(C.lost_damaged), 'inventory + flags', 'bg-red-50');
 
             paintCategoryChart(C.by_category || [], C.total_titles);
-            var statusRows = [['Available', C.available || 0], ['Borrowed', C.borrowed || 0], ['Reserved', C.reserved || 0], ['Overdue', C.overdue || 0], ['Lost / Damaged', C.lost_damaged || 0], ['Under Maintenance', C.maintenance || 0]];
+            var statusRows = [['Available', C.available || 0], ['Borrowed', C.borrowed || 0], ['Reserved', C.reserved || 0], ['Overdue', C.overdue || 0], ['Lost / Damaged', C.lost_damaged || 0]];
             paintStatusChart(statusRows, C.total_copies || 1, C.total_copies || 0);
             renderConditionBars();
             renderRecentCollection();
             var att = document.getElementById('attention-list');
             if (att) att.innerHTML =
                 '<a href="{{ url_for('cataloging.cataloging_page', copy_status='overdue') }}" class="flex items-center gap-2 border rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors"><span class="material-symbols-outlined text-red-500">schedule</span><span class="flex-1"><b>Overdue Copies</b><br><span class="text-slate-500">Require immediate follow-up</span></span><b class="text-red-600">' + rNum(C.overdue) + '</b></a>'
-                + '<a href="{{ url_for('cataloging.cataloging_page', copy_status='lost_damaged') }}" class="flex items-center gap-2 border rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors"><span class="material-symbols-outlined text-red-500">warning</span><span class="flex-1"><b>Lost / Damaged Copies</b><br><span class="text-slate-500">Require replacement or review</span></span><b class="text-red-600">' + rNum(C.lost_damaged) + '</b></a>'
-                + '<a href="{{ url_for('cataloging.cataloging_page', copy_status='maintenance') }}" class="flex items-center gap-2 border rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors"><span class="material-symbols-outlined text-blue-600">build</span><span class="flex-1"><b>Due for Maintenance</b><br><span class="text-slate-500">Inventory flagged missing</span></span><b class="text-blue-600">' + rNum(C.maintenance) + '</b></a>';
+                + '<a href="{{ url_for('cataloging.cataloging_page', copy_status='lost_damaged') }}" class="flex items-center gap-2 border rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors"><span class="material-symbols-outlined text-red-500">warning</span><span class="flex-1"><b>Lost / Damaged Copies</b><br><span class="text-slate-500">Require replacement or review</span></span><b class="text-red-600">' + rNum(C.lost_damaged) + '</b></a>';
 
             var lk = document.getElementById('library-kpis');
             if (lk) lk.innerHTML =
@@ -2174,7 +2172,7 @@ function syncGlobalFilterCustomDates() {
             'donut-status': { t: 'Copies by Status',
                 def: 'Physical copies grouped by current availability state.',
                 interp: 'A high Borrowed or Overdue share signals collection pressure; Lost / Damaged counts flag replacement needs.',
-                calc: 'Available, Borrowed, Overdue, Reserved, Lost / Damaged, and Maintenance buckets. Reserved copies are held by waiting or allocated reservations; loans flagged lost count as lost/damaged.',
+                calc: 'Available, Borrowed, Overdue, Reserved, and Lost / Damaged buckets. Reserved copies are held by waiting or allocated reservations; loans flagged lost count as lost/damaged.',
                 ex: 'If 45 of 300 copies are borrowed, collection utilization is 15%.',
                 src: 'Accession log, circulation loans, reservation queue, and inventory states.' },
             'recent-collection-body': { t: 'Recent Collection Status',
@@ -2187,7 +2185,7 @@ function syncGlobalFilterCustomDates() {
             'attention-list': { t: 'Items Requiring Attention',
                 def: 'Shortcut counts for copies that need staff action right now.',
                 interp: 'Any non-zero Overdue or Lost / Damaged row needs follow-up. Each row links to the filtered catalog.',
-                calc: 'Same buckets as Copies by Status: overdue loans, lost/damaged flags, and inventory-missing copies.',
+                calc: 'Same buckets as Copies by Status: overdue loans and lost/damaged flags.',
                 ex: 'Overdue Copies showing 6 means six loans need reminder or desk action today.',
                 src: 'Circulation loans and inventory states.' },
             'trend-line': { t: 'Borrowings Trend',

@@ -32,6 +32,9 @@ def _fresh_bloom_registry():
 
 class TestBloomFilter:
     def test_contains_added_values(self):
+        """Validates contains added values [TestBloomFilter / bloom].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates Bloom autosuggest index is wrong (false negatives/positives)."""
         bf = BloomFilter(10)
         bf.add('The Great Gatsby')
         bf.add('Harper Lee')
@@ -39,12 +42,18 @@ class TestBloomFilter:
         assert 'harper lee' in bf  # case normalization
 
     def test_absent_value_reported_not_present(self):
+        """Validates absent value reported not present [TestBloomFilter / bloom].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates Bloom autosuggest index is wrong (false negatives/positives)."""
         bf = BloomFilter(10)
         for value in ('Alpha', 'Beta', 'Gamma'):
             bf.add(value)
         assert 'Not-In-This-Set-12345' not in bf
 
     def test_payload_roundtrip(self):
+        """Validates payload roundtrip [TestBloomFilter / bloom].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates Bloom autosuggest index is wrong (false negatives/positives)."""
         bf = BloomFilter(10)
         for value in ('one', 'two', 'three'):
             bf.add(value)
@@ -54,6 +63,9 @@ class TestBloomFilter:
             assert value in restored
 
     def test_optimal_params_byte_aligned(self):
+        """Validates optimal params byte aligned [TestBloomFilter / bloom].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates Bloom autosuggest index is wrong (false negatives/positives)."""
         m, k = optimal_params(1000)
         assert m % 8 == 0
         assert k >= 1
@@ -62,21 +74,33 @@ class TestBloomFilter:
 
 class TestRecordKey:
     def test_key_normalizes(self):
+        """Validates key normalizes [TestRecordKey / bloom].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates Bloom autosuggest index is wrong (false negatives/positives)."""
         assert record_key('  The Great Gatsby ', ' F. Scott Fitzgerald ', '9780743273565') == \
             record_key('the great gatsby', 'f. scott fitzgerald', '9780743273565')
 
     def test_blank_isbn_matches_blank(self):
+        """Validates blank isbn matches blank [TestRecordKey / bloom].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates Bloom autosuggest index is wrong (false negatives/positives)."""
         assert record_key('Title', 'Author', '') == record_key('title', 'author', None)
 
 
 class TestCategoryKey:
     def test_key_normalizes(self):
+        """Validates key normalizes [TestCategoryKey / bloom].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates Bloom autosuggest index is wrong (false negatives/positives)."""
         assert category_key('  Physics ') == 'physics'
         assert category_key(None) == ''
 
 
 class TestBloomApi:
     def test_endpoint_returns_record_filters(self, client, mock_db):
+        """Validates endpoint returns record filters `/api/bloom` (expects 200) [TestBloomApi / bloom].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates Bloom autosuggest index is wrong (false negatives/positives)."""
         _mock_fetch_all_by_query(mock_db)
         resp = client.get('/api/bloom')
         assert resp.status_code == 200
@@ -86,6 +110,9 @@ class TestBloomApi:
             assert 'm' in data[key] and 'k' in data[key] and 'bits' in data[key]
 
     def test_book_record_reflects_db(self, client, mock_db):
+        """Validates book record reflects db `/api/bloom` [TestBloomApi / bloom].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates Bloom autosuggest index is wrong (false negatives/positives)."""
         _mock_fetch_all_by_query(mock_db)
         data = client.get('/api/bloom').get_json()
         book_bf = BloomFilter.from_payload(**data['book_record'])
@@ -94,6 +121,9 @@ class TestBloomApi:
         assert record_key('Never Written', 'Nobody', '0000000000000') not in book_bf
 
     def test_student_record_reflects_db(self, client, mock_db):
+        """Validates student record reflects db `/api/bloom` [TestBloomApi / bloom].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates Bloom autosuggest index is wrong (false negatives/positives)."""
         _mock_fetch_all_by_query(mock_db)
         data = client.get('/api/bloom').get_json()
         student_bf = BloomFilter.from_payload(**data['student_record'])
@@ -102,6 +132,9 @@ class TestBloomApi:
         assert '9999-9999' not in student_bf
 
     def test_category_record_reflects_db(self, client, mock_db):
+        """Validates category record reflects db `/api/bloom` [TestBloomApi / bloom].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates Bloom autosuggest index is wrong (false negatives/positives)."""
         _mock_fetch_all_by_query(mock_db)
         data = client.get('/api/bloom').get_json()
         cat_bf = BloomFilter.from_payload(**data['category_record'])
@@ -111,6 +144,9 @@ class TestBloomApi:
         assert 'Never Taught 12345' not in cat_bf
 
     def test_rebuild_after_mark_dirty(self, client, mock_db):
+        """Validates rebuild after mark dirty `/api/bloom` [TestBloomApi / bloom].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates Bloom autosuggest index is wrong (false negatives/positives)."""
         _mock_fetch_all_by_query(mock_db)
         client.get('/api/bloom')
 

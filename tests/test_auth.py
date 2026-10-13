@@ -6,6 +6,9 @@ from datetime import datetime
 
 class TestLoginPage:
     def test_login_page_renders(self, client):
+        """Validates login page renders `/login` (expects 200) [TestLoginPage / auth].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = client.get('/login')
         assert resp.status_code == 200
         assert b'MCST' in resp.data or b'Login' in resp.data or b'login' in resp.data
@@ -13,6 +16,9 @@ class TestLoginPage:
 
 class TestGoogleLogin:
     def test_google_login_redirects(self, client, mock_oauth_flow):
+        """Validates google login redirects `/login/google` (expects 302) [TestGoogleLogin / auth].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_oauth_flow.code_verifier = 'test-verifier'
         mock_oauth_flow.authorization_url.return_value = ('https://accounts.google.com/o/oauth2/auth?state=xyz', 'xyz')
         resp = client.get('/login/google')
@@ -23,6 +29,9 @@ class TestGoogleLogin:
             assert sess['_oauth_code_verifier'] == 'test-verifier'
 
     def test_google_login_no_verifier_not_stored(self, client, mock_oauth_flow):
+        """Validates google login no verifier not stored `/login/google` (expects 302) [TestGoogleLogin / auth].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_oauth_flow.authorization_url.return_value = ('https://accounts.google.com/o/oauth2/auth?state=xyz', 'xyz')
         resp = client.get('/login/google')
         assert resp.status_code == 302
@@ -31,6 +40,9 @@ class TestGoogleLogin:
             assert '_oauth_code_verifier' not in sess
 
     def test_google_login_handles_exception(self, client):
+        """Validates google login handles exception `/login/google` (expects 302) [TestGoogleLogin / auth].
+    If fails: likely auth guard/session mock changed or route path renamed.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         from unittest.mock import patch
         with patch('app.auth.routes._build_flow', side_effect=Exception('mock error')):
             resp = client.get('/login/google')
@@ -40,11 +52,17 @@ class TestGoogleLogin:
 
 class TestGoogleCallback:
     def test_callback_missing_state(self, client):
+        """Validates callback missing state `/login/google/callback` (expects 302) [TestGoogleCallback / auth].
+    If fails: likely auth guard/session mock changed or route path renamed.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = client.get('/login/google/callback')
         assert resp.status_code == 302
         assert resp.location.endswith('/login')
 
     def test_callback_valid_user_logs_in(self, client, mock_oauth_flow):
+        """Validates callback valid user logs in `/login/google/callback` (expects 302) [TestGoogleCallback / auth].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         with client.session_transaction() as sess:
             sess['_oauth_state'] = 'test-state'
 
@@ -77,6 +95,9 @@ class TestGoogleCallback:
                     assert mock_login.called
 
     def test_callback_restores_code_verifier(self, client, mock_oauth_flow):
+        """Validates callback restores code verifier `/login/google/callback` (expects 302) [TestGoogleCallback / auth].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         with client.session_transaction() as sess:
             sess['_oauth_state'] = 'test-state'
             sess['_oauth_code_verifier'] = 'test-verifier'
@@ -103,6 +124,9 @@ class TestGoogleCallback:
                         assert '_oauth_code_verifier' not in sess
 
     def test_callback_blocked_domain(self, client):
+        """Validates callback blocked domain `/login/google/callback` (expects 302) [TestGoogleCallback / auth].
+    If fails: likely auth guard/session mock changed or route path renamed.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         with client.session_transaction() as sess:
             sess['_oauth_state'] = 'test-state'
 
@@ -124,6 +148,9 @@ class TestGoogleCallback:
                 assert resp.location.endswith('/login')
 
     def test_first_user_becomes_admin(self, client):
+        """Validates first user becomes admin `/login/google/callback` (expects 302) [TestGoogleCallback / auth].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         with client.session_transaction() as sess:
             sess['_oauth_state'] = 'test-state'
 
@@ -151,6 +178,9 @@ class TestGoogleCallback:
                                 assert '/user/profile' in resp.location
 
     def test_callback_archived_user_blocked_with_reason(self, client, mock_oauth_flow, mock_db):
+        """Validates callback archived user blocked with reason `/login/google/callback` (expects 302) [TestGoogleCallback / auth].
+    If fails: likely auth guard/session mock changed or route path renamed; unexpected DB write (validation/pre-check bypassed).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         with client.session_transaction() as sess:
             sess['_oauth_state'] = 'test-state'
         mock_oauth_flow.fetch_token.return_value = None
@@ -175,6 +205,9 @@ class TestGoogleCallback:
                     assert mock_db['execute'].call_count == 0
 
     def test_callback_pending_user_sees_approval_page(self, client, mock_oauth_flow, mock_db):
+        """Validates callback pending user sees approval page `/login/google/callback` (expects 200) [TestGoogleCallback / auth].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         with client.session_transaction() as sess:
             sess['_oauth_state'] = 'test-state'
         mock_oauth_flow.fetch_token.return_value = None
@@ -198,6 +231,9 @@ class TestGoogleCallback:
                     assert not mock_login.called
 
     def test_second_user_goes_to_role_select(self, client):
+        """Validates second user goes to role select `/login/google/callback` (expects 302) [TestGoogleCallback / auth].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         with client.session_transaction() as sess:
             sess['_oauth_state'] = 'test-state'
 
@@ -223,11 +259,17 @@ class TestGoogleCallback:
 
 class TestRoleSelect:
     def test_role_select_no_session_redirects(self, client):
+        """Validates role select no session redirects `/login/role-select` (expects 302) [TestRoleSelect / auth].
+    If fails: likely auth guard/session mock changed or route path renamed.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = client.get('/login/role-select')
         assert resp.status_code == 302
         assert resp.location.endswith('/login')
 
     def test_role_select_renders(self, client):
+        """Validates role select renders `/login/role-select` (expects 200) [TestRoleSelect / auth].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         with client.session_transaction() as sess:
             sess['_google_oauth_data'] = {
                 'email': 'test@mcst.edu.ph',
@@ -238,6 +280,9 @@ class TestRoleSelect:
         assert resp.status_code == 200
 
     def test_role_select_post_student(self, client, mock_db):
+        """Validates role select post student `/login/role-select` (expects 302) [TestRoleSelect / auth].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         with client.session_transaction() as sess:
             sess['_google_oauth_data'] = {
                 'email': 'test@mcst.edu.ph',
@@ -259,6 +304,9 @@ class TestRoleSelect:
             assert '/user/profile' in resp.location
 
     def test_role_select_rejects_unknown_program(self, client, mock_db):
+        """Validates role select rejects unknown program `/login/role-select` (expects 200) [TestRoleSelect / auth].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched; unexpected DB write (validation/pre-check bypassed).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         with client.session_transaction() as sess:
             sess['_google_oauth_data'] = {
                 'email': 'test@mcst.edu.ph',
@@ -280,6 +328,9 @@ class TestRoleSelect:
             assert mock_db['execute'].call_count == 0
 
     def test_role_select_post_faculty_pending(self, client, mock_db):
+        """Validates role select post faculty pending `/login/role-select` (expects 200) [TestRoleSelect / auth].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched; wrong/absent SQL call or placeholder mismatch.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         with client.session_transaction() as sess:
             sess['_google_oauth_data'] = {
                 'email': 'faculty@mcst.edu.ph',
@@ -301,6 +352,9 @@ class TestRoleSelect:
             assert b'approval' in resp.data.lower() or b'pending' in resp.data.lower()
 
     def test_role_select_invalid_role(self, client):
+        """Validates role select invalid role `/login/role-select` (expects 200) [TestRoleSelect / auth].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         with client.session_transaction() as sess:
             sess['_google_oauth_data'] = {
                 'email': 'test@mcst.edu.ph',
@@ -316,6 +370,9 @@ class TestRoleSelect:
         assert b'valid' in resp.data.lower() or b'error' in resp.data.lower()
 
     def test_role_select_rejects_bad_student_id(self, client, mock_db):
+        """Validates role select rejects bad student id `/login/role-select` (expects 200) [TestRoleSelect / auth].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched; unexpected DB write (validation/pre-check bypassed).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         with client.session_transaction() as sess:
             sess['_google_oauth_data'] = {
                 'email': 'test@mcst.edu.ph',
@@ -332,6 +389,9 @@ class TestRoleSelect:
         assert mock_db['execute'].call_count == 0
 
     def test_role_select_rejects_bad_faculty_id(self, client, mock_db):
+        """Validates role select rejects bad faculty id `/login/role-select` (expects 200) [TestRoleSelect / auth].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched; unexpected DB write (validation/pre-check bypassed).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         with client.session_transaction() as sess:
             sess['_google_oauth_data'] = {
                 'email': 'faculty@mcst.edu.ph',
@@ -348,6 +408,9 @@ class TestRoleSelect:
         assert mock_db['execute'].call_count == 0
 
     def test_role_select_rejects_duplicate_id(self, client, mock_db):
+        """Validates role select rejects duplicate id `/login/role-select` (expects 200) [TestRoleSelect / auth].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched; unexpected DB write (validation/pre-check bypassed).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         with client.session_transaction() as sess:
             sess['_google_oauth_data'] = {
                 'email': 'test@mcst.edu.ph',
@@ -367,6 +430,9 @@ class TestRoleSelect:
 
 class TestIdNumberFormats:
     def test_patterns(self):
+        """Validates patterns [TestIdNumberFormats / auth].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         from app.auth.models import is_valid_id_number
         assert is_valid_id_number('2024-00001', 'Student')
         assert not is_valid_id_number('2024-0001', 'Student')
@@ -384,6 +450,9 @@ class TestIdNumberFormats:
 
 class TestDepartmentsManager:
     def test_librarian_adds_program(self, librarian_client, mock_db):
+        """Validates librarian adds program `/librarian/departments/add` as librarian (expects 302) [TestDepartmentsManager / auth].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = None  # not a duplicate
         resp = librarian_client.post('/librarian/departments/add', data={
             'name': 'BSCS',
@@ -396,6 +465,9 @@ class TestDepartmentsManager:
         assert call_args[0][1] == ('BSCS', 'program')
 
     def test_add_duplicate_rejected(self, librarian_client, mock_db):
+        """Validates add duplicate rejected `/librarian/departments/add` as librarian (expects 302) [TestDepartmentsManager / auth].
+    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = (1,)
         resp = librarian_client.post('/librarian/departments/add', data={
             'name': 'BSIS',
@@ -405,6 +477,9 @@ class TestDepartmentsManager:
         assert mock_db['execute'].call_count == 0
 
     def test_add_invalid_type_rejected(self, librarian_client, mock_db):
+        """Validates add invalid type rejected `/librarian/departments/add` as librarian (expects 302) [TestDepartmentsManager / auth].
+    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = librarian_client.post('/librarian/departments/add', data={
             'name': 'Whatever',
             'dept_type': 'bogus',
@@ -413,6 +488,9 @@ class TestDepartmentsManager:
         assert mock_db['execute'].call_count == 0
 
     def test_admin_deletes_unused(self, admin_client, mock_db):
+        """Validates admin deletes unused `/admin/departments/1/delete` as admin (expects 302) [TestDepartmentsManager / auth].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (DELETE FROM).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].side_effect = [
             (1, 'BSCS', 'program'),  # get_department_by_id
             (0,),                     # count_borrowers_in_department
@@ -423,6 +501,9 @@ class TestDepartmentsManager:
         assert 'DELETE FROM departments' in call_args[0][0]
 
     def test_admin_delete_blocked_when_in_use(self, admin_client, mock_db):
+        """Validates admin delete blocked when in use `/admin/departments/1/delete` as admin (expects 302) [TestDepartmentsManager / auth].
+    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].side_effect = [
             (1, 'BSIS', 'program'),
             (3,),
@@ -433,6 +514,9 @@ class TestDepartmentsManager:
 
     def test_admin_edit_user_rejects_bad_department(self, admin_client, mock_db):
         # profile: Student with current dept BSIS; submitting unknown program
+        """Validates admin edit user rejects bad department `/admin/users/1/edit` as admin (expects 302) [TestDepartmentsManager / auth].
+    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].side_effect = [
             (1, 'a@mcst.edu.ph', 'Student', 'Stu', 5, '2024-1', 'BSIS', None, 'active'),
             None,  # is_valid_department -> invalid
@@ -446,6 +530,9 @@ class TestDepartmentsManager:
         assert mock_db['execute'].call_count == 0
 
     def test_admin_edit_user_allows_unchanged_legacy(self, admin_client, mock_db):
+        """Validates admin edit user allows unchanged legacy `/admin/users/1/edit` as admin (expects 302) [TestDepartmentsManager / auth].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = (
             1, 'a@mcst.edu.ph', 'Student', 'Stu', 5, '2024-1', 'Old Variant', None, 'active')
         resp = admin_client.post('/admin/users/1/edit', data={
@@ -458,6 +545,9 @@ class TestDepartmentsManager:
         assert mock_db['execute'].call_count == 3
 
     def test_admin_edit_staff_rejects_unknown_department(self, admin_client, mock_db):
+        """Validates admin edit staff rejects unknown department `/admin/users/2/edit` as admin (expects 302) [TestDepartmentsManager / auth].
+    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].side_effect = [
             (2, 'b@mcst.edu.ph', 'Admin', 'Boss', 9, 'A-1', 'Old Dept', None, 'active'),
             None,  # is_valid_any_department -> invalid
@@ -471,6 +561,9 @@ class TestDepartmentsManager:
         assert mock_db['execute'].call_count == 0
 
     def test_admin_edit_staff_accepts_combined_vocab(self, admin_client, mock_db):
+        """Validates admin edit staff accepts combined vocab `/admin/users/2/edit` as admin (expects 302) [TestDepartmentsManager / auth].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].side_effect = [
             (2, 'b@mcst.edu.ph', 'Admin', 'Boss', 9, 'A-1', 'Old Dept', None, 'active'),
             (1,),  # is_valid_any_department -> valid
@@ -485,6 +578,9 @@ class TestDepartmentsManager:
         assert mock_db['execute'].call_count == 3
 
     def test_add_race_reports_exists(self, librarian_client, mock_db):
+        """Validates add race reports exists `/librarian/departments/add` as librarian (expects 302) [TestDepartmentsManager / auth].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = None  # pre-check passes
         mock_db['execute'].return_value = 0  # ON CONFLICT swallowed a racing insert
         resp = librarian_client.post('/librarian/departments/add', data={
@@ -495,6 +591,9 @@ class TestDepartmentsManager:
         assert mock_db['execute'].call_count == 1  # no log_activity write
 
     def test_delete_confirm_uses_data_attribute(self, admin_client, mock_db):
+        """Validates delete confirm uses data attribute `/librarian/users` as admin (expects 200) [TestDepartmentsManager / auth].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_all'].side_effect = [
             [],  # users
             [],  # pending
@@ -511,6 +610,9 @@ class TestDepartmentsManager:
     JSON = {'Accept': 'application/json'}
 
     def test_add_program_json_returns_new_row(self, librarian_client, mock_db):
+        """Validates add program json returns new row `/librarian/departments/add` as librarian (expects 200) [TestDepartmentsManager / auth].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched; wrong/absent SQL call or placeholder mismatch.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].side_effect = [
             None,  # is_valid_department -> not a duplicate
             (99, 'BSCS', 'program'),  # get_department_by_name
@@ -525,6 +627,9 @@ class TestDepartmentsManager:
         assert body['added'] == {'id': 99, 'name': 'BSCS', 'dept_type': 'program'}
 
     def test_add_duplicate_json_409(self, librarian_client, mock_db):
+        """Validates add duplicate json 409 `/librarian/departments/add` as librarian (expects 409) [TestDepartmentsManager / auth].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched; unexpected DB write (validation/pre-check bypassed).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = (1,)
         resp = librarian_client.post('/librarian/departments/add', data={
             'name': 'BSIS',
@@ -535,6 +640,9 @@ class TestDepartmentsManager:
         assert mock_db['execute'].call_count == 0
 
     def test_add_missing_name_json_400(self, librarian_client, mock_db):
+        """Validates add missing name json 400 `/librarian/departments/add` as librarian (expects 400) [TestDepartmentsManager / auth].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched; unexpected DB write (validation/pre-check bypassed).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = librarian_client.post('/librarian/departments/add', data={
             'name': '',
             'dept_type': 'program',
@@ -544,6 +652,9 @@ class TestDepartmentsManager:
         assert mock_db['execute'].call_count == 0
 
     def test_delete_unused_json(self, admin_client, mock_db):
+        """Validates delete unused json `/admin/departments/5/delete` as admin (expects 200) [TestDepartmentsManager / auth].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].side_effect = [
             (5, 'BSCS', 'program'),  # get_department_by_id
             (0,),                     # count_borrowers_in_department
@@ -553,6 +664,9 @@ class TestDepartmentsManager:
         assert resp.get_json()['deleted'] == 5
 
     def test_delete_in_use_json_409(self, admin_client, mock_db):
+        """Validates delete in use json 409 `/admin/departments/1/delete` as admin (expects 409) [TestDepartmentsManager / auth].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched; unexpected DB write (validation/pre-check bypassed).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].side_effect = [
             (1, 'BSIS', 'program'),
             (3,),
@@ -563,13 +677,20 @@ class TestDepartmentsManager:
         assert mock_db['execute'].call_count == 0
 
     def test_delete_missing_json_404(self, admin_client, mock_db):
+        """Validates delete missing json 404 `/admin/departments/9/delete` as admin (expects 404) [TestDepartmentsManager / auth].
+    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = None
         resp = admin_client.post('/admin/departments/9/delete', headers=self.JSON)
         assert resp.status_code == 404
         assert mock_db['execute'].call_count == 0
 
     def test_delete_department_scopes_count_to_faculty(self, admin_client, mock_db):
-        """A student program sharing the name must not block deleting the
+        """Validates delete department scopes count to faculty `/admin/departments/1/delete` as admin (expects 302) [TestDepartmentsManager / auth].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (DELETE FROM).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed).
+
+A student program sharing the name must not block deleting the
         faculty department entry (e.g. 'BA Communication')."""
         from app.auth.models import count_borrowers_in_department
         mock_db['fetch_one'].side_effect = [
@@ -585,6 +706,9 @@ class TestDepartmentsManager:
         assert 'DELETE FROM departments' in call_args[0][0]
 
     def test_count_scopes_program_to_students(self, mock_db):
+        """Validates count scopes program to students [TestDepartmentsManager / auth].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         from app.auth.models import count_borrowers_in_department
         mock_db['fetch_one'].return_value = (2,)
         assert count_borrowers_in_department('BSIS', 'program') == 2
@@ -593,6 +717,9 @@ class TestDepartmentsManager:
         assert 'Faculty' not in query
 
     def test_count_unscoped_keeps_legacy_query(self, mock_db):
+        """Validates count unscoped keeps legacy query [TestDepartmentsManager / auth].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         from app.auth.models import count_borrowers_in_department
         mock_db['fetch_one'].return_value = (1,)
         assert count_borrowers_in_department('BSIS') == 1
@@ -600,6 +727,9 @@ class TestDepartmentsManager:
         assert 'JOIN' not in query
 
     def test_users_page_has_ajax_hooks(self, admin_client, mock_db):
+        """Validates users page has ajax hooks `/librarian/users` as admin (expects 200) [TestDepartmentsManager / auth].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_all'].side_effect = [
             [],  # users
             [],  # pending
@@ -631,6 +761,9 @@ class TestUserCardFilters:
         ]
 
     def test_role_filter_shows_only_students(self, librarian_client, mock_db):
+        """Validates role filter shows only students `/librarian/users?role=Student` as librarian (expects 200) [TestUserCardFilters / auth].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         self._mock_lists(mock_db)
         resp = librarian_client.get('/librarian/users?role=Student')
         assert resp.status_code == 200
@@ -639,6 +772,9 @@ class TestUserCardFilters:
         assert b'ring-2 ring-primary' in resp.data
 
     def test_status_filter_still_works(self, librarian_client, mock_db):
+        """Validates status filter still works `/librarian/users?status=disabled` as librarian (expects 200) [TestUserCardFilters / auth].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         self._mock_lists(mock_db)
         resp = librarian_client.get('/librarian/users?status=disabled')
         assert resp.status_code == 200
@@ -646,6 +782,9 @@ class TestUserCardFilters:
         assert b'Alpha Student' not in resp.data
 
     def test_export_respects_role_filter(self, librarian_client, mock_db):
+        """Validates export respects role filter `/librarian/users/export?role=Student&format=csv` as librarian (expects 200) [TestUserCardFilters / auth].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_all'].return_value = list(self.USERS)
         resp = librarian_client.get('/librarian/users/export?role=Student&format=csv')
         assert resp.status_code == 200
@@ -656,11 +795,17 @@ class TestUserCardFilters:
 class TestLogout:
     @patch('app.auth.routes.log_activity')
     def test_logout(self, mock_log_activity, student_client, client):
+        """Validates logout `/logout` as student (expects 302) [TestLogout / auth].
+    If fails: likely auth guard/session mock changed or route path renamed.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = student_client.get('/logout')
         assert resp.status_code == 302
         assert resp.location.endswith('/login')
 
     def test_logout_unauthenticated_redirects(self, client):
+        """Validates logout unauthenticated redirects `/logout` (expects 302) [TestLogout / auth].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = client.get('/logout')
         assert resp.status_code == 302
         assert '/login' in resp.location
@@ -675,55 +820,85 @@ class TestUserManagement:
     ROLES = [(1, 'Student'), (2, 'Faculty'), (3, 'Librarian'), (4, 'Admin')]
 
     def test_admin_users_student_forbidden(self, student_client, mock_db):
+        """Validates admin users student forbidden `/librarian/users` as student (expects 302) [TestUserManagement / auth].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_all'].return_value = self.USERS_TABLE
         resp = student_client.get('/librarian/users')
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
     def test_admin_users_librarian_allowed(self, librarian_client, mock_db):
+        """Validates admin users librarian allowed `/librarian/users` as librarian (expects 200) [TestUserManagement / auth].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = (4,)
         mock_db['fetch_all'].side_effect = lambda q, p=None: [] if 'pending' in q else self.USERS_TABLE
         resp = librarian_client.get('/librarian/users')
         assert resp.status_code == 200
 
     def test_admin_users_admin_allowed(self, admin_client, mock_db):
+        """Validates admin users admin allowed `/librarian/users` as admin (expects 200) [TestUserManagement / auth].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = (4,)
         mock_db['fetch_all'].side_effect = lambda q, p=None: [] if 'pending' in q else self.USERS_TABLE
         resp = admin_client.get('/librarian/users')
         assert resp.status_code == 200
 
     def test_approve_user_librarian(self, librarian_client, mock_db):
+        """Validates approve user librarian `/librarian/users/2/approve` as librarian (expects 302) [TestUserManagement / auth].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['execute'].return_value = 1
         resp = librarian_client.post('/librarian/users/2/approve')
         assert resp.status_code == 302
 
     def test_approve_user_student_forbidden(self, student_client, mock_db):
+        """Validates approve user student forbidden `/librarian/users/2/approve` as student (expects 302) [TestUserManagement / auth].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = student_client.post('/librarian/users/2/approve')
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
     @patch('app.auth.routes.log_activity')
     def test_toggle_status_admin(self, mock_log, admin_client, mock_db):
+        """Validates toggle status admin `/admin/users/1/toggle-status` as admin (expects 302) [TestUserManagement / auth].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['execute'].return_value = 1
         resp = admin_client.post('/admin/users/1/toggle-status')
         assert resp.status_code == 302
 
     def test_toggle_status_librarian_forbidden(self, librarian_client, mock_db):
+        """Validates toggle status librarian forbidden `/admin/users/1/toggle-status` as librarian (expects 302) [TestUserManagement / auth].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = librarian_client.post('/admin/users/1/toggle-status')
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
     def test_change_role_admin(self, admin_client, mock_db):
+        """Validates change role admin `/admin/users/1/role` as admin (expects 302) [TestUserManagement / auth].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['execute'].return_value = 1
         resp = admin_client.post('/admin/users/1/role', data={'role_id': '3'})
         assert resp.status_code == 302
 
     def test_change_role_librarian_forbidden(self, librarian_client, mock_db):
+        """Validates change role librarian forbidden `/admin/users/1/role` as librarian (expects 302) [TestUserManagement / auth].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = librarian_client.post('/admin/users/1/role', data={'role_id': '3'})
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
     def test_archive_user_admin(self, admin_client, mock_db):
+        """Validates archive user admin `/admin/users/1/archive` as admin (expects 302) [TestUserManagement / auth].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = (1, 'a@x.ph', 'Student', 'Ann')
         mock_db['execute'].return_value = 1
         resp = admin_client.post('/admin/users/1/archive')
@@ -733,11 +908,17 @@ class TestUserManagement:
         assert 'UPDATE user_accounts' in call_args[0][0]
 
     def test_archive_user_librarian_forbidden(self, librarian_client, mock_db):
+        """Validates archive user librarian forbidden `/admin/users/1/archive` as librarian (expects 302) [TestUserManagement / auth].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = librarian_client.post('/admin/users/1/archive')
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
     def test_unarchive_user_admin(self, admin_client, mock_db):
+        """Validates unarchive user admin `/admin/users/1/unarchive` as admin (expects 302) [TestUserManagement / auth].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = (1, 'a@x.ph', 'Student', 'Ann')
         mock_db['execute'].return_value = 1
         resp = admin_client.post('/admin/users/1/unarchive')
@@ -745,11 +926,17 @@ class TestUserManagement:
         assert mock_db['execute'].call_count >= 1
 
     def test_unarchive_user_librarian_forbidden(self, librarian_client, mock_db):
+        """Validates unarchive user librarian forbidden `/admin/users/1/unarchive` as librarian (expects 302) [TestUserManagement / auth].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = librarian_client.post('/admin/users/1/unarchive')
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
     def test_delete_user_archived_success(self, admin_client, mock_db):
+        """Validates delete user archived success `/admin/users/1/delete` as admin (expects 302) [TestUserManagement / auth].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (DELETE FROM).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = ('archived',)
         mock_db['execute'].return_value = 1
         resp = admin_client.post('/admin/users/1/delete')
@@ -761,12 +948,18 @@ class TestUserManagement:
         assert any('DELETE FROM borrowers' in s for s in statements)
 
     def test_delete_user_not_archived_fails(self, admin_client, mock_db):
+        """Validates delete user not archived fails `/admin/users/1/delete` as admin (expects 302) [TestUserManagement / auth].
+    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = ('active',)
         resp = admin_client.post('/admin/users/1/delete')
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
 
     def test_delete_user_not_found(self, admin_client, mock_db):
+        """Validates delete user not found `/admin/users/999/delete` as admin (expects 302) [TestUserManagement / auth].
+    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].return_value = None
         resp = admin_client.post('/admin/users/999/delete')
         assert resp.status_code == 302
@@ -783,6 +976,9 @@ class TestUserManagement:
         return (1, 'a@mcst.edu.ph', 'Student', 'Ann', status)
 
     def test_delete_archived_user_succeeds(self, admin_client, mock_db):
+        """Validates delete archived user succeeds `/admin/users/1/delete` as admin (expects 302) [TestUserManagement / auth].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (DELETE FROM).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].side_effect = self._archived_lookup
         resp = admin_client.post('/admin/users/1/delete')
         assert resp.status_code == 302
@@ -791,6 +987,9 @@ class TestUserManagement:
         assert any('DELETE FROM user_accounts' in s for s in statements)
 
     def test_unarchive_archived_user_succeeds(self, admin_client, mock_db):
+        """Validates unarchive archived user succeeds `/admin/users/1/unarchive` as admin (expects 302) [TestUserManagement / auth].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         mock_db['fetch_one'].side_effect = self._archived_lookup
         resp = admin_client.post('/admin/users/1/unarchive')
         assert resp.status_code == 302
@@ -798,6 +997,9 @@ class TestUserManagement:
         assert 'UPDATE user_accounts' in mock_db['execute'].call_args_list[0][0][0]
 
     def test_archive_disabled_user_succeeds(self, admin_client, mock_db):
+        """Validates archive disabled user succeeds `/admin/users/1/archive` as admin (expects 302) [TestUserManagement / auth].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         import functools
         mock_db['fetch_one'].side_effect = functools.partial(
             self._archived_lookup, status='disabled')
@@ -807,11 +1009,17 @@ class TestUserManagement:
         assert 'UPDATE user_accounts' in mock_db['execute'].call_args_list[0][0][0]
 
     def test_delete_user_librarian_forbidden(self, librarian_client, mock_db):
+        """Validates delete user librarian forbidden `/admin/users/1/delete` as librarian (expects 302) [TestUserManagement / auth].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = librarian_client.post('/admin/users/1/delete')
         assert resp.status_code == 302
         assert '/user/profile' in resp.location
 
     def test_delete_user_unauthenticated(self, client, mock_db):
+        """Validates delete user unauthenticated `/admin/users/1/delete` (expects 302) [TestUserManagement / auth].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = client.post('/admin/users/1/delete')
         assert resp.status_code == 302
         assert '/login' in resp.location
