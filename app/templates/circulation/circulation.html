@@ -577,7 +577,6 @@
                 </div>
                 <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Loan status filter">
                     <a href="{{ url_for('circulation.circulation_page', search=search, q=table_search, loan_type=loan_type, loan_status='all', borrow_date=borrow_date) }}#all-borrowings" class="badge {% if loan_status == 'all' %}badge-borrowed{% else %}bg-gray-100 text-gray-600{% endif %}">All ({{ total_loans }})</a>
-                    <a href="{{ url_for('circulation.circulation_page', search=search, q=table_search, loan_type=loan_type, loan_status='borrowed', borrow_date=borrow_date) }}#all-borrowings" id="filter-borrowed" class="badge {% if loan_status == 'borrowed' %}badge-borrowed{% else %}bg-gray-100 text-gray-600{% endif %}">Borrowed ({{ borrowed_count }})</a>
                     <a href="{{ url_for('circulation.circulation_page', search=search, q=table_search, loan_type=loan_type, loan_status='overdue', borrow_date=borrow_date) }}#all-borrowings" id="filter-overdue" class="badge {% if loan_status == 'overdue' %}badge-danger{% else %}bg-gray-100 text-gray-600{% endif %}">Overdue ({{ overdue_count }})</a>
                     <a href="{{ url_for('circulation.circulation_page', search=search, q=table_search, loan_type=loan_type, loan_status='due_soon', borrow_date=borrow_date) }}#all-borrowings" id="filter-due-soon" class="badge {% if loan_status == 'due_soon' %}badge-warning{% else %}bg-gray-100 text-gray-600{% endif %}">Due Soon ({{ due_soon_count }})</a>
                 </div>
