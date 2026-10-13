@@ -546,6 +546,136 @@ def borrowings_by_program_on_date(day, borrow_type=None, departments=None):
     )
 
 
+def overdue_by_program_on_date(day):
+    """Return [(program_label, count)] overdue items for one due date by program.
+
+    Powers the Overdue Trend dot drill-down. Same overdue rule and
+    due-date grouping as overdue_trend (active-but-past-due counts).
+    """
+    return db.fetch_all(
+        '''SELECT {}, COUNT(c.circulation_id)
+           FROM circulation_records c{}
+           WHERE COALESCE(c.due_date, c.borrow_date)::date = %s::date
+             AND (c.transaction_status = 'overdue'
+                  OR (c.transaction_status = 'active'
+                      AND c.due_date::date < CURRENT_DATE))
+           GROUP BY 1 ORDER BY 2 DESC'''.format(
+            _PROGRAM_LABEL, _program_joins()),
+        (day,)
+    )
+
+
+def category_borrowings_by_program(category, start_date=None, end_date=None,
+                                   borrow_type=None):
+    """Return [(program_label, count)] borrows in one category by program.
+
+    Powers the Top Borrowed Categories drill-down (donut slice / legend
+    click). Category matches the card's label expression, so 'Others'
+    covers blank classifications. Period-scoped like the card.
+    """
+    parts = ["COALESCE(NULLIF(b.subject_classification, ''), 'Others') = %s"]
+    params = [category]
+    range_parts, range_params = _range_clause('c.borrow_date', start_date,
+                                             end_date)
+    parts.extend(range_parts)
+    params.extend(range_params)
+    if borrow_type:
+        parts.append('c.borrow_type = %s')
+        params.append(borrow_type)
+    return db.fetch_all(
+        '''SELECT {}, COUNT(c.circulation_id)
+           FROM circulation_records c
+           JOIN book_catalog b ON c.book_id = b.book_id{}
+           WHERE {} GROUP BY 1 ORDER BY 2 DESC'''.format(
+            _PROGRAM_LABEL, _program_joins(), ' AND '.join(parts)),
+        tuple(params)
+    )
+
+
+def fines_by_program_for_title(title, start_date=None, end_date=None):
+    """Return [(program_label, total_fines, fine_count)] for one title by program.
+
+    Powers the Books with Most Fines row drill-down. Same window and
+    fine_amount > 0 rule as fines_by_book.
+    """
+    parts = ['b.title = %s', 'c.fine_amount > 0']
+    params = [title]
+    range_parts, range_params = _range_clause('c.borrow_date', start_date,
+                                             end_date)
+    parts.extend(range_parts)
+    params.extend(range_params)
+    return db.fetch_all(
+        '''SELECT {}, SUM(c.fine_amount), COUNT(c.circulation_id)
+           FROM circulation_records c
+           JOIN book_catalog b ON c.book_id = b.book_id{}
+           WHERE {} GROUP BY 1 ORDER BY 2 DESC'''.format(
+            _PROGRAM_LABEL, _program_joins(), ' AND '.join(parts)),
+        tuple(params)
+    )
+
+
+def active_loans_by_program_for_title(title):
+    """Return [(program_label, count)] current active loans for one title by program.
+
+    Powers the High-Demand Titles row drill-down. Same active/overdue
+    scope as high_demand_titles (current demand, not period borrows).
+    """
+    return db.fetch_all(
+        '''SELECT {}, COUNT(c.circulation_id)
+           FROM circulation_records c
+           JOIN book_catalog b ON c.book_id = b.book_id{}
+           WHERE b.title = %s
+             AND c.transaction_status IN ('active', 'overdue')
+           GROUP BY 1 ORDER BY 2 DESC'''.format(
+            _PROGRAM_LABEL, _program_joins()),
+        (title,)
+    )
+
+
+def _request_program_joins():
+    return (' JOIN borrowers b ON b.borrower_id = rr.requester_id'
+            ' JOIN user_accounts u ON b.user_id = u.user_id'
+            ' JOIN roles r ON u.role_id = r.role_id')
+
+
+def requests_by_program_on_date(day):
+    """Return [(program_label, count)] book requests for one day by program.
+
+    Powers the Requests Over Time dot drill-down. Same pending +
+    rejected scope as requests_trend so denied demand stays visible.
+    """
+    return db.fetch_all(
+        '''SELECT {}, COUNT(rr.request_id)
+           FROM request_records rr{}
+           WHERE rr.request_date::date = %s::date
+             AND rr.request_status IN ('pending_review', 'rejected')
+           GROUP BY 1 ORDER BY 2 DESC'''.format(
+            _PROGRAM_LABEL, _request_program_joins()),
+        (day,)
+    )
+
+
+def requests_for_title_by_program(title, start_date=None, end_date=None):
+    """Return [(program_label, count)] pending requests for one title by program.
+
+    Powers the Student vs Faculty demand row drill-down (per-title
+    program split). Same pending-only scope as top_requested_titles.
+    """
+    parts = ['rr.book_title = %s', "rr.request_status = 'pending_review'"]
+    params = [title]
+    range_parts, range_params = _range_clause('rr.request_date', start_date,
+                                             end_date)
+    parts.extend(range_parts)
+    params.extend(range_params)
+    return db.fetch_all(
+        '''SELECT {}, COUNT(rr.request_id)
+           FROM request_records rr{}
+           WHERE {} GROUP BY 1 ORDER BY 2 DESC'''.format(
+            _PROGRAM_LABEL, _request_program_joins(), ' AND '.join(parts)),
+        tuple(params)
+    )
+
+
 def overdue_trend_by_program(start_date=None, end_date=None, borrow_type=None,
                              departments=None):
     """Return [(due_date, program_label, count)] overdue trend split by program."""

@@ -1241,6 +1241,99 @@ def trend_day_json():
     })
 
 
+DRILLDOWN_TYPES = frozenset({
+    'overdue_day', 'category', 'title_demand', 'title_fines',
+    'request_day', 'request_title',
+})
+
+# Drill-down response units per type (amounts for fines, counts otherwise).
+_DRILLDOWN_UNITS = {
+    'overdue_day': 'overdue items',
+    'category': 'borrowings',
+    'title_demand': 'active loans',
+    'title_fines': 'fines',
+    'request_day': 'requests',
+    'request_title': 'requests',
+}
+
+
+@analytics_bp.route('/librarian/analytics/drilldown')
+@login_required
+@librarian_required
+def drilldown_json():
+    """Per-program breakdown for one Library card segment as JSON.
+
+    Clicking a chart segment that has no program split (overdue-trend
+    dot, category slice, fines/demand row, request dot/row) shows which
+    programs sit behind it. `type` is allowlisted; range-scoped types
+    honor the page period (preset/from/to) like chart_json.
+    """
+    drill_type = request.args.get('type', '').strip()
+    if drill_type not in DRILLDOWN_TYPES:
+        return jsonify({'error': 'invalid drilldown type'}), 400
+    from_str = request.args.get('from', '').strip()
+    to_str = request.args.get('to', '').strip()
+    preset = _effective_preset(request.args.get('preset'), from_str, to_str)
+    preset, from_str, to_str = _normalize_range(preset, from_str, to_str)
+    start_date, end_date = resolve_dates(preset, from_str, to_str)
+
+    key = ''
+    title = ''
+    rows = []
+    if drill_type in ('overdue_day', 'request_day'):
+        day = request.args.get('date', '').strip()
+        try:
+            datetime.strptime(day, '%Y-%m-%d')
+        except (TypeError, ValueError):
+            return jsonify({'error': 'invalid date (use YYYY-MM-DD)'}), 400
+        key = day
+        if drill_type == 'overdue_day':
+            title = 'Overdue items due ' + day
+            rows = models.overdue_by_program_on_date(day) or []
+        else:
+            title = 'Requests on ' + day
+            rows = models.requests_by_program_on_date(day) or []
+    else:
+        param = 'category' if drill_type == 'category' else 'title'
+        key = request.args.get(param, '').strip()
+        if not key:
+            return jsonify({'error': 'missing ' + param}), 400
+        if drill_type == 'category':
+            title = 'Borrowings · ' + key
+            rows = models.category_borrowings_by_program(
+                key, start_date, end_date) or []
+        elif drill_type == 'title_demand':
+            title = 'Active loans · ' + key
+            rows = models.active_loans_by_program_for_title(key) or []
+        elif drill_type == 'title_fines':
+            title = 'Fines · ' + key
+            rows = models.fines_by_program_for_title(
+                key, start_date, end_date) or []
+        else:
+            title = 'Requests · ' + key
+            rows = models.requests_for_title_by_program(
+                key, start_date, end_date) or []
+
+    by_program = []
+    for r in rows:
+        try:
+            label = r[0] if len(r) > 0 else 'No program'
+            value = r[1] if len(r) > 1 else 0
+            value = round(float(value), 2) if drill_type == 'title_fines' else int(value or 0)
+            by_program.append([label, value])
+        except (IndexError, TypeError, ValueError):
+            continue
+    total = round(sum(c for _, c in by_program), 2)
+    return jsonify({
+        'type': drill_type,
+        'key': key,
+        'title': title,
+        'total': total,
+        'unit': _DRILLDOWN_UNITS[drill_type],
+        'by_program': by_program,
+    })
+
+
 @analytics_bp.route('/librarian/analytics/kpi')
 @login_required
 @librarian_required

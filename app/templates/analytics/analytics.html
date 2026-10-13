@@ -377,7 +377,7 @@
                         <div class="flex items-center gap-4"><div id="donut-topcats" class="shrink-0"></div><div id="legend-topcats" class="flex-1 space-y-1 text-xs min-w-0"></div></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">3. Peak Borrowing Periods</h3>
                             
-                        <div class="chart-legend mb-2" aria-label="Peak periods chart legend"><span title="Borrowings on each day"><span class="lg-dot" style="background:#2563eb"></span>Borrowings</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details</span></div>
+                        <div class="chart-legend mb-2" aria-label="Peak periods chart legend"><span title="Borrowings on each day"><span class="lg-dot" style="background:#2563eb"></span>Borrowings</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details · click for the program breakdown</span></div>
                         <div id="peak-bars" class="space-y-1.5"></div><p class="text-[10px] text-slate-400 mt-1">Grouped by day (borrow_date has no time-of-day).</p></div>
                     </div>
                     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -401,7 +401,7 @@
                         <div class="chart-legend mb-2" aria-label="Top requested titles legend"><span title="Requests per title"><span class="lg-dot" style="background:#2563eb"></span>Requests</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details</span></div>
                         <div id="req-top-titles" class="space-y-1.5"></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">9. Student vs Faculty Request Demand</h3>
-                        <div class="chart-legend mb-2" aria-label="Request demand legend"><span><span class="lg-dot" style="background:#1d4ed8"></span>Student</span><span><span class="lg-dot" style="background:#0ea5e9"></span>Faculty</span><span><span class="lg-dot" style="background:#94a3b8"></span>Other staff</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details</span></div>
+                        <div class="chart-legend mb-2" aria-label="Request demand legend"><span><span class="lg-dot" style="background:#1d4ed8"></span>Student</span><span><span class="lg-dot" style="background:#0ea5e9"></span>Faculty</span><span><span class="lg-dot" style="background:#94a3b8"></span>Other staff</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details · click for the program breakdown</span></div>
                         <div id="req-role-split" class="space-y-3"></div></div>
                     </div>
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -815,6 +815,7 @@
         const EXPORT_URL = '{{ url_for("analytics.export_report") }}';
         const DASHBOARD_URL = '{{ url_for("analytics.dashboard_json") }}';
         const TREND_DAY_URL = '{{ url_for("analytics.trend_day_json") }}';
+        const DRILLDOWN_URL = '{{ url_for("analytics.drilldown_json") }}';
         const REQUESTS_URL = '{{ url_for("requests.list_requests") }}';
         function reqTitleSearchLink(row) { return REQUESTS_URL + '?status=all&search=' + encodeURIComponent(row[0]); }
         const BOOK_SEARCH_URL = '{{ url_for("analytics.book_search_json") }}';
@@ -1290,22 +1291,64 @@ function syncGlobalFilterCustomDates() {
         function paintTrendCharts(rows) {
             lineChart(document.getElementById('trend-line'), rows, '#2563eb', { xLabel: 'Date', yLabel: 'Borrowings', unit: 'borrowings', drilldown: 'borrowings' });
             hbars(document.getElementById('peak-bars'), rows.slice(-7).map(function (r) { return [String(r[0]).slice(5), r[1]]; }), 'bg-blue-600');
+            annotatePeakBarsInto(document.getElementById('peak-bars'), rows.slice(-7));
+        }
+
+        // Peak bars show MM-DD labels but keep their full date for the
+        // same per-program drill-down as the trend dots.
+        function annotatePeakBarsInto(box, rows) {
+            if (!box) return;
+            var nodes = box.querySelectorAll('.hbar-row');
+            (rows || []).forEach(function (r, i) {
+                var n = nodes[i];
+                if (!n) return;
+                var day = String(r[0]).slice(0, 10);
+                n.setAttribute('data-date', day);
+                n.setAttribute('data-drill', 'borrowings');
+                n.setAttribute('tabindex', '0');
+                n.setAttribute('role', 'button');
+                n.setAttribute('aria-label', 'Show borrowings by program on ' + day);
+                n.style.cursor = 'pointer';
+            });
         }
 
         function paintOverdueTrend(rows) {
-            lineChart(document.getElementById('overdue-line'), rows, '#dc2626', { xLabel: 'Date', yLabel: 'Overdue items', unit: 'overdue items' });
+            lineChart(document.getElementById('overdue-line'), rows, '#dc2626', { xLabel: 'Date', yLabel: 'Overdue items', unit: 'overdue items', drilldown: 'overdue' });
         }
 
         function paintTopCats(rows, centerTotal) {
             var total = chartRowSum(rows);
             donutSVG(document.getElementById('donut-topcats'), rows, total, rNum(centerTotal), 'Total');
             legendList(document.getElementById('legend-topcats'), rows, total);
+            annotateTopCats(rows);
+        }
+
+        // Category donut slices + legend items open the per-program
+        // breakdown for that category (donut cards have no expand view,
+        // so card-level annotation is enough).
+        function annotateTopCats(rows) {
+            var vis = (rows || []).slice(0, 8);
+            [['#donut-topcats .chart-donut-seg'], ['#legend-topcats .legend-item']].forEach(function (sel) {
+                document.querySelectorAll(sel[0]).forEach(function (node) {
+                    var idx = parseInt(node.getAttribute('data-idx'), 10);
+                    var row = vis[idx];
+                    if (!row) return;
+                    var cat = String(row[0]);
+                    node.setAttribute('data-category', cat);
+                    node.setAttribute('data-drill', 'category');
+                    node.setAttribute('tabindex', '0');
+                    node.setAttribute('role', 'button');
+                    node.setAttribute('aria-label', 'Show borrowings by program for ' + cat);
+                    node.style.cursor = 'pointer';
+                });
+            });
         }
 
         function paintHighDemand(rows) {
             var hd = document.getElementById('high-demand-body');
             if (hd) hd.innerHTML = (rows || []).map(function (r, i) {
-                return '<tr class="border-b last:border-0"><td class="py-2">' + (i + 1) + '</td><td class="py-2 font-semibold">' + escapeHtml(r[0]) + '</td><td class="py-2 text-slate-500">' + escapeHtml(r[1]) + '</td><td class="py-2 text-right font-bold">' + rNum(r[2]) + '</td></tr>';
+                var dt = ' data-drill="title_demand" data-title="' + escapeHtml(r[0]) + '" tabindex="0" role="button" aria-label="Show active loans by program for ' + escapeHtml(r[0]) + '" style="cursor:pointer"';
+                return '<tr class="border-b last:border-0"' + dt + '><td class="py-2">' + (i + 1) + '</td><td class="py-2 font-semibold">' + escapeHtml(r[0]) + '</td><td class="py-2 text-slate-500">' + escapeHtml(r[1]) + '</td><td class="py-2 text-right font-bold">' + rNum(r[2]) + '</td></tr>';
             }).join('') || '<tr><td colspan="4" class="py-6 text-center text-slate-400">No active demand.</td></tr>';
         }
 
@@ -1409,7 +1452,8 @@ function syncGlobalFilterCustomDates() {
             if (!tb) return;
             tb.innerHTML = (rows || []).slice(0, 10).map(function (r, i) {
                 var total = Number(r[2]) || 0;
-                return '<tr class="border-b last:border-0"><td class="py-2">' + (i + 1) + '</td>'
+                var dt = ' data-drill="title_fines" data-title="' + escapeHtml(r[0]) + '" tabindex="0" role="button" aria-label="Show fines by program for ' + escapeHtml(r[0]) + '" style="cursor:pointer"';
+                return '<tr class="border-b last:border-0"' + dt + '><td class="py-2">' + (i + 1) + '</td>'
                     + '<td class="py-2 font-semibold">' + escapeHtml(r[0]) + '</td>'
                     + '<td class="py-2 text-slate-500">' + escapeHtml(r[1] || '') + '</td>'
                     + '<td class="py-2 text-right font-bold text-red-600">₱' + total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</td>'
@@ -1484,7 +1528,7 @@ function syncGlobalFilterCustomDates() {
             else if (name === 'high_demand') paintHighDemand(rows);
             else if (name === 'top_requested_titles') hbars(document.getElementById('req-top-titles'), rows, 'bg-blue-600', 10, reqTitleSearchLink);
             else if (name === 'requests_by_role') paintReqRoleSplitInto(document.getElementById('req-role-split'), rows);
-            else if (name === 'requests_trend') lineChart(document.getElementById('req-trend-line'), rows, '#1d4ed8', { xLabel: 'Date', yLabel: 'Requests', unit: 'requests' });
+            else if (name === 'requests_trend') lineChart(document.getElementById('req-trend-line'), rows, '#1d4ed8', { xLabel: 'Date', yLabel: 'Requests', unit: 'requests', drilldown: 'requests' });
             else if (name === 'requests_by_program') hbars(document.getElementById('req-by-program'), rows, 'bg-violet-600');
         }
 
@@ -1639,7 +1683,7 @@ function syncGlobalFilterCustomDates() {
                 var sp = total ? (s / total * 100) : 0, fp = total ? (f / total * 100) : 0,
                     op = total ? Math.max(o / total * 100, 0) : 0;
                 var tip = title + ': Student ' + s + ' · Faculty ' + f + (o ? ' · Other ' + o : '') + ' (' + total + ' total)';
-                return '<div role="listitem" title="' + escapeHtml(tip) + '" tabindex="0">'
+                return '<div role="listitem" data-drill="request_title" data-title="' + escapeHtml(title) + '" tabindex="0" aria-label="Show requests by program for ' + escapeHtml(title) + '" style="cursor:pointer" title="' + escapeHtml(tip) + '">'
                     + '<div class="flex justify-between text-[11px] font-semibold text-slate-600"><span class="truncate pr-2">' + escapeHtml(title) + '</span><span>' + rNum(total) + '</span></div>'
                     + '<div class="flex h-3 bg-slate-100 rounded-full overflow-hidden mt-0.5">'
                     + (s ? '<div class="h-full" style="width:' + sp.toFixed(1) + '%;background:#1d4ed8" title="Student: ' + s + '"></div>' : '')
@@ -1660,7 +1704,7 @@ function syncGlobalFilterCustomDates() {
             R = R || {};
             hbars(document.getElementById('req-top-titles'), R.top_titles || [], 'bg-blue-600', 10, reqTitleSearchLink);
             paintReqRoleSplitInto(document.getElementById('req-role-split'), R.by_role || []);
-            lineChart(document.getElementById('req-trend-line'), R.trend || [], '#1d4ed8', { xLabel: 'Date', yLabel: 'Requests', unit: 'requests' });
+            lineChart(document.getElementById('req-trend-line'), R.trend || [], '#1d4ed8', { xLabel: 'Date', yLabel: 'Requests', unit: 'requests', drilldown: 'requests' });
             hbars(document.getElementById('req-by-program'), R.by_program || [], 'bg-violet-600');
         }
 
@@ -2143,12 +2187,17 @@ function syncGlobalFilterCustomDates() {
             if (cid === 'dept-bars') hbars(box, cap(U.by_department), 'bg-blue-600', EXPAND_FULL_CAP);
             else if (cid === 'overdue-dept-bars') hbars(box, cap(U.overdue_by_department), 'bg-red-500', EXPAND_FULL_CAP);
             else if (cid === 'borrowers-dept-bars') hbars(box, cap(U.borrowers_by_department), 'bg-green-600', EXPAND_FULL_CAP);
-            else if (cid === 'peak-bars') hbars(box, cap(L.trend || []).map(function (r) { return [String(r[0]).slice(5), r[1]]; }), 'bg-blue-600', EXPAND_FULL_CAP);
+            else if (cid === 'peak-bars') {
+                var peakRows = cap(L.trend || []);
+                hbars(box, peakRows.map(function (r) { return [String(r[0]).slice(5), r[1]]; }), 'bg-blue-600', EXPAND_FULL_CAP);
+                annotatePeakBarsInto(box, peakRows);
+            }
+            else if (cid === 'overdue-line') lineChart(box, cap(L.overdue_trend), '#dc2626', { xLabel: 'Date', yLabel: 'Overdue items', unit: 'overdue items', drilldown: 'overdue' });
             else if (cid === 'trend-line') lineChart(box, cap(L.trend), '#2563eb', { xLabel: 'Date', yLabel: 'Borrowings', unit: 'borrowings', drilldown: 'borrowings' });
             else if (cid === 'req-top-titles') hbars(box, cap(R.top_titles), 'bg-blue-600', EXPAND_FULL_CAP, reqTitleSearchLink);
             else if (cid === 'req-by-program') hbars(box, cap(R.by_program), 'bg-violet-600', EXPAND_FULL_CAP);
             else if (cid === 'req-role-split') paintReqRoleSplitInto(box, cap(R.by_role));
-            else if (cid === 'req-trend-line') lineChart(box, cap(R.trend), '#1d4ed8', { xLabel: 'Date', yLabel: 'Requests', unit: 'requests' });
+            else if (cid === 'req-trend-line') lineChart(box, cap(R.trend), '#1d4ed8', { xLabel: 'Date', yLabel: 'Requests', unit: 'requests', drilldown: 'requests' });
             else if (cid === 'condition-bars') renderConditionBarsInto(box, cap(C.condition), C.cond_total || 0, EXPAND_FULL_CAP);
             else if (cid === 'recent-collection-body') box.innerHTML = recentCollectionHTML(cap(C.recent));
             else if (cid === 'recent-circ-body') box.innerHTML = recentCircHTML(cap(L.recent));
@@ -2174,12 +2223,21 @@ function syncGlobalFilterCustomDates() {
             }
         }
 
-        /* ============ Borrowings Trend dot drill-down ==================
-           Clicking a trend dot opens #trendDayModal with that date's
-           borrowings split by program. Dots are found via document-level
+        /* ============ Library card drill-down ========================
+           Clicking a chart segment with no program split opens
+           #trendDayModal with that segment's borrowings/requests/fines
+           split by program. Segments are found via document-level
            delegation on data-drill attributes (which survive the
-           cloneNode used by the expand modal), so dots work identically
+           cloneNode used by the expand modal), so clicks work identically
            on the card and inside the expanded view. */
+        var trendDayUnit = 'borrowings';
+        var trendDaySub = '';
+        function fmtDrillTotal(total) {
+            if (trendDayUnit === 'fines') {
+                return '₱' + Number(total).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
+            return rNum(total);
+        }
         function renderTrendDayBody(day, json) {
             var body = document.getElementById('trendDayBody');
             if (!body) return;
@@ -2188,36 +2246,89 @@ function syncGlobalFilterCustomDates() {
                 ? json.total
                 : rows.reduce(function (a, r) { return a + (Number(r[1]) || 0); }, 0);
             var head = '<div class="flex items-baseline gap-2 mb-3"><span class="text-2xl font-extrabold text-slate-900">'
-                + rNum(total) + '</span><span class="text-xs text-slate-500">borrowing' + (total === 1 ? '' : 's')
-                + ' on ' + escapeHtml(day) + '</span></div>';
+                + fmtDrillTotal(total) + '</span><span class="text-xs text-slate-500">' + escapeHtml(trendDayUnit)
+                + (trendDaySub ? ' ' + escapeHtml(trendDaySub) : '') + '</span></div>';
             if (!rows.length) {
-                body.innerHTML = head + '<div class="text-xs text-slate-400 py-4 text-center">No borrowings recorded on this date.</div>';
+                body.innerHTML = head + '<div class="text-xs text-slate-400 py-4 text-center">No ' + escapeHtml(trendDayUnit) + ' recorded here.</div>';
                 return;
             }
-            body.innerHTML = head + '<div id="trend-day-bars" role="list" aria-label="Borrowings by program"></div>'
-                + '<p class="text-[10px] text-slate-400 mt-3">Share = program borrowings ÷ day total × 100.</p>';
+            body.innerHTML = head + '<div id="trend-day-bars" role="list" aria-label="Breakdown by program"></div>'
+                + '<p class="text-[10px] text-slate-400 mt-3">Share = program ' + escapeHtml(trendDayUnit) + ' ÷ total × 100.</p>';
             hbars(document.getElementById('trend-day-bars'), rows, 'bg-blue-600', 50);
         }
 
-        function openTrendDayModal(day) {
-            if (!day) return;
+        function openProgramModal(titleText, url, unit, sub) {
             var modal = document.getElementById('trendDayModal');
             var body = document.getElementById('trendDayBody');
-            if (!modal || !body) return;
-            document.getElementById('trendDayTitle').textContent = 'Borrowings on ' + day;
+            if (!modal || !body || !url) return;
+            trendDayUnit = unit || 'borrowings';
+            trendDaySub = sub || '';
+            document.getElementById('trendDayTitle').textContent = titleText;
             body.innerHTML = '<div class="text-xs text-slate-400 py-8 text-center">Loading breakdown…</div>';
             modal.classList.remove('hidden');
             modal.classList.add('flex');
             document.body.style.overflow = 'hidden';
-            fetch(TREND_DAY_URL + '?date=' + encodeURIComponent(day))
+            fetch(url)
                 .then(function (r) {
                     if (!r.ok) throw new Error('status ' + r.status);
                     return r.json();
                 })
-                .then(function (json) { renderTrendDayBody(day, json); })
+                .then(function (json) { renderTrendDayBody('', json); })
                 .catch(function () {
                     body.innerHTML = '<div class="text-xs text-red-500 py-8 text-center">Could not load the breakdown. Please try again.</div>';
                 });
+        }
+
+        function openTrendDayModal(day) {
+            if (!day) return;
+            openProgramModal('Borrowings on ' + day, TREND_DAY_URL + '?date=' + encodeURIComponent(day), 'borrowings', 'on ' + day);
+        }
+
+        // Page period for range-scoped drill-downs (mirrors chart_json).
+        function drillRangeParams() {
+            var p = new URLSearchParams({ preset: GLOBAL.preset || 'year' });
+            if (GLOBAL.from) p.set('from', GLOBAL.from);
+            if (GLOBAL.to) p.set('to', GLOBAL.to);
+            return '&' + p.toString();
+        }
+
+        function openDrilldownFor(el) {
+            var kind = el.getAttribute('data-drill');
+            if (kind === 'borrowings') { openTrendDayModal(el.getAttribute('data-date')); return; }
+            if (kind === 'overdue') {
+                var d = el.getAttribute('data-date');
+                openProgramModal('Overdue items due ' + d, DRILLDOWN_URL + '?type=overdue_day&date=' + encodeURIComponent(d), 'overdue items', 'due ' + d);
+                return;
+            }
+            if (kind === 'requests') {
+                var rd = el.getAttribute('data-date');
+                openProgramModal('Requests on ' + rd, DRILLDOWN_URL + '?type=request_day&date=' + encodeURIComponent(rd), 'requests', 'on ' + rd);
+                return;
+            }
+            if (kind === 'category') {
+                var c = el.getAttribute('data-category');
+                if (!c) return;
+                openProgramModal('Borrowings · ' + c, DRILLDOWN_URL + '?type=category&category=' + encodeURIComponent(c) + drillRangeParams(), 'borrowings', 'in ' + c);
+                return;
+            }
+            if (kind === 'title_demand') {
+                var t = el.getAttribute('data-title');
+                if (!t) return;
+                openProgramModal('Active loans · ' + t, DRILLDOWN_URL + '?type=title_demand&title=' + encodeURIComponent(t), 'active loans', 'for ' + t);
+                return;
+            }
+            if (kind === 'title_fines') {
+                var tf = el.getAttribute('data-title');
+                if (!tf) return;
+                openProgramModal('Fines · ' + tf, DRILLDOWN_URL + '?type=title_fines&title=' + encodeURIComponent(tf) + drillRangeParams(), 'fines', 'for ' + tf);
+                return;
+            }
+            if (kind === 'request_title') {
+                var rt = el.getAttribute('data-title');
+                if (!rt) return;
+                openProgramModal('Requests · ' + rt, DRILLDOWN_URL + '?type=request_title&title=' + encodeURIComponent(rt) + drillRangeParams(), 'requests', 'for ' + rt);
+                return;
+            }
         }
 
         function closeTrendDayModal() {
@@ -2235,11 +2346,9 @@ function syncGlobalFilterCustomDates() {
         }
 
         document.addEventListener('click', function (e) {
-            var dot = e.target && e.target.closest
-                ? e.target.closest('.line-dot[data-drill="borrowings"]')
-                : null;
-            if (!dot) return;
-            openTrendDayModal(dot.getAttribute('data-date'));
+            var t = e.target && e.target.closest ? e.target.closest('[data-drill]') : null;
+            if (!t) return;
+            openDrilldownFor(t);
         });
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
@@ -2248,10 +2357,10 @@ function syncGlobalFilterCustomDates() {
                 return;
             }
             if ((e.key === 'Enter' || e.key === ' ') && document.activeElement && document.activeElement.closest) {
-                var dot = document.activeElement.closest('.line-dot[data-drill="borrowings"]');
-                if (dot && (e.target === dot || dot.contains(e.target))) {
+                var seg = document.activeElement.closest('[data-drill]');
+                if (seg && (e.target === seg || seg.contains(e.target))) {
                     e.preventDefault();
-                    openTrendDayModal(dot.getAttribute('data-date'));
+                    openDrilldownFor(seg);
                 }
             }
         });
