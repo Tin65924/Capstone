@@ -2049,10 +2049,22 @@ function syncGlobalFilterCustomDates() {
                 ? '<p class="text-[10px] text-amber-600 font-semibold mb-1">Only one day with activity in this period — widen the time filter to see trends.</p>'
                 : '';
             // Stride long ranges so lines stay readable (at most ~45 points).
+            // Never drop days with activity: sampled indices are unioned
+            // with every non-zero day so lone spikes (e.g. 3 borrows on
+            // 10-01 in a 365-day range) always render instead of falling
+            // between sampled points and showing a flat zero line.
             var idx = dates.map(function (_, i) { return i; });
             if (idx.length > 45) {
                 var stride = Math.ceil(idx.length / 45);
-                idx = idx.filter(function (_, i) { return i % stride === 0; });
+                var sampled = idx.filter(function (_, i) { return i % stride === 0; });
+                var seen = {};
+                sampled.forEach(function (di) { seen[di] = 1; });
+                allSeries.forEach(function (s) {
+                    s.values.forEach(function (v, di) {
+                        if ((Number(v) || 0) > 0) seen[di] = 1;
+                    });
+                });
+                idx = Object.keys(seen).map(Number).sort(function (a, b) { return a - b; });
                 if (idx[idx.length - 1] !== dates.length - 1) idx.push(dates.length - 1);
             }
             var W = 600, H = 268, ML = 48, MR = 14, MT = 12, MB = 46;

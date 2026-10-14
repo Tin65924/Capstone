@@ -1813,7 +1813,8 @@ Recent circulation exposes Accession No., not the TXN id."""
         query, params = mock_db['fetch_all'].call_args[0]
         assert 'UNION ALL' in query
         assert "transaction_type = 'borrow'" in query
-        assert "transaction_type = 'return'" in query
+        assert "transaction_status = 'returned'" in query
+        assert 'c.return_date' in query
         assert "transaction_status = 'overdue'" in query
         assert 'reservation_queue' in query
         assert 'reservation_status' in query

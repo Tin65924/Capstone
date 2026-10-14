@@ -1482,9 +1482,13 @@ BOOK_STATUS_KEYS = (
 def book_status_trends(book_id, start_date=None, end_date=None):
     """Return [(day, status, count)] daily per-status traffic for one book.
 
-    Circulation rows group borrow_date by action/state (borrowed, returned,
-    overdue); reservation rows group request_date by queue state (waiting,
-    allocated, claimed, expired — the Reservation Management states).
+    Circulation rows: borrowed groups borrow_date where
+    transaction_type = 'borrow'; returned groups return_date where
+    transaction_status = 'returned' (returns are an UPDATE of the loan
+    row, so no transaction_type = 'return' row ever exists); overdue
+    groups borrow_date for overdue/active-past-due loans. Reservation
+    rows group request_date by queue state (waiting, allocated,
+    claimed, expired — the Reservation Management states).
     Reservation rows are dated by request_date (the only per-row date on
     reservation_queue), so claimed/expired lines show when the request was
     made, not when it changed state.
@@ -1497,6 +1501,14 @@ def book_status_trends(book_id, start_date=None, end_date=None):
     cparts = ['c.book_id = %s'] + cparts
     cparams = [book_id] + cparams
     cwhere = ' AND '.join(cparts)
+    # Returned loans are dated by return_date: the borrow row is UPDATED
+    # to transaction_status = 'returned' (transaction_type stays
+    # 'borrow'), so filtering borrow_date by transaction_type = 'return'
+    # would always return zero rows.
+    rtn_parts, rtn_params = _range_clause('c.return_date::date', start_date, end_date)
+    rtn_parts = ['c.book_id = %s', "c.transaction_status = 'returned'"] + rtn_parts
+    rtn_params = [book_id] + rtn_params
+    rtn_where = ' AND '.join(rtn_parts)
     rparts, rparams = _range_clause('r.request_date::date', start_date, end_date)
     rparts = ['r.book_id = %s'] + rparts
     rparams = [book_id] + rparams
@@ -1506,8 +1518,8 @@ def book_status_trends(book_id, start_date=None, end_date=None):
            FROM circulation_records c WHERE {} AND c.transaction_type = 'borrow'
            GROUP BY day
            UNION ALL
-           SELECT c.borrow_date AS day, 'returned' AS status, COUNT(*)
-           FROM circulation_records c WHERE {} AND c.transaction_type = 'return'
+           SELECT c.return_date::date AS day, 'returned' AS status, COUNT(*)
+           FROM circulation_records c WHERE {} AND c.return_date IS NOT NULL
            GROUP BY day
            UNION ALL
             SELECT c.borrow_date AS day, 'overdue' AS status, COUNT(*)
@@ -1517,8 +1529,8 @@ def book_status_trends(book_id, start_date=None, end_date=None):
            SELECT r.request_date::date AS day, r.reservation_status AS status, COUNT(*)
            FROM reservation_queue r WHERE {}
            GROUP BY day, r.reservation_status
-           ORDER BY day'''.format(cwhere, cwhere, cwhere, rwhere),
-        tuple(cparams + cparams + cparams + rparams)
+           ORDER BY day'''.format(cwhere, rtn_where, cwhere, rwhere),
+        tuple(cparams + rtn_params + cparams + rparams)
     )
 
 
