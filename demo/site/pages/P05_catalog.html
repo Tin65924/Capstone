@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Library Resource Catalog Search</title>
+    <link rel="icon" type="image/jpeg" href="/static/images/Library_Logo.jpg">
+    <link rel="apple-touch-icon" href="/static/images/Library_Logo.jpg">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#1e3a8a",
+                        "background-light": "#f7f7f7",
+                        "background-dark": "#0f172a"
+                    },
+                    fontFamily: {
+                        display: "Manrope"
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.125rem",
+                        lg: "0.25rem",
+                        xl: "0.5rem",
+                        full: "0.75rem"
+                    }
+                }
+            }
+        };
+    </script>
+    
+</head>
+<body class="bg-background-light dark:bg-background-dark text-[#0f172a] dark:text-gray-100 font-display min-h-screen flex flex-col">
+    <header class="sticky top-0 z-50 border-b border-solid border-b-[#e7ebf3] dark:border-gray-800 bg-white dark:bg-[#151c2b] shadow-sm">
+    <div class="flex items-center justify-between px-4 sm:px-6 lg:px-10 py-3">
+        <a href="/" class="flex items-center gap-3 text-[#0f172a] dark:text-white min-w-0">
+            <img src="/static/images/Library_Logo.jpg" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover shrink-0">
+            <h2 class="text-[#0f172a] dark:text-white text-lg sm:text-xl font-bold leading-tight tracking-[-0.015em] truncate">MCST Library</h2>
+        </a>
+        <div class="flex items-center gap-2 sm:gap-8">
+            <nav class="hidden md:flex items-center gap-6 lg:gap-9">
+                <a class="text-[#0f172a] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none " href="/">Home</a>
+                <a class="text-[#0f172a] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none text-primary font-bold border-b-2 border-primary pb-1" href="/catalog">Catalog</a>
+                
+                <a class="text-[#0f172a] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none " href="/login">Login</a>
+                
+            </nav>
+            <button id="mobile-menu-btn" type="button" aria-label="Toggle menu" aria-expanded="false" class="md:hidden inline-flex items-center justify-center p-2 rounded-lg text-[#0f172a] dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                <span class="material-symbols-outlined" id="mobile-menu-icon">menu</span>
+            </button>
+        </div>
+    </div>
+    <!-- Mobile menu -->
+    <div id="mobile-menu" class="hidden md:hidden border-t border-[#e7ebf3] dark:border-gray-800 bg-white dark:bg-[#151c2b] px-4 sm:px-6 py-3">
+        <nav class="flex flex-col gap-1">
+            <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-[#0f172a] dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-800" href="/">
+                <span class="material-symbols-outlined text-[20px]">home</span> Home
+            </a>
+            <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors bg-primary text-white" href="/catalog">
+                <span class="material-symbols-outlined text-[20px]">menu_book</span> Catalog
+            </a>
+            
+            <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-[#0f172a] dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-800" href="/login">
+                <span class="material-symbols-outlined text-[20px]">login</span> Login
+            </a>
+            
+        </nav>
+    </div>
+</header>
+<script>
+(function() {
+    var btn = document.getElementById('mobile-menu-btn');
+    var menu = document.getElementById('mobile-menu');
+    var icon = document.getElementById('mobile-menu-icon');
+    if (!btn || !menu) return;
+    btn.addEventListener('click', function() {
+        var isHidden = menu.classList.contains('hidden');
+        menu.classList.toggle('hidden');
+        btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+        if (icon) icon.textContent = isHidden ? 'close' : 'menu';
+    });
+    document.addEventListener('click', function(e) {
+        if (!menu.classList.contains('hidden') && !menu.contains(e.target) && !btn.contains(e.target)) {
+            menu.classList.add('hidden');
+            btn.setAttribute('aria-expanded', 'false');
+            if (icon) icon.textContent = 'menu';
+        }
+    });
+})();
+</script>
+
+    <main class="flex-grow">
+        
+    
+
+        
+<main class="flex-grow mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 w-full max-w-[1400px]">
+    <div class="flex flex-col lg:flex-row gap-6 lg:gap-8 items-start">
+        <!-- Mobile filter toggle -->
+        <button type="button" id="mobile-filter-toggle" class="lg:hidden w-full flex items-center justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 shadow-sm hover:border-primary/30 transition-colors">
+            <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[20px]">tune</span> Filters</span>
+            <span class="material-symbols-outlined text-[20px]">expand_more</span>
+        </button>
+        <!-- Filter Sidebar - Desktop -->
+        <aside class="hidden lg:block w-52 shrink-0">
+            <form method="GET" action="/catalog" id="filter-form" class="sticky top-8">
+                    <input type="hidden" name="q" value="data">
+                    <input type="hidden" name="field" value="">
+                    <input type="hidden" name="view" value="grid">
+                    <div class="space-y-6 pr-3">
+
+                    <div>
+                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Sort</h3>
+                        <div class="space-y-1.5 text-[13px]">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="sort_by" value="" checked onchange="this.form.submit()" class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Sort by relevance</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="sort_by" value="title"  onchange="this.form.submit()" class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Sort by title (A-Z)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="sort_by" value="year_desc"  onchange="this.form.submit()" class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Sort by year (newest)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
+                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Category</h3>
+                        <div class="space-y-1.5 text-[13px]">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="category" value="" checked onchange="this.form.submit()" class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">All categories</span>
+                            </label>
+                            
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="category" value="Science"  onchange="this.form.submit()" class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Science</span>
+                            </label>
+                            
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="category" value="Fiction"  onchange="this.form.submit()" class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Fiction</span>
+                            </label>
+                            
+                            
+                        </div>
+                    </div>
+
+                    <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
+                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Type</h3>
+                        <div class="space-y-1.5 text-[13px]">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="material_type" value="" checked onchange="this.form.submit()" class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Any type</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="material_type" value="ebook"  onchange="this.form.submit()" class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">E-Books</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="material_type" value="physical"  onchange="this.form.submit()" class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Physical books</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
+                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Year</h3>
+                        <div class="space-y-1.5 text-[13px]">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="year_preset" value="any" checked class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Any time</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="year_preset" value="since_this_year"  class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Since 2026</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="year_preset" value="since_last_year"  class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Since 2025</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="year_preset" value="since_2023"  class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Since 2023</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="year_preset" value="custom"  class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Custom range...</span>
+                            </label>
+                        </div>
+                        <div class="mt-2 space-y-2.5">
+                            <div class="flex items-center gap-1.5">
+                                <input type="number" name="year_from" value="" min="1000" max="2100" placeholder="From"
+                                    class="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-[13px] placeholder-slate-400 focus:ring-2 focus:ring-primary/20 outline-none transition-all">
+                                <span class="text-slate-400 text-[13px]">to</span>
+                                <input type="number" name="year_to" value="" min="1000" max="2100" placeholder="To"
+                                    class="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-[13px] placeholder-slate-400 focus:ring-2 focus:ring-primary/20 outline-none transition-all">
+                            </div>
+                            <button type="submit"
+                                class="w-full py-1.5 bg-primary text-white rounded text-[13px] font-semibold hover:bg-primary/90 transition-colors">Apply</button>
+                        </div>
+                    </div>
+
+                    </div>
+                </form>
+        </aside>
+
+        <!-- Mobile Filter Drawer -->
+        <div id="mobile-filter-drawer" class="fixed inset-0 z-50 hidden lg:hidden">
+            <div id="mobile-filter-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+            <div class="absolute top-0 left-0 h-full w-[85%] max-w-[340px] bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto">
+                <div class="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
+                    <h3 class="font-bold text-slate-800 dark:text-white flex items-center gap-2"><span class="material-symbols-outlined text-[20px]">tune</span> Filters</h3>
+                    <button type="button" id="mobile-filter-close" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"><span class="material-symbols-outlined">close</span></button>
+                </div>
+                <form method="GET" action="/catalog" class="p-4 space-y-6">
+                    <input type="hidden" name="q" value="data">
+                    <input type="hidden" name="field" value="">
+                    <input type="hidden" name="view" value="grid">
+                    <div>
+                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Sort</h3>
+                        <div class="space-y-1.5 text-[13px]">
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="sort_by" value="" checked class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Sort by relevance</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="sort_by" value="title"  class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Sort by title (A-Z)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="sort_by" value="year_desc"  class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Sort by year (newest)</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
+                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Category</h3>
+                        <div class="space-y-1.5 text-[13px]">
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="category" value="" checked class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">All categories</span>
+                            </label>
+                            
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="category" value="Science"  class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Science</span>
+                            </label>
+                            
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="category" value="Fiction"  class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Fiction</span>
+                            </label>
+                            
+                            
+                        </div>
+                    </div>
+                    <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
+                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Type</h3>
+                        <div class="space-y-1.5 text-[13px]">
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="material_type" value="" checked class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Any type</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="material_type" value="ebook"  class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">E-Books</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="material_type" value="physical"  class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Physical books</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
+                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Year</h3>
+                        <div class="space-y-1.5 text-[13px]">
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="year_preset" value="any" checked class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Any time</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="year_preset" value="since_this_year"  class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Since 2026</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="year_preset" value="since_last_year"  class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Since 2025</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="year_preset" value="since_2023"  class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Since 2023</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer py-1">
+                                <input type="radio" name="year_preset" value="custom"  class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">Custom range...</span>
+                            </label>
+                        </div>
+                        <div class="mt-3 space-y-2.5">
+                            <div class="flex items-center gap-1.5">
+                                <input type="number" name="year_from" value="" min="1000" max="2100" placeholder="From"
+                                    class="w-full px-2 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-[13px] placeholder-slate-400 focus:ring-2 focus:ring-primary/20 outline-none">
+                                <span class="text-slate-400 text-[13px]">to</span>
+                                <input type="number" name="year_to" value="" min="1000" max="2100" placeholder="To"
+                                    class="w-full px-2 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-[13px] placeholder-slate-400 focus:ring-2 focus:ring-primary/20 outline-none">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="pt-4 flex gap-2 sticky bottom-0 bg-white dark:bg-slate-900 pb-2">
+                        <button type="submit" class="flex-1 bg-primary text-white py-2.5 rounded-lg font-bold text-sm hover:bg-primary/90 transition-colors">Apply Filters</button>
+                        <a href="/catalog" class="px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-semibold text-slate-600 dark:text-slate-300 text-center hover:bg-slate-50 dark:hover:bg-slate-800">Clear</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div class="flex-1 min-w-0 w-full">
+            <form method="GET" action="/catalog" class="flex flex-col gap-3 sm:gap-4">
+                        <input type="hidden" name="view" value="grid">
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <div class="relative w-full sm:w-auto sm:min-w-[180px]" id="field-select-wrapper">
+                                <!-- Hidden native select for form submission / no-JS fallback -->
+                                <select name="field" id="field-select-native" class="sr-only" tabindex="-1" aria-hidden="true">
+                                    <option value="" selected>All Fields</option>
+                                    <option value="title" >Title</option>
+                                    <option value="author" >Author</option>
+                                    <option value="isbn" >ISBN</option>
+                                    <option value="category" >Category</option>
+                                </select>
+                                <button type="button" id="field-select-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="field-select-dropdown"
+                                    class="w-full flex items-center justify-between gap-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:border-slate-400 dark:hover:border-slate-600 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
+                                    <span id="field-select-label" class="min-w-0 flex-1 truncate text-left">All Fields</span>
+                                    <span class="material-symbols-outlined text-slate-400 text-[20px] shrink-0 transition-transform duration-200" id="field-select-arrow">expand_more</span>
+                                </button>
+                                <ul id="field-select-dropdown" role="listbox" tabindex="-1"
+                                    class="hidden absolute z-20 mt-2 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden py-1.5 text-sm">
+                                    <li role="option" data-value="" tabindex="0" aria-selected="true" class="field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors bg-primary/10 text-primary font-semibold">
+                                        <span>All Fields</span><span class="material-symbols-outlined text-[18px] text-primary">check</span>
+                                    </li>
+                                    <li role="option" data-value="title" tabindex="0" aria-selected="false" class="field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors text-slate-700 dark:text-slate-200">
+                                        <span>Title</span>
+                                    </li>
+                                    <li role="option" data-value="author" tabindex="0" aria-selected="false" class="field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors text-slate-700 dark:text-slate-200">
+                                        <span>Author</span>
+                                    </li>
+                                    <li role="option" data-value="isbn" tabindex="0" aria-selected="false" class="field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors text-slate-700 dark:text-slate-200">
+                                        <span>ISBN</span>
+                                    </li>
+                                    <li role="option" data-value="category" tabindex="0" aria-selected="false" class="field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors text-slate-700 dark:text-slate-200">
+                                        <span>Category</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="relative flex-grow">
+                                <span class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <span class="material-icons text-slate-400">search</span>
+                                </span>
+                                <input id="catalog-search-input" name="q" value="data"
+                                    class="block w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-sm placeholder-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                                    placeholder="Search by title, author, keyword, or ISBN..." type="search" data-suggest="book_search" />
+                            </div>
+                            <button type="submit"
+                                class="bg-primary hover:bg-primary/90 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg font-semibold text-sm transition-all flex items-center justify-center gap-2 w-full sm:w-auto shrink-0">
+                                Search Resources
+                            </button>
+                        </div>
+                        
+                    </form>
+
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 sm:mb-6">
+                <div class="min-w-0">
+                    <h2 class="text-base sm:text-lg font-bold text-slate-800 dark:text-white py-1 sm:py-3">Catalog Results</h2>
+                    <p class="text-xs sm:text-sm text-slate-500 truncate">
+                        
+                            Showing 2 results for <span class="italic">&quot;data&quot;</span>
+                        
+                    </p>
+                </div>
+                <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-1 shrink-0 self-start sm:self-center" role="group" aria-label="Catalog view">
+                    
+                    
+                    <a href="/catalog?view=grid&amp;q=data&amp;field=&amp;year_preset=&amp;year_from=&amp;year_to=&amp;sort_by=&amp;category=&amp;material_type=" title="Grid view"
+                        class="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-colors bg-white dark:bg-slate-900 text-primary shadow-sm">
+                        <span class="material-symbols-outlined text-[18px]">grid_view</span><span class="hidden sm:inline">Grid</span>
+                    </a>
+                    <a href="/catalog?view=list&amp;q=data&amp;field=&amp;year_preset=&amp;year_from=&amp;year_to=&amp;sort_by=&amp;category=&amp;material_type=" title="List view"
+                        class="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-colors text-slate-500 dark:text-slate-400 hover:text-slate-700">
+                        <span class="material-symbols-outlined text-[18px]">view_list</span><span class="hidden sm:inline">List</span>
+                    </a>
+                </div>
+            </div>
+            
+            
+            <div id="catalog-results-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+                
+                    
+                    
+                    
+                    
+                    
+                        
+                    
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden flex flex-col hover:shadow-lg hover:border-primary/30 transition-all group">
+                        <div class="p-4 sm:p-5 flex-grow flex flex-col">
+                            <div class="mb-3">
+                                
+                                <span class="inline-flex bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight items-center gap-1">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                    Available
+                                </span>
+                                
+                            </div>
+                            <h3 class="text-primary font-bold text-sm sm:text-base leading-tight mb-1 sm:mb-2 line-clamp-2 break-words">Introduction to Data Science</h3>
+                            <p class="text-slate-600 dark:text-slate-400 text-xs mb-3 sm:mb-4 truncate">Jane Doe</p>
+                            <div class="mt-auto space-y-3">
+                                <div class="flex flex-col gap-1 text-[10px] text-slate-400 font-medium">
+                                    <span>Copyright: 2023</span>
+                                    <span>ISBN: 9780000000001</span>
+                                </div>
+                                <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                                    <span class="text-[11px] font-semibold text-green-600 dark:text-green-400">
+                                        Available
+                                    </span>
+                                    <div class="flex items-center gap-2 shrink-0">
+                                        
+                                        <a href="/book/1"
+                                            class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-primary text-white hover:bg-primary/90 transition-colors">Borrow</a>
+                                        
+                                        
+                                        <button type="button" disabled title="A copy is available — reserve is only enabled when all copies are borrowed."
+                                            class="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-60">Reserve</button>
+                                        
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-center">
+                                    <a href="/book/1" class="text-primary text-xs font-bold hover:underline text-center">View Details</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    
+                    
+                    
+                    
+                        
+                    
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden flex flex-col hover:shadow-lg hover:border-primary/30 transition-all group">
+                        <div class="p-4 sm:p-5 flex-grow flex flex-col">
+                            <div class="mb-3">
+                                
+                                <span class="inline-flex bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight items-center gap-1">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                    Available
+                                </span>
+                                
+                            </div>
+                            <h3 class="text-primary font-bold text-sm sm:text-base leading-tight mb-1 sm:mb-2 line-clamp-2 break-words">Clean Code</h3>
+                            <p class="text-slate-600 dark:text-slate-400 text-xs mb-3 sm:mb-4 truncate">Robert Martin</p>
+                            <div class="mt-auto space-y-3">
+                                <div class="flex flex-col gap-1 text-[10px] text-slate-400 font-medium">
+                                    <span>Copyright: 2008</span>
+                                    <span>ISBN: 9780132350884</span>
+                                </div>
+                                <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                                    <span class="text-[11px] font-semibold text-green-600 dark:text-green-400">
+                                        Available
+                                    </span>
+                                    <div class="flex items-center gap-2 shrink-0">
+                                        
+                                        <a href="/book/2"
+                                            class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-primary text-white hover:bg-primary/90 transition-colors">Borrow</a>
+                                        
+                                        
+                                        <button type="button" disabled title="A copy is available — reserve is only enabled when all copies are borrowed."
+                                            class="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-60">Reserve</button>
+                                        
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-center">
+                                    <a href="/book/2" class="text-primary text-xs font-bold hover:underline text-center">View Details</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                
+            </div>
+            
+            
+            
+            <footer class="mt-8 py-8 border-t border-slate-200 dark:border-slate-800">
+                <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+                    <p class="text-sm text-slate-500">Showing <span class="font-medium text-slate-900 dark:text-slate-100">1 - 2</span> of <span class="font-medium text-slate-900 dark:text-slate-100">2</span> results</p>
+                </div>
+            </footer>
+            
+        </div>
+    </div>
+    </main>
+
+<!-- All Categories Modal - moved outside aside to prevent overlapping top bar -->
+<div id="categoryModal" class="fixed inset-0 z-[70] hidden bg-black/40 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-md mx-4 p-6 max-h-[80vh] flex flex-col overflow-hidden">
+        <div class="flex items-center justify-between mb-4 shrink-0">
+            <h3 class="text-lg font-bold text-slate-800 dark:text-white">All Categories</h3>
+            <button type="button" onclick="closeCategoryModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        <div class="overflow-y-auto space-y-1.5 text-[13px] pr-1">
+            <button type="button" onclick="selectCategory('')"
+                class="w-full flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded px-2 py-1.5 text-left">
+                <span class="text-slate-700 dark:text-slate-300">All categories</span>
+            </button>
+            
+            <button type="button" onclick="selectCategory('Science')"
+                class="w-full flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded px-2 py-1.5 text-left">
+                <span class="text-slate-700 dark:text-slate-300">Science</span>
+            </button>
+            
+            <button type="button" onclick="selectCategory('Fiction')"
+                class="w-full flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded px-2 py-1.5 text-left">
+                <span class="text-slate-700 dark:text-slate-300">Fiction</span>
+            </button>
+            
+        </div>
+    </div>
+</div>
+
+    </main>
+
+    <footer class="bg-white dark:bg-[#151c2b] border-t border-[#e7ebf3] dark:border-gray-800 py-6 px-4 sm:px-6 lg:px-10">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+        <p class="text-sm text-gray-500 dark:text-gray-400">&copy; 2026 MCST Library. All rights reserved.</p>
+        <div class="flex items-center gap-6">
+            <a href="/" class="text-sm text-gray-500 dark:text-gray-400 hover:text-primary transition-colors">Home</a>
+            <a href="/catalog" class="text-sm text-gray-500 dark:text-gray-400 hover:text-primary transition-colors">Catalog</a>
+        </div>
+    </div>
+</footer>
+
+    
+<script src="/static/js/autosuggest.js"></script>
+<script>
+    function openCategoryModal() {
+        // close field dropdown if open to prevent overlap (both use z-50, category needs z-60)
+        var fieldDropdown = document.getElementById('field-select-dropdown');
+        var fieldBtn = document.getElementById('field-select-btn');
+        var fieldArrow = document.getElementById('field-select-arrow');
+        if (fieldDropdown && !fieldDropdown.classList.contains('hidden')) {
+            fieldDropdown.classList.add('hidden');
+            if (fieldBtn) fieldBtn.setAttribute('aria-expanded', 'false');
+            if (fieldArrow) fieldArrow.style.transform = '';
+        }
+        document.getElementById('categoryModal').classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+    function closeCategoryModal() {
+        document.getElementById('categoryModal').classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+    function selectCategory(value) {
+        var radios = document.querySelectorAll('#filter-form input[name="category"]');
+        for (var i = 0; i < radios.length; i++) {
+            radios[i].checked = (radios[i].value === value);
+        }
+        closeCategoryModal();
+        document.getElementById('filter-form').submit();
+    }
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            var catModal = document.getElementById('categoryModal');
+            if (catModal && !catModal.classList.contains('hidden')) closeCategoryModal();
+        }
+    });
+    document.getElementById('categoryModal').addEventListener('click', function (e) {
+        if (e.target === this) closeCategoryModal();
+    });
+    // When the search box is cleared, return to the empty catalog state instantly.
+    // Works for both grid (catalog-results-grid) and list (catalog-results-list) views.
+    (function() {
+        var input = document.getElementById('catalog-search-input');
+        var grid = document.getElementById('catalog-results-grid') || document.getElementById('catalog-results-list');
+        if (!input || !grid) return;
+        var hasActiveFilter = false;
+        var isSearching = true;
+        var emptyPromptHTML = '<div id="catalog-empty-prompt" class="col-span-full flex flex-col items-center justify-center py-16 text-center">'
+            + '<span class="material-symbols-outlined text-5xl text-slate-300 dark:text-slate-600 mb-4">search</span>'
+            + '<h3 class="text-lg font-bold text-slate-700 dark:text-slate-300 mb-1">Search to explore the catalog</h3>'
+            + '<p class="text-sm text-slate-500 max-w-md">Enter a keyword, title, author, ISBN or category in the search box above — or use the filters on the left — to see matching books and related titles.</p>'
+            + '</div>';
+        var debounce;
+        input.addEventListener('input', function() {
+            clearTimeout(debounce);
+            debounce = setTimeout(function() {
+                var val = input.value.trim();
+                if (val === '' && !hasActiveFilter) {
+                    if (isSearching) {
+                        // Prefer a clean server empty state; update URL without q and reload
+                        var url = new URL(window.location.href);
+                        url.searchParams.delete('q');
+                        url.searchParams.delete('field');
+                        url.searchParams.delete('page');
+                        // If no filter params remain, this becomes /catalog with empty state
+                        if (!url.searchParams.toString()) {
+                            // Instant client-side empty (no round-trip) then sync URL
+                            grid.innerHTML = emptyPromptHTML;
+                            var headerP = document.querySelector('.flex.items-center.justify-between.mb-6 p');
+                            if (headerP) headerP.textContent = 'Start searching — enter a title, author, keyword or select a filter to discover books.';
+                            var footer = document.querySelector('main footer');
+                            if (footer) footer.style.display = 'none';
+                            var nav = document.querySelector('nav[aria-label="Pagination"]');
+                            if (nav) nav.style.display = 'none';
+                            history.replaceState(null, '', url.pathname);
+                        } else {
+                            window.location.href = url.pathname + '?' + url.searchParams.toString();
+                        }
+                    } else {
+                        // Already empty — keep prompt
+                        if (!document.getElementById('catalog-empty-prompt')) {
+                            grid.innerHTML = emptyPromptHTML;
+                        }
+                    }
+                } else if (val !== '' && !isSearching) {
+                    // User started typing again — no auto-submit, wait for Search button/enter
+                }
+            }, 300);
+        });
+        // Also handle native search clear (×) button
+        input.addEventListener('search', function() {
+            if (input.value.trim() === '' && !hasActiveFilter && isSearching) {
+                var url2 = new URL(window.location.href);
+                url2.searchParams.delete('q');
+                url2.searchParams.delete('field');
+                url2.searchParams.delete('page');
+                window.location.href = url2.pathname + (url2.searchParams.toString() ? '?' + url2.searchParams.toString() : '');
+            }
+        });
+    })();
+
+    document.getElementById('categoryModal').addEventListener('click', function (e) {
+        if (e.target === this) closeCategoryModal();
+    });
+
+    // Mobile filter drawer
+    function openMobileFilters() {
+        var drawer = document.getElementById('mobile-filter-drawer');
+        if (drawer) {
+            drawer.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+    }
+    function closeMobileFilters() {
+        var drawer = document.getElementById('mobile-filter-drawer');
+        if (drawer) {
+            drawer.classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+    }
+    var toggleBtn = document.getElementById('mobile-filter-toggle');
+    if (toggleBtn) toggleBtn.addEventListener('click', openMobileFilters);
+    var closeBtn = document.getElementById('mobile-filter-close');
+    if (closeBtn) closeBtn.addEventListener('click', closeMobileFilters);
+    var backdrop = document.getElementById('mobile-filter-backdrop');
+    if (backdrop) backdrop.addEventListener('click', closeMobileFilters);
+
+    // Custom field select — replaces native <select> that looked broken on some browsers
+    (function() {
+        var btn = document.getElementById('field-select-btn');
+        var dropdown = document.getElementById('field-select-dropdown');
+        var label = document.getElementById('field-select-label');
+        var arrow = document.getElementById('field-select-arrow');
+        var native = document.getElementById('field-select-native');
+        var wrapper = document.getElementById('field-select-wrapper');
+        if (!btn || !dropdown || !native) return;
+
+        function setExpanded(expanded) {
+            btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            dropdown.classList.toggle('hidden', !expanded);
+            if (arrow) arrow.style.transform = expanded ? 'rotate(180deg)' : '';
+        }
+        function isOpen() { return !dropdown.classList.contains('hidden'); }
+
+        function selectValue(value, text) {
+            native.value = value;
+            if (label) label.textContent = text;
+            // update option styles
+            dropdown.querySelectorAll('[role=\"option\"]').forEach(function(opt) {
+                var isSel = opt.getAttribute('data-value') === value;
+                opt.setAttribute('aria-selected', isSel ? 'true' : 'false');
+                opt.classList.toggle('bg-primary/10', isSel);
+                opt.classList.toggle('text-primary', isSel);
+                opt.classList.toggle('font-semibold', isSel);
+                opt.classList.toggle('text-slate-700', !isSel);
+                // toggle check icon
+                var check = opt.querySelector('.material-symbols-outlined');
+                if (isSel) {
+                    if (!check) {
+                        var c = document.createElement('span');
+                        c.className = 'material-symbols-outlined text-[18px] text-primary';
+                        c.textContent = 'check';
+                        opt.appendChild(c);
+                    }
+                } else {
+                    if (check) check.remove();
+                }
+            });
+        }
+
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            setExpanded(!isOpen());
+        });
+
+        dropdown.querySelectorAll('[role=\"option\"]').forEach(function(opt) {
+            opt.addEventListener('click', function() {
+                selectValue(opt.getAttribute('data-value'), opt.querySelector('span').textContent.trim());
+                setExpanded(false);
+                btn.focus();
+            });
+            opt.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    opt.click();
+                } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    var next = opt.nextElementSibling;
+                    if (next) next.focus();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    var prev = opt.previousElementSibling;
+                    if (prev) prev.focus(); else btn.focus();
+                } else if (e.key === 'Escape') {
+                    setExpanded(false);
+                    btn.focus();
+                }
+            });
+        });
+
+        btn.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                if (!isOpen()) setExpanded(true);
+                var first = dropdown.querySelector('[role=\"option\"]');
+                if (first) first.focus();
+            } else if (e.key === 'Escape' && isOpen()) {
+                setExpanded(false);
+            }
+        });
+
+        document.addEventListener('click', function(e) {
+            if (isOpen() && wrapper && !wrapper.contains(e.target)) {
+                setExpanded(false);
+            }
+        });
+    })();
+</script>
+
+</body>
+</html>

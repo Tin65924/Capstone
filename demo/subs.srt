@@ -1,0 +1,183 @@
+1
+00:00:00,000 --> 00:00:01,686
+This is the sign-in page.
+
+2
+00:00:01,806 --> 00:00:06,814
+To begin, click Sign in with Google and
+use your school Google account.
+
+3
+00:00:06,934 --> 00:00:10,715
+Only your school account can enter the
+library system.
+
+4
+00:00:10,835 --> 00:00:14,730
+Once you sign in, the system takes you to
+the next step.
+
+5
+00:00:14,880 --> 00:00:16,767
+Here you set up your account.
+
+6
+00:00:16,887 --> 00:00:24,654
+Select Faculty, then type your 9-digit ID
+number, for example 123456789, and choose
+
+7
+00:00:24,774 --> 00:00:30,367
+Double check your details, then press
+Continue to submit your account for
+
+8
+00:00:30,517 --> 00:00:33,815
+After you submit, you will see this
+waiting screen.
+
+9
+00:00:33,935 --> 00:00:38,037
+It means your account was received and is
+waiting for approval.
+
+10
+00:00:38,157 --> 00:00:40,785
+You do not need to do anything else here.
+
+11
+00:00:40,905 --> 00:00:45,848
+Just sign in again later, and once
+approved you will land on your home page.
+
+12
+00:00:45,998 --> 00:00:47,437
+This is the home page.
+
+13
+00:00:47,557 --> 00:00:53,106
+It welcomes you and shows what is new in
+the library, like recently added books.
+
+14
+00:00:53,226 --> 00:00:57,570
+From the top menu you can move to the
+catalog or sign in areas.
+
+15
+00:00:57,690 --> 00:01:02,217
+Think of this as your starting point
+whenever you open the system.
+
+16
+00:01:02,367 --> 00:01:05,354
+This is the catalog, where you look for
+books.
+
+17
+00:01:05,474 --> 00:01:10,691
+Type a title, an author, or a keyword in
+the search box and browse the results.
+
+18
+00:01:10,811 --> 00:01:13,731
+You can filter and open any book to see
+more.
+
+19
+00:01:13,851 --> 00:01:17,619
+Use this page whenever you want to find
+something to read.
+
+20
+00:01:17,769 --> 00:01:19,546
+This is the book details page.
+
+21
+00:01:19,666 --> 00:01:24,478
+Here you see the title, the author, and
+whether a copy is available right now.
+
+22
+00:01:24,598 --> 00:01:30,105
+From this page you can borrow the book to
+take it home, or reserve it to hold your
+
+23
+00:01:30,225 --> 00:01:32,604
+Just fill in the small form and confirm.
+
+24
+00:01:32,754 --> 00:01:34,932
+This is your profile and overview.
+
+25
+00:01:35,052 --> 00:01:40,679
+At the top you see your name, your ID
+number, your department, and your phone
+
+26
+00:01:40,799 --> 00:01:47,981
+Below that are your live counts: books you
+currently have, overdue books, and
+
+27
+00:01:48,101 --> 00:01:50,145
+Your borrowing limit is 5 books.
+
+28
+00:01:50,265 --> 00:01:55,621
+You can also press Edit Profile to update
+your name, phone number, or department.
+
+29
+00:01:55,741 --> 00:01:57,619
+Your ID number stays the same.
+
+30
+00:01:57,769 --> 00:01:59,352
+This is the request page.
+
+31
+00:01:59,472 --> 00:02:06,505
+If the library does not have the book you
+need, type the title and the author here
+
+32
+00:02:06,625 --> 00:02:11,585
+Your sent requests appear below so you can
+follow their status at any time.
+
+33
+00:02:11,735 --> 00:02:13,167
+This is your history page.
+
+34
+00:02:13,287 --> 00:02:19,676
+It keeps everything in one place: books
+you borrowed before, your reservations,
+
+35
+00:02:19,796 --> 00:02:24,244
+Come back here whenever you want to review
+what you have done in the library.
+
+36
+00:02:24,394 --> 00:02:26,367
+This is your notifications page.
+
+37
+00:02:26,487 --> 00:02:35,263
+Here you receive friendly reminders, such
+as when a book is almost due, when it is
+
+38
+00:02:35,383 --> 00:02:39,057
+Check this page regularly so you never
+miss a return date.
+
+39
+00:02:39,177 --> 00:02:42,755
+Thank you for watching this tour of your
+faculty account.
+

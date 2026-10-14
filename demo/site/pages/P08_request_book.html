@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Book Procurement Request - MCST Library</title>
+    <link rel="icon" type="image/jpeg" href="/static/images/Library_Logo.jpg">
+    <link rel="apple-touch-icon" href="/static/images/Library_Logo.jpg">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#1e3a8a",
+                        "background-light": "#f7f7f7",
+                        "background-dark": "#0f172a"
+                    },
+                    fontFamily: {
+                        display: "Manrope"
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.125rem",
+                        lg: "0.25rem",
+                        xl: "0.5rem",
+                        full: "0.75rem"
+                    }
+                }
+            }
+        };
+    </script>
+</head>
+
+<body class="bg-background-light dark:bg-background-dark text-[#0f172a] dark:text-white font-display overflow-hidden">
+    <div class="flex h-screen w-full flex-row">
+        <!-- Sidebar - Desktop -->
+        <div
+            class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0">
+            <div class="p-6">
+                <div class="flex items-center gap-3 mb-8">
+                    <img src="/static/images/Library_Logo.jpg" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
+                    <h1 class="text-xl font-bold tracking-tight" style="">Profile</h1>
+                </div>
+                <nav class="flex flex-col gap-1 overflow-y-auto pr-2 custom-scrollbar">
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="/">
+                <span class="material-symbols-outlined">home</span>
+                <span class="text-sm">Home</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="/catalog">
+        <span class="material-symbols-outlined">menu_book</span>
+        <span class="text-sm">Catalog</span>
+    </a>
+    <hr class="border-gray-200 dark:border-gray-700 my-1">
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" href="/user/profile">
+        <span class="material-symbols-outlined">Overview</span>
+        <span class="text-sm">Overview</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors bg-primary/10 text-primary" href="/user/request-book">
+        <span class="material-symbols-outlined">book_online</span>
+        <span class="text-sm">Request Book</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" href="/user/history">
+        <span class="material-symbols-outlined">history</span>
+        <span class="text-sm">History</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" href="/user/notifications">
+        <span class="material-symbols-outlined">notifications</span>
+        <span class="text-sm">Notifications</span>
+    </a>
+    
+    
+</nav>
+            </div>
+            <div class="mt-auto p-6 border-t border-[#cfd7e7] dark:border-gray-700">
+                <div class="flex flex-col items-center mb-4">
+                    <h2 class="text-lg font-bold text-center" style="">Maria Santos | Faculty</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400" style="">faculty@mcst.edu.ph</p>
+                </div>
+                <a href="/logout"
+                    class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-700 transition-colors"
+                    style="">
+                    <span class="material-symbols-outlined text-[18px]" style="">logout</span>
+                    <span class="" style="">Log Out</span>
+                </a>
+            </div>
+        </div>
+        <!-- Mobile sidebar drawer -->
+        <div id="mobile-sidebar" class="fixed inset-0 z-50 hidden lg:hidden">
+            <div id="mobile-sidebar-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+            <div class="absolute top-0 left-0 h-full w-[80%] max-w-[280px] bg-white dark:bg-[#1a2235] shadow-2xl flex flex-col overflow-hidden">
+                <div class="p-4 flex items-center justify-between border-b border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                    <div class="flex items-center gap-3">
+                        <img src="/static/images/Library_Logo.jpg" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
+                        <h1 class="text-lg font-bold">Profile</h1>
+                    </div>
+                    <button id="mobile-sidebar-close" type="button" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">close</span></button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-6">
+                    <nav class="flex flex-col gap-1 overflow-y-auto pr-2 custom-scrollbar">
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="/">
+                <span class="material-symbols-outlined">home</span>
+                <span class="text-sm">Home</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="/catalog">
+        <span class="material-symbols-outlined">menu_book</span>
+        <span class="text-sm">Catalog</span>
+    </a>
+    <hr class="border-gray-200 dark:border-gray-700 my-1">
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" href="/user/profile">
+        <span class="material-symbols-outlined">Overview</span>
+        <span class="text-sm">Overview</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors bg-primary/10 text-primary" href="/user/request-book">
+        <span class="material-symbols-outlined">book_online</span>
+        <span class="text-sm">Request Book</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" href="/user/history">
+        <span class="material-symbols-outlined">history</span>
+        <span class="text-sm">History</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" href="/user/notifications">
+        <span class="material-symbols-outlined">notifications</span>
+        <span class="text-sm">Notifications</span>
+    </a>
+    
+    
+</nav>
+                </div>
+                <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                    <div class="flex flex-col items-center mb-4">
+                        <h2 class="text-base font-bold text-center">Maria Santos | Faculty</h2>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 text-center break-all">faculty@mcst.edu.ph</p>
+                    </div>
+                    <a href="/logout" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-700 transition-colors">
+                        <span class="material-symbols-outlined text-[18px]">logout</span> Log Out
+                    </a>
+                </div>
+            </div>
+        </div>
+        <!-- Main Content -->
+        <main class="flex-1 h-full overflow-y-auto bg-background-light dark:bg-background-dark">
+            <!-- Mobile top bar -->
+            <div class="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-[#1a2235] border-b border-[#cfd7e7] dark:border-gray-700 px-4 py-3">
+                <button id="mobile-sidebar-open" type="button" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">menu</span></button>
+                <div class="flex items-center gap-2">
+                    <img src="/static/images/Library_Logo.jpg" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover">
+                    <span class="font-bold text-sm">MCST Library</span>
+                </div>
+                <div class="w-10"></div>
+            </div>
+            
+    
+
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:py-12">
+                <!-- Book Procurement Header -->
+                <div class="mb-6 sm:mb-8 lg:mb-10">
+                    <h1 class="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight leading-tight" style="">Book
+                        Procurement</h1>
+                    <p class="text-gray-500 dark:text-gray-400 mt-2 sm:mt-3 text-sm sm:text-base lg:text-lg leading-relaxed" style="">Submit a request for books not
+                        currently available in our digital or physical library collection.</p>
+                </div>
+                <!-- Form Card -->
+                <div
+                    class="bg-white dark:bg-[#1a2235] rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 sm:p-6 md:p-8 lg:p-12">
+                    <form class="space-y-6 sm:space-y-8" method="POST">
+                        <!-- Book Title Field -->
+                        <div>
+                            <label class="block text-xs sm:text-sm font-bold text-gray-900 dark:text-white mb-1.5 sm:mb-2" for="book-title"
+                                style="">
+                                Book Title <span class="text-red-500" style="">*</span>
+                            </label>
+                            <input
+                                class="w-full px-3 sm:px-4 py-3 sm:py-3.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm sm:text-base focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder:text-gray-400"
+                                id="book-title" name="book-title" placeholder="Enter the full title of the book"
+                                required="" type="text" maxlength="255" data-suggest="book_title">
+                        </div>
+                        <!-- Author Field -->
+                        <div>
+                            <label class="block text-xs sm:text-sm font-bold text-gray-900 dark:text-white mb-1.5 sm:mb-2" for="author"
+                                style="">
+                                Author (Optional)
+                            </label>
+                            <input
+                                class="w-full px-3 sm:px-4 py-3 sm:py-3.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm sm:text-base focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder:text-gray-400"
+                                id="author" name="author" placeholder="Enter the author's name" type="text" maxlength="150" data-suggest="book_author">
+                            <p class="mt-1.5 sm:mt-2 text-[11px] sm:text-xs text-gray-400" style="">Recommended for faster processing</p>
+                        </div>
+                        <!-- Submit Button -->
+                        <div class="pt-2 sm:pt-4">
+                            <button
+                                class="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-3.5 bg-primary text-white font-bold rounded-lg hover:bg-blue-800 transition-colors shadow-md sm:shadow-lg active:transform active:scale-[0.98] text-sm sm:text-base flex items-center justify-center gap-2"
+                                type="submit" style="">
+                                <span class="material-symbols-outlined text-[18px] sm:text-[20px]">send</span>
+                                Submit Request
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                    <!-- My Requests Section -->
+                    <div class="mt-8 sm:mt-12">
+                        <h2 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-3 sm:mb-4">My Requests</h2>
+                        
+                        <div class="space-y-2 sm:space-y-3">
+                            
+                            <div class="bg-white dark:bg-[#1a2235] rounded-lg border border-gray-100 dark:border-gray-700 p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
+                                <div class="min-w-0 flex-1">
+                                    <p class="font-bold text-gray-900 dark:text-white text-sm sm:text-base truncate">The Pragmatic Programmer</p>
+                                    <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">David Thomas &middot; Oct 05, 2026</p>
+                                    
+                                </div>
+                                <span class="text-[11px] sm:text-xs font-bold px-2.5 sm:px-3 py-1 rounded-full shrink-0 self-start sm:self-auto whitespace-nowrap
+                                    bg-gray-100 text-gray-700">
+                                    Pending
+                                </span>
+                            </div>
+                            
+                        </div>
+                        
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+    (function() {
+        var openBtn = document.getElementById('mobile-sidebar-open');
+        var closeBtn = document.getElementById('mobile-sidebar-close');
+        var drawer = document.getElementById('mobile-sidebar');
+        var backdrop = document.getElementById('mobile-sidebar-backdrop');
+        function open() { if (drawer) { drawer.classList.remove('hidden'); document.body.style.overflow = 'hidden'; } }
+        function close() { if (drawer) { drawer.classList.add('hidden'); document.body.style.overflow = ''; } }
+        if (openBtn) openBtn.addEventListener('click', open);
+        if (closeBtn) closeBtn.addEventListener('click', close);
+        if (backdrop) backdrop.addEventListener('click', close);
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && drawer && !drawer.classList.contains('hidden')) close(); });
+    })();
+    </script>
+    <script src="/static/js/autosuggest.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Select Your Role</title>
+    <link rel="icon" type="image/jpeg" href="/static/images/Library_Logo.jpg">
+    <link rel="apple-touch-icon" href="/static/images/Library_Logo.jpg">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#1e3a8a",
+                        "background-light": "#f7f7f7",
+                        "background-dark": "#0f172a"
+                    },
+                    fontFamily: {
+                        display: "Manrope"
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.125rem",
+                        lg: "0.25rem",
+                        xl: "0.5rem",
+                        full: "0.75rem"
+                    }
+                }
+            }
+        };
+    </script>
+    
+</head>
+<body class="bg-background-light dark:bg-background-dark text-[#0f172a] dark:text-gray-100 font-display min-h-screen flex flex-col">
+    <header class="sticky top-0 z-50 border-b border-solid border-b-[#e7ebf3] dark:border-gray-800 bg-white dark:bg-[#151c2b] shadow-sm">
+    <div class="flex items-center justify-between px-4 sm:px-6 lg:px-10 py-3">
+        <a href="/" class="flex items-center gap-3 text-[#0f172a] dark:text-white min-w-0">
+            <img src="/static/images/Library_Logo.jpg" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover shrink-0">
+            <h2 class="text-[#0f172a] dark:text-white text-lg sm:text-xl font-bold leading-tight tracking-[-0.015em] truncate">MCST Library</h2>
+        </a>
+        <div class="flex items-center gap-2 sm:gap-8">
+            <nav class="hidden md:flex items-center gap-6 lg:gap-9">
+                <a class="text-[#0f172a] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none " href="/">Home</a>
+                <a class="text-[#0f172a] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none " href="/catalog">Catalog</a>
+                
+                <a class="text-[#0f172a] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none " href="/login">Login</a>
+                
+            </nav>
+            <button id="mobile-menu-btn" type="button" aria-label="Toggle menu" aria-expanded="false" class="md:hidden inline-flex items-center justify-center p-2 rounded-lg text-[#0f172a] dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                <span class="material-symbols-outlined" id="mobile-menu-icon">menu</span>
+            </button>
+        </div>
+    </div>
+    <!-- Mobile menu -->
+    <div id="mobile-menu" class="hidden md:hidden border-t border-[#e7ebf3] dark:border-gray-800 bg-white dark:bg-[#151c2b] px-4 sm:px-6 py-3">
+        <nav class="flex flex-col gap-1">
+            <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-[#0f172a] dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-800" href="/">
+                <span class="material-symbols-outlined text-[20px]">home</span> Home
+            </a>
+            <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-[#0f172a] dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-800" href="/catalog">
+                <span class="material-symbols-outlined text-[20px]">menu_book</span> Catalog
+            </a>
+            
+            <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-[#0f172a] dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-800" href="/login">
+                <span class="material-symbols-outlined text-[20px]">login</span> Login
+            </a>
+            
+        </nav>
+    </div>
+</header>
+<script>
+(function() {
+    var btn = document.getElementById('mobile-menu-btn');
+    var menu = document.getElementById('mobile-menu');
+    var icon = document.getElementById('mobile-menu-icon');
+    if (!btn || !menu) return;
+    btn.addEventListener('click', function() {
+        var isHidden = menu.classList.contains('hidden');
+        menu.classList.toggle('hidden');
+        btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+        if (icon) icon.textContent = isHidden ? 'close' : 'menu';
+    });
+    document.addEventListener('click', function(e) {
+        if (!menu.classList.contains('hidden') && !menu.contains(e.target) && !btn.contains(e.target)) {
+            menu.classList.add('hidden');
+            btn.setAttribute('aria-expanded', 'false');
+            if (icon) icon.textContent = 'menu';
+        }
+    });
+})();
+</script>
+
+    <main class="flex-grow">
+        
+        
+<main class="flex-grow flex items-center justify-center px-6 py-12">
+    <div class="w-full max-w-lg">
+        
+        
+        
+        <div class="bg-white dark:bg-slate-900 shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden p-8 md:p-10">
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-primary/10 dark:bg-primary/20 rounded-xl mb-6">
+                    <span class="material-icons text-primary text-4xl">how_to_reg</span>
+                </div>
+                <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Complete Your Registration</h1>
+                <p class="mt-2 text-slate-500 dark:text-slate-400 font-medium">Select your role to continue</p>
+            </div>
+            <form method="POST" action="/login/role-select" class="space-y-6" data-exists-student>
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">I am a...</label>
+                    <div class="grid grid-cols-2 gap-4">
+                        <label class="relative flex flex-col items-center gap-2 p-5 border-2 rounded-xl cursor-pointer transition-all duration-200
+                            border-slate-200 dark:border-slate-700 hover:border-primary/50 dark:hover:border-primary/50
+                            has-[:checked]:border-primary has-[:checked]:bg-primary/5 dark:has-[:checked]:bg-primary/10">
+                            <input type="radio" name="role" value="Student" class="sr-only peer" required>
+                            <span class="material-icons text-3xl text-slate-400 peer-checked:text-primary">school</span>
+                            <span class="text-sm font-semibold text-slate-700 dark:text-slate-300 peer-checked:text-primary">Student</span>
+                            <span class="text-xs text-slate-400 text-center">Auto-approved. Up to 3 books.</span>
+                        </label>
+                        <label class="relative flex flex-col items-center gap-2 p-5 border-2 rounded-xl cursor-pointer transition-all duration-200
+                            border-slate-200 dark:border-slate-700 hover:border-primary/50 dark:hover:border-primary/50
+                            has-[:checked]:border-primary has-[:checked]:bg-primary/5 dark:has-[:checked]:bg-primary/10">
+                            <input type="radio" name="role" value="Faculty" class="sr-only peer" required checked>
+                            <span class="material-icons text-3xl text-slate-400 peer-checked:text-primary">badge</span>
+                            <span class="text-sm font-semibold text-slate-700 dark:text-slate-300 peer-checked:text-primary">Faculty</span>
+                            <span class="text-xs text-slate-400 text-center">Requires librarian approval.</span>
+                        </label>
+                    </div>
+                </div>
+                <div>
+                    <label for="id_number" class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">ID Number</label>
+                    <input type="text" id="id_number" name="id_number" required maxlength="10"
+                           class="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors text-sm"
+                           placeholder="e.g. 123456789" pattern="[0-9]{9}" title="Faculty format: 000000000 (e.g. 123456789)">
+                    <p id="id-hint" class="mt-2 text-xs text-slate-500 dark:text-slate-400">Faculty ID format: 000000000 (e.g. 123456789)</p>
+                    <p data-exists-msg class="hidden mt-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm font-medium text-red-700 dark:text-red-300"></p>
+                </div>
+                <div id="program-wrap" class="hidden">
+                    <label for="program" class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Program</label>
+                    <select id="program" name="department"
+                            class="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors text-sm">
+                        <option value="">— Select your program —</option>
+                        
+                        <option value="College of Computing">College of Computing</option>
+                        
+                        <option value="College of Engineering">College of Engineering</option>
+                        
+                    </select>
+                    
+                </div>
+                <div id="department-wrap" class="">
+                    <label for="department" class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Department</label>
+                    <select id="department" name="department"
+                            class="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors text-sm">
+                        <option value="">— Select your department —</option>
+                        
+                        <option value="College of Computing">College of Computing</option>
+                        
+                        <option value="College of Engineering">College of Engineering</option>
+                        
+                    </select>
+                    
+                </div>
+                <noscript>
+                    <p class="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm font-medium text-amber-700 dark:text-amber-300">Please enable JavaScript to select your program or department and complete registration.</p>
+                </noscript>
+                <button type="submit"
+                        class="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:opacity-90 transition-opacity">
+                    Continue
+                </button>
+            </form>
+        </div>
+    </div>
+</main>
+
+    </main>
+
+    <footer class="bg-white dark:bg-[#151c2b] border-t border-[#e7ebf3] dark:border-gray-800 py-6 px-4 sm:px-6 lg:px-10">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+        <p class="text-sm text-gray-500 dark:text-gray-400">&copy; 2026 MCST Library. All rights reserved.</p>
+        <div class="flex items-center gap-6">
+            <a href="/" class="text-sm text-gray-500 dark:text-gray-400 hover:text-primary transition-colors">Home</a>
+            <a href="/catalog" class="text-sm text-gray-500 dark:text-gray-400 hover:text-primary transition-colors">Catalog</a>
+        </div>
+    </div>
+</footer>
+
+    
+<script src="/static/js/autosuggest.js"></script>
+<script>
+(function () {
+    var programWrap = document.getElementById('program-wrap');
+    var deptWrap = document.getElementById('department-wrap');
+    var programSel = document.getElementById('program');
+    var deptSel = document.getElementById('department');
+    var idInput = document.getElementById('id_number');
+    var idHint = document.getElementById('id-hint');
+    var FORMATS = {
+        Student: {placeholder: 'e.g. 2024-00123', pattern: '\\d{4}-\\d{5}', title: 'Faculty format: 000000000 (e.g. 123456789)', hint: 'Student ID format: 0000-00000 (e.g. 2024-00123)', maxlength: 10},
+        Faculty: {placeholder: 'e.g. 123456789', pattern: '[0-9]{9}', title: 'Faculty format: 000000000 (e.g. 123456789)', hint: 'Faculty ID format: 000000000 (e.g. 123456789)', maxlength: 9}
+    };
+    function sync() {
+        var role = (document.querySelector('input[name="role"]:checked') || {}).value;
+        var showProgram = role === 'Student';
+        var showDept = role === 'Faculty';
+        programWrap.classList.toggle('hidden', !showProgram);
+        deptWrap.classList.toggle('hidden', !showDept);
+        programSel.disabled = !showProgram;
+        deptSel.disabled = !showDept;
+        programSel.required = showProgram;
+        deptSel.required = showDept;
+        if (FORMATS[role] && idInput) {
+            idInput.placeholder = FORMATS[role].placeholder;
+            idInput.pattern = FORMATS[role].pattern;
+            idInput.title = FORMATS[role].title;
+            idInput.maxLength = FORMATS[role].maxlength;
+            if (idInput.value.length > FORMATS[role].maxlength) {
+                idInput.value = idInput.value.slice(0, FORMATS[role].maxlength);
+            }
+            if (idHint) idHint.textContent = FORMATS[role].hint;
+        }
+    }
+    if (idInput) {
+        idInput.addEventListener('input', function () {
+            var role = (document.querySelector('input[name="role"]:checked') || {}).value;
+            if (role === 'Faculty') {
+                var pos = idInput.selectionStart;
+                idInput.value = idInput.value.toUpperCase();
+                try { idInput.setSelectionRange(pos, pos); } catch (e) {}
+            }
+        });
+    }
+    document.querySelectorAll('input[name="role"]').forEach(function (r) {
+        r.addEventListener('change', sync);
+    });
+    sync();
+})();
+</script>
+
+</body>
+</html>

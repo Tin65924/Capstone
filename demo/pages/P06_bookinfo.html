@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Introduction to Data Science - Book Detail</title>
+<link rel="icon" type="image/jpeg" href="/static/images/Library_Logo.jpg">
+<link rel="apple-touch-icon" href="/static/images/Library_Logo.jpg">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+    tailwind.config = {
+        darkMode: "class",
+        theme: {
+            extend: {
+                colors: {
+                    primary: "#1e3a8a",
+                    "background-light": "#f7f7f7",
+                    "background-dark": "#0f172a"
+                },
+                fontFamily: {
+                    display: "Manrope"
+                },
+                borderRadius: {
+                    DEFAULT: "0.125rem",
+                    lg: "0.25rem",
+                    xl: "0.5rem",
+                    full: "0.75rem"
+                }
+            }
+        }
+    };
+</script>
+<style type="text/tailwindcss">
+    @layer base {
+        body { @apply font-display bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100; }
+    }
+    .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+</style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+<header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <a href="/" class="flex items-center gap-2">
+            <img src="/static/images/Library_Logo.jpg" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
+            <h1 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white">MCST <span class="text-primary">Library</span></h1>
+        </a>
+        <nav class="hidden md:flex items-center gap-6">
+            <a class="text-sm font-medium text-slate-500 hover:text-primary transition-colors" href="/">Home</a>
+            <a class="text-sm font-medium text-primary border-b-2 border-primary pb-1" href="/catalog">Catalog</a>
+            <a class="text-sm font-medium text-slate-500 hover:text-primary transition-colors flex items-center gap-1.5"
+               href="/login">
+                <span>Profile</span>
+            </a>
+        </nav>
+        <button id="bookinfo-mobile-menu-btn" type="button" class="md:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+            <span class="material-symbols-outlined">menu</span>
+        </button>
+    </div>
+    <!-- Mobile nav drawer -->
+    <div id="bookinfo-mobile-menu" class="hidden md:hidden fixed inset-0 z-50">
+        <div id="bookinfo-mobile-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+        <div class="absolute top-0 right-0 h-full w-[75%] max-w-[280px] bg-white dark:bg-slate-900 shadow-2xl p-6 flex flex-col">
+            <div class="flex items-center justify-between mb-6">
+                <span class="font-bold text-slate-800 dark:text-white">Menu</span>
+                <button id="bookinfo-mobile-close" type="button" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <nav class="flex flex-col gap-1">
+                <a class="px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300" href="/">Home</a>
+                <a class="px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300" href="/catalog">Catalog</a>
+                <a class="px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300" href="/login">Profile</a>
+            </nav>
+        </div>
+    </div>
+</header>
+
+<main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+    
+    
+
+    <nav aria-label="Breadcrumb" class="flex mb-6 text-xs font-medium text-slate-500 uppercase tracking-wider">
+        <ol class="flex items-center space-x-2">
+            <li><a class="hover:text-primary" href="/catalog">Catalog</a></li>
+            <li><span class="material-icons text-xs">chevron_right</span></li>
+            
+            <li><a class="hover:text-primary" href="/catalog?q=Science&amp;field=category">Science</a></li>
+            <li><span class="material-icons text-xs">chevron_right</span></li>
+            
+            <li class="text-slate-900 dark:text-slate-100">Book Details</li>
+        </ol>
+    </nav>
+
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 sm:p-6 lg:p-8 mb-6 sm:mb-8">
+        <div class="flex flex-col lg:flex-row justify-between items-start gap-4 sm:gap-6">
+            <div class="flex-grow min-w-0">
+                <div class="flex items-start gap-3 sm:gap-4 mb-2">
+                    <h2 class="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 dark:text-white leading-tight break-words">
+                        Introduction to Data Science
+                    </h2>
+                </div>
+                <p class="text-sm sm:text-lg text-slate-600 dark:text-slate-400 font-medium break-words">Jane Doe</p>
+            </div>
+            <div class="flex flex-col items-stretch sm:items-end gap-3 sm:gap-4 w-full lg:w-auto lg:min-w-[240px]">
+                
+                <span class="inline-flex justify-center bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 sm:px-4 py-2 rounded font-bold uppercase tracking-wider text-[11px] sm:text-xs items-center gap-2 border border-green-200 dark:border-green-800">
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                    Available in Library
+                </span>
+                
+            </div>
+        </div>
+
+        <hr class="my-8 border-slate-100 dark:border-slate-800">
+
+        <div class="space-y-8">
+            <div>
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Description</h3>
+                <p class="text-slate-700 dark:text-slate-300 leading-relaxed text-sm max-w-4xl">
+                    A friendly introduction to data science for beginners.
+                </p>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6">
+                
+                <div>
+                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Copyright Year</h4>
+                    <p class="text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-100">2023</p>
+                </div>
+                
+                <div>
+                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Edition</h4>
+                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">Tech Press</p>
+                </div>
+                <div>
+                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Publisher</h4>
+                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">1st Edition</p>
+                </div>
+                <div>
+                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">ISBN</h4>
+                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">9780000000001</p>
+                </div>
+                <div>
+                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Material Type</h4>
+                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">Book</p>
+                </div>
+                <div>
+                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">LOC Classification</h4>
+                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">English</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-8 sm:mt-12">
+        <h3 class="text-base sm:text-lg font-bold text-slate-800 dark:text-white mb-4 sm:mb-6 flex items-center gap-2">
+            <span class="material-icons text-slate-400">layers</span>
+            Availability
+        </h3>
+        
+        
+            
+        
+        
+        
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div class="min-w-0">
+                
+                <p class="text-sm font-bold text-slate-900 dark:text-slate-100">1 of 1 copy available</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">A copy is ready — you can borrow it now.</p>
+                
+            </div>
+            <div class="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-end shrink-0">
+                
+                    
+                    <a href="/login?next=/book/1"
+                        class="px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors flex items-center justify-center gap-1">Borrow <span class="material-symbols-outlined text-[18px]">login</span></a>
+                    <button type="button" disabled title="Log in to reserve."
+                        class="px-5 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 text-sm font-bold cursor-not-allowed opacity-60">Reserve</button>
+                    
+                
+            </div>
+        </div>
+    </div>
+</main>
+
+<!-- Borrow Modal -->
+<div id="borrowModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-slate-900/60" onclick="closeBorrowModal()"></div>
+    <div class="relative bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 max-w-[95vw] sm:max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-800">
+            <h3 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white">Borrow Introduction to Data Science</h3>
+            <button onclick="closeBorrowModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        <form method="post" action="/user/borrow" class="p-4 sm:p-6 space-y-4 sm:space-y-5">
+            <input type="hidden" name="book_id" value="1">
+            <input type="hidden" id="borrowAccessionId" name="accession_id" value="">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Choose a borrow type. The due date is computed automatically based on your role.</p>
+            <label class="flex items-start gap-3 p-4 border border-slate-200 dark:border-slate-700 rounded cursor-pointer has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary">
+                <input type="radio" name="borrow_type" value="overnight" checked class="mt-0.5 accent-primary">
+                <span>
+                    <span class="font-bold text-sm text-slate-900 dark:text-white">Overnight</span>
+                    <span class="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">Requires librarian approval. A reservation is placed and you'll be notified when a copy is approved for pickup.</span>
+                </span>
+            </label>
+            <label class="flex items-start gap-3 p-4 border border-slate-200 dark:border-slate-700 rounded cursor-pointer has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary">
+                <input type="radio" name="borrow_type" value="daily_circulation" class="mt-0.5 accent-primary">
+                <span>
+                    <span class="font-bold text-sm text-slate-900 dark:text-white">In-Library (Daily Circulation)</span>
+                    <span class="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">Same-day loan, 8:00 AM&ndash;5:00 PM (~9 hours), for any role. Checked out immediately at the desk.</span>
+                </span>
+            </label>
+            <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded font-bold text-sm transition-all flex items-center justify-center gap-2">
+                Submit Request <span class="material-symbols-outlined text-lg">check_circle</span>
+            </button>
+        </form>
+    </div>
+</div>
+
+<footer class="mt-auto py-8 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 bg-slate-200 dark:bg-slate-800 rounded flex items-center justify-center text-slate-600 dark:text-slate-400">
+                    <span class="material-icons text-sm">account_balance</span>
+                </div>
+                <p class="text-sm text-slate-500 font-medium">© 2024 University Academic Library. All Rights Reserved.</p>
+            </div>
+            <nav class="flex items-center gap-6">
+                <a class="text-xs text-slate-400 hover:text-primary" href="#">Terms of Use</a>
+                <a class="text-xs text-slate-400 hover:text-primary" href="#">Privacy Policy</a>
+                <a class="text-xs text-slate-400 hover:text-primary" href="#">Help Desk</a>
+            </nav>
+        </div>
+    </div>
+</footer>
+
+<script>
+    function openBorrowModal(accessionId) {
+        document.getElementById('borrowAccessionId').value = accessionId || '';
+        document.getElementById('borrowModal').classList.remove('hidden');
+    }
+    function closeBorrowModal() {
+        document.getElementById('borrowModal').classList.add('hidden');
+    }
+
+    // Mobile menu for book details header
+    (function() {
+        var openBtn = document.getElementById('bookinfo-mobile-menu-btn');
+        var closeBtn = document.getElementById('bookinfo-mobile-close');
+        var drawer = document.getElementById('bookinfo-mobile-menu');
+        var backdrop = document.getElementById('bookinfo-mobile-backdrop');
+        function open() { if (drawer) { drawer.classList.remove('hidden'); document.body.style.overflow = 'hidden'; } }
+        function close() { if (drawer) { drawer.classList.add('hidden'); document.body.style.overflow = ''; } }
+        if (openBtn) openBtn.addEventListener('click', open);
+        if (closeBtn) closeBtn.addEventListener('click', close);
+        if (backdrop) backdrop.addEventListener('click', close);
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && drawer && !drawer.classList.contains('hidden')) close(); });
+    })();
+</script>
+
+</body>
+</html>

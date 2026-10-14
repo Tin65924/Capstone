@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Notifications - MCST Library</title>
+    <link rel="icon" type="image/jpeg" href="/static/images/Library_Logo.jpg">
+    <link rel="apple-touch-icon" href="/static/images/Library_Logo.jpg">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = { darkMode: "class", theme: { extend: { colors: { primary: "#1e3a8a", "background-light": "#f7f7f7", "background-dark": "#0f172a" }, fontFamily: { display: "Manrope" } } } };
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-[#0f172a] dark:text-white font-display">
+    <div class="flex h-screen w-full flex-row">
+        <div class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0">
+            <div class="p-6">
+                <div class="flex items-center gap-3 mb-8">
+                    <img src="/static/images/Library_Logo.jpg" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
+                    <h1 class="text-xl font-bold tracking-tight">Profile</h1>
+                </div>
+                <nav class="flex flex-col gap-1 overflow-y-auto pr-2 custom-scrollbar">
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="/">
+                <span class="material-symbols-outlined">home</span>
+                <span class="text-sm">Home</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="/catalog">
+        <span class="material-symbols-outlined">menu_book</span>
+        <span class="text-sm">Catalog</span>
+    </a>
+    <hr class="border-gray-200 dark:border-gray-700 my-1">
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" href="/user/profile">
+        <span class="material-symbols-outlined">Overview</span>
+        <span class="text-sm">Overview</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" href="/user/request-book">
+        <span class="material-symbols-outlined">book_online</span>
+        <span class="text-sm">Request Book</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" href="/user/history">
+        <span class="material-symbols-outlined">history</span>
+        <span class="text-sm">History</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors bg-primary/10 text-primary" href="/user/notifications">
+        <span class="material-symbols-outlined">notifications</span>
+        <span class="text-sm">Notifications</span>
+    </a>
+    
+    
+</nav>
+            </div>
+            <div class="mt-auto p-6 border-t border-[#cfd7e7] dark:border-gray-700">
+                <a href="/logout" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-700 transition-colors">
+                    <span class="material-symbols-outlined text-[18px]">logout</span><span>Log Out</span>
+                </a>
+            </div>
+        </div>
+        <main class="flex-1 h-full overflow-y-auto">
+            <!-- Mobile top bar -->
+            <div class="lg:hidden sticky top-0 z-30 flex items-center gap-2 bg-white dark:bg-[#1a2235] border-b border-[#cfd7e7] dark:border-gray-700 px-4 py-3">
+                <img src="/static/images/Library_Logo.jpg" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover">
+                <span class="font-bold text-sm">Notifications</span>
+            </div>
+            
+    
+
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                    <div>
+                        <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight uppercase">Notifications</h1>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Borrowing, returns, requests, fines, and due-date reminders. (<span data-unread-count>2</span> unread)</p>
+                    </div>
+                    
+                    <form method="POST" action="/user/notifications/read-all?next=/user/notifications" data-notif-read-all>
+                        <button type="submit" class="px-4 py-2 text-sm font-bold text-primary border border-primary rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20">Mark all as read</button>
+                    </form>
+                    
+                </div>
+                <div class="flex flex-col gap-3">
+                    
+                    
+                    <div data-notif-card="701" class="p-4 rounded-xl border bg-white dark:bg-[#1a2235] border-primary/30 shadow-sm flex flex-col sm:flex-row sm:items-center gap-3">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">Due Soon</span>
+                                <span data-notif-dot class="w-2 h-2 rounded-full bg-primary"></span>
+                            </div>
+                            <p class="text-sm font-medium mt-1">Introduction to Data Science is due soon.</p>
+                            <p class="text-xs text-gray-400 mt-1">Oct 04, 2026</p>
+                        </div>
+                        
+                        <form method="POST" action="/user/notifications/701/read?next=/user/notifications" class="shrink-0" data-notif-read="701">
+                            <button type="submit" class="px-3 py-1.5 text-xs font-bold text-primary border border-primary rounded-lg hover:bg-blue-50">Mark as read</button>
+                        </form>
+                        
+                    </div>
+                    
+                    
+                    <div data-notif-card="702" class="p-4 rounded-xl border bg-white dark:bg-[#1a2235] border-primary/30 shadow-sm flex flex-col sm:flex-row sm:items-center gap-3">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">Overdue Reminder</span>
+                                <span data-notif-dot class="w-2 h-2 rounded-full bg-primary"></span>
+                            </div>
+                            <p class="text-sm font-medium mt-1">Clean Code is overdue. Please return it.</p>
+                            <p class="text-xs text-gray-400 mt-1">Oct 05, 2026</p>
+                        </div>
+                        
+                        <form method="POST" action="/user/notifications/702/read?next=/user/notifications" class="shrink-0" data-notif-read="702">
+                            <button type="submit" class="px-3 py-1.5 text-xs font-bold text-primary border border-primary rounded-lg hover:bg-blue-50">Mark as read</button>
+                        </form>
+                        
+                    </div>
+                    
+                </div>
+                <div class="mt-6">
+                    <a href="/user/history" class="text-sm font-bold text-primary hover:underline">View full borrowing &amp; request history →</a>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="/static/js/ajax_ui.js"></script>
+    <script>
+    // Notifications: mark read without reloading (plain POST+redirect
+    // still works with JS off; DOM updates only on confirmed response).
+    (function () {
+        if (!window.AjaxUI) return;
+        var toast = window.AjaxUI.toast, postForm = window.AjaxUI.postForm;
+
+        function setCount(count) {
+            document.querySelectorAll('[data-unread-count]').forEach(function (el) {
+                el.textContent = count;
+            });
+        }
+        function dimCard(id) {
+            var card = document.querySelector('[data-notif-card="' + id + '"]');
+            if (!card) return;
+            card.classList.add('opacity-70');
+            var dot = card.querySelector('[data-notif-dot]');
+            if (dot) dot.remove();
+            var form = card.querySelector('form[data-notif-read]');
+            if (form) form.remove();
+        }
+        document.querySelectorAll('form[data-notif-read]').forEach(function (form) {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                var btn = form.querySelector('button[type="submit"]');
+                if (btn) btn.disabled = true;
+                postForm(form.action, new FormData(form)).then(function (data) {
+                    dimCard(data.read);
+                    setCount(data.unread_count || 0);
+                }).catch(function (err) {
+                    toast(err.message, 'error');
+                    if (btn) btn.disabled = false;
+                });
+            });
+        });
+        document.querySelectorAll('form[data-notif-read-all]').forEach(function (form) {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                var btn = form.querySelector('button[type="submit"]');
+                if (btn) btn.disabled = true;
+                postForm(form.action, new FormData(form)).then(function (data) {
+                    document.querySelectorAll('form[data-notif-read]').forEach(function (f) {
+                        var card = f.closest('[data-notif-card]');
+                        if (card) {
+                            card.classList.add('opacity-70');
+                            var dot = card.querySelector('[data-notif-dot]');
+                            if (dot) dot.remove();
+                        }
+                        f.remove();
+                    });
+                    form.remove();
+                    setCount(data.unread_count || 0);
+                    toast('All notifications marked as read.', 'success');
+                }).catch(function (err) {
+                    toast(err.message, 'error');
+                    if (btn) btn.disabled = false;
+                });
+            });
+        });
+    })();
+    </script>
+</body>
+</html>

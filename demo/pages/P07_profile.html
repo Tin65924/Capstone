@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Member Profile Dashboard</title>
+    <link rel="icon" type="image/jpeg" href="/static/images/Library_Logo.jpg">
+    <link rel="apple-touch-icon" href="/static/images/Library_Logo.jpg">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#1e3a8a",
+                        "background-light": "#f7f7f7",
+                        "background-dark": "#0f172a"
+                    },
+                    fontFamily: {
+                        display: "Manrope"
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.125rem",
+                        lg: "0.25rem",
+                        xl: "0.5rem",
+                        full: "0.75rem"
+                    }
+                }
+            }
+        };
+    </script>
+</head>
+
+<body class="bg-background-light dark:bg-background-dark text-[#0f172a] dark:text-white font-display overflow-hidden">
+    <div class="flex h-screen w-full flex-row">
+        <!-- Sidebar - Desktop -->
+        <div
+            class="hidden lg:flex flex-col w-64 h-full border-r border-[#cfd7e7] dark:border-gray-700 bg-white dark:bg-[#1a2235] shrink-0">
+            <div class="p-6">
+                <div class="flex items-center gap-3 mb-8">
+                    <img src="/static/images/Library_Logo.jpg" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
+                    <h1 class="text-xl font-bold tracking-tight" style="">Profile</h1>
+                </div>
+                <nav class="flex flex-col gap-1 overflow-y-auto pr-2 custom-scrollbar">
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="/">
+                <span class="material-symbols-outlined">home</span>
+                <span class="text-sm">Home</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="/catalog">
+        <span class="material-symbols-outlined">menu_book</span>
+        <span class="text-sm">Catalog</span>
+    </a>
+    <hr class="border-gray-200 dark:border-gray-700 my-1">
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors bg-primary/10 text-primary" href="/user/profile">
+        <span class="material-symbols-outlined">Overview</span>
+        <span class="text-sm">Overview</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" href="/user/request-book">
+        <span class="material-symbols-outlined">book_online</span>
+        <span class="text-sm">Request Book</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" href="/user/history">
+        <span class="material-symbols-outlined">history</span>
+        <span class="text-sm">History</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" href="/user/notifications">
+        <span class="material-symbols-outlined">notifications</span>
+        <span class="text-sm">Notifications</span>
+    </a>
+    
+    
+</nav>
+            </div>
+            <div class="mt-auto p-6 border-t border-[#cfd7e7] dark:border-gray-700">
+                <div class="flex flex-col items-center mb-4">
+                    <h2 class="text-lg font-bold text-center" style="">Maria Santos</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 text-center" style="">Faculty</p>
+                </div>
+                <a href="/logout"
+                    class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-700 transition-colors">
+                    <span class="material-symbols-outlined text-[18px]" style="">logout</span>
+                    <span class="" style="">Log Out</span>
+                </a>
+            </div>
+        </div>
+        <!-- Mobile sidebar drawer -->
+        <div id="mobile-sidebar" class="fixed inset-0 z-50 hidden lg:hidden">
+            <div id="mobile-sidebar-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+            <div class="absolute top-0 left-0 h-full w-[80%] max-w-[280px] bg-white dark:bg-[#1a2235] shadow-2xl flex flex-col overflow-hidden">
+                <div class="p-4 flex items-center justify-between border-b border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                    <div class="flex items-center gap-3">
+                        <img src="/static/images/Library_Logo.jpg" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover">
+                        <h1 class="text-lg font-bold">Profile</h1>
+                    </div>
+                    <button id="mobile-sidebar-close" type="button" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">close</span></button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-6">
+                    <nav class="flex flex-col gap-1 overflow-y-auto pr-2 custom-scrollbar">
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="/">
+                <span class="material-symbols-outlined">home</span>
+                <span class="text-sm">Home</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="/catalog">
+        <span class="material-symbols-outlined">menu_book</span>
+        <span class="text-sm">Catalog</span>
+    </a>
+    <hr class="border-gray-200 dark:border-gray-700 my-1">
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors bg-primary/10 text-primary" href="/user/profile">
+        <span class="material-symbols-outlined">Overview</span>
+        <span class="text-sm">Overview</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" href="/user/request-book">
+        <span class="material-symbols-outlined">book_online</span>
+        <span class="text-sm">Request Book</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" href="/user/history">
+        <span class="material-symbols-outlined">history</span>
+        <span class="text-sm">History</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" href="/user/notifications">
+        <span class="material-symbols-outlined">notifications</span>
+        <span class="text-sm">Notifications</span>
+    </a>
+    
+    
+</nav>
+                </div>
+                <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                    <div class="flex flex-col items-center mb-4">
+                        <h2 class="text-base font-bold text-center">Maria Santos</h2>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 text-center">Faculty</p>
+                    </div>
+                    <a href="/logout" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-700 transition-colors">
+                        <span class="material-symbols-outlined text-[18px]">logout</span> Log Out
+                    </a>
+                </div>
+            </div>
+        </div>
+        <!-- Main Content -->
+        <main class="flex-1 h-full overflow-y-auto bg-background-light dark:bg-background-dark">
+            <!-- Mobile top bar -->
+            <div class="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-[#1a2235] border-b border-[#cfd7e7] dark:border-gray-700 px-4 py-3">
+                <button id="mobile-sidebar-open" type="button" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">menu</span></button>
+                <div class="flex items-center gap-2">
+                    <img src="/static/images/Library_Logo.jpg" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover">
+                    <span class="font-bold text-sm">MCST Library</span>
+                </div>
+                <button type="button" onclick="openNotificationsModal()" class="relative p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                    <span class="material-symbols-outlined text-[20px]">notifications</span>
+                    
+                    <span data-unread-badge class="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">2</span>
+                </button>
+            </div>
+            
+    
+
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+                <!-- Header / Greeting -->
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 sm:mb-8">
+                    <div class="min-w-0">
+                        <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white leading-tight" style="">Welcome back, Maria</h1>
+                        <p class="text-sm sm:text-base text-gray-500 dark:text-gray-400 mt-1" style="">Here's what's happening with your
+                            library account today.</p>
+                    </div>
+                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full lg:w-auto">
+                        <button type="button" onclick="openNotificationsModal()"
+                            class="relative justify-center px-4 sm:px-4 py-2.5 text-xs sm:text-sm font-bold text-white bg-gray-700 hover:bg-gray-800 rounded-full transition-all shadow-sm flex items-center gap-2 w-full sm:w-auto"
+                            style="">
+                            <span class="material-symbols-outlined text-[18px] sm:text-[20px]" style="">notifications</span>
+                            <span class="" style="">Notifications</span>
+                            
+                            
+                            <span data-unread-badge
+                                class="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">2</span>
+                            
+                        </button>
+                        <a href="/catalog"
+                            class="justify-center px-4 sm:px-6 py-2.5 text-xs sm:text-sm font-bold text-white bg-primary rounded-full hover:bg-blue-800 transition-all shadow-sm flex items-center gap-2 w-full sm:w-auto"
+                            style="">
+                            <span class="material-symbols-outlined text-[18px] sm:text-[20px]" style="">search_check</span>
+                            <span class="" style="">Browse Catalog</span>
+                        </a>
+                        <a href="https://docs.google.com/forms/d/e/1FAIpQLSc0vbO3CnrIk6iheC7Dz_IU3_EhMDXmiKxYWKF8oqUiPNL9xQ/viewform" target="_blank" rel="noopener"
+                            class="justify-center px-4 sm:px-6 py-2.5 text-xs sm:text-sm font-bold text-white bg-emerald-600 rounded-full hover:bg-emerald-700 transition-all shadow-sm flex items-center gap-2 w-full sm:w-auto">
+                            <span class="material-symbols-outlined text-[18px] sm:text-[20px]">assignment</span>
+                            <span>SURVEY</span>
+                        </a>
+                    </div>
+                </div>
+                <!-- Profile Information -->
+                <section class="bg-white dark:bg-[#1a2235] rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 sm:p-6 mb-6 sm:mb-8">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="min-w-0">
+                            <h2 class="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">Profile Information</h2>
+                            <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Update your contact details. Your student ID cannot be changed here.</p>
+                        </div>
+                        <button type="button" onclick="openProfileModal()"
+                            class="shrink-0 px-4 py-2 text-sm font-bold text-primary border border-primary rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all">Edit Profile</button>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-4 text-sm">
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-wider text-gray-400">Full Name</p>
+                            <p class="font-semibold text-gray-900 dark:text-white truncate">Maria Santos</p>
+                        </div>
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-wider text-gray-400">Student / ID Number</p>
+                            <p class="font-semibold text-gray-900 dark:text-white truncate">123456789</p>
+                        </div>
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-wider text-gray-400">Program / Department</p>
+                            <p class="font-semibold text-gray-900 dark:text-white truncate">College of Engineering</p>
+                        </div>
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-wider text-gray-400">Phone Number</p>
+                            <p class="font-semibold text-gray-900 dark:text-white truncate">09171234567</p>
+                        </div>
+                    </div>
+                    
+                </section>
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+                    <div
+                        class="bg-white dark:bg-[#1a2235] rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col justify-between h-28 sm:h-32 relative overflow-hidden group">
+                        <div class="absolute right-0 top-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <span class="material-symbols-outlined text-8xl text-primary" style="">menu_book</span>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium text-gray-500 dark:text-gray-400" style="">Books Borrowed</p>
+                            <h3 class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mt-1" style="">2</h3>
+                        </div>
+                        <div class="flex items-center text-sm text-green-600 dark:text-green-400 font-medium">
+                            <span class="material-symbols-outlined text-base mr-1" style="">check_circle</span>
+                            <span class="" style="">Within limit (2/5 books)</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white dark:bg-[#1a2235] rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col justify-between h-28 sm:h-32 relative overflow-hidden group">
+                        <div class="absolute right-0 top-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <span class="material-symbols-outlined text-8xl text-red-500" style="">warning</span>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium text-gray-500 dark:text-gray-400" style="">Overdue Books</p>
+                            <h3 class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mt-1" style="">1</h3>
+                        </div>
+                        <div class="flex items-center text-sm text-red-600 dark:text-red-400 font-medium">
+                            <span class="material-symbols-outlined text-base mr-1" style="">priority_high</span>
+                            <span class="" style="">Action required</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white dark:bg-[#1a2235] rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col justify-between h-28 sm:h-32 relative overflow-hidden group">
+                        <div class="absolute right-0 top-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <span class="material-symbols-outlined text-8xl text-green-500" style="">bookmark</span>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium text-gray-500 dark:text-gray-400" style="">Reservations Ready
+                            </p>
+                            <h3 class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mt-1" style="">1</h3>
+                        </div>
+                        <div class="flex items-center text-sm text-blue-600 dark:text-blue-400 font-medium">
+                            <span class="material-symbols-outlined text-base mr-1" style="">check_circle</span>
+                            <span class="" style="">Ready for pickup</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+                    <!-- Left Column: Current Borrowings & Ready for Pickup -->
+                    <div class="lg:col-span-2 flex flex-col gap-6 sm:gap-8">
+                        <!-- Current Borrowings List -->
+                        <section>
+                            <div class="flex items-center justify-between mb-3 sm:mb-4">
+                                <h2 class="text-lg sm:text-xl font-bold text-gray-900 dark:text-white" style="">Current Borrowings
+                                </h2>
+                                <a class="text-xs sm:text-sm font-medium text-primary hover:text-blue-700" href="/user/history" style="">View
+                                    All History</a>
+                            </div>
+                            <div class="flex flex-col gap-3 sm:gap-4">
+                                
+                                
+                                <div
+                                    class="bg-white dark:bg-[#1a2235] p-4 sm:p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 ">
+                                    
+                                    <div class="flex-1 flex flex-col justify-center">
+                                        <div class="flex justify-between items-start">
+                                            <div>
+                                                <h3 class="font-bold text-gray-900 dark:text-white text-sm sm:text-base truncate" style="">
+                                                    Introduction to Data Science</h3>
+                                                <p class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm truncate" style="">Accession:
+                                                    ACC-101 · Due Oct 20, 2026</p>
+                                            </div>
+                                            <span
+                                                class="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs px-2 py-1 rounded font-medium"
+                                                style="">On Time</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <span class="shrink-0 px-4 py-2 text-xs font-bold text-gray-400 border border-gray-200 rounded-lg bg-gray-50 dark:bg-gray-800/50 dark:border-gray-700">Return at desk</span>
+                                    
+                                </div>
+                                
+                                
+                                <div
+                                    class="bg-white dark:bg-[#1a2235] p-4 sm:p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 relative overflow-hidden">
+                                    
+                                    <div class="absolute left-0 top-0 bottom-0 w-1 bg-red-500"></div>
+                                    
+                                    <div class="flex-1 flex flex-col justify-center">
+                                        <div class="flex justify-between items-start">
+                                            <div>
+                                                <h3 class="font-bold text-gray-900 dark:text-white text-sm sm:text-base truncate" style="">
+                                                    Clean Code</h3>
+                                                <p class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm truncate" style="">Accession:
+                                                    ACC-205 · Due Oct 12, 2026</p>
+                                            </div>
+                                            <span
+                                                class="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs px-2 py-1 rounded font-medium"
+                                                style="">Overdue</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <button type="button"
+                                        data-circulation-id="502"
+                                        data-title="Clean Code"
+                                        data-accession="ACC-205"
+                                        data-due="Oct 12, 2026"
+                                        data-type="daily"
+                                        data-status="overdue"
+                                        onclick="openBorrowingModal(this)"
+                                        class="shrink-0 px-4 py-2 text-sm font-bold text-primary border border-primary rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all">
+                                        View Details
+                                    </button>
+                                    
+                                </div>
+                                
+                            </div>
+                        </section>
+                        <!-- Ready for Pickup Section -->
+                        <section>
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-3 sm:mb-4">
+                                <h2 class="text-lg sm:text-xl font-bold text-gray-900 dark:text-white" style="">Ready for Pickup
+                                </h2>
+                                <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400" style="">Claim reserved book before hold expires.</p>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                
+                                <div
+                                    class="bg-white dark:bg-[#1a2235] p-4 sm:p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
+                                    <div class="flex justify-between items-start mb-3">
+                                        <div>
+                                            <h3 class="font-bold text-gray-900 dark:text-white text-sm sm:text-base truncate" style="">
+                                                Design Patterns</h3>
+                                            <p class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm truncate" style="">Erich Gamma
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div
+                                        class="mt-auto flex items-center justify-between pt-4 border-t border-gray-50 dark:border-gray-800">
+                                        
+                                        <div class="flex items-center gap-2 text-orange-600 dark:text-orange-400">
+                                            <span class="material-symbols-outlined text-[18px]" style="">timer</span>
+                                            <span class="text-xs font-bold uppercase tracking-wide" style="">Claim by
+                                                Oct 18, 2026</span>
+                                        </div>
+                                        
+                                    </div>
+                                </div>
+                                
+                            </div>
+                        </section>
+                    </div>
+                    <!-- Right Column: Current Book Requests -->
+                    <div class="flex flex-col gap-4 sm:gap-6">
+                        <!-- Current Book Borrowing Requests Section -->
+                        <div
+                            class="bg-white dark:bg-[#1a2235] rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                            <div class="p-3 sm:p-4 border-b border-gray-100 dark:border-gray-700">
+                                <h2 class="font-bold text-gray-900 dark:text-white text-base sm:text-lg" style="">Current Book Borrowing Requests</h2>
+                            </div>
+                            <div class="p-3 sm:p-4 flex flex-col gap-3 sm:gap-4 ">
+                                
+                                <div
+                                    class="p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
+                                    <div class="flex justify-between items-start mb-1">
+                                        <h4 class="font-bold text-sm text-gray-900 dark:text-white leading-tight"
+                                            style="">Design Patterns</h4>
+                                        <span
+                                            class="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider"
+                                            style="">Allocated</span>
+                                    </div>
+                                    <p class="text-xs text-gray-500" style="">Erich Gamma · Queue #3</p>
+                                </div>
+                                
+                                
+                            </div>
+                        </div>
+                        <!-- Current Book Procurement Requests Section -->
+                        <div
+                            class="bg-white dark:bg-[#1a2235] rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                            <div class="p-3 sm:p-4 border-b border-gray-100 dark:border-gray-700">
+                                <h2 class="font-bold text-gray-900 dark:text-white text-base sm:text-lg" style="">Current Book Procurement Requests</h2>
+                            </div>
+                            <div class="p-3 sm:p-4 flex flex-col gap-3 sm:gap-4 ">
+                                
+                                <div
+                                    class="p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
+                                    <div class="flex justify-between items-start mb-1">
+                                        <h4 class="font-bold text-sm text-gray-900 dark:text-white leading-tight"
+                                            style="">The Pragmatic Programmer</h4>
+                                        <span
+                                            class="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider"
+                                            style="">Pending</span>
+                                    </div>
+                                    <p class="text-xs text-gray-500" style="">David Thomas</p>
+                                </div>
+                                
+                                
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Notifications Modal -->
+    <div id="notificationsModal"
+        class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4">
+        <div class="bg-white dark:bg-[#1a2235] rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col">
+            <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-700">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white">Notifications</h2>
+                <div class="flex items-center gap-2">
+                    <a href="/user/notifications" class="text-xs font-bold text-primary hover:underline">View all</a>
+                    <button type="button" onclick="closeNotificationsModal()"
+                        class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+            </div>
+            <div class="px-5 pt-3">
+                
+                <form method="POST" action="/user/notifications/read-all?next=/user/profile" data-notif-read-all>
+                    <button type="submit" class="text-xs font-bold text-primary hover:underline">Mark all as read</button>
+                </form>
+                
+            </div>
+            <div class="overflow-y-auto p-5 flex flex-col gap-3">
+                
+                
+                <div data-notif-card="701"
+                    class="p-4 rounded-lg border bg-gray-50 dark:bg-gray-800/50 border-gray-100 dark:border-gray-700">
+                    <div class="flex justify-between items-start gap-2">
+                        <p class="text-sm text-gray-700 dark:text-gray-200 font-medium">Introduction to Data Science is due soon.</p>
+                        <span
+                            class="shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">Due Soon</span>
+                    </div>
+                    <div class="flex items-center justify-between mt-1">
+                        <p class="text-xs text-gray-400">Oct 04, 2026</p>
+                        
+                        <form method="POST" action="/user/notifications/701/read?next=/user/profile" data-notif-read="701">
+                            <button type="submit" class="text-[11px] font-bold text-primary hover:underline">Mark as read</button>
+                        </form>
+                        
+                    </div>
+                </div>
+                
+                
+                <div data-notif-card="702"
+                    class="p-4 rounded-lg border bg-gray-50 dark:bg-gray-800/50 border-gray-100 dark:border-gray-700">
+                    <div class="flex justify-between items-start gap-2">
+                        <p class="text-sm text-gray-700 dark:text-gray-200 font-medium">Clean Code is overdue. Please return it.</p>
+                        <span
+                            class="shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">Overdue Reminder</span>
+                    </div>
+                    <div class="flex items-center justify-between mt-1">
+                        <p class="text-xs text-gray-400">Oct 05, 2026</p>
+                        
+                        <form method="POST" action="/user/notifications/702/read?next=/user/profile" data-notif-read="702">
+                            <button type="submit" class="text-[11px] font-bold text-primary hover:underline">Mark as read</button>
+                        </form>
+                        
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+
+    <!-- Borrowing Details Modal -->
+    <div id="borrowingModal"
+        class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4">
+        <div class="bg-white dark:bg-[#1a2235] rounded-2xl shadow-2xl max-w-md w-full">
+            <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-700">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white">Book Details</h2>
+                <button type="button" onclick="closeBorrowingModal()"
+                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="p-5 flex flex-col gap-3">
+                <h3 id="borrowTitle" class="text-xl font-bold text-gray-900 dark:text-white"></h3>
+                <p id="borrowAccession" class="text-sm text-gray-500 dark:text-gray-400"></p>
+                <p id="borrowDue" class="text-sm text-gray-500 dark:text-gray-400"></p>
+                <p id="borrowType" class="text-sm text-gray-500 dark:text-gray-400"></p>
+                <p id="borrowStatus" class="text-sm text-gray-500 dark:text-gray-400"></p>
+                <p id="borrowOvernightMsg" class="hidden text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">Overnight books must be returned at the circulation desk for inspection.</p>
+                <form id="borrowReturnForm" method="POST" action="/user/return" class="mt-2">
+                    <input type="hidden" name="circulation_id" id="borrowCirculationId" value="">
+                    <button type="submit"
+                        class="w-full px-4 py-2.5 text-sm font-bold text-white bg-primary rounded-lg hover:bg-blue-800 transition-all">
+                        Return Book
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Profile Modal -->
+    <div id="profileModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4">
+        <div class="bg-white dark:bg-[#1a2235] rounded-2xl shadow-2xl max-w-md w-full">
+            <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-700">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white">Edit Profile</h2>
+                <button type="button" onclick="closeProfileModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <form method="POST" action="/user/profile/update" class="p-5 flex flex-col gap-4">
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1" for="profile-full-name">Full Name</label>
+                    <input id="profile-full-name" name="full_name" type="text" required
+                        value="Maria Santos"
+                        class="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Student / ID Number (locked)</label>
+                    <input type="text" disabled value="123456789"
+                        class="w-full px-3 py-2.5 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-gray-500 cursor-not-allowed">
+                    <p class="text-[11px] text-gray-400 mt-1">Students are not allowed to change their student IDs.</p>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1" for="profile-dept">Department</label>
+                    
+                    
+                    <select id="profile-dept" name="department"
+                        class="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+                        <option value="">— Select —</option>
+                        
+                        <option value="College of Computing" >College of Computing</option>
+                        
+                        <option value="College of Engineering" selected>College of Engineering</option>
+                        
+                        
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1" for="profile-phone">Phone Number</label>
+                    <input id="profile-phone" name="phone_number" type="tel"
+                        value="09171234567"
+                        placeholder="e.g. +63 912 345 6789"
+                        class="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+                </div>
+                <button type="submit" class="w-full px-4 py-2.5 text-sm font-bold text-white bg-primary rounded-lg hover:bg-blue-800 transition-all">Save Changes</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/js/autosuggest.js"></script>
+    <script src="/static/js/ajax_ui.js"></script>
+    <script>
+    // Notifications: mark read without reloading. Plain POST+redirect still
+    // works with JS off; with JS on, the row/badge update only after the
+    // backend confirms (pessimistic AJAX — never painted before commit).
+    (function () {
+        if (!window.AjaxUI) return;
+        var toast = window.AjaxUI.toast, postForm = window.AjaxUI.postForm;
+
+        function setBadges(count) {
+            document.querySelectorAll('[data-unread-badge]').forEach(function (el) {
+                if (count > 0) {
+                    el.textContent = count;
+                } else {
+                    el.remove();
+                }
+            });
+        }
+        function dimCard(id) {
+            var card = document.querySelector('[data-notif-card="' + id + '"]');
+            if (!card) return;
+            card.classList.add('opacity-70');
+            var form = card.querySelector('form[data-notif-read]');
+            if (form) form.remove();
+        }
+        document.querySelectorAll('form[data-notif-read]').forEach(function (form) {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                var btn = form.querySelector('button[type="submit"]');
+                if (btn) btn.disabled = true;
+                postForm(form.action, new FormData(form)).then(function (data) {
+                    dimCard(data.read);
+                    setBadges(data.unread_count || 0);
+                }).catch(function (err) {
+                    toast(err.message, 'error');
+                    if (btn) btn.disabled = false;
+                });
+            });
+        });
+        document.querySelectorAll('form[data-notif-read-all]').forEach(function (form) {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                var btn = form.querySelector('button[type="submit"]');
+                if (btn) btn.disabled = true;
+                postForm(form.action, new FormData(form)).then(function (data) {
+                    document.querySelectorAll('form[data-notif-read]').forEach(function (f) {
+                        var card = f.closest('[data-notif-card]');
+                        if (card) card.classList.add('opacity-70');
+                        f.remove();
+                    });
+                    form.remove();
+                    setBadges(data.unread_count || 0);
+                    toast('All notifications marked as read.', 'success');
+                }).catch(function (err) {
+                    toast(err.message, 'error');
+                    if (btn) btn.disabled = false;
+                });
+            });
+        });
+    })();
+    </script>
+    <script>
+        function openNotificationsModal() {
+            var modal = document.getElementById('notificationsModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+        function closeNotificationsModal() {
+            var modal = document.getElementById('notificationsModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+        function openProfileModal() {
+            var modal = document.getElementById('profileModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+        function closeProfileModal() {
+            var modal = document.getElementById('profileModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+        function openBorrowingModal(btn) {
+            document.getElementById('borrowTitle').textContent = btn.dataset.title;
+            document.getElementById('borrowAccession').textContent = 'Accession: ' + btn.dataset.accession;
+            document.getElementById('borrowDue').textContent = 'Due: ' + btn.dataset.due;
+            document.getElementById('borrowType').textContent = 'Type: ' + btn.dataset.type;
+            document.getElementById('borrowStatus').textContent = 'Status: ' + btn.dataset.status;
+            document.getElementById('borrowCirculationId').value = btn.dataset.circulationId;
+            var isOvernight = btn.dataset.type === 'overnight';
+            document.getElementById('borrowReturnForm').classList.toggle('hidden', isOvernight);
+            document.getElementById('borrowOvernightMsg').classList.toggle('hidden', !isOvernight);
+            var modal = document.getElementById('borrowingModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+        function closeBorrowingModal() {
+            var modal = document.getElementById('borrowingModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+        document.getElementById('notificationsModal').addEventListener('click', function (e) {
+            if (e.target === this) closeNotificationsModal();
+        });
+        document.getElementById('borrowingModal').addEventListener('click', function (e) {
+            if (e.target === this) closeBorrowingModal();
+        });
+        var profileModal = document.getElementById('profileModal');
+        if (profileModal) profileModal.addEventListener('click', function (e) {
+            if (e.target === this) closeProfileModal();
+        });
+
+        // Mobile sidebar
+        (function() {
+            var openBtn = document.getElementById('mobile-sidebar-open');
+            var closeBtn = document.getElementById('mobile-sidebar-close');
+            var drawer = document.getElementById('mobile-sidebar');
+            var backdrop = document.getElementById('mobile-sidebar-backdrop');
+            function open() { if (drawer) { drawer.classList.remove('hidden'); document.body.style.overflow = 'hidden'; } }
+            function close() { if (drawer) { drawer.classList.add('hidden'); document.body.style.overflow = ''; } }
+            if (openBtn) openBtn.addEventListener('click', open);
+            if (closeBtn) closeBtn.addEventListener('click', close);
+            if (backdrop) backdrop.addEventListener('click', close);
+            document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && drawer && !drawer.classList.contains('hidden')) close(); });
+        })();
+    </script>
+</body>
+
+</html>

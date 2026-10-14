@@ -527,7 +527,7 @@ def get_audit_logs(limit=50, search=None, tab='all'):
     params.append(limit)
     return db.fetch_all(
         f'''SELECT a.log_id, u.full_name, u.email, r.role_name,
-                   a.activity, a.log_timestamp
+                   a.activity, a.log_timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Manila'
             FROM audit_trail a
             LEFT JOIN user_accounts u ON a.user_id = u.user_id
             LEFT JOIN roles r ON u.role_id = r.role_id

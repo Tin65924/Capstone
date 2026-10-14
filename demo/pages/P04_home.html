@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Public Library Home - New Arrivals</title>
+    <link rel="icon" type="image/jpeg" href="/static/images/Library_Logo.jpg">
+    <link rel="apple-touch-icon" href="/static/images/Library_Logo.jpg">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#1e3a8a",
+                        "background-light": "#f7f7f7",
+                        "background-dark": "#0f172a"
+                    },
+                    fontFamily: {
+                        display: "Manrope"
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.125rem",
+                        lg: "0.25rem",
+                        xl: "0.5rem",
+                        full: "0.75rem"
+                    }
+                }
+            }
+        };
+    </script>
+    
+</head>
+<body class="bg-background-light dark:bg-background-dark text-[#0f172a] dark:text-gray-100 font-display min-h-screen flex flex-col">
+    <header class="sticky top-0 z-50 border-b border-solid border-b-[#e7ebf3] dark:border-gray-800 bg-white dark:bg-[#151c2b] shadow-sm">
+    <div class="flex items-center justify-between px-4 sm:px-6 lg:px-10 py-3">
+        <a href="/" class="flex items-center gap-3 text-[#0f172a] dark:text-white min-w-0">
+            <img src="/static/images/Library_Logo.jpg" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover shrink-0">
+            <h2 class="text-[#0f172a] dark:text-white text-lg sm:text-xl font-bold leading-tight tracking-[-0.015em] truncate">MCST Library</h2>
+        </a>
+        <div class="flex items-center gap-2 sm:gap-8">
+            <nav class="hidden md:flex items-center gap-6 lg:gap-9">
+                <a class="text-[#0f172a] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none text-primary font-bold border-b-2 border-primary pb-1" href="/">Home</a>
+                <a class="text-[#0f172a] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none " href="/catalog">Catalog</a>
+                
+                <a class="text-[#0f172a] dark:text-gray-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-none " href="/login">Login</a>
+                
+            </nav>
+            <button id="mobile-menu-btn" type="button" aria-label="Toggle menu" aria-expanded="false" class="md:hidden inline-flex items-center justify-center p-2 rounded-lg text-[#0f172a] dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                <span class="material-symbols-outlined" id="mobile-menu-icon">menu</span>
+            </button>
+        </div>
+    </div>
+    <!-- Mobile menu -->
+    <div id="mobile-menu" class="hidden md:hidden border-t border-[#e7ebf3] dark:border-gray-800 bg-white dark:bg-[#151c2b] px-4 sm:px-6 py-3">
+        <nav class="flex flex-col gap-1">
+            <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors bg-primary text-white" href="/">
+                <span class="material-symbols-outlined text-[20px]">home</span> Home
+            </a>
+            <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-[#0f172a] dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-800" href="/catalog">
+                <span class="material-symbols-outlined text-[20px]">menu_book</span> Catalog
+            </a>
+            
+            <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-[#0f172a] dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-800" href="/login">
+                <span class="material-symbols-outlined text-[20px]">login</span> Login
+            </a>
+            
+        </nav>
+    </div>
+</header>
+<script>
+(function() {
+    var btn = document.getElementById('mobile-menu-btn');
+    var menu = document.getElementById('mobile-menu');
+    var icon = document.getElementById('mobile-menu-icon');
+    if (!btn || !menu) return;
+    btn.addEventListener('click', function() {
+        var isHidden = menu.classList.contains('hidden');
+        menu.classList.toggle('hidden');
+        btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+        if (icon) icon.textContent = isHidden ? 'close' : 'menu';
+    });
+    document.addEventListener('click', function(e) {
+        if (!menu.classList.contains('hidden') && !menu.contains(e.target) && !btn.contains(e.target)) {
+            menu.classList.add('hidden');
+            btn.setAttribute('aria-expanded', 'false');
+            if (icon) icon.textContent = 'menu';
+        }
+    });
+})();
+</script>
+
+    <main class="flex-grow">
+        
+    
+
+        
+<section class="flex flex-col items-center justify-center py-10 sm:py-14 md:py-16 px-4 sm:px-6 bg-white dark:bg-[#151c2b] border-b border-[#e7ebf3] dark:border-gray-800">
+    <div class="max-w-[800px] w-full flex flex-col items-center text-center">
+        <h1 class="text-[#0f172a] dark:text-white tracking-tight text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight pb-3 sm:pb-4 px-2">
+            Discover Knowledge
+        </h1>
+        <p class="text-gray-500 dark:text-gray-400 text-base sm:text-lg font-normal leading-normal pb-6 sm:pb-8 max-w-2xl px-2">
+            Access thousands of books across our academic network. Start your research journey here.
+        </p>
+        <form method="GET" action="/catalog" class="w-full px-0 sm:px-2">
+            <div class="w-full relative group">
+                <div class="absolute inset-y-0 left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
+                    <span class="material-symbols-outlined text-gray-400 text-[20px] sm:text-[24px]">search</span>
+                </div>
+                <input name="q"
+                    class="block w-full rounded-xl border-0 py-3 sm:py-4 pl-10 sm:pl-12 pr-24 sm:pr-36 text-gray-900 dark:text-white ring-1 ring-inset ring-gray-300 dark:ring-gray-700 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary bg-gray-50 dark:bg-gray-800 text-sm sm:text-lg sm:leading-6 shadow-sm transition-shadow"
+                    placeholder="Search by title, author, or ISBN..." type="text" data-suggest="book_search" autocomplete="off">
+                <div class="absolute inset-y-0 right-0 flex py-1.5 sm:py-2 pr-1.5 sm:pr-2">
+                    <button type="submit"
+                        class="inline-flex items-center justify-center rounded-lg bg-primary px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-sm hover:bg-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 whitespace-nowrap">
+                        Search
+                    </button>
+                </div>
+            </div>
+            <input type="hidden" name="field" id="searchField" value="">
+            <div class="flex gap-2 sm:gap-3 pt-4 sm:pt-6 flex-wrap justify-center px-2" id="filterButtons">
+                <button type="button" data-field=""
+                    class="flex items-center gap-x-1.5 sm:gap-x-2 rounded-full bg-primary/10 dark:bg-primary/20 border border-primary/20 px-3 sm:px-4 py-1.5 transition hover:bg-primary/20">
+                    <span class="material-symbols-outlined text-primary text-[16px] sm:text-[18px]">check</span>
+                    <span class="text-primary text-xs sm:text-sm font-bold">All</span>
+                </button>
+                <button type="button" data-field="title"
+                    class="flex items-center gap-x-1.5 sm:gap-x-2 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-3 sm:px-4 py-1.5 transition">
+                    <span class="text-gray-600 dark:text-gray-300 text-xs sm:text-sm font-medium">Title</span>
+                </button>
+                <button type="button" data-field="author"
+                    class="flex items-center gap-x-1.5 sm:gap-x-2 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-3 sm:px-4 py-1.5 transition">
+                    <span class="text-gray-600 dark:text-gray-300 text-xs sm:text-sm font-medium">Author</span>
+                </button>
+                <button type="button" data-field="isbn"
+                    class="flex items-center gap-x-1.5 sm:gap-x-2 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-3 sm:px-4 py-1.5 transition">
+                    <span class="text-gray-600 dark:text-gray-300 text-xs sm:text-sm font-medium">ISBN</span>
+                </button>
+            </div>
+        </form>
+        <script>
+        document.getElementById('filterButtons').addEventListener('click', function(e) {
+            var btn = e.target.closest('button');
+            if (!btn) return;
+            this.querySelectorAll('button').forEach(function(b) {
+                b.className = 'flex items-center gap-x-1.5 sm:gap-x-2 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-3 sm:px-4 py-1.5 transition';
+                var icon = b.querySelector('.material-symbols-outlined');
+                if (icon) icon.remove();
+                var span = b.querySelector('span:not(.material-symbols-outlined)');
+                if (span) span.className = 'text-gray-600 dark:text-gray-300 text-xs sm:text-sm font-medium';
+            });
+            btn.className = 'flex items-center gap-x-1.5 sm:gap-x-2 rounded-full bg-primary/10 dark:bg-primary/20 border border-primary/20 px-3 sm:px-4 py-1.5 transition hover:bg-primary/20';
+            var check = document.createElement('span');
+            check.className = 'material-symbols-outlined text-primary text-[16px] sm:text-[18px]';
+            check.textContent = 'check';
+            btn.insertBefore(check, btn.firstChild);
+            var span = btn.querySelector('span:not(.material-symbols-outlined)');
+            if (span) span.className = 'text-primary text-xs sm:text-sm font-bold';
+            document.getElementById('searchField').value = btn.getAttribute('data-field');
+        });
+        </script>
+        <script src="/static/js/autosuggest.js"></script>
+    </div>
+</section>
+<main class="flex-grow layout-container w-full max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
+        <div class="lg:col-span-12 flex flex-col gap-4 sm:gap-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#e7ebf3] dark:border-gray-800 pb-3 sm:pb-4">
+                <h3 class="text-xl sm:text-2xl font-bold text-[#0f172a] dark:text-white">New Arrivals</h3>
+                <a class="text-primary text-xs sm:text-sm font-bold hover:underline flex items-center gap-1 self-start sm:self-auto" href="/catalog">
+                    View full catalog <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                </a>
+            </div>
+            <div class="flex flex-col bg-white dark:bg-[#151c2b] rounded-xl border border-[#e7ebf3] dark:border-gray-800 divide-y divide-[#e7ebf3] dark:divide-gray-800 overflow-hidden shadow-sm">
+                
+                    
+                    <a href="/book/1" class="group flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors gap-2">
+                        <div class="flex flex-col gap-0.5 min-w-0 flex-1">
+                            <h4 class="text-base sm:text-lg font-bold text-[#0f172a] dark:text-white group-hover:text-primary group-hover:underline transition-colors truncate sm:whitespace-normal">Introduction to Data Science</h4>
+                            <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">Jane Doe</p>
+                        </div>
+                        <div class="mt-1 sm:mt-0 shrink-0">
+                            
+                            <span class="inline-flex items-center rounded-md bg-green-50 dark:bg-green-900/30 px-2.5 py-1 text-xs font-bold text-green-700 dark:text-green-400 ring-1 ring-inset ring-green-600/20 uppercase tracking-wider">Available</span>
+                            
+                        </div>
+                    </a>
+                    
+                    <a href="/book/2" class="group flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors gap-2">
+                        <div class="flex flex-col gap-0.5 min-w-0 flex-1">
+                            <h4 class="text-base sm:text-lg font-bold text-[#0f172a] dark:text-white group-hover:text-primary group-hover:underline transition-colors truncate sm:whitespace-normal">Clean Code</h4>
+                            <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">Robert Martin</p>
+                        </div>
+                        <div class="mt-1 sm:mt-0 shrink-0">
+                            
+                            <span class="inline-flex items-center rounded-md bg-green-50 dark:bg-green-900/30 px-2.5 py-1 text-xs font-bold text-green-700 dark:text-green-400 ring-1 ring-inset ring-green-600/20 uppercase tracking-wider">Available</span>
+                            
+                        </div>
+                    </a>
+                    
+                
+            </div>
+        </div>
+    </div>
+</main>
+
+    </main>
+
+    <footer class="bg-white dark:bg-[#151c2b] border-t border-[#e7ebf3] dark:border-gray-800 py-6 px-4 sm:px-6 lg:px-10">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+        <p class="text-sm text-gray-500 dark:text-gray-400">&copy; 2026 MCST Library. All rights reserved.</p>
+        <div class="flex items-center gap-6">
+            <a href="/" class="text-sm text-gray-500 dark:text-gray-400 hover:text-primary transition-colors">Home</a>
+            <a href="/catalog" class="text-sm text-gray-500 dark:text-gray-400 hover:text-primary transition-colors">Catalog</a>
+        </div>
+    </div>
+</footer>
+
+    
+</body>
+</html>
