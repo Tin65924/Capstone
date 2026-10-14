@@ -188,10 +188,13 @@ def user_profile():
             pass
 
         role_name = user_data[2] if user_data else ''
-        if role_name == 'Faculty':
-            borrow_limit = current_app.config.get('MAX_BORROW_LIMIT_FACULTY', 5)
-        else:
+        # Only Students get the student limit; Faculty, Admin, and
+        # Librarian all inherit the faculty limit (mirrors
+        # circulation._borrow_limit).
+        if role_name == 'Student':
             borrow_limit = current_app.config.get('MAX_BORROW_LIMIT_STUDENT', 3)
+        else:
+            borrow_limit = current_app.config.get('MAX_BORROW_LIMIT_FACULTY', 5)
 
         try:
             reservations = get_reservations_by_borrower(borrower_id) or []

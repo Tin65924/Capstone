@@ -112,6 +112,8 @@ def _create_reservation_retry(book_id, borrower_id, max_attempts=3):
 
 
 def _borrow_limit(role_name):
+    """Max active loans for a role. Only Students get the student limit;
+    Faculty, Admin, and Librarian all inherit the faculty limit."""
     if role_name == 'Student':
         return current_app.config.get('MAX_BORROW_LIMIT_STUDENT', 3)
     return current_app.config.get('MAX_BORROW_LIMIT_FACULTY', 5)
@@ -164,6 +166,8 @@ def _claim_window():
 
 
 def _compute_due_date(borrow_type, role_name):
+    """Due date for a borrow. Only Students get the student overnight
+    period; Faculty, Admin, and Librarian all inherit the faculty period."""
     if borrow_type == 'daily_circulation':
         days = current_app.config.get('DAILY_CIRCULATION_DUE_DAYS', 0)
         fallback = 0

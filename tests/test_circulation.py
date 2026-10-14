@@ -1431,3 +1431,71 @@ class TestPayFine:
         assert resp.status_code == 200
         assert b'Mark paid' in resp.data
         assert b'/librarian/users/4/fines/55/pay' in resp.data
+
+
+class TestStaffInheritFacultySettings:
+    """Admin/Librarian inherit faculty borrowing settings (max borrows, overnight due)."""
+
+    def test_borrow_limit(self, app):
+        """Validates staff borrow limit equals faculty limit [TestStaffInheritFacultySettings / circulation].
+    If fails: likely _borrow_limit branching changed so Admin/Librarian no longer inherit faculty settings.
+    Failure indicates staff borrowing is capped by the wrong (student) limit."""
+        from app.circulation.routes import _borrow_limit
+        with app.test_request_context():
+            app.config['MAX_BORROW_LIMIT_STUDENT'] = 3
+            app.config['MAX_BORROW_LIMIT_FACULTY'] = 5
+            assert _borrow_limit('Student') == 3
+            assert _borrow_limit('Faculty') == 5
+            assert _borrow_limit('Admin') == 5
+            assert _borrow_limit('Librarian') == 5
+
+    def test_overnight_due_date(self, app):
+        """Validates staff overnight due equals faculty due [TestStaffInheritFacultySettings / circulation].
+    If fails: likely _compute_due_date branching changed so Admin/Librarian no longer inherit faculty due days.
+    Failure indicates staff loans get the wrong (student) loan period."""
+        from app.circulation.routes import _compute_due_date
+        with app.test_request_context():
+            app.config['OVERNIGHT_DUE_DAYS_STUDENT'] = 1
+            app.config['OVERNIGHT_DUE_DAYS_FACULTY'] = 7
+            faculty_due = _compute_due_date('overnight', 'Faculty')
+            assert _compute_due_date('overnight', 'Admin') == faculty_due
+            assert _compute_due_date('overnight', 'Librarian') == faculty_due
+            assert _compute_due_date('overnight', 'Student') != faculty_due
+
+    @staticmethod
+    def _profile_mocks(mock_db, uid, email, role, name, borrower_id, id_number):
+        mock_db['fetch_one'].side_effect = [
+            (uid, email, role, name, borrower_id, id_number, 'HQ', '555', 'active'),  # profile
+            (borrower_id, uid, id_number, 'HQ', '555', 'active', None, None),  # borrower
+            (0,),  # count_active_loans
+            (0,),  # count_unread_notifications
+            (0,),  # get_total_fines
+        ]
+        mock_db['fetch_all'].return_value = []
+
+    def test_admin_profile_shows_faculty_limit(self, admin_client, mock_db):
+        """Validates admin profile shows faculty borrow limit `/user/profile` as admin (expects 200) [TestStaffInheritFacultySettings / circulation].
+    If fails: likely user_profile borrow-limit branching changed so Admin falls back to the student limit.
+    Failure indicates staff see (and are capped by) the wrong limit on their profile."""
+        self._profile_mocks(mock_db, 4, 'admin@mcst.edu.ph', 'Admin', 'Test Admin', 9, 'ADM-001')
+        resp = admin_client.get('/user/profile')
+        assert resp.status_code == 200
+        assert b'(0/5 books)' in resp.data
+
+    def test_librarian_profile_shows_faculty_limit(self, librarian_client, mock_db):
+        """Validates librarian profile shows faculty borrow limit `/user/profile` as librarian (expects 200) [TestStaffInheritFacultySettings / circulation].
+    If fails: likely user_profile borrow-limit branching changed so Librarian falls back to the student limit.
+    Failure indicates staff see (and are capped by) the wrong limit on their profile."""
+        self._profile_mocks(mock_db, 3, 'librarian@mcst.edu.ph', 'Librarian', 'Test Librarian', 8, 'LIB-001')
+        resp = librarian_client.get('/user/profile')
+        assert resp.status_code == 200
+        assert b'(0/5 books)' in resp.data
+
+    def test_student_profile_shows_student_limit(self, student_client, mock_db):
+        """Validates student profile still shows student borrow limit `/user/profile` as student (expects 200) [TestStaffInheritFacultySettings / circulation].
+    If fails: likely user_profile borrow-limit branching changed so Student no longer gets the student limit.
+    Failure indicates the staff-inherit-faculty change leaked into student limits."""
+        self._profile_mocks(mock_db, 1, 'student@mcst.edu.ph', 'Student', 'Test Student', 1, '2024-0001')
+        resp = student_client.get('/user/profile')
+        assert resp.status_code == 200
+        assert b'(0/3 books)' in resp.data
