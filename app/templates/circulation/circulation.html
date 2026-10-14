@@ -564,7 +564,7 @@
                 <div class="flex flex-wrap items-center gap-2">
                     <div class="relative flex-1 min-w-[200px]">
                         <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[20px] pointer-events-none">search</span>
-                        <input type="text" name="q" value="{{ table_search }}" placeholder="Search borrower, book title, or accession…" class="form-input !pl-10" aria-label="Search borrowings" data-suggest="book_search">
+                        <input type="text" name="q" value="{{ table_search }}" placeholder="Search borrower, ID, role, book title, or accession…" class="form-input !pl-10" aria-label="Search borrowings" data-suggest="book_search">
                     </div>
                     <button type="submit" class="btn-primary !py-2">Search</button>
                     <button type="button" id="loan-filter-btn" class="btn-ghost !py-2 flex items-center gap-1.5" aria-haspopup="dialog">
@@ -587,6 +587,8 @@
                     <thead>
                         <tr>
                             <th>Borrower</th>
+                            <th>Borrower ID</th>
+                            <th>Borrower Role</th>
                             <th>Book Title</th>
                             <th>Accession</th>
                             <th>Type</th>
@@ -599,6 +601,8 @@
                         {% for loan in active_loans %}
                         <tr>
                             <td class="font-semibold">{{ loan[5] }}</td>
+                            <td class="font-mono text-gray-500">{{ loan[10] if loan|length > 10 else '—' }}</td>
+                            <td>{% if loan|length > 11 and loan[11] %}<span class="badge {% if loan[11] == 'Student' %}bg-blue-100 text-blue-700{% elif loan[11] == 'Faculty' %}bg-violet-100 text-violet-700{% else %}bg-gray-100 text-gray-600{% endif %}">{{ loan[11] }}</span>{% else %}<span class="text-gray-400">—</span>{% endif %}</td>
                             <td class="text-gray-600">{{ loan[7] }}</td>
                             <td class="font-mono text-gray-500">{{ loan[8] }}</td>
                             <td>{{ 'Overnight' if loan[3] == 'overnight' else 'In-Library' }}</td>
@@ -616,9 +620,9 @@
                         </tr>
                         {% else %}
                         {% if filters_active %}
-                        <tr><td colspan="7" class="text-center text-gray-400 py-6">No borrowings match the selected filters. <a href="{{ url_for('circulation.circulation_page', search=search) }}#all-borrowings" class="text-primary font-semibold underline">Clear filters</a></td></tr>
+                        <tr><td colspan="9" class="text-center text-gray-400 py-6">No borrowings match the selected filters. <a href="{{ url_for('circulation.circulation_page', search=search) }}#all-borrowings" class="text-primary font-semibold underline">Clear filters</a></td></tr>
                         {% else %}
-                        <tr><td colspan="7" class="text-center text-gray-400 py-6">No active loans.</td></tr>
+                        <tr><td colspan="9" class="text-center text-gray-400 py-6">No active loans.</td></tr>
                         {% endif %}
                         {% endfor %}
                     </tbody>

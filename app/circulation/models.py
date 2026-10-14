@@ -386,10 +386,12 @@ def get_circulation_stats():
 def get_active_loans():
     return db.fetch_all(
         '''SELECT c.circulation_id, c.borrow_date, c.due_date, c.borrow_type, c.transaction_status,
-                  u.full_name, u.user_id, b.title, a.accession_number, br.borrower_id
+                  u.full_name, u.user_id, b.title, a.accession_number, br.borrower_id,
+                  br.id_number, r.role_name
            FROM circulation_records c
            JOIN borrowers br ON c.borrower_id = br.borrower_id
            JOIN user_accounts u ON br.user_id = u.user_id
+           JOIN roles r ON u.role_id = r.role_id
            JOIN book_catalog b ON c.book_id = b.book_id
            JOIN accession_log a ON c.accession_id = a.accession_id
            WHERE c.transaction_status IN ('active', 'overdue')

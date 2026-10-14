@@ -273,9 +273,10 @@ def circulation_page():
 
 
 def _loan_matches_search(loan, query):
-    """Case-insensitive match on borrower, title, or accession number."""
+    """Case-insensitive match on borrower, ID, role, title, or accession."""
     needle = query.lower()
-    return any(needle in str(loan[i] or '').lower() for i in (5, 7, 8))
+    return any(i < len(loan) and needle in str(loan[i] or '').lower()
+               for i in (5, 7, 8, 10, 11))
 
 
 def _loan_is_overdue(loan, today):
