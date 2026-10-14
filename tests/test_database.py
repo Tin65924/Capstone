@@ -11,6 +11,7 @@ import pytest
 
 
 def _db_with_fake_pool():
+    """Test helper _db_with_fake_pool: build mocked data or DB stub for the test."""
     from app.database import Database
     db = Database()
     pool = MagicMock()
@@ -19,6 +20,7 @@ def _db_with_fake_pool():
 
 
 def _cursor_mock(conn, description, fetchall_result=None):
+    """Test helper _cursor_mock: build mocked data or DB stub for the test."""
     cur = conn.cursor.return_value.__enter__.return_value
     cur.description = description
     if fetchall_result is not None:
@@ -76,6 +78,7 @@ class TestInitDbSchemaGate:
 
     @staticmethod
     def _pause_init_db_patch():
+        """Test helper _pause_init_db_patch: build mocked data or DB stub for the test."""
         import sys
         patcher = getattr(sys.modules.get('conftest'), 'patcher_init_db', None)
         if patcher is None:

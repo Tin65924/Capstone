@@ -190,6 +190,16 @@ def _compute_due_date(borrow_type, role_name):
 @login_required
 @librarian_required
 def circulation_page():
+    """Render the circulation desk (GET, Librarian+Admin only).
+    Guarded by login_required then librarian_required. Parses loan_type,
+    loan_status, borrow_date, q, and search args, flags each active loan
+    as overdue, due_soon, or borrowed, filters the table, resolves an
+    optional borrower lookup, and renders desk limits. Read-only.
+    Args:
+        None (reads `search`, `loan_type`, `loan_status`, `borrow_date`, `q`).
+    Returns:
+        Rendered circulation/circulation.html with stats and filtered loans.
+    """
     stats = get_circulation_stats()
     active_loans = get_active_loans()
     recent = get_recent_transactions(10) or []
@@ -320,6 +330,18 @@ def _loan_is_due_soon(loan, today, cutoff):
 @login_required
 @librarian_required
 def desk_borrow():
+    """Check out a copy at the desk (POST, Librarian+Admin only).
+    Guarded by login_required then librarian_required. Parses
+    borrower_id or id_number plus accession_number and borrow_type,
+    refuses closed hours, archived books, lost or loaned copies, queue
+    jumps, duplicate titles, limits, and daily blocks, then creates the
+    loan via borrow_book, notifies, logs circulation:borrow:<accession>,
+    and redirects with a flash.
+    Args:
+        None (reads `borrower_id`, `id_number`, `accession_number`, `borrow_type`).
+    Returns:
+        Redirect to the circulation desk with a flash message.
+    """
     borrower_id = request.form.get('borrower_id', type=int)
     id_number = request.form.get('id_number', '').strip()
     accession_number = request.form.get('accession_number', '').strip()
@@ -557,6 +579,16 @@ def mark_copy_damaged_route():
 @login_required
 @librarian_required
 def reservations_page():
+    """Render the reservation queue (GET, Librarian+Admin only).
+    Guarded by login_required then librarian_required. Sweeps past-deadline
+    allocations first, parses the status filter into waiting, allocated,
+    claimed, or expired buckets, groups reservations by book, computes
+    active/ready/pending counts, and renders the queue. Read-only.
+    Args:
+        None (reads `status` query arg).
+    Returns:
+        Rendered reservations/reservations.html with grouped queues.
+    """
     # Auto-expire past-deadline allocations so they leave the active queue,
     # and auto-remove finished (claimed/expired) history from the default view.
     try:
@@ -585,6 +617,20 @@ def reservations_page():
             get_reservations_by_book(row[0]) or [])
 
     def _num(r, i):
+        """Read one reservation-group count cell as an integer.
+
+        Indexes the grouped (book_id, title, author, total, waiting,
+        allocated, claimed, expired) tuple safely, coercing None or
+        malformed values to 0 so headline active/ready/pending sums
+        never raise on short mock rows.
+
+        Args:
+            r: Grouped reservation row tuple.
+            i: Column index to read.
+
+        Returns:
+            Integer count at that index, or 0.
+        """
         try:
             return int(r[i] or 0)
         except (IndexError, TypeError, ValueError):
@@ -615,6 +661,19 @@ def reservations_page():
 @login_required
 @librarian_required
 def reservation_action(reservation_id, action):
+    """Allocate, claim, or expire a reservation (POST, staff only).
+    Guarded by login_required then librarian_required. Sweeps expired
+    allocations, validates waiting versus allocated states, checks copy
+    availability, archived books, borrower status, duplicate loans, and
+    borrow limits, then allocates with a claim deadline, claims into an
+    overnight loan, or expires. Notifies, logs the action, and redirects
+    preserving the status filter.
+    Args:
+        reservation_id: Primary key of the reservation to act on.
+        action: One of 'allocate', 'claim', or 'expire'.
+    Returns:
+        Redirect to the reservations page with a flash message.
+    """
     keep_status = request.form.get('status', '').strip().lower()
     status_args = {'status': keep_status} if keep_status in ('active', 'waiting', 'allocated', 'history', 'all') else {}
     # Sweep past-deadline allocations first so a stale 'allocated' row
@@ -766,6 +825,17 @@ def reservation_action(reservation_id, action):
 @circulation_bp.route('/user/borrow', methods=['POST'])
 @login_required
 def user_borrow():
+    """Borrow a copy or request overnight approval (POST, any login).
+    Requires login with no role restriction. Validates the book, borrower
+    record, archived state, duplicate loans, and borrow limits. Overnight
+    creates a queue reservation via retry; daily checks hours, copy
+    choice, availability, queue jumps, and daily blocks, then creates the
+    loan. Notifies, logs circulation:user_borrow(_request), and redirects.
+    Args:
+        None (reads `book_id`, `borrow_type`, optional `accession_id`).
+    Returns:
+        Redirect to the book page with a flash message.
+    """
     book_id = request.form.get('book_id', type=int)
     borrow_type = request.form.get('borrow_type', '')
     if borrow_type not in VALID_BORROW_TYPES:
@@ -892,6 +962,17 @@ def user_borrow():
 @circulation_bp.route('/user/reserve', methods=['POST'])
 @login_required
 def user_reserve():
+    """Place a hold on a fully borrowed book (POST, any login).
+    Requires login with no role restriction. Validates the book, active
+    borrower record, archived state, duplicate reservations and loans,
+    and requires that no copy is currently available. Creates a queue
+    reservation via retry, notifies with the queue position, logs
+    circulation:user_reserve:<book_id>, and redirects with a flash.
+    Args:
+        None (reads `book_id` form field).
+    Returns:
+        Redirect to the book page with a flash message.
+    """
     book_id = request.form.get('book_id', type=int)
     book = get_book_by_id(book_id) if book_id else None
     if not book:
@@ -961,6 +1042,15 @@ def user_return():
 @login_required
 @librarian_required
 def user_history_list():
+    """Render the borrower history lookup (GET, Librarian+Admin only).
+    Guarded by login_required then librarian_required. Parses an optional
+    search string to filter borrowers via get_borrowers_for_history and
+    renders the lookup table. Read-only; writes no audit row.
+    Args:
+        None (reads optional `search` query arg).
+    Returns:
+        Rendered circulation/user_history_list.html with borrowers.
+    """
     search = request.args.get('search', '').strip() or None
     borrowers = get_borrowers_for_history(search=search)
     return render_template(
@@ -974,6 +1064,16 @@ def user_history_list():
 @login_required
 @librarian_required
 def user_history_detail(user_id):
+    """Render one borrower's full history (GET, staff only).
+    Guarded by login_required then librarian_required. Loads the user and
+    borrower rows, then loans, reservation history, requests, fines, and
+    fine totals for the detail page. Missing users or borrower records
+    flash and redirect to the lookup list. Read-only.
+    Args:
+        user_id: Primary key of the user whose history to display.
+    Returns:
+        Rendered user_history_detail.html, or lookup redirect when missing.
+    """
     from app.auth.models import get_user_by_id
     from app.requests.models import get_requests_by_borrower
 
@@ -1011,6 +1111,18 @@ def user_history_detail(user_id):
 @login_required
 @librarian_required
 def pay_fine(user_id, circulation_id):
+    """Mark one overdue fine as paid (POST, Librarian+Admin only).
+    Guarded by login_required then librarian_required. Validates the user
+    and borrower rows plus the fine record (belongs to borrower, positive,
+    unpaid), marks paid via mark_fine_paid, logs
+    circulation:fine_paid:<id>, flashes the peso amount, and redirects to
+    the borrower history detail.
+    Args:
+        user_id: Primary key of the fined user (redirect context).
+        circulation_id: Primary key of the circulation fine row.
+    Returns:
+        Redirect to the borrower history detail with a flash message.
+    """
     from app.auth.models import get_user_by_id
     back = url_for('circulation.user_history_detail', user_id=user_id)
     if not get_user_by_id(user_id):

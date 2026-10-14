@@ -15,6 +15,7 @@ FULL_BOOK = {
 
 
 def _post_add(client, **overrides):
+    """Test helper _post_add: build mocked data or DB stub for the test."""
     data = dict(FULL_BOOK)
     data.update(overrides)
     return client.post('/librarian/cataloging/add', data=data)

@@ -136,6 +136,7 @@ class TestBorrowGuards:
     @staticmethod
     def _borrow_mocks(mock_db, book=BOOK, borrower=BORROWER, loan=None,
                       res=None, count=0, accessions=(ACC,)):
+        """Test helper _borrow_mocks: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].side_effect = [book, borrower, loan, res,
                                             (count,)]
         mock_db['fetch_all'].return_value = [list(accessions)]
@@ -231,6 +232,7 @@ class TestReserveGuards:
     @staticmethod
     def _res_mocks(mock_db, book=BOOK, borrower=BORROWER, res=None,
                    loan=None, avail=(ACC,)):
+        """Test helper _res_mocks: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].side_effect = [book, borrower, res, loan]
         mock_db['fetch_all'].return_value = [list(avail)]
 

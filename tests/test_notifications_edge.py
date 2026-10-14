@@ -9,6 +9,7 @@ gracefully — never 500.
 
 
 def _borrower(mock_db, bid=5):
+    """Test helper _borrower: build mocked data or DB stub for the test."""
     mock_db['fetch_one'].return_value = (bid,)
     mock_db['fetch_all'].return_value = []
     mock_db['execute'].return_value = []

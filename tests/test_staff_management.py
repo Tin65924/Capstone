@@ -15,6 +15,7 @@ ROLES = [(1, 'Student'), (2, 'Faculty'), (3, 'Librarian'), (4, 'Admin')]
 
 
 def _mock_lists(mock_db, users=None, pending=None):
+    """Test helper _mock_lists: build mocked data or DB stub for the test."""
     mock_db['fetch_all'].side_effect = [
         list(users if users is not None else USERS),  # get_all_users
         list(pending if pending is not None else PENDING),  # get_pending_users
@@ -340,6 +341,7 @@ class TestExportScope:
 
 
 def _many_users(n=45):
+    """Test helper _many_users: build mocked data or DB stub for the test."""
     rows = []
     for i in range(n):
         role = 'Student' if i % 2 else 'Faculty'

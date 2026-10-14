@@ -13,7 +13,9 @@ CAT_ROWS = [('Physics',), ('Computer Science',)]
 
 
 def _mock_fetch_all_by_query(mock_db):
+    """Test helper _mock_fetch_all_by_query: build mocked data or DB stub for the test."""
     def side_effect(query, params=None):
+        """Test helper side_effect: build mocked data or DB stub for the test."""
         if 'FROM book_catalog WHERE title IS NOT NULL' in query:
             return BOOK_ROWS
         if 'FROM borrowers WHERE id_number IS NOT NULL' in query:
@@ -26,6 +28,7 @@ def _mock_fetch_all_by_query(mock_db):
 
 @pytest.fixture(autouse=True)
 def _fresh_bloom_registry():
+    """Test helper _fresh_bloom_registry: build mocked data or DB stub for the test."""
     bloom_registry.mark_dirty()
     yield
 

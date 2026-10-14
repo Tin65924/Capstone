@@ -8,6 +8,7 @@ import pytest
 
 def _row(backup_id=1, filename='library_backup_20260101_020000.sql',
          size=1024, status='completed', btype='manual', created=None):
+    """Test helper _row: build mocked data or DB stub for the test."""
     return (backup_id, filename, size, status, btype, None,
             created or datetime(2026, 1, 1, 2, 0, 0))
 
@@ -22,6 +23,7 @@ class TestCreateBackup:
         monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
 
         def fake_run(cmd, **kwargs):
+            """Test helper fake_run: build mocked data or DB stub for the test."""
             assert isinstance(cmd, list)
             assert kwargs.get('shell') is not True
             for part in cmd:
@@ -50,6 +52,7 @@ class TestCreateBackup:
         monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
 
         def fake_run(cmd, **kwargs):
+            """Test helper fake_run: build mocked data or DB stub for the test."""
             for part in cmd:
                 if part.startswith('--file='):
                     with open(part[len('--file='):], 'w') as f:
@@ -75,6 +78,7 @@ Dumps must DROP existing objects so a restore truly replaces data."""
         monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
 
         def fake_run(cmd, **kwargs):
+            """Test helper fake_run: build mocked data or DB stub for the test."""
             for part in cmd:
                 if part.startswith('--file='):
                     with open(part[len('--file='):], 'w') as f:
@@ -173,6 +177,7 @@ Older dumps must replay when the live schema grew FKs since.
         monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
 
         def fake_run(cmd, **kwargs):
+            """Test helper fake_run: build mocked data or DB stub for the test."""
             raise subprocess.CalledProcessError(1, cmd, stderr='disk full')
 
         with app.app_context():
@@ -215,6 +220,7 @@ pg_dump must not block on a password prompt with no terminal."""
         monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
 
         def fake_run(cmd, **kwargs):
+            """Test helper fake_run: build mocked data or DB stub for the test."""
             for part in cmd:
                 if part.startswith('--file='):
                     with open(part[len('--file='):], 'w') as f:
@@ -240,6 +246,7 @@ pg_dump must not block on a password prompt with no terminal."""
         monkeypatch.setitem(app.config, 'DATABASE_URL', 'postgresql://u:p@h/db')
 
         def fake_run(cmd, **kwargs):
+            """Test helper fake_run: build mocked data or DB stub for the test."""
             for part in cmd:
                 if part.startswith('--file='):
                     with open(part[len('--file='):], 'w') as f:
@@ -487,6 +494,7 @@ The response must not block on pg_dump (true background thread)."""
         release = threading.Event()
 
         def slow():
+            """Test helper slow: build mocked data or DB stub for the test."""
             assert release.wait(10)
             return ('slow.sql', 1)
 
@@ -537,6 +545,7 @@ A second backup while one runs redirects — no second row."""
         release = threading.Event()
 
         def slow():
+            """Test helper slow: build mocked data or DB stub for the test."""
             assert release.wait(10)
             return ('slow.sql', 1)
 
@@ -791,6 +800,7 @@ def _clean_backup_jobs():
 
 
 def _in_progress_row(**overrides):
+    """Test helper _in_progress_row: build mocked data or DB stub for the test."""
     row = (9, 'library_backup_20260920_020000_in_progress.sql', None,
            'in_progress', 'manual', None, datetime.now().replace(microsecond=0))
     for key, value in overrides.items():
@@ -1137,6 +1147,7 @@ class TestRestorePreservesHistory:
     """
 
     def _old_and_new(self):
+        """Test helper _old_and_new: build mocked data or DB stub for the test."""
         old = _row(backup_id=1, filename='library_backup_20250101_020000.sql',
                    created=datetime(2025, 1, 1, 2, 0, 0))
         new = _row(backup_id=5, filename='library_backup_20260301_020000.sql',
@@ -1146,6 +1157,7 @@ class TestRestorePreservesHistory:
         return old, new, safety
 
     def _reinserted_filenames(self, mock_db):
+        """Test helper _reinserted_filenames: build mocked data or DB stub for the test."""
         return [c[0][1][0] for c in mock_db['execute'].call_args_list
                 if 'INSERT INTO backup_log' in c[0][0]
                 and len(c[0][1]) == 6]

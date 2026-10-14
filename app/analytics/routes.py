@@ -145,6 +145,15 @@ def resolve_dates(preset, from_str, to_str):
 
 
 def _normalize_range(preset, from_str, to_str):
+    """Normalize preset and from/to strings into a concrete date range. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        preset: Named range preset (e.g. '7d', '30d', 'all').
+        from_str: Start of the date window, or None for open-ended.
+        to_str: End of the date window, or None for open-ended.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     if preset in ('semester', 'year', 'month'):
         from_str = to_str = ''
     elif preset not in ('custom', 'all'):
@@ -182,6 +191,13 @@ def _clean_department_list(values):
 def _dashboard_cache_key(start_date, end_date, departments):
     """JSON-safe cache key for a dashboard filter set."""
     def _iso(value):
+        """Format a date or datetime as an ISO string for cache keys and JSON. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+        
+        Args:
+            value: See implementation for usage.
+        
+        Returns:
+            Query rows or computed payload for the caller (see implementation for shape)."""
         try:
             return value.isoformat() if hasattr(value, 'isoformat') else value
         except (TypeError, ValueError):
@@ -201,6 +217,13 @@ def _dashboard_cache_allowed():
 
 
 def _dashboard_actor():
+    """Resolve the requesting user for dashboard cache attribution. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        None.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     try:
         from flask_login import current_user
         return current_user.id
@@ -243,12 +266,26 @@ def _compute_dashboard(start_date, end_date, departments=None):
     always use the full range.
     """
     def _safe(fn, *args, **kwargs):
+        """Coerce a possibly-None numeric value into a safe number for charts. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+        
+        Args:
+            fn: See implementation for usage.
+        
+        Returns:
+            Query rows or computed payload for the caller (see implementation for shape)."""
         try:
             return fn(*args, **kwargs)
         except Exception:
             return None
 
     def _pair(rows):
+        """Build a two-element label/value row tolerating short mock rows. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+        
+        Args:
+            rows: See implementation for usage.
+        
+        Returns:
+            Query rows or computed payload for the caller (see implementation for shape)."""
         out = []
         for r in rows or []:
             try:
@@ -264,6 +301,13 @@ def _compute_dashboard(start_date, end_date, departments=None):
         return out
 
     def _triple(rows):
+        """Build a three-element program split row tolerating short mock rows. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+        
+        Args:
+            rows: See implementation for usage.
+        
+        Returns:
+            Query rows or computed payload for the caller (see implementation for shape)."""
         out = []
         for r in rows or []:
             try:
@@ -604,6 +648,13 @@ def _compute_dashboard(start_date, end_date, departments=None):
 @login_required
 @librarian_required
 def analytics_page():
+    """Render the analytics dashboard shell with default filters and cached payload. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        None.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     from_str = request.args.get('from', '').strip()
     to_str = request.args.get('to', '').strip()
     preset = _effective_preset(request.args.get('preset'), from_str, to_str)
@@ -652,6 +703,13 @@ def analytics_page():
 
 
 def _parse_book_id(value):
+    """Parse and validate a book_id query argument into an integer. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        value: See implementation for usage.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     try:
         book_id = int((value or '').strip())
     except (AttributeError, TypeError, ValueError):
@@ -681,12 +739,26 @@ def compute_book_traffic(book_id, start_date, end_date):
     """
 
     def _safe(fn, *args, **kwargs):
+        """Coerce a possibly-None numeric value into a safe number for charts. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+        
+        Args:
+            fn: See implementation for usage.
+        
+        Returns:
+            Query rows or computed payload for the caller (see implementation for shape)."""
         try:
             return fn(*args, **kwargs)
         except Exception:
             return None
 
     def _pair(rows):
+        """Build a two-element label/value row tolerating short mock rows. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+        
+        Args:
+            rows: See implementation for usage.
+        
+        Returns:
+            Query rows or computed payload for the caller (see implementation for shape)."""
         out = []
         for r in rows or []:
             try:
@@ -789,6 +861,13 @@ def compute_book_traffic(book_id, start_date, end_date):
         copy_count = 0
 
     def _col(i):
+        """Perform the  col analytics operation. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+        
+        Args:
+            i: See implementation for usage.
+        
+        Returns:
+            Query rows or computed payload for the caller (see implementation for shape)."""
         return book[i] if len(book) > i else None
 
     return {
@@ -1145,6 +1224,16 @@ def _chart_rows(rows):
 
 
 def _run_chart(name, start_date, end_date, args):
+    """Execute one chart dataset query by chart name with shared filters. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        name: See implementation for usage.
+        start_date: Start of the date window, or None for open-ended.
+        end_date: End of the date window, or None for open-ended.
+        args: See implementation for usage.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     borrow_type = _clean_borrow_type(args.get('borrow_type', ''))
     if name == 'collection_by_category':
         return models.collection_by_category(
@@ -1206,6 +1295,13 @@ def _run_chart(name, start_date, end_date, args):
 
 
 def _echo_chart_filters(args):
+    """Echo the normalized chart filters back for the frontend request. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        args: See implementation for usage.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     echoed = {}
     departments = _clean_list(args.getlist('department'))
     roles = _clean_list(args.getlist('role'))
@@ -1504,6 +1600,16 @@ USAGE_SCOPED_KPIS = frozenset({
 
 
 def _run_kpi(kpi_type, start_date, end_date, departments=None):
+    """Compute one KPI value by name with shared date and department filters. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        kpi_type: See implementation for usage.
+        start_date: Start of the date window, or None for open-ended.
+        end_date: End of the date window, or None for open-ended.
+        departments: Program names to filter by, or None for all programs.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     dept_list = _normalize_dept_list(departments)
     # Only usage-scoped sections honor the program filter; collection
     # sections always report the full catalog.
@@ -1571,6 +1677,13 @@ def _run_kpi(kpi_type, start_date, end_date, departments=None):
 
 
 def _normalize_dept_list(departments):
+    """Normalize the department filter list for KPI and chart queries. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        departments: Program names to filter by, or None for all programs.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     if departments is None:
         return None
     if isinstance(departments, str):
@@ -1580,18 +1693,39 @@ def _normalize_dept_list(departments):
 
 
 def _all_labels():
+    """Return every known program label for zero-filling chart series. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        None.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     labels = dict(KPI_LABELS)
     labels.update(DASHBOARD_LABELS)
     return labels
 
 
 def _all_descriptions():
+    """Return human descriptions for every metric label. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        None.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     descriptions = dict(KPI_DESCRIPTIONS)
     descriptions.update(DASHBOARD_DESCRIPTIONS)
     return descriptions
 
 
 def _jsonable_cell(value):
+    """Coerce one analytics cell into a JSON-serializable primitive. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        value: See implementation for usage.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     if hasattr(value, 'isoformat'):
         return value.isoformat()
     try:
@@ -1604,6 +1738,13 @@ def _jsonable_cell(value):
 
 
 def _jsonable(kpi_data):
+    """Recursively coerce analytics payloads into JSON-serializable structures. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        kpi_data: See implementation for usage.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     if isinstance(kpi_data, list):
         return [[_jsonable_cell(c) for c in r] if isinstance(r, (list, tuple))
                 else _jsonable_cell(r) for r in kpi_data]
@@ -1611,6 +1752,17 @@ def _jsonable(kpi_data):
 
 
 def _format_period(start_date, end_date, preset, from_str, to_str):
+    """Format a date period label for chart axes and PDF tables. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        start_date: Start of the date window, or None for open-ended.
+        end_date: End of the date window, or None for open-ended.
+        preset: Named range preset (e.g. '7d', '30d', 'all').
+        from_str: Start of the date window, or None for open-ended.
+        to_str: End of the date window, or None for open-ended.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     if from_str or to_str:
         if start_date and end_date:
             return f"{start_date:%b %d, %Y} – {end_date:%b %d, %Y}"
@@ -1652,6 +1804,13 @@ _BAR_SECTIONS = frozenset({
 
 
 def _chart_num(value):
+    """Coerce one chart value into a number, defaulting blanks to zero. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        value: See implementation for usage.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -1670,6 +1829,14 @@ def _pdf_text(value):
 
 
 def _chart_short(label, limit=20):
+    """Shorten a chart label for cramped axis and legend space. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        label: See implementation for usage.
+        limit: Maximum rows to return.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     text = str(label)
     return text if len(text) <= limit else text[:limit - 1] + '…'
 
@@ -1873,6 +2040,14 @@ def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
     WHITE = colors.white
 
     def _header_footer(canvas, doc):
+        """Perform the  header footer analytics operation. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+        
+        Args:
+            canvas: See implementation for usage.
+            doc: See implementation for usage.
+        
+        Returns:
+            Query rows or computed payload for the caller (see implementation for shape)."""
         canvas.saveState()
         # top hairline + brand
         canvas.setStrokeColor(SLATE_300)
@@ -2253,6 +2428,13 @@ def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
 @login_required
 @librarian_required
 def export_report():
+    """Build and stream the analytics PDF or CSV export for the current filters. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        None.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     kpi_type = request.form.get('kpi_type', '')
     from_str = request.form.get('from', '').strip()
     to_str = request.form.get('to', '').strip()

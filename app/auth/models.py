@@ -33,7 +33,20 @@ ID_NUMBER_MAX_LENGTHS = {
 
 
 def normalize_id_number(id_number, role_name=None):
-    """Strip whitespace; uppercase the LIB- prefix for librarians."""
+    """Normalize a school ID number for comparison and validation.
+
+    Strips surrounding whitespace and uppercases the whole value when it
+    belongs to a Librarian (or already starts with ``LIB-``), so
+    ``lib-00123`` and ``LIB-00123`` compare equal. All other roles are
+    returned whitespace-stripped but case-untouched.
+
+    Args:
+        id_number: Raw ID string from a form, possibly None.
+        role_name: Role the ID belongs to (enables LIB- uppercasing).
+
+    Returns:
+        Cleaned ID string (empty string when input was None/blank).
+    """
     value = (id_number or '').strip()
     if role_name == 'Librarian' or value.upper().startswith('LIB-'):
         return value.upper()
@@ -41,7 +54,19 @@ def normalize_id_number(id_number, role_name=None):
 
 
 def is_valid_id_number(id_number, role_name):
-    """True when id_number matches the canonical format for role_name."""
+    """Check whether an ID number matches its role's canonical format.
+
+    Validates the normalized value against ID_NUMBER_PATTERNS: Student
+    ``0000-00000``, Faculty ``000000000``, Librarian ``LIB-00000``,
+    Admin ``1-10``. Unknown roles always fail.
+
+    Args:
+        id_number: Raw ID string to validate.
+        role_name: Role name selecting which pattern to enforce.
+
+    Returns:
+        True when the ID matches the role's pattern, False otherwise.
+    """
     pattern = ID_NUMBER_PATTERNS.get(role_name)
     if not pattern:
         return False
@@ -49,6 +74,20 @@ def is_valid_id_number(id_number, role_name):
 
 
 def get_user_by_id(user_id):
+    """Fetch one active user by primary key for login/session loading.
+
+    Joins user_accounts to roles to resolve the role name. Only rows
+    with account_status='active' are returned, so disabled, pending, and
+    archived accounts cannot authenticate; use get_user_record when any
+    status is acceptable (e.g. audit enrichment).
+
+    Args:
+        user_id: Primary key of user_accounts.
+
+    Returns:
+        Tuple (user_id, email, role_name, full_name) or None if no active
+        account matches.
+    """
     return db.fetch_one(
         '''SELECT u.user_id, u.email, r.role_name, u.full_name
            FROM user_accounts u
@@ -59,6 +98,18 @@ def get_user_by_id(user_id):
 
 
 def get_user_by_email(email):
+    """Fetch one user by exact email address regardless of status.
+
+    Used during Google OAuth callback to find the account that owns an
+    email, and by admin tooling. Returns the first match joined with its
+    role name.
+
+    Args:
+        email: Exact email string to look up.
+
+    Returns:
+        Tuple (user_id, email, role_name, full_name) or None if not found.
+    """
     return db.fetch_one(
         '''SELECT u.user_id, u.email, r.role_name, u.full_name
            FROM user_accounts u
@@ -69,6 +120,19 @@ def get_user_by_email(email):
 
 
 def get_user_by_oauth_sub(oauth_sub):
+    """Fetch one user by Google OAuth subject identifier.
+
+    The oauth_sub is Google's stable user key stored at first login;
+    this is the primary returning-login lookup because emails can change
+    while the sub cannot.
+
+    Args:
+        oauth_sub: Google ``sub`` claim string stored in user_accounts.
+
+    Returns:
+        Tuple (user_id, email, role_name, full_name) or None if this
+        Google account has never logged in.
+    """
     return db.fetch_one(
         '''SELECT u.user_id, u.email, r.role_name, u.full_name
            FROM user_accounts u
@@ -79,6 +143,19 @@ def get_user_by_oauth_sub(oauth_sub):
 
 
 def get_user_by_id_number(id_number):
+    """Fetch one user by their borrower school ID number.
+
+    Joins through the borrowers table (which owns id_number) to
+    user_accounts and roles. Used to detect duplicate school IDs at
+    registration and to resolve desk lookups by ID.
+
+    Args:
+        id_number: Canonical school ID string (already normalized).
+
+    Returns:
+        Tuple (user_id, email, role_name, full_name) or None if no
+        borrower holds that ID.
+    """
     return db.fetch_one(
         '''SELECT u.user_id, u.email, r.role_name, u.full_name
            FROM user_accounts u
@@ -90,10 +167,18 @@ def get_user_by_id_number(id_number):
 
 
 def get_user_record(user_id):
-    """One user row regardless of account status (for audit enrichment).
+    """Fetch one user row regardless of account status for audit display.
 
-    Unlike get_user_by_id (active only): (user_id, email, role_name,
-    full_name, account_status) or None when the user is gone.
+    Unlike get_user_by_id (active only), this returns disabled, pending,
+    and archived accounts too, so audit-trail enrichment can still name
+    the actor after their account changed state.
+
+    Args:
+        user_id: Primary key of user_accounts.
+
+    Returns:
+        Tuple (user_id, email, role_name, full_name, account_status) or
+        None when the user no longer exists.
     """
     return db.fetch_one(
         '''SELECT u.user_id, u.email, r.role_name, u.full_name, u.account_status
@@ -105,10 +190,19 @@ def get_user_record(user_id):
 
 
 def audit_text(value, width=60):
-    """One-line audit-safe text for embedding in an activity code.
+    """Sanitize free text for embedding inside a colon-separated audit code.
 
-    Collapses whitespace and strips colons (the code separator), then
-    truncates — activity is VARCHAR(255) and presenters split on ':'.
+    Collapses all whitespace to single spaces and replaces colons (the
+    activity-code separator) with spaces so presenters that split on ':'
+    never break. Truncates with an ellipsis to keep the full activity
+    within VARCHAR(255).
+
+    Args:
+        value: Raw name/title/detail to embed.
+        width: Maximum output length including ellipsis.
+
+    Returns:
+        One-line audit-safe string.
     """
     text = ' '.join(str(value or '').split()).replace(':', ' ').strip()
     if len(text) > width:
@@ -117,6 +211,19 @@ def audit_text(value, width=60):
 
 
 def suggest_programs(prefix, limit=8):
+    """Suggest distinct borrower department/program names by prefix.
+
+    Powers the registration and profile autocomplete dropdowns by
+    returning distinct non-empty department values that start with the
+    typed prefix (case-insensitive), alphabetically ordered.
+
+    Args:
+        prefix: Typed prefix to match with ILIKE.
+        limit: Maximum suggestions to return.
+
+    Returns:
+        List of 1-tuples (department,) matching the prefix.
+    """
     return db.fetch_all(
         "SELECT DISTINCT department FROM borrowers WHERE department IS NOT NULL "
         "AND department != '' AND department ILIKE %s ORDER BY department LIMIT %s",
@@ -125,6 +232,21 @@ def suggest_programs(prefix, limit=8):
 
 
 def create_user(email, oauth_sub, full_name, role_id):
+    """Create an immediately-active user account and return its new id.
+
+    Inserts into user_accounts with account_status='active' and
+    created_at=NOW(). Used for the first-ever Admin auto-creation and
+    any staff-side direct creation path.
+
+    Args:
+        email: Unique email address for the account.
+        oauth_sub: Google subject id, or None for non-OAuth rows.
+        full_name: Display name.
+        role_id: FK into roles.
+
+    Returns:
+        New user_id integer, or None if the INSERT returned nothing.
+    """
     row = db.fetch_one(
         '''INSERT INTO user_accounts (email, oauth_sub, full_name, role_id, account_status, created_at)
            VALUES (%s, %s, %s, %s, %s, NOW()) RETURNING user_id''',
@@ -134,6 +256,21 @@ def create_user(email, oauth_sub, full_name, role_id):
 
 
 def create_pending_user(email, oauth_sub, full_name, role_id):
+    """Create a pending-approval user account and return its new id.
+
+    Identical to create_user except account_status='pending', so the
+    account cannot log in until an admin approves it via approve_user.
+    Used by the self-registration flow.
+
+    Args:
+        email: Unique email address for the account.
+        oauth_sub: Google subject id from the OAuth callback.
+        full_name: Display name from the registration form.
+        role_id: Requested role FK (Student/Faculty normally).
+
+    Returns:
+        New user_id integer, or None if the INSERT returned nothing.
+    """
     row = db.fetch_one(
         '''INSERT INTO user_accounts (email, oauth_sub, full_name, role_id, account_status, created_at)
            VALUES (%s, %s, %s, %s, %s, NOW()) RETURNING user_id''',
@@ -143,6 +280,20 @@ def create_pending_user(email, oauth_sub, full_name, role_id):
 
 
 def create_borrower(user_id, id_number, department=None):
+    """Create the borrower profile row linked to a user account.
+
+    Every Student/Faculty member needs exactly one borrowers row holding
+    their school ID number and program/department; it is what
+    circulation, reservations, and requests join against.
+
+    Args:
+        user_id: FK into user_accounts.
+        id_number: Canonical school ID (validated per-role beforehand).
+        department: Program/department name, or None.
+
+    Returns:
+        Rowcount from the INSERT (1 on success).
+    """
     return db.execute(
         'INSERT INTO borrowers (user_id, id_number, department) VALUES (%s, %s, %s)',
         (user_id, id_number, department)
@@ -154,6 +305,12 @@ def delete_signup_user(user_id):
 
     Keeps a failed signup from leaving an orphan user row (no borrower):
     the borrower INSERT already rolled back, so only the user row remains.
+
+    Args:
+        user_id: The orphaned user_accounts row to delete.
+
+    Returns:
+        Rowcount from the DELETE.
     """
     return db.execute(
         'DELETE FROM user_accounts WHERE user_id = %s',
@@ -162,10 +319,29 @@ def delete_signup_user(user_id):
 
 
 def get_roles():
+    """List every role for dropdowns and role assignment.
+
+    Returns all rows from the roles table ordered by role_id so Admin,
+    Librarian, Student, Faculty appear in stable creation order.
+
+    Returns:
+        List of (role_id, role_name) tuples.
+    """
     return db.fetch_all('SELECT role_id, role_name FROM roles ORDER BY role_id')
 
 
 def get_role_by_name(role_name):
+    """Fetch one role row by its exact name.
+
+    Used to resolve a role name from a form/OAuth flow into the role_id
+    needed for user creation and role updates.
+
+    Args:
+        role_name: Exact role name (e.g. 'Student').
+
+    Returns:
+        Tuple (role_id, role_name) or None if no such role exists.
+    """
     return db.fetch_one(
         'SELECT role_id, role_name FROM roles WHERE role_name = %s',
         (role_name,)
@@ -173,11 +349,16 @@ def get_role_by_name(role_name):
 
 
 def log_activity(user_id, activity, session_token=None):
-    """Best-effort audit: must never 500 a successful write.
+    """Append a best-effort audit row that must never break the request.
 
     Callers invoke this after the real write commits; a transient DB
     failure here previously turned a success into a 500. Swallow and
     warn so the redirect still happens.
+
+    Args:
+        user_id: Actor's user_id, or None for system events.
+        activity: Namespaced code like 'cataloging:add_book:42'.
+        session_token: Optional session identifier for grouping.
     """
     try:
         db.execute(
@@ -198,6 +379,9 @@ def log_system_event(activity):
     Stored with a NULL user_id so it surfaces under the System tab of
     the admin Audit Logs. Activity should be a short namespaced string,
     e.g. 'system:scheduled_backup:completed:<filename>'.
+
+    Args:
+        activity: Namespaced system event code to store.
     """
     db.execute(
         'INSERT INTO audit_trail (user_id, activity, session_token) VALUES (%s, %s, %s)',
@@ -206,6 +390,16 @@ def log_system_event(activity):
 
 
 def get_all_users():
+    """List every user account newest-first for the admin user table.
+
+    Joins user_accounts to roles and left-joins borrowers so staff-only
+    accounts (no borrower row) still appear. Used by the admin user
+    management page and CSV/XLSX exports.
+
+    Returns:
+        List of (user_id, email, full_name, role_name, account_status,
+        created_at, id_number, department) tuples.
+    """
     return db.fetch_all(
         '''SELECT u.user_id, u.email, u.full_name, r.role_name, u.account_status,
                   u.created_at, b.id_number, b.department
@@ -217,6 +411,15 @@ def get_all_users():
 
 
 def get_pending_users():
+    """List accounts awaiting approval oldest-first for the approvals queue.
+
+    Same shape as get_all_users but filtered to account_status='pending'
+    and ordered ASC so the longest-waiting signup is reviewed first.
+
+    Returns:
+        List of (user_id, email, full_name, role_name, created_at,
+        id_number, department) tuples.
+    """
     return db.fetch_all(
         '''SELECT u.user_id, u.email, u.full_name, r.role_name, u.created_at,
                   b.id_number, b.department
@@ -229,11 +432,25 @@ def get_pending_users():
 
 
 def count_total_users():
+    """Count every row in user_accounts regardless of status.
+
+    Feeds the admin dashboard headline stat and pagination totals.
+
+    Returns:
+        Integer total user count (0 when the table is empty).
+    """
     row = db.fetch_one('SELECT COUNT(*) FROM user_accounts')
     return row[0] if row else 0
 
 
 def count_pending_users():
+    """Count accounts with status 'pending' for the approval badge.
+
+    Drives the pending-approvals notification count in the admin UI.
+
+    Returns:
+        Integer pending user count.
+    """
     row = db.fetch_one(
         "SELECT COUNT(*) FROM user_accounts WHERE account_status = 'pending'"
     )
@@ -241,9 +458,13 @@ def count_pending_users():
 
 
 def count_active_users_by_role():
-    """Active user counts keyed by role name.
+    """Count active accounts grouped by role name for dashboard charts.
 
-    Returns a list of (role_name, count) tuples.
+    Only account_status='active' rows are counted, so pending, disabled,
+    and archived accounts never inflate the role breakdown.
+
+    Returns:
+        List of (role_name, count) tuples, one per role with actives.
     """
     return db.fetch_all(
         '''SELECT r.role_name, COUNT(*)
@@ -276,10 +497,24 @@ OPERATIONAL_PREFIXES = ('circulation:', 'requests:')
 
 
 def get_audit_logs(limit=50, search=None, tab='all'):
-    """Newest-first audit trail rows for the admin Audit Logs page.
+    """Fetch newest-first audit rows for the admin Audit Logs page.
 
-    LIKE patterns travel as bound parameters, never inline: a literal %
-    inside the SQL string breaks psycopg2 placeholder parsing.
+    Excludes day-to-day operational noise (circulation: and requests:
+    prefixes, which have dedicated pages) via NOT LIKE filters, applies
+    one allowlisted tab fragment (staff/members/system) with all values
+    still bound as %s parameters (a literal % inside the SQL string
+    breaks psycopg2 parsing), and optionally ILIKE-matches the search
+    text against the activity code.
+
+    Args:
+        limit: Maximum rows to return.
+        search: Optional substring to match inside activity codes.
+        tab: One of 'all', 'staff', 'members', 'system' selecting the
+            actor filter fragment.
+
+    Returns:
+        List of (log_id, full_name, email, role_name, activity,
+        log_timestamp) tuples newest-first.
     """
     clauses = ['(a.activity NOT LIKE %s AND a.activity NOT LIKE %s)']
     params = ['circulation:%', 'requests:%']
@@ -304,12 +539,19 @@ def get_audit_logs(limit=50, search=None, tab='all'):
 
 
 def describe_activity(actor, activity):
-    """Human sentence for an audit row, e.g. 'Staff1 edited book #42'.
+    """Render a human sentence for one stored audit activity code.
 
     Pure presenter — the stored code is unchanged (still rendered small
     next to the sentence). Both legacy codes and newer enriched codes
     (with embedded names / before~>after detail) are understood;
     unknown codes fall back to the raw string.
+
+    Args:
+        actor: Display name of the actor, or None for System.
+        activity: Raw stored activity code string.
+
+    Returns:
+        Human-readable sentence like 'Staff1 edited book #42'.
     """
     import re
     who = actor or 'System'
@@ -498,7 +740,19 @@ LOGIN_ACTIVITIES = ('login', 'first_login')
 
 
 def _activity_category(code):
-    """Bucket an activity code for the category donut."""
+    """Bucket one activity code into a dashboard category label.
+
+    Maps code prefixes (login/logout, backup:, cataloging:, settings:,
+    inventory:, user-management codes, etc.) to the fixed category names
+    used by the audit category donut chart. Unknown codes fall into
+    'Other' so new codes never break the aggregation.
+
+    Args:
+        code: Raw activity code string.
+
+    Returns:
+        Category label string.
+    """
     c = code or ''
     if c in LOGIN_ACTIVITIES:
         return 'Sign-ins'
@@ -535,7 +789,18 @@ def _activity_category(code):
 
 
 def _as_date(value):
-    """Best-effort date from a datetime or DB string; None if unparseable."""
+    """Coerce a datetime, date, or DB string to a date, or None.
+
+    Best-effort helper for audit aggregation: datetimes use .date(),
+    ISO strings are parsed to YYYY-MM-DD, and anything unparseable
+    returns None instead of raising so one bad row never breaks stats.
+
+    Args:
+        value: datetime, date, or string timestamp.
+
+    Returns:
+        A date object, or None if the value is unparseable.
+    """
     from datetime import date
     try:
         if hasattr(value, 'date'):
@@ -546,11 +811,18 @@ def _as_date(value):
 
 
 def _sortable_ts(value):
-    """Naive datetime for ordering mixed date/datetime/string stamps.
+    """Normalize mixed timestamp shapes to one comparable naive datetime.
 
     Raw log_timestamp values are naive datetimes in practice, but a mix
     of dates, datetimes, and strings would crash every comparison, so
-    normalize once and compare only normalized values.
+    normalize once and compare only normalized values. Unparseable
+    values become None.
+
+    Args:
+        value: datetime, date, or ISO string timestamp.
+
+    Returns:
+        Naive datetime for ordering, or None if unparseable.
     """
     from datetime import date, datetime
     try:
@@ -565,11 +837,25 @@ def _sortable_ts(value):
 
 def get_audit_stats(days=AUDIT_STATS_DAYS, limit=AUDIT_STATS_MAX_ROWS,
                     today=None):
-    """Aggregate login/error/category/role stats for the Audit Logs page.
+    """Aggregate login, error, category, and role stats for Audit Logs.
 
-    One bounded query (same operational exclusions as get_audit_logs),
-    everything else in Python. All values JSON-serializable for tojson.
-    `today` is injectable for tests.
+    Runs one bounded query (same operational exclusions as
+    get_audit_logs) over the trailing window, then computes everything
+    else in Python: per-day login/error series, today/7-day login
+    counts, active-now sessions, failed logins, denials, server errors,
+    category breakdown, logins by role, and top error paths. All values
+    are JSON-serializable for tojson.
+
+    Args:
+        days: Trailing window size in days for the query cutoff.
+        limit: Maximum audit rows to pull for aggregation.
+        today: Injectable date for tests (defaults to date.today()).
+
+    Returns:
+        Dict with window_days, total_events, logins_today, logins_7d,
+        active_now, active_users, failed_logins, denials, server_errors,
+        logins_per_day, errors_per_day, by_category, logins_by_role,
+        and top_error_paths.
     """
     from collections import Counter
     from datetime import date, datetime, timedelta
@@ -675,6 +961,16 @@ def get_audit_stats(days=AUDIT_STATS_DAYS, limit=AUDIT_STATS_MAX_ROWS,
 
 
 def approve_user(user_id, updated_by=None):
+    """Approve a pending signup by flipping it to active.
+
+    Sets account_status='active' and stamps updated_at/updated_by so the
+    account can log in immediately. Called from the admin approvals
+    queue after the borrower ID and department are validated.
+
+    Args:
+        user_id: The pending user_accounts row to activate.
+        updated_by: Approving staff user_id for the audit stamp.
+    """
     db.execute(
         'UPDATE user_accounts SET account_status = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s',
         ('active', updated_by, user_id)
@@ -682,6 +978,17 @@ def approve_user(user_id, updated_by=None):
 
 
 def update_user_role(user_id, role_id, updated_by=None):
+    """Change a user's role assignment.
+
+    Updates the role_id FK plus audit stamps. Callers must guard the
+    last-admin rule (never demote the final active Admin) before
+    calling.
+
+    Args:
+        user_id: Target user_accounts row.
+        role_id: New roles FK to assign.
+        updated_by: Acting staff user_id for the audit stamp.
+    """
     db.execute(
         'UPDATE user_accounts SET role_id = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s',
         (role_id, updated_by, user_id)
@@ -689,6 +996,20 @@ def update_user_role(user_id, role_id, updated_by=None):
 
 
 def update_user_details(user_id, full_name, id_number, department, updated_by=None):
+    """Update a user's display name plus their borrower ID and department.
+
+    Writes user_accounts.full_name and the linked borrowers row
+    (id_number, department) with audit stamps, keeping the two tables in
+    sync for admin-side edits. Self-service edits must use
+    update_own_profile instead (which never touches id_number).
+
+    Args:
+        user_id: Target user_accounts row.
+        full_name: New display name.
+        id_number: New canonical school ID for the borrower row.
+        department: New program/department name.
+        updated_by: Acting staff user_id for the audit stamp.
+    """
     db.execute(
         'UPDATE user_accounts SET full_name = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s',
         (full_name, updated_by, user_id)
@@ -700,6 +1021,17 @@ def update_user_details(user_id, full_name, id_number, department, updated_by=No
 
 
 def toggle_user_status(user_id, updated_by=None):
+    """Flip a user account between active and disabled.
+
+    Reads the current account_status first: active becomes disabled and
+    disabled becomes active. Pending and archived accounts are left
+    untouched (returns without writing) because they have dedicated
+    approve/archive flows.
+
+    Args:
+        user_id: Target user_accounts row.
+        updated_by: Acting staff user_id for the audit stamp.
+    """
     cur = db.fetch_one(
         'SELECT account_status FROM user_accounts WHERE user_id = %s',
         (user_id,)
@@ -731,6 +1063,10 @@ def delete_user(user_id):
     deleted here — check :func:`get_user_deletion_blocker` first; the
     route refuses with a friendly message instead of hitting a FK
     violation (500).
+
+    Args:
+        user_id: Archived user_accounts row to hard-delete. Caller must
+            have verified account_status='archived' and no blocker.
     """
     borrower = db.fetch_one(
         'SELECT borrower_id FROM borrowers WHERE user_id = %s',
@@ -805,7 +1141,17 @@ _NULLABLE_USER_REFS = (
 
 
 def get_account_status(user_id):
-    """Raw account_status for archive-before-delete enforcement."""
+    """Fetch the raw account_status for archive-before-delete enforcement.
+
+    Routes read this single column to refuse a DELETE unless the status
+    is 'archived', per the hard-delete rule.
+
+    Args:
+        user_id: Target user_accounts row.
+
+    Returns:
+        1-tuple (account_status,) or None if the user is gone.
+    """
     return db.fetch_one(
         'SELECT account_status FROM user_accounts WHERE user_id = %s',
         (user_id,)
@@ -813,15 +1159,23 @@ def get_account_status(user_id):
 
 
 def get_user_deletion_blocker(user_id):
-    """Human-readable reason an archived account cannot be deleted yet.
+    """Explain why an archived account cannot be hard-deleted yet.
 
-    Returns e.g. 'active loans' when history on a NOT NULL FK (or live
-    operational state) would make the DELETE fail — the route turns this
-    into a flash message instead of a 500. Returns None when the account
-    is safe for :func:`delete_user` to cascade-clean.
+    Checks live operational state (active/overdue loans, waiting/
+    allocated reservations, pending/approved requests) and undeletable
+    staff action history on NOT NULL FK columns (accession_log,
+    circulation_records, inventory_sessions). The route turns a
+    non-None result into a flash message instead of a 500.
 
     Existence checks use fetch_all (empty == clear) so the contrived
     single-tuple fetch_one mocks in the test-suite never read as blockers.
+
+    Args:
+        user_id: Archived user_accounts row being considered for delete.
+
+    Returns:
+        Human-readable blocker like 'active loans', or None when
+        :func:`delete_user` is safe to run.
     """
     borrower = db.fetch_one(
         'SELECT borrower_id FROM borrowers WHERE user_id = %s',
@@ -867,6 +1221,16 @@ def get_user_deletion_blocker(user_id):
 
 
 def archive_user(user_id, updated_by=None):
+    """Soft-delete a user by marking them archived (first delete step).
+
+    Sets account_status='archived' so the account disappears from active
+    listings but its history is preserved. Only archived accounts may
+    later be hard-deleted via delete_user.
+
+    Args:
+        user_id: Target user_accounts row.
+        updated_by: Acting staff user_id for the audit stamp.
+    """
     db.execute(
         'UPDATE user_accounts SET account_status = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s',
         ('archived', updated_by, user_id)
@@ -874,6 +1238,16 @@ def archive_user(user_id, updated_by=None):
 
 
 def unarchive_user(user_id, updated_by=None):
+    """Restore an archived user back to active status.
+
+    Reverses archive_user by setting account_status='active' so the
+    account can log in again. Used from the archived-users management
+    view.
+
+    Args:
+        user_id: Archived user_accounts row to restore.
+        updated_by: Acting staff user_id for the audit stamp.
+    """
     db.execute(
         'UPDATE user_accounts SET account_status = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s',
         ('active', updated_by, user_id)
@@ -881,6 +1255,14 @@ def unarchive_user(user_id, updated_by=None):
 
 
 def get_admin_count():
+    """Count active Admin accounts to protect the last-admin rule.
+
+    Routes refuse to demote, disable, archive, or delete when this would
+    drop to zero, guaranteeing the system always has an administrator.
+
+    Returns:
+        Integer count of active Admin users.
+    """
     row = db.fetch_one(
         '''SELECT COUNT(*) FROM user_accounts u
            JOIN roles r ON u.role_id = r.role_id
@@ -890,10 +1272,18 @@ def get_admin_count():
 
 
 def get_profile_by_user(user_id):
-    """Full self-service profile: user + borrower details incl. phone.
+    """Fetch the full self-service profile for one user.
 
-    Returns (user_id, email, role_name, full_name, borrower_id, id_number,
-             department, phone_number, borrower_status) or None.
+    Joins user_accounts to roles and left-joins borrowers so staff
+    without a borrower row still get a profile. Includes phone and
+    borrower status needed by the profile page.
+
+    Args:
+        user_id: Owner of the profile to load.
+
+    Returns:
+        Tuple (user_id, email, role_name, full_name, borrower_id,
+        id_number, department, phone_number, borrower_status) or None.
     """
     return db.fetch_one(
         '''SELECT u.user_id, u.email, r.role_name, u.full_name,
@@ -907,11 +1297,23 @@ def get_profile_by_user(user_id):
 
 
 def update_own_profile(user_id, full_name, phone_number=None, department=None):
-    """Update editable self-service fields. Never touches id_number.
+    """Update the editable self-service fields of your own profile.
 
+    Writes user_accounts.full_name and the linked borrowers row
+    (phone_number, department) with audit stamps. Never touches
+    id_number, which only admins may change via update_user_details.
     Best-effort atomicity on the non-transactional db helper: the old
     name is re-applied if the borrower update fails, so a midway DB
     failure cannot leave name updated with phone/department stale.
+
+    Args:
+        user_id: Owner of the profile being edited.
+        full_name: New display name.
+        phone_number: New contact number, or None to clear.
+        department: New program/department, or None.
+
+    Raises:
+        Exception: Re-raises the borrower-update failure after rollback.
     """
     old = db.fetch_one(
         'SELECT full_name FROM user_accounts WHERE user_id = %s',
@@ -945,7 +1347,18 @@ DEPT_STATUSES = ('active', 'inactive')
 
 
 def _dept_status(row):
-    """Status at index 3 when present; legacy 3-tuple rows count as active."""
+    """Extract the status element from a department row tuple.
+
+    Reads index 3 when present and truthy; legacy 3-tuple rows without a
+    status column count as 'active'. Never raises on short or malformed
+    rows.
+
+    Args:
+        row: Department tuple (department_id, name, dept_type[, status]).
+
+    Returns:
+        Status string, defaulting to 'active'.
+    """
     try:
         return row[3] if len(row) > 3 and row[3] else 'active'
     except (IndexError, TypeError):
@@ -953,12 +1366,21 @@ def _dept_status(row):
 
 
 def get_departments(dept_type=None, include_inactive=False):
-    """Controlled-vocabulary entries as (department_id, name, dept_type, status).
+    """List controlled-vocabulary program/department entries.
 
-    Default returns active entries only — every registration/profile
+    Returns (department_id, name, dept_type, status) rows. By default
+    only active entries are returned — every registration/profile
     dropdown and option list must never show inactive values. Pass
     include_inactive=True for the management listing so librarians can
     see and reactivate inactive entries.
+
+    Args:
+        dept_type: Optional 'program' or 'department' filter.
+        include_inactive: When True, include status='inactive' rows.
+
+    Returns:
+        List of (department_id, name, dept_type, status) tuples ordered
+        by name (or by type then name when unfiltered).
     """
     status_filter = '' if include_inactive else " AND status = 'active'"
     if dept_type:
@@ -975,11 +1397,36 @@ def get_departments(dept_type=None, include_inactive=False):
 
 
 def get_active_departments(dept_type=None):
-    """Active entries only (registration/profile/edit options)."""
+    """List active vocabulary entries for public dropdowns and options.
+
+    Thin wrapper over get_departments with include_inactive=False, so
+    registration, profile, and edit forms only offer currently-active
+    programs/departments.
+
+    Args:
+        dept_type: Optional 'program' or 'department' filter.
+
+    Returns:
+        List of (department_id, name, dept_type, status) tuples.
+    """
     return get_departments(dept_type, include_inactive=False)
 
 
 def is_valid_department(name, dept_type):
+    """Check whether a name is an active vocab entry of the given type.
+
+    Used to validate registration/profile submissions against the
+    controlled vocabulary, rejecting inactive entries and cross-type
+    mismatches (e.g. a faculty department submitted as a student
+    program).
+
+    Args:
+        name: Exact vocabulary name to validate.
+        dept_type: Required 'program' or 'department' type.
+
+    Returns:
+        True when an active entry with that name and type exists.
+    """
     row = db.fetch_one(
         "SELECT 1 FROM departments WHERE name = %s AND dept_type = %s AND status = 'active'",
         (name, dept_type)
@@ -988,7 +1435,18 @@ def is_valid_department(name, dept_type):
 
 
 def is_valid_any_department(name):
-    """Staff (Admin/Librarian) may hold either a program or a department."""
+    """Check whether a name is any active vocab entry of either type.
+
+    Staff (Admin/Librarian) may hold either a program or a department,
+    so their validation accepts both types, unlike the role-specific
+    is_valid_department.
+
+    Args:
+        name: Exact vocabulary name to validate.
+
+    Returns:
+        True when an active entry with that name exists in any type.
+    """
     row = db.fetch_one(
         "SELECT 1 FROM departments WHERE name = %s AND status = 'active'",
         (name,)
@@ -997,6 +1455,18 @@ def is_valid_any_department(name):
 
 
 def create_department(name, dept_type):
+    """Insert a new program/department vocabulary entry if not present.
+
+    Uses ON CONFLICT DO NOTHING so re-adding an existing name is a safe
+    no-op rather than an error.
+
+    Args:
+        name: Vocabulary name to add.
+        dept_type: 'program' or 'department'.
+
+    Returns:
+        Rowcount from the INSERT (0 when the name already existed).
+    """
     return db.execute(
         'INSERT INTO departments (name, dept_type) VALUES (%s, %s) ON CONFLICT DO NOTHING',
         (name, dept_type)
@@ -1004,6 +1474,17 @@ def create_department(name, dept_type):
 
 
 def get_department_by_id(department_id):
+    """Fetch one vocabulary entry by its primary key.
+
+    Used by status-toggle and delete routes to confirm the entry exists
+    and to report its name in flash/audit messages.
+
+    Args:
+        department_id: Primary key of departments.
+
+    Returns:
+        Tuple (department_id, name, dept_type, status) or None.
+    """
     return db.fetch_one(
         'SELECT department_id, name, dept_type, status FROM departments WHERE department_id = %s',
         (department_id,)
@@ -1011,7 +1492,16 @@ def get_department_by_id(department_id):
 
 
 def get_department_by_name(name):
-    """Single vocab entry by exact name (for JSON add responses)."""
+    """Fetch one vocabulary entry by its exact name.
+
+    Used after inserts to return the new row for JSON add responses.
+
+    Args:
+        name: Exact vocabulary name to look up.
+
+    Returns:
+        Tuple (department_id, name, dept_type, status) or None.
+    """
     return db.fetch_one(
         'SELECT department_id, name, dept_type, status FROM departments WHERE name = %s',
         (name,)
@@ -1019,7 +1509,19 @@ def get_department_by_name(name):
 
 
 def update_department_status(department_id, status):
-    """Switch a program/department between active and inactive."""
+    """Activate or deactivate a program/department vocabulary entry.
+
+    Switches the status between 'active' and 'inactive'. Inactive
+    entries vanish from all public dropdowns but remain resolvable for
+    existing borrower rows and the management listing.
+
+    Args:
+        department_id: Target departments row.
+        status: New status, 'active' or 'inactive'.
+
+    Returns:
+        Rowcount from the UPDATE.
+    """
     return db.execute(
         'UPDATE departments SET status = %s WHERE department_id = %s',
         (status, department_id)
@@ -1027,13 +1529,21 @@ def update_department_status(department_id, status):
 
 
 def count_borrowers_in_department(name, dept_type=None):
-    """Borrowers actually bound to a vocab entry.
+    """Count borrowers bound to a vocabulary entry to guard deletion.
 
     Programs are only selectable by Students and departments only by
     Faculty, so a same-named value on the other side (e.g. a student
     program "BA Communication" vs the faculty department of the same
     name) must not block deletion. Unscoped (dept_type=None) keeps the
     legacy all-borrower count.
+
+    Args:
+        name: Vocabulary name to count usage for.
+        dept_type: Optional 'program' (Students only) or 'department'
+            (Faculty only) scope; None counts all borrowers.
+
+    Returns:
+        Integer borrower count using that entry.
     """
     if dept_type == 'program':
         row = db.fetch_one(
@@ -1060,4 +1570,13 @@ def count_borrowers_in_department(name, dept_type=None):
 
 
 def delete_department(department_id):
+    """Hard-delete a vocabulary entry by primary key.
+
+    Callers must first verify count_borrowers_in_department is zero so
+    no borrower row still references the name; the route refuses with a
+    friendly message otherwise.
+
+    Args:
+        department_id: Target departments row to delete.
+    """
     db.execute('DELETE FROM departments WHERE department_id = %s', (department_id,))

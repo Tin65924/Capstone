@@ -479,6 +479,7 @@ A form without the toggle must not flip restore off."""
 class TestUpdateHostile:
     @staticmethod
     def _defs(mock_db):
+        """Test helper _defs: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = []
 

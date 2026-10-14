@@ -8,6 +8,22 @@ login_manager.login_message_category = 'info'
 
 @login_manager.user_loader
 def load_user(user_id):
+    """Load the session user from the database for Flask-Login.
+
+    Called on every request with an authenticated session cookie. Looks
+    up the account via ``get_user_by_id`` (active accounts only), so
+    disabled, pending, or archived users are logged out naturally on
+    their next request. Any transient database failure or malformed row
+    returns None (redirect to login) instead of raising a 500 on every
+    page navigation.
+
+    Args:
+        user_id: Primary key from the session cookie (string form).
+
+    Returns:
+        A :class:`app.auth.user.User` instance, or None when the
+        account is missing, inactive, or the lookup fails.
+    """
     from flask import current_app
     from app.auth.models import get_user_by_id
     from app.auth.user import User
@@ -36,6 +52,18 @@ def load_user(user_id):
 
 @login_manager.unauthorized_handler
 def unauthorized():
+    """Redirect anonymous visitors to the login page with an audit note.
+
+    Records a ``system:auth_required:<path>`` event (best-effort, never
+    breaking the redirect) so repeated anonymous probes of protected
+    URLs stay visible in the admin audit views. Then flashes an info
+    message and redirects to the Google sign-in page, preserving the
+    original path as ``next`` for a post-login return.
+
+    Returns:
+        A Flask redirect response to ``auth.login`` with the ``next``
+        query parameter set to the requested path.
+    """
     from flask import flash, redirect, url_for, request
 
     try:

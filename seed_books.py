@@ -536,15 +536,42 @@ CALL_PREFIX = {
 
 
 def flatten_books():
-    """Yield (program, title, author, edition, publisher, year, subject,
-    copies, blurb) in a stable order."""
+    """Yield every catalog entry tagged with its academic program.
+
+    Iterates ``PROGRAMS`` in declaration order and yields each ``BOOKS``
+    entry as a ``(program, title, author, edition, publisher, year,
+    subject, copies, blurb)`` tuple, so seeding is deterministic and
+    per-program reports stay stable across runs.
+
+    Yields:
+        tuple: Program name followed by the 8 book-tuple fields
+            ``(title, author, edition, publisher, year, subject,
+            copies, blurb)``.
+
+    Side effects:
+        None; pure generator over the in-memory ``BOOKS`` mapping.
+    """
     for program in PROGRAMS:
         for entry in BOOKS.get(program, []):
             yield (program,) + entry
 
 
 def isbn13_for(index):
-    """Deterministic, unique, check-digit-valid ISBN-13 per title index."""
+    """Build a deterministic, check-digit-valid ISBN-13 for a title index.
+
+    Derives a unique 12-digit ``978`` core from ``index`` (step 7919 keeps
+    neighbours far apart), computes the real ISBN-13 check digit, and
+    formats the result in hyphenated groups.
+
+    Args:
+        index (int): Zero-based position of the title in ``flatten_books``.
+
+    Returns:
+        str: Hyphenated ISBN-13 such as ``"978-1-234-56789-0"``.
+
+    Side effects:
+        None; pure function of ``index``.
+    """
     core = "%09d" % (100000000 + index * 7919)
     digits = "978" + core  # 12 digits
     total = sum(int(d) * (1 if i % 2 == 0 else 3) for i, d in enumerate(digits))
@@ -554,12 +581,49 @@ def isbn13_for(index):
 
 
 def call_number_for(program, index, year):
+    """Build a deterministic Library-of-Congress-style call number.
+
+    Combines the program's ``CALL_PREFIX`` with a cutter derived from
+    ``index`` and the book's publication year, so every seeded title gets
+    a unique, reproducible shelf mark.
+
+    Args:
+        program (str): Program name key into ``CALL_PREFIX``.
+        index (int): Zero-based title position; drives the cutter.
+        year (int): Publication year appended to the call number.
+
+    Returns:
+        str: Call number such as ``"QA.A123 2020"``.
+
+    Side effects:
+        None; pure string formatting.
+    """
     prefix = CALL_PREFIX[program]
     cutter = chr(65 + (index % 26)) + str(100 + (index * 37) % 800)
     return "%s.%s %d" % (prefix, cutter, year)
 
 
 def get_conn(dsn):
+    """Open a psycopg2 connection for seeding (autocommit off).
+
+    Prefers the explicit ``--dsn`` value and falls back to
+    ``DATABASE_URL`` from ``.env``; normalises Render-style
+    ``postgres://`` URLs to the ``postgresql://`` scheme psycopg2
+    expects. Exits the process with a message when no DSN is set or
+    the connection fails, since seeding cannot proceed.
+
+    Args:
+        dsn (str | None): Explicit Postgres connection string, or None
+            to read ``DATABASE_URL`` from the environment.
+
+    Returns:
+        psycopg2 connection: Open connection with ``autocommit=False``;
+            the caller owns commit/rollback/close.
+
+    Side effects:
+        Loads ``.env`` via ``load_dotenv``; calls ``sys.exit`` on
+        missing DSN or connection failure.
+    """
     from dotenv import load_dotenv
 
     load_dotenv()
@@ -581,7 +645,25 @@ def get_conn(dsn):
 
 def ensure_schema(conn):
     """Apply app/schema.sql statement-by-statement (same approach as
-    app/database.py:run_schema) so the seeder works on an empty database."""
+    app/database.py:run_schema) so the seeder works on an empty database.
+
+    Skips silently when ``app/schema.sql`` is missing or when the
+    ``book_catalog``/``accession_log``/``departments`` tables already
+    exist. Comment lines are stripped before splitting on ``;``; each
+    statement is committed individually and a failing statement is
+    rolled back without aborting the rest.
+
+    Args:
+        conn: Open psycopg2 connection used to probe for tables and to
+            execute the schema statements.
+
+    Returns:
+        None.
+
+    Side effects:
+        Creates tables (and seed roles) in the database on a fresh
+        install; commits per statement, rolls back failures.
+    """
     schema_path = os.path.join(os.path.dirname(__file__), "app", "schema.sql")
     if not os.path.isfile(schema_path):
         return
@@ -612,6 +694,22 @@ def ensure_schema(conn):
 
 
 def ensure_seed_librarian(cur):
+    """Return the user id recorded as librarian on seeded copies.
+
+    Reuses the lowest-id existing Librarian/Admin account when one
+    exists; otherwise ensures the ``Librarian`` role exists and upserts
+    the ``SEED_LIBRARIAN_EMAIL`` account, since every ``accession_log``
+    row requires a non-null ``librarian_id``.
+
+    Args:
+        cur: Open DB cursor on the seeding transaction.
+
+    Returns:
+        int: ``user_id`` of the existing or newly created librarian.
+
+    Side effects:
+        May INSERT into ``roles`` and INSERT/UPDATE ``user_accounts``.
+    """
     cur.execute(
         "SELECT user_id FROM user_accounts "
         "WHERE role_id IN (SELECT role_id FROM roles "
@@ -641,6 +739,23 @@ def ensure_seed_librarian(cur):
 
 
 def ensure_departments(cur):
+    """Register the 9 academic programs in ``departments``.
+
+    Inserts each name in ``PROGRAMS`` with ``dept_type='program'`` using
+    ``ON CONFLICT DO NOTHING``, so reruns never duplicate rows.
+    ``book_catalog`` has no program column; the department rows plus each
+    title's ``subject_classification``/``description`` carry the program
+    link instead.
+
+    Args:
+        cur: Open DB cursor on the seeding transaction.
+
+    Returns:
+        None.
+
+    Side effects:
+        INSERTs missing program rows into ``departments``.
+    """
     for name in PROGRAMS:
         cur.execute(
             """INSERT INTO departments (name, dept_type) VALUES (%s, 'program')
@@ -651,7 +766,24 @@ def ensure_departments(cur):
 
 def reset_seed(cur):
     """Wipe the whole book collection so a fresh database can be reseeded
-    from scratch. Deletes dependents first to satisfy foreign keys."""
+    from scratch. Deletes dependents first to satisfy foreign keys.
+
+    Clears ``circulation_records``, ``inventory_status``,
+    ``reservation_queue``, ``user_favorites`` and ``procurement_log``,
+    unlinks ``request_records.matched_book_id``, then deletes
+    ``accession_log`` and ``book_catalog``. Only use when the seeded
+    data IS the collection — never once real circulation data exists.
+
+    Args:
+        cur: Open DB cursor; the caller commits the wiped transaction.
+
+    Returns:
+        None.
+
+    Side effects:
+        DELETEs all book-collection rows (and their dependents);
+        prints per-table row counts.
+    """
     cur.execute("DELETE FROM circulation_records")
     print("removed %d circulation rows" % cur.rowcount)
     cur.execute("DELETE FROM inventory_status")
@@ -673,7 +805,22 @@ def reset_seed(cur):
 
 def _next_accession_seq(cur, prefix):
     """Next free sequence number: max(numeric suffix)+1 over accession
-    numbers matching this run's format, so reruns never reuse a number."""
+    numbers matching this run's format, so reruns never reuse a number.
+
+    Scans existing ``accession_number`` values for the ``^{prefix}NNNN``
+    pattern and returns one past the highest numeric suffix (1 on a
+    fresh database), keeping numbering gap-free per prefix.
+
+    Args:
+        cur: Open DB cursor used for the accession-number scan.
+        prefix (str): Accession prefix for this run (``""`` by default).
+
+    Returns:
+        int: First unused sequence number for ``prefix``.
+
+    Side effects:
+        None; read-only SELECT.
+    """
     cur.execute("SELECT accession_number FROM accession_log")
     pattern = re.compile(r"^%s(\d+)$" % re.escape(prefix))
     best = 0
@@ -685,7 +832,20 @@ def _next_accession_seq(cur, prefix):
 
 
 def _copy_counts(cur, book_ids):
-    """Existing copy count per title."""
+    """Existing copy count per title.
+
+    Args:
+        cur: Open DB cursor used for the aggregate query.
+        book_ids (set[int]): Catalog ids to count copies for; an empty
+            set short-circuits to ``{}`` without hitting the database.
+
+    Returns:
+        dict[int, int]: Mapping of ``book_id`` to its current number of
+            rows in ``accession_log``.
+
+    Side effects:
+        None; read-only ``GROUP BY`` SELECT.
+    """
     if not book_ids:
         return {}
     cur.execute(
@@ -697,6 +857,33 @@ def _copy_counts(cur, book_ids):
 
 
 def seed(conn, target, prefix=""):
+    """Seed the catalog and physical copies up to ``target`` (idempotent).
+
+    Ensures departments and the seed librarian, tops up the planned
+    per-title copy counts with round-robin extras on multi-copy titles
+    so ``target`` is always reached, matches books on the natural key
+    ``(title, author, isbn)`` (reusing existing titles, never
+    duplicating — the same rule as the cataloging add-book flow), and
+    inserts only each title's shortfall of ``accession_log`` rows
+    numbered sequentially from ``max(existing)+1``.
+
+    Args:
+        conn: Open psycopg2 connection; committed inside on success.
+        target (int): Minimum total physical copies desired.
+        prefix (str): Accession-number prefix (``""`` yields
+            ``0001``, ``0002``, ...).
+
+    Returns:
+        dict: Report with ``titles_new``, ``titles_reused``,
+            ``copies_new``, ``copies_skipped``, ``per_program``
+            ``{program: [titles, copies]}``, ``total_titles`` and
+            ``total_copies``.
+
+    Side effects:
+        INSERTs into ``departments``, ``roles``/``user_accounts`` (seed
+        librarian), ``book_catalog`` and ``accession_log``; commits the
+        transaction.
+    """
     cur = conn.cursor()
     ensure_departments(cur)
     librarian_id = ensure_seed_librarian(cur)
@@ -811,6 +998,25 @@ def seed(conn, target, prefix=""):
 
 
 def main():
+    """Parse CLI flags and run the book seeder end to end.
+
+    Handles ``--dsn`` (falls back to ``DATABASE_URL``), ``--target``
+    (minimum copies), ``--reset`` (wipe the collection first — fresh
+    databases only) and ``--prefix`` (accession numbering scheme);
+    applies the schema, seeds, prints the per-program report, and
+    exits non-zero when the final copy count is below target.
+
+    Args:
+        None; reads ``sys.argv`` via ``argparse``.
+
+    Returns:
+        None.
+
+    Side effects:
+        Opens/closes a DB connection, writes seeded rows (commits via
+        ``seed``), rolls back on failure, and prints the seeder report
+        to stdout.
+    """
     ap = argparse.ArgumentParser(description="Seed 5000+ book copies.")
     ap.add_argument("--dsn", default=None,
                     help="Postgres connection string "

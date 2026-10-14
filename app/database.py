@@ -4,12 +4,36 @@ from psycopg2 import pool
 from flask import current_app, g
 
 class Database:
+    """Threaded PostgreSQL connection pool wrapper used by every model module.
+
+    Holds a single psycopg2 ThreadedConnectionPool and binds one pooled
+    connection per Flask request via ``flask.g``. All SQL in the codebase
+    flows through this class so transaction handling, broken-connection
+    recovery, and pool return live in one place.
+    """
+
     def __init__(self, app=None):
+        """Create the wrapper, optionally binding it to a Flask app immediately.
+
+        Args:
+            app: Flask application to call :meth:`init_app` on, or None to
+                bind later (the module-level ``db`` singleton uses this).
+        """
         self._pool = None
         if app is not None:
             self.init_app(app)
 
     def init_app(self, app):
+        """Build the connection pool from app config and register teardown.
+
+        Reads ``DATABASE_URL`` from the Flask config, adds connect timeout
+        and TCP keepalive parameters, creates a ThreadedConnectionPool
+        (1-10 connections), and registers :meth:`close_connection` as the
+        app-context teardown so each request returns its connection.
+
+        Args:
+            app: Flask application whose config holds DATABASE_URL.
+        """
         dsn = _with_conn_params(app.config['DATABASE_URL'])
         self._pool = pool.ThreadedConnectionPool(
             minconn=1,
@@ -19,6 +43,19 @@ class Database:
         app.teardown_appcontext(self.close_connection)
 
     def get_connection(self):
+        """Return the current request's pooled PostgreSQL connection.
+
+        Reuses the connection stored on ``flask.g`` when one already exists
+        for this request, otherwise checks one out of the pool. Validates
+        the checkout with ``SELECT 1`` because hosting providers
+        (Render/Neon/Supabase) silently close idle connections, and a dead
+        pooled connection would otherwise cause a random 500 on the next
+        page load. A failed validation discards that slot and checks out
+        a fresh connection.
+
+        Returns:
+            A live psycopg2 connection bound to the current request.
+        """
         if 'db_conn' in g:
             return g.db_conn
         conn = self._pool.getconn()
@@ -43,6 +80,16 @@ class Database:
         return conn
 
     def close_connection(self, exc=None):
+        """Return the current request's connection to the pool at teardown.
+
+        Pops ``db_conn`` off ``flask.g`` and puts it back in the pool,
+        closing the slot instead when the connection is already dead. Any
+        teardown error is swallowed so teardown itself never raises.
+
+        Args:
+            exc: Exception that ended the request, if any (ignored; required
+                by the Flask teardown signature).
+        """
         conn = g.pop('db_conn', None)
         if conn is not None:
             try:
@@ -54,6 +101,32 @@ class Database:
                 pass
 
     def execute(self, query, params=None):
+        """Run any SQL statement and commit it, rolling back on failure.
+
+        This is the single choke point for all database access: every
+        ``fetch_one``/``fetch_all``/write in every ``models.py`` calls
+        through here. SELECT statements return a list of positional tuple
+        rows; INSERT/UPDATE/DELETE return the cursor rowcount, except an
+        INSERT ... RETURNING which returns its returned rows. Commits after
+        every statement (including reads) so pooled connections never sit
+        idle-in-transaction holding locks that would block DDL such as a
+        backup restore. On error the transaction is rolled back, a broken
+        connection is discarded rather than returned to the pool, a warning
+        is logged, and the original exception is re-raised for the route's
+        error handler.
+
+        Args:
+            query: SQL string with ``%s`` placeholders (never f-string
+                interpolated values).
+            params: Tuple/list of bound parameters, or None.
+
+        Returns:
+            List of row tuples for statements that return rows, otherwise
+            the affected-row count.
+
+        Raises:
+            Exception: Whatever psycopg2 raised, after rollback.
+        """
         conn = self.get_connection()
         try:
             with conn.cursor() as cur:
@@ -89,10 +162,37 @@ class Database:
             raise e
 
     def fetch_one(self, query, params=None):
+        """Fetch a single row for a SELECT expected to match zero or one rows.
+
+        Convenience wrapper over :meth:`execute` used by all ``get_*``
+        single-row model lookups. Returns the first positional tuple or
+        None when nothing matched.
+
+        Args:
+            query: SELECT SQL with ``%s`` placeholders.
+            params: Bound parameters, or None.
+
+        Returns:
+            The first row tuple, or None if the query returned no rows.
+        """
         rows = self.execute(query, params)
         return rows[0] if rows else None
 
     def fetch_all(self, query, params=None):
+        """Fetch every row for a SELECT expected to match many rows.
+
+        Convenience wrapper over :meth:`execute` used by all list/search
+        model queries. SELECT column order is the tuple contract callers
+        index into. Returns an empty list (or rowcount passthrough from the
+        mock in tests) when nothing matched.
+
+        Args:
+            query: SELECT SQL with ``%s`` placeholders.
+            params: Bound parameters, or None.
+
+        Returns:
+            List of row tuples (possibly empty).
+        """
         return self.execute(query, params)
 
 db = Database()
@@ -139,6 +239,20 @@ def _with_connect_timeout(dsn, seconds=10):
 
 
 def run_schema(app):
+    """Apply schema.sql plus follow-up constraint patches at app startup.
+
+    Reads ``app/schema.sql`` (the idempotent source of truth, safe to
+    re-apply), strips full-line ``--`` comments, and executes it
+    statement-by-statement so one failing statement never rolls back the
+    whole schema into an empty database. Then applies extra ALTER TABLE
+    patches (account/backup/accession status checks, phone/is_read
+    columns, notification and analytics-cache checks) the same way.
+    Skips entirely with a warning when schema.sql is missing or a
+    statement fails, logging applied/skipped counts. Never raises.
+
+    Args:
+        app: Flask application providing config and ``logger``.
+    """
     schema_path = os.path.join(os.path.dirname(__file__), 'schema.sql')
     if not os.path.isfile(schema_path):
         app.logger.warning('schema.sql not found — skipping schema initialization')
@@ -146,6 +260,19 @@ def run_schema(app):
     conn = db._pool.getconn()
     try:
         def _exec_each(statements):
+            """Execute one batch of raw DDL statements, counting results.
+
+            Runs each non-blank statement on the schema connection with an
+            immediate commit, rolling back and warning per failed
+            statement instead of aborting the batch, so a partially
+            initialized database still converges on restart.
+
+            Args:
+                statements: Iterable of raw SQL statement strings.
+
+            Returns:
+                Tuple (ok, failed) of applied vs skipped statement counts.
+            """
             ok, failed = 0, 0
             with conn.cursor() as cur:
                 for stmt in statements:
@@ -249,6 +376,16 @@ def run_schema(app):
 
 
 def init_db(app):
+    """Initialize the connection pool and sync the schema for the app.
+
+    Calls :meth:`Database.init_app` to build the pool, then unless
+    ``SKIP_SCHEMA_SYNC`` is set in config (used by tooling/tests),
+    invokes :func:`run_schema` to re-apply the idempotent schema at
+    every startup.
+
+    Args:
+        app: Flask application to initialize database access for.
+    """
     db.init_app(app)
     if app.config.get('SKIP_SCHEMA_SYNC'):
         app.logger.info('SKIP_SCHEMA_SYNC is set — skipping schema initialization.')

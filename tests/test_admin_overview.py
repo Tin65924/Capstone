@@ -4,6 +4,7 @@ from datetime import datetime
 
 
 def _admin_ok(mock_db):
+    """Test helper _admin_ok: build mocked data or DB stub for the test."""
     mock_db['fetch_one'].return_value = (0,)
     mock_db['fetch_all'].return_value = []
 
@@ -69,6 +70,7 @@ class TestAdminOverviewStats:
 
 class TestAdminDashboardRoute:
     def _mock_overview(self, mock_db):
+        """Test helper _mock_overview: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].side_effect = [(42,), (3,), (120,), (350,)]
         mock_db['fetch_all'].side_effect = [
             [('Librarian', 4), ('Faculty', 6)],  # count_active_users_by_role

@@ -41,7 +41,24 @@ TERMINAL_STATES = ('done', 'failed')
 
 
 def start_job(kind, label, user_id, backup_id=None):
-    """Register a job and return its id. Prunes stale finished jobs."""
+    """Register a background backup/restore job and return its id.
+
+    Creates a ``running`` entry in the in-memory ``_jobs`` dict and
+    prunes finished jobs older than ``_JOB_TTL`` so the dict stays
+    bounded across restarts. Only one job runs at a time (enforced by
+    the routes' busy guard); the returned id lets the page banner and
+    the worker coordinate on completion.
+
+    Args:
+        kind: ``'backup'`` or ``'restore'`` for progress messaging.
+        label: Human-readable label shown on the backup page banner.
+        user_id: Acting admin id for audit rows written by the worker.
+        backup_id: Pre-inserted backup_log row for backups, or None
+            for restores (which snapshot first).
+
+    Returns:
+        The new hex job id string.
+    """
     now = time.time()
     job_id = uuid.uuid4().hex
     with _jobs_lock:
@@ -65,7 +82,16 @@ def start_job(kind, label, user_id, backup_id=None):
 
 
 def active_job():
-    """The currently running job, if any (only one at a time)."""
+    """Return the currently running job, if any (only one at a time).
+
+    Scans the in-memory ``_jobs`` dict for any entry outside
+    ``TERMINAL_STATES`` and returns a copy so callers cannot mutate the
+    registry. Used by the backup page busy banner and the concurrency
+    guard that refuses a second backup/restore while one runs.
+
+    Returns:
+        Dict copy of the running job, or None when idle.
+    """
     with _jobs_lock:
         for job in _jobs.values():
             if job['status'] not in TERMINAL_STATES:
@@ -74,7 +100,20 @@ def active_job():
 
 
 def recent_finished_job(max_age=_FINISHED_BANNER_AGE):
-    """Most recent terminal job within `max_age` seconds, else None."""
+    """Return the most recent terminal job within max_age, else None.
+
+    Powers the one-shot success/failure banner on the backup page after
+    a worker finishes: only jobs updated within ``max_age`` seconds
+    (default 10 minutes) surface, so stale results from hours ago do not
+    confuse the next admin visit. Picks the newest terminal entry when
+    several exist.
+
+    Args:
+        max_age: Maximum age in seconds for a finished job to count.
+
+    Returns:
+        Dict copy of the newest terminal job in window, or None.
+    """
     now = time.time()
     with _jobs_lock:
         finished = [j for j in _jobs.values()
@@ -86,6 +125,20 @@ def recent_finished_job(max_age=_FINISHED_BANNER_AGE):
 
 
 def _finish(job_id, app, status, filename=None, error=None):
+    """Mark a background job terminal and log its outcome.
+
+    Updates the in-memory entry to ``done``/``failed`` with the result
+    filename or truncated error and a fresh timestamp, then logs the
+    outcome to the app logger. Unknown job ids are ignored (the registry
+    may have been pruned). Never raises; worker completion must not fail.
+
+    Args:
+        job_id: Hex id returned by :func:`start_job`.
+        app: Flask app for logging, or None to skip logging.
+        status: Terminal state (``'done'`` or ``'failed'``).
+        filename: Result backup filename on success.
+        error: Truncated error message on failure.
+    """
     with _jobs_lock:
         job = _jobs.get(job_id)
         if not job:
@@ -100,7 +153,22 @@ def _finish(job_id, app, status, filename=None, error=None):
 
 
 def run_backup_job(app, job_id, backup_id, user_id, keep_n):
-    """Worker body: pg_dump, then flip the in_progress row. Never raises out."""
+    """Run the pg_dump worker body and flip the in_progress row.
+
+    Worker body: pg_dump, then flip the in_progress row. Never raises out.
+    Runs inside an app context on a daemon thread: dumps via
+    ``create_backup``, flips the pre-inserted row to ``completed`` (or
+    ``failed`` with a truncated error), applies retention, and records
+    the audit event. All exceptions are converted to row/job updates so
+    they never propagate out of the thread.
+
+    Args:
+        app: Flask app providing context and logger.
+        job_id: In-memory job id to finish.
+        backup_id: Pre-inserted backup_log row to update.
+        user_id: Acting admin id for the audit trail.
+        keep_n: Retention count passed to ``apply_retention``.
+    """
     with app.app_context():
         try:
             filename, size_bytes = create_backup()
@@ -121,7 +189,22 @@ def run_backup_job(app, job_id, backup_id, user_id, keep_n):
 
 
 def run_restore_job(app, job_id, user_id, backup_id, filename):
-    """Worker body: safety snapshot, then atomic replace. Never raises out."""
+    """Run the restore worker body with a safety snapshot first.
+
+    Worker body: safety snapshot, then atomic replace. Never raises out.
+    Verifies the target row is ``completed``, snapshots current data via
+    ``create_backup`` (aborting when no safety net exists), preserves
+    backup history across the full-dump replay, replays the dump, then
+    reconciles history and audits. Every failure path finishes the job
+    as failed with a message instead of raising.
+
+    Args:
+        app: Flask app providing context and logger.
+        job_id: In-memory job id to finish.
+        user_id: Acting admin id for the audit trail.
+        backup_id: backup_log row being restored from.
+        filename: Dump filename inside BACKUP_DIR to replay.
+    """
     with app.app_context():
         row = get_backup_by_id(backup_id)
         if not row or row[3] != 'completed':

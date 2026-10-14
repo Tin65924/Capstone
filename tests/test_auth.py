@@ -752,6 +752,7 @@ class TestUserCardFilters:
     ]
 
     def _mock_lists(self, mock_db):
+        """Test helper _mock_lists: build mocked data or DB stub for the test."""
         mock_db['fetch_all'].side_effect = [
             list(self.USERS),  # get_all_users
             [],                # get_pending_users

@@ -41,6 +41,15 @@ def _safe_next(default_endpoint):
 
 
 def _safe_departments(dept_type):
+    """Fetch program/department vocab tolerating DB failures.
+    Wraps get_departments so a database error degrades to an empty list
+    instead of breaking the profile page render. Used for the profile
+    program and department dropdowns.
+    Args:
+        dept_type: Vocab type string ('program' or 'department').
+    Returns:
+        List of vocab rows, or empty list when unavailable.
+    """
     try:
         from app.auth.models import get_departments
         return get_departments(dept_type) or []
@@ -103,6 +112,15 @@ def _overdue_loan_ids(loans, today, id_idx=0, due_idx=2, status_idx=4):
 
 @main_bp.route('/')
 def index():
+    """Render the public landing page (GET /, no login).
+    Public endpoint with no RBAC guard. Fetches five recent books for the
+    new-arrivals section and renders the homepage. Read-only with no
+    audit row.
+    Args:
+        None.
+    Returns:
+        Rendered public/index.html with new arrivals.
+    """
     new_arrivals = get_recent_books(5)
     return render_template('public/index.html', new_arrivals=new_arrivals)
 
@@ -133,12 +151,32 @@ def health_db():
 @main_bp.route('/dashboard')
 @login_required
 def dashboard():
+    """Redirect the legacy dashboard URL to the user profile.
+    Requires login with no role restriction. Kept so old bookmarks and
+    role guards landing on /dashboard forward to /user/profile instead
+    of 404ing. Writes no audit row.
+    Args:
+        None.
+    Returns:
+        Redirect to the user profile page.
+    """
     return redirect(url_for('main.user_profile'))
 
 
 @main_bp.route('/user/profile')
 @login_required
 def user_profile():
+    """Render the signed-in user's profile hub (GET, any login).
+    Requires login with no role restriction. Loads user, profile, loans
+    with overdue flags, borrow limits, allocated pickups, requests,
+    notifications with auto-generated due-soon and overdue reminders,
+    and fines, plus program/department vocab. Read-only aside from
+    reminder notification writes.
+    Args:
+        None.
+    Returns:
+        Rendered users/user_profile.html with loans and notifications.
+    """
     from app.auth.models import get_user_by_id, get_profile_by_user
     from app.circulation.models import (
         get_borrower_by_user, get_loans_by_borrower, count_active_loans,
@@ -279,6 +317,16 @@ def user_profile():
 @main_bp.route('/user/profile/update', methods=['POST'])
 @login_required
 def update_profile():
+    """Update the signed-in user's own profile (POST, any login).
+    Requires login with no role restriction. Validates full name, phone,
+    and controlled-vocabulary department (ID numbers are immutable),
+    updates via update_own_profile, logs profile:update, flashes the
+    outcome, and redirects to the profile page (Post/Redirect/Get).
+    Args:
+        None (reads `full_name`, `phone_number`, `department` forms).
+    Returns:
+        Redirect to the user profile page with a flash message.
+    """
     import re
     from app.auth.models import get_profile_by_user, update_own_profile, log_activity, is_valid_department, is_valid_any_department
 
@@ -342,6 +390,15 @@ def update_profile():
 @main_bp.route('/user/notifications')
 @login_required
 def user_notifications():
+    """Render the user's paginated notifications (GET, any login).
+    Requires login with no role restriction. Loads all borrower
+    notifications plus the unread count, slices 10 per page with clamped
+    pagination, and renders the list. Read-only; writes no audit row.
+    Args:
+        None (reads optional `page` query arg).
+    Returns:
+        Rendered users/user_notifications.html with page slice and counts.
+    """
     from app.circulation.models import (
         get_borrower_by_user, get_notifications_by_borrower, count_unread_notifications
     )
@@ -380,6 +437,16 @@ def user_notifications():
 @main_bp.route('/user/notifications/<int:notification_id>/read', methods=['POST'])
 @login_required
 def mark_notification_read_route(notification_id):
+    """Mark one notification as read (POST, any login).
+    Requires login with no role restriction. Scopes the write to the
+    caller's borrower row via mark_notification_read, logs
+    notifications:read:<id>, and returns JSON unread counts for AJAX or
+    a safe-next redirect otherwise.
+    Args:
+        notification_id: Primary key of the notification to mark read.
+    Returns:
+        JSON read payload for AJAX, else redirect with flash handling.
+    """
     from app.circulation.models import get_borrower_by_user, mark_notification_read
     from app.auth.models import log_activity
     borrower = get_borrower_by_user(current_user.id)
@@ -400,6 +467,16 @@ def mark_notification_read_route(notification_id):
 @main_bp.route('/user/notifications/read-all', methods=['POST'])
 @login_required
 def mark_all_notifications_read_route():
+    """Mark all borrower notifications as read (POST, any login).
+    Requires login with no role restriction. Marks every notification
+    for the caller's borrower row via mark_all_notifications_read, logs
+    notifications:read_all, and returns JSON for AJAX or flashes plus a
+    safe-next redirect otherwise.
+    Args:
+        None.
+    Returns:
+        JSON read_all payload for AJAX, else redirect with a flash.
+    """
     from app.circulation.models import get_borrower_by_user, mark_all_notifications_read
     from app.auth.models import log_activity
     borrower = get_borrower_by_user(current_user.id)
@@ -424,6 +501,17 @@ def _wants_json():
 @main_bp.route('/user/history')
 @login_required
 def user_history():
+    """Render the user's tabbed history (GET, any login).
+    Requires login with no role restriction. Parses tab (borrowing,
+    fines, reservations, requests) and page args, sweeps expired
+    allocations, loads each history list with per-list counts, paginates
+    10 per page, flags date-past-due loans as overdue, and renders the
+    active tab. Read-only.
+    Args:
+        None (reads `tab` and `page` query args).
+    Returns:
+        Rendered users/user_history.html with tab records and counts.
+    """
     from app.circulation.models import (
         get_borrower_by_user, get_user_loan_history,
         get_reservation_history_by_borrower, get_fines_by_borrower,
@@ -503,12 +591,31 @@ def user_history():
 
 @main_bp.route('/api/bloom')
 def bloom_filters():
+    """Serve Bloom filter payloads for client-side negative checks.
+    Public endpoint with no auth or DB access. Returns the registry's
+    title, author, ISBN, and accession filters so catalog forms can warn
+    instantly while the server remains authoritative. Read-only.
+    Args:
+        None.
+    Returns:
+        JSON mapping of Bloom filter payloads.
+    """
     from app.bloom_registry import bloom_registry
     return jsonify(bloom_registry.get_payloads())
 
 
 @main_bp.route('/api/suggestions')
 def suggestions():
+    """Return autocomplete suggestions (GET /api/suggestions, public).
+    Public endpoint with no RBAC guard. Requires a known field and at
+    least 2 query characters, then queries program vocab or book values;
+    book_search also attaches rich title/author pairs. Empty input
+    returns an empty list. Read-only with no audit row.
+    Args:
+        None (reads `field` and `q` query args).
+    Returns:
+        JSON with suggestions list and optional rich pairs.
+    """
     field = request.args.get('field', '')
     q = request.args.get('q', '').strip()
     if field not in SUGGEST_FIELDS or len(q) < 2:
@@ -539,6 +646,16 @@ def suggestions():
 
 @main_bp.route('/api/book-exists')
 def book_exists():
+    """Answer whether an exact title/author/ISBN title already exists.
+
+    Public GET used by the add-book form's duplicate warning. Requires
+    title and author query args (returns exists False without them);
+    optional isbn narrows to the ISBN-bearing match. Returns JSON
+    {exists: bool} via get_book_by_title_author_isbn.
+
+    Returns:
+        JSON response with the exists boolean.
+    """
     title = request.args.get('title', '').strip()
     author = request.args.get('author', '').strip()
     if not title or not author:
@@ -549,6 +666,15 @@ def book_exists():
 
 @main_bp.route('/api/student-exists')
 def student_exists():
+    """Answer whether a borrower ID number is already registered.
+
+    Public GET used by registration validation. Returns exists False
+    for a blank id_number, otherwise checks via
+    get_user_by_id_number. Returns JSON {exists: bool}.
+
+    Returns:
+        JSON response with the exists boolean.
+    """
     id_number = request.args.get('id_number', '').strip()
     if not id_number:
         return jsonify({'exists': False})
@@ -558,6 +684,15 @@ def student_exists():
 
 @main_bp.route('/api/accession-exists')
 def accession_exists():
+    """Answer whether a barcode accession number already exists.
+
+    Public GET used by the accession form's duplicate warning. Returns
+    exists False for a blank number, otherwise checks via
+    get_accession_by_number. Returns JSON {exists: bool}.
+
+    Returns:
+        JSON response with the exists boolean.
+    """
     accession_number = request.args.get('accession_number', '').strip()
     if not accession_number:
         return jsonify({'exists': False})
@@ -568,6 +703,16 @@ def accession_exists():
 @login_required
 @librarian_required
 def librarian_dashboard():
+    """Render the librarian dashboard with stats, activity, and trends.
+
+    GET guarded by login + Librarian/Admin. Loads cached headline
+    counts (get_dashboard_stats), the 5-row activity feed, 6-day borrow
+    series, and the attention panel, then renders
+    dashboard/dashboard.html with the librarian sidebar.
+
+    Returns:
+        Rendered librarian dashboard template response.
+    """
     stats = get_dashboard_stats()
     activity = get_recent_activity(5)
     daily = get_daily_borrows(6)
@@ -582,6 +727,17 @@ def librarian_dashboard():
 @login_required
 @admin_required
 def admin_dashboard():
+    """Render the admin System Overview with governance and backup health.
+
+    GET guarded by login + Admin. Loads overview counts, the 5 newest
+    pending signups plus total, the 8 newest audit rows, backup history
+    (newest completed as last_backup, busy flag from the worker or an
+    in_progress row), schedule config, and next run time, then renders
+    dashboard/admin_overview.html with the admin sidebar.
+
+    Returns:
+        Rendered admin overview template response.
+    """
     from app.auth.models import get_audit_logs, get_pending_users
     from app.backup.models import get_backup_logs
     from app.backup.scheduler import next_scheduled_backup
@@ -617,6 +773,18 @@ def admin_dashboard():
 @login_required
 @admin_required
 def admin_audits():
+    """Render the admin Audit Logs table with filters and chart stats.
+
+    GET guarded by login + Admin. Parses q/tab/limit query args
+    (tab allowlisted to AUDIT_TABS, limit clamped 1-200), loads newest
+    audit rows via get_audit_logs and chart aggregates via
+    get_audit_stats (which never breaks the table on failure), then
+    renders dashboard/admin_audits.html with the describe_activity
+    presenter and admin sidebar.
+
+    Returns:
+        Rendered audit logs template response.
+    """
     from app.auth.models import (AUDIT_TABS, describe_activity, get_audit_logs,
                                  get_audit_stats)
     search = (request.args.get('q', '') or '').strip()

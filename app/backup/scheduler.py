@@ -35,6 +35,17 @@ def run_scheduled_backup(app):
 
 
 def _apply_retention(app, keep_n):
+    """Delete stale completed backups beyond the keep count.
+
+    Fetches rows past keep_n newest, skips anything not completed,
+    removes the dump file from disk then its history row, logging but
+    never raising per-row failures so one bad file never blocks the
+    rest. Shared by the scheduled job and manual retention runs.
+
+    Args:
+        app: Flask app for config and logger.
+        keep_n: Number of newest backups to keep.
+    """
     from .models import delete_backup_row, get_stale_backups
     from .utils import resolve_backup_path
 

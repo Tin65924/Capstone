@@ -34,6 +34,17 @@ def _is_unique_violation(exc):
 @login_required
 @librarian_required
 def list_requests():
+    """Render the staff requests triage page with demand chart and cards.
+
+    GET guarded by login + Librarian/Admin. Parses status/search/page/
+    sort args, loads one page of detailed requests plus totals, builds
+    headline status counts, global fuzzy-merged demand chart (Student/
+    Faculty/Other splits), and per-title grouped cards, then renders
+    requests/requests.html. Read-only.
+
+    Returns:
+        Rendered staff requests template response.
+    """
     status = request.args.get('status', 'pending_review')
     if status == 'all':
         status = None
@@ -317,6 +328,22 @@ def bulk_review(action):
 @login_required
 @librarian_required
 def review_request(request_id, action):
+    """Approve or reject one pending book request as staff.
+
+    POST guarded by login + Librarian/Admin. Validates the action
+    (approve/reject), verifies the request exists and is still
+    pending_review, updates its status with reviewer and remarks,
+    creates a procurement row on approval, notifies the requester
+    (best-effort), logs requests:<action>:<id>, flashes the outcome,
+    and redirects to the triage list.
+
+    Args:
+        request_id: Request to review.
+        action: 'approve' or 'reject'.
+
+    Returns:
+        Redirect to the staff requests list.
+    """
     if action not in ('approve', 'reject'):
         flash('Invalid action.', 'error')
         return redirect(url_for('requests.list_requests'))
@@ -360,6 +387,18 @@ def review_request(request_id, action):
 @login_required
 
 def user_request_book():
+    """Submit a new book request or view your own requests.
+
+    GET renders requests/user_request_book.html with the member's
+    history. POST validates title/author lengths, requires a borrower
+    row, blocks duplicates (your live requests), catalog matches, and
+    approved-request matches, creates a pending_review row (turning a
+    double-submit race into a friendly message), notifies and audit-logs
+    the creation, flashes success, and redirects back (Post/Redirect/Get).
+
+    Returns:
+        Rendered request form on GET, redirect after POST.
+    """
     if request.method == 'POST':
         book_title = request.form.get('book-title', '').strip()
         author = request.form.get('author', '').strip() or None

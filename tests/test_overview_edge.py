@@ -10,6 +10,7 @@ full auth matrix. Everything must degrade gracefully — never 500.
 class TestEmptyDb:
     @staticmethod
     def _empty(mock_db):
+        """Test helper _empty: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = []
         mock_db['execute'].return_value = []

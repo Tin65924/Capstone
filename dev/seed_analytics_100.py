@@ -36,6 +36,20 @@ LAST = ["Santos", "Reyes", "Cruz", "Bautista", "Ocampo", "Garcia", "Mendoza", "T
 
 
 def get_conn():
+    """Open a psycopg2 connection from ``DATABASE_URL`` in ``.env``.
+
+    Loads ``.env`` and connects with the ``DATABASE_URL`` value; exits
+    the process with a message when it is unset, since every seed step
+    needs the database.
+
+    Returns:
+        psycopg2 connection: Open connection (``autocommit=False`` is
+            set by the caller); the caller owns close/commit.
+
+    Side effects:
+        Loads ``.env`` via ``load_dotenv``; calls ``sys.exit`` when
+        ``DATABASE_URL`` is missing.
+    """
     from dotenv import load_dotenv
 
     load_dotenv()
@@ -48,6 +62,24 @@ def get_conn():
 
 
 def reset_seed(cur):
+    """Delete prior SEED100 analytics rows in dependency order.
+
+    Removes dependent reservation/notification/circulation rows for
+    ``SEED100-*`` borrowers, then favorites/analytics/audit rows for
+    ``seed100_*`` users, then ``inventory_status`` notes, borrowers and
+    users. The ``'!'`` ESCAPE keeps the ``_`` in seed emails literal so
+    only seed rows match.
+
+    Args:
+        cur: Open DB cursor on the seeding transaction.
+
+    Returns:
+        None.
+
+    Side effects:
+        DELETEs prior SEED100 rows across 8 tables; prints per-table
+        row counts.
+    """
     id_pattern = SEED_TAG + '-%%'
     # '_' is a LIKE wildcard: escape it so only seed emails match.
     email_pattern = SEED_TAG.lower() + '!_%%@' + SEED_EMAIL_DOMAIN
@@ -95,6 +127,27 @@ def reset_seed(cur):
 
 
 def main(reset=True):
+    """Seed 12 users and 100 deterministic circulation rows for Analytics.
+
+    Creates 9 Student + 3 Faculty users/borrowers (``SEED100-*``), picks
+    active accessions while sparing the last 10 titles (so the
+    underutilized-titles KPI stays non-empty), weights 40% of loans
+    onto a top-5 (so most-borrowed ranks clearly), spreads rows over
+    180 days as ~60% returned / ~25% active / ~15% overdue, tops up
+    ``inventory_status`` for the condition chart, and commits. Rolls
+    back and re-raises on any error.
+
+    Args:
+        reset (bool): When True (default), delete prior SEED100 rows
+            first; pass False (``--no-reset``) to append.
+
+    Returns:
+        None.
+
+    Side effects:
+        INSERTs users, borrowers, circulation and inventory rows;
+        commits on success, rolls back on failure; prints a summary.
+    """
     rng = random.Random(100)
     today = date.today()
     conn = get_conn()

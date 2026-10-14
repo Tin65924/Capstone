@@ -24,26 +24,86 @@ SEP = '\x1f'
 
 
 def record_key(title, author, isbn=''):
-    """Composite key for a book record; must match the client (autosuggest.js)."""
+    """Build the composite book dedup key shared with the client.
+
+    Lowercases and strips each component and joins them with the
+    unit-separator character, exactly mirroring ``autosuggest.js`` and
+    the server dedup rule in ``get_book_by_title_author_isbn`` (blank
+    ISBN matches books with no ISBN). Any change here must be mirrored
+    client-side or hints silently stop matching.
+
+    Args:
+        title: Book title string.
+        author: Book author string.
+        isbn: ISBN string, or '' when unknown.
+
+    Returns:
+        Composite ``title SEP author SEP isbn`` key string.
+    """
     return f'{title.strip().lower()}{SEP}{author.strip().lower()}{SEP}{(isbn or "").strip().lower()}'
 
 
 def category_key(name):
-    """Normalized key for a collection category; must match the client."""
+    """Normalize a category name into its filter key, matching the client.
+
+    Strips surrounding whitespace and lowercases so ``" Fiction "``
+    and ``"fiction"`` share one bit pattern on both server and browser.
+    Used when building and querying the ``category_record`` filter for
+    the analytics category known-value check.
+
+    Args:
+        name: Raw subject_classification string, possibly None.
+
+    Returns:
+        Normalized lowercase key string ('' when input was None).
+    """
     return (name or '').strip().lower()
 
 
 class BloomRegistry:
     def __init__(self):
+        """Create an empty lazy registry that builds filters on demand.
+
+        Initializes the thread lock, the filter and payload caches, and
+        the dirty flag (True so the first :meth:`get_payloads` call
+        builds from the database). No database access happens here; the
+        build is deferred until the payloads are actually needed.
+
+        Args:
+            None: Takes no arguments.
+        """
         self._lock = threading.Lock()
         self._filters = {}
         self._payloads = {}
         self._dirty = True
 
     def mark_dirty(self):
+        """Flag cached filters stale so the next read rebuilds them.
+
+        Called after any write that changes the underlying sets (new
+        book cataloged, borrower id_number added, category created).
+        Only flips a boolean under no extra I/O; the expensive rebuild
+        happens lazily inside :meth:`get_payloads`.
+
+        Args:
+            None: Takes no arguments.
+        """
         self._dirty = True
 
     def _build(self):
+        """Query the database and build all three Bloom filters fresh.
+
+        Pulls distinct book triples, borrower id_numbers, and subject
+        classifications (skipping NULL/blank rows), sizes one
+        :class:`BloomFilter` per set, and inserts every normalized key.
+        An empty table still yields a minimal one-item filter so later
+        ``add``/``in`` calls never divide by zero. Runs outside the
+        caller lock; the caller swaps the result in atomically.
+
+        Returns:
+            Dict mapping ``book_record``/``student_record``/
+            ``category_record`` to their built BloomFilter instances.
+        """
         filters = {}
 
         book_rows = db.fetch_all(
@@ -77,6 +137,18 @@ class BloomRegistry:
         return filters
 
     def get_payloads(self):
+        """Return JSON-serializable payloads for every filter, rebuilding if stale.
+
+        Takes the registry lock, rebuilds via :meth:`_build` when the
+        dirty flag is set or no payloads exist yet, serializes each
+        filter with ``to_payload``, clears the dirty flag, and returns a
+        copy so callers cannot mutate the cache. Thread-safe: concurrent
+        readers block on the lock while one rebuild runs.
+
+        Returns:
+            Dict mapping filter name to its ``{'m', 'k', 'bits'}``
+            payload dict.
+        """
         with self._lock:
             if self._dirty or not self._payloads:
                 self._filters = self._build()

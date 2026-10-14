@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 
 def _audit_inserts(mock_db):
+    """Test helper _audit_inserts: build mocked data or DB stub for the test."""
     return [c for c in mock_db['execute'].call_args_list
             if 'INSERT INTO audit_trail' in c[0][0]]
 

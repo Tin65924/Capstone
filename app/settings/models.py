@@ -13,17 +13,49 @@ PHT = timezone(timedelta(hours=8), name='PHT')
 
 
 def library_now():
-    """Current wall-clock time in the library (Philippine time)."""
+    """Return the current wall-clock time in Philippine Time (Asia/Manila).
+
+    Uses a fixed UTC+8 offset (no DST in the Philippines) instead of a
+    tzdata zone, so Windows and Render hosts without zoneinfo data still
+    gate correctly. Render servers run on UTC, so naive ``datetime.now``
+    would read ~8 hours behind the library and wrongly block borrowing.
+
+    Returns:
+        Timezone-aware datetime stamped with the PHT fixed offset.
+    """
     return datetime.now(PHT)
 
 
 def library_today():
-    """Current calendar date in the library (Philippine time)."""
+    """Return today's calendar date in Philippine Time.
+
+    Derives from :func:`library_now` (not the server-local date), so a
+    UTC-hosted request just after midnight Manila time still counts as
+    the new day. Used for due-date math and same-day circulation rules
+    that must follow the library wall clock.
+
+    Returns:
+        A date object for the current Manila calendar day.
+    """
     return library_now().date()
 
 
 def _env_default(name, fallback):
-    """String default honoring an env override (BACKUP_* live in env today)."""
+    """Resolve a string default honoring an environment override.
+
+    Reads ``os.getenv(name)`` and coerces it through ``int`` so the
+    ``BACKUP_*`` tunables (day/hour/keep) can be set per-deploy without
+    code changes. A missing or non-numeric variable falls back to the
+    provided default instead of raising at import time.
+
+    Args:
+        name: Environment variable name to read.
+        fallback: Default value used when the variable is unset or
+            unparseable.
+
+    Returns:
+        String form of the integer value (env value or fallback).
+    """
     try:
         return str(int(os.getenv(name, fallback)))
     except (TypeError, ValueError):
@@ -124,12 +156,35 @@ DEFAULTS = {
 
 
 def get_all_settings():
+    """Fetch every stored library setting row ordered by key.
+
+    Reads ``(setting_key, setting_value, description, updated_at)`` from
+    ``library_settings`` in key order for the admin/librarian settings
+    pages. Stored values are strings; callers coerce by kind via
+    ``SETTING_DEFS``. Raises through to the route on DB failure so the
+    page can flash a table-unavailable message.
+
+    Returns:
+        List of (setting_key, setting_value, description, updated_at)
+        tuples, possibly empty.
+    """
     return db.fetch_all(
         'SELECT setting_key, setting_value, description, updated_at FROM library_settings ORDER BY setting_key'
     )
 
 
 def get_settings_dict():
+    """Return effective settings as a key-value dict with defaults applied.
+
+    Starts from a copy of ``DEFAULTS`` so every known key has a value
+    even when the table is empty, then overlays stored rows on top.
+    Malformed rows are skipped and a total read failure degrades to an
+    empty dict (callers fall back to defaults/config). Never raises.
+
+    Returns:
+        Dict mapping setting_key to its string value, including
+        defaults for keys with no stored row.
+    """
     try:
         rows = get_all_settings() or []
     except Exception:
@@ -144,6 +199,23 @@ def get_settings_dict():
 
 
 def get_setting(key, default=None):
+    """Fetch one setting value with default fallback.
+
+    Queries ``library_settings`` by exact key. A stored non-NULL value
+    wins; otherwise the explicit ``default`` argument wins when given;
+    otherwise the ``DEFAULTS`` entry for the key (or None for unknown
+    keys). Used for single-key reads like the restore toggle where a
+    full dict would be wasteful.
+
+    Args:
+        key: Setting key string (e.g. ``'BACKUP_KEEP'``).
+        default: Explicit fallback when no row and no DEFAULTS entry
+            should apply, or None to use DEFAULTS.
+
+    Returns:
+        The stored string value, the explicit default, the DEFAULTS
+        entry, or None.
+    """
     row = db.fetch_one(
         'SELECT setting_value FROM library_settings WHERE setting_key = %s',
         (key,)
@@ -156,11 +228,20 @@ def get_setting(key, default=None):
 
 
 def is_restore_enabled():
-    """Whether an admin may restore a backup.
+    """Check whether an admin may restore a backup right now.
 
     Reads BACKUP_RESTORE_ENABLED (default on). Only explicit off-values
     disable restore; anything else — including an unreadable settings
-    table — preserves the historical behavior (restore allowed).
+    table — preserves the historical behavior (restore allowed). The
+    fail-open choice keeps disaster recovery reachable even when the
+    settings table itself is damaged.
+
+    Args:
+        None: Takes no arguments; reads the stored setting internally.
+
+    Returns:
+        True when restores are allowed, False only on an explicit
+        off-like value (``0``/``false``/``off``/``no``).
     """
     try:
         raw = get_setting('BACKUP_RESTORE_ENABLED', '1')
@@ -170,6 +251,21 @@ def is_restore_enabled():
 
 
 def update_setting(key, value, updated_by=None):
+    """Upsert one library setting with audit stamps.
+
+    Inserts the key/value row, or on key conflict overwrites the value
+    and refreshes ``updated_at``/``updated_by``. Values are stored as
+    strings (callers stringify ints/floats/times first); validation
+    happens in the routes layer, not here.
+
+    Args:
+        key: Setting key string from SETTING_DEFS.
+        value: New value to store (stringified by the caller).
+        updated_by: Acting staff user_id for the audit stamp.
+
+    Returns:
+        Rowcount from the upsert.
+    """
     return db.execute(
         '''INSERT INTO library_settings (setting_key, setting_value, updated_at, updated_by)
            VALUES (%s, %s, NOW(), %s)
@@ -182,6 +278,19 @@ def update_setting(key, value, updated_by=None):
 
 
 def sync_settings_to_config(app=None):
+    """Copy stored library settings into the Flask config type-coerced.
+
+    Reads the effective settings dict and writes each key into
+    ``app.config`` by its declared kind: bools become 0/1, times stay
+    ``HH:MM`` strings (skipped when invalid), floats/ints are coerced
+    numerically. Unparseable values are skipped, never raising, so one
+    corrupt row cannot break app startup or a settings save. Borrowing,
+    fines, and backup code then read plain ``current_app.config``.
+
+    Args:
+        app: Flask application to sync into, defaulting to
+            ``current_app``.
+    """
     app = app or current_app
     try:
         data = get_settings_dict()
@@ -205,7 +314,19 @@ def sync_settings_to_config(app=None):
 
 
 def parse_hhmm(raw):
-    """'HH:MM' 24-hour string as (hour, minute), or None when invalid."""
+    """Parse an 'HH:MM' 24-hour string into an (hour, minute) tuple.
+
+    Strictly validates with a full-match regex (``00:00``–``23:59``),
+    so ``"8:00"``, ``"24:00"``, and ``"08:60"`` all fail. Used by the
+    settings forms for opening/closing hours and by the open-hours gate
+    before any borrowing is allowed.
+
+    Args:
+        raw: Candidate time string, possibly None or padded.
+
+    Returns:
+        Tuple (hour, minute) as ints, or None when invalid.
+    """
     match = re.fullmatch(r'([01]\d|2[0-3]):([0-5]\d)', (raw or '').strip())
     if not match:
         return None
@@ -213,11 +334,22 @@ def parse_hhmm(raw):
 
 
 def library_hours_from_config(config=None):
-    """Configured (opening, closing) as ((h, m), (h, m)), or None.
+    """Resolve the configured (opening, closing) pair, or None if open-all-day.
 
+    Configured (opening, closing) as ((h, m), (h, m)), or None.
     None means unrestricted: the keys are absent (e.g. tests, where
     settings sync is skipped) or fail validation. Borrowing must never
     be blocked by a missing or corrupt setting, so callers fail open.
+    Also requires opening < closing; an inverted pair (e.g. 17:00–08:00)
+    is treated as unconfigured rather than a midnight-spanning schedule.
+
+    Args:
+        config: Optional config mapping to read from (defaults to
+            ``current_app.config``).
+
+    Returns:
+        Tuple ((open_h, open_m), (close_h, close_m)) when both parse
+        and opening precedes closing, else None.
     """
     cfg = config if config is not None else current_app.config
     opening = parse_hhmm(cfg.get('LIBRARY_OPENING_TIME') or '')
@@ -228,7 +360,20 @@ def library_hours_from_config(config=None):
 
 
 def library_hours_label(config=None):
-    """'08:00–17:00' for messages, or None when unrestricted."""
+    """Format the configured hours as a display label, or None.
+
+    Renders ``'08:00–17:00'`` (en dash) for flash messages and closed
+    notices from :func:`library_hours_from_config`. Returns None when
+    hours are unrestricted so callers can omit the label rather than
+    show a misleading range.
+
+    Args:
+        config: Optional config mapping to read from (defaults to
+            ``current_app.config``).
+
+    Returns:
+        Formatted hours string, or None when unrestricted.
+    """
     hours = library_hours_from_config(config)
     if hours is None:
         return None
@@ -237,12 +382,22 @@ def library_hours_label(config=None):
 
 
 def is_library_open(now=None, config=None):
-    """True when borrowing is allowed right now.
+    """Check whether borrowing is allowed at a given moment.
 
-    Open boundary inclusive, closing exclusive (at exactly 17:00 the
-    library is closed). Philippine wall-clock time, so a UTC-hosted
-    server (e.g. Render) still gates on Manila hours. Unconfigured
-    → True (fail open).
+    True when borrowing is allowed right now. Open boundary inclusive,
+    closing exclusive (at exactly 17:00 the library is closed).
+    Philippine wall-clock time, so a UTC-hosted server (e.g. Render)
+    still gates on Manila hours. Unconfigured hours mean open (fail
+    open), and a timestamp without clock fields also fails open rather
+    than blocking circulation on bad input.
+
+    Args:
+        now: Datetime to test (defaults to :func:`library_now`).
+        config: Optional config mapping for hours (defaults to
+            ``current_app.config``).
+
+    Returns:
+        True when the library counts as open, False when closed.
     """
     hours = library_hours_from_config(config)
     if hours is None:
@@ -256,10 +411,20 @@ def is_library_open(now=None, config=None):
 
 
 def get_closing_time(config=None):
-    """(hour, minute) for due timestamps; (17, 0) when unconfigured.
+    """Resolve the closing time used for due-date timestamps.
 
+    (hour, minute) for due timestamps; (17, 0) when unconfigured.
     Closing alone is meaningful (unlike the open/close pair needed for
     the open-hours gate), so only the closing value is consulted.
+    Overnight loans stamp their due moment at this wall-clock time on
+    the due date, keeping returns aligned with the desk schedule.
+
+    Args:
+        config: Optional config mapping to read from (defaults to
+            ``current_app.config``).
+
+    Returns:
+        Tuple (hour, minute) of the configured close, or (17, 0).
     """
     cfg = config if config is not None else current_app.config
     parsed = parse_hhmm(cfg.get('LIBRARY_CLOSING_TIME') or '')

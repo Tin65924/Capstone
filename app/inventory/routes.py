@@ -24,6 +24,16 @@ VALID_STATES = ['available', 'borrowed', 'lost', 'damaged', 'missing']
 @login_required
 @librarian_required
 def inventory_page():
+    """Render the librarian inventory dashboard with session and history.
+
+    GET guarded by login + Librarian/Admin. Loads the requested or
+    active session (ignored when malformed), status counts for the
+    condition cards, and one page of scan history optionally filtered
+    by VALID_STATES. Renders inventory/inventory.html; never writes.
+
+    Returns:
+        Rendered inventory dashboard template response.
+    """
     session_id = request.args.get('session_id', type=int)
     session = get_session(session_id) if session_id else get_active_session(current_user.id)
     if session is not None and len(session) < 6:
@@ -65,6 +75,17 @@ def inventory_page():
 @login_required
 @librarian_required
 def start_session():
+    """Open a new annual-physical inventory session for the librarian.
+
+    POST guarded by login + Librarian/Admin. Refuses with an error flash
+    when the librarian already has an active session; otherwise counts
+    all accessions as the baseline, creates the session, logs
+    inventory:start_session:<id>, flashes success, and redirects to the
+    inventory page for the new session.
+
+    Returns:
+        Redirect to the inventory page (existing or new session).
+    """
     existing = get_active_session(current_user.id)
     if existing:
         flash('You already have an active session. Resume it instead.', 'error')
@@ -82,6 +103,20 @@ def start_session():
 @login_required
 @librarian_required
 def complete_session(session_id):
+    """Close an active session by reconciling scans against the collection.
+
+    POST guarded by login + Librarian/Admin. Verifies the session exists,
+    belongs to the librarian, and is active; collects scanned ids,
+    runs reconcile_inventory (marking unscanned available copies
+    missing), logs inventory:complete_session:<id>, flashes the
+    discrepancy count, and redirects back to the session view.
+
+    Args:
+        session_id: Inventory session to reconcile and close.
+
+    Returns:
+        Redirect to the inventory page for the session.
+    """
     session = get_session(session_id)
     if not session or len(session) < 6 or session[1] != int(current_user.id):
         flash('Session not found.', 'error')
@@ -104,6 +139,20 @@ def complete_session(session_id):
 @login_required
 @librarian_required
 def cancel_session(session_id):
+    """Abort an active inventory session without reconciliation.
+
+    POST guarded by login + Librarian/Admin. Verifies ownership and
+    active status, marks the session cancelled via
+    cancel_inventory_session, logs inventory:cancel_session:<id>,
+    flashes success, and redirects to the inventory landing page.
+    Already-recorded copy states are kept.
+
+    Args:
+        session_id: Active session to cancel.
+
+    Returns:
+        Redirect to the inventory page.
+    """
     session = get_session(session_id)
     if not session or len(session) < 6 or session[1] != int(current_user.id):
         flash('Session not found.', 'error')
@@ -122,6 +171,17 @@ def cancel_session(session_id):
 @login_required
 @librarian_required
 def scan_accession():
+    """Record one barcode scan as available or borrowed.
+
+    POST guarded by login + Librarian/Admin. Validates the session when
+    given, requires an accession number, resolves it to a copy, derives
+    state (borrowed when a live loan exists, else available), bumps the
+    session counter, upserts the inventory row, logs inventory:scan:<id>,
+    flashes the result, and redirects back preserving session_id.
+
+    Returns:
+        Redirect to the inventory page for the session (or landing).
+    """
     accession_number = request.form.get('accession_number', '').strip()
     session_id = request.form.get('session_id', type=int)
 
@@ -159,6 +219,16 @@ def scan_accession():
 @login_required
 @librarian_required
 def check_accession():
+    """Look up and flash one copy's current condition without writing.
+
+    POST guarded by login + Librarian/Admin. Resolves the barcode via
+    get_accession_by_number and get_accession_status, then flashes an
+    info line like '<number> — <title>: currently <state>' ('never
+    scanned' when no row exists). Read-only; redirects back.
+
+    Returns:
+        Redirect to the inventory page preserving session_id.
+    """
     accession_number = request.form.get('accession_number', '').strip()
     session_id = request.form.get('session_id', type=int)
 
@@ -180,6 +250,19 @@ def check_accession():
 @login_required
 @librarian_required
 def damage_accession(accession_id):
+    """Flag one copy as damaged with a required reason note.
+
+    POST guarded by login + Librarian/Admin. Verifies the copy exists,
+    requires a non-empty note (max 255 chars), optionally validates the
+    session, records via mark_copy_damaged, logs
+    inventory:mark_damaged:<id>, flashes success, and redirects back.
+
+    Args:
+        accession_id: Copy to mark damaged.
+
+    Returns:
+        Redirect to the inventory page preserving session_id.
+    """
     notes = request.form.get('notes', '').strip() or None
     session_id = request.form.get('session_id', type=int)
 
@@ -210,6 +293,20 @@ def damage_accession(accession_id):
 @login_required
 @librarian_required
 def lost_accession(accession_id):
+    """Flag one copy as lost with an optional note.
+
+    POST guarded by login + Librarian/Admin. Verifies the copy exists,
+    caps an optional note at 255 chars, optionally validates the
+    session, records via mark_copy_lost, logs inventory:mark_lost:<id>,
+    flashes success, and redirects back. Lost copies leave the
+    lendable pool until recovered.
+
+    Args:
+        accession_id: Copy to mark lost.
+
+    Returns:
+        Redirect to the inventory page preserving session_id.
+    """
     session_id = request.form.get('session_id', type=int)
     notes = request.form.get('notes', '').strip() or None
 
@@ -238,6 +335,20 @@ def lost_accession(accession_id):
 @login_required
 @librarian_required
 def export_session(session_id):
+    """Download a completed session's rows as CSV.
+
+    GET guarded by login + Librarian/Admin. Verifies ownership and that
+    the session is completed (active sessions are refused), streams
+    get_session_export_rows as a CSV download named
+    inventory_session_<id>.csv, and logs
+    inventory:export_session:<id>.
+
+    Args:
+        session_id: Completed session to export.
+
+    Returns:
+        CSV download response, or a redirect with an error flash.
+    """
     session = get_session(session_id)
     if not session or len(session) < 6 or session[1] != int(current_user.id):
         flash('Session not found.', 'error')

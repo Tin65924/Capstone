@@ -5,6 +5,16 @@ from .config import Config
 from .extensions import login_manager
 
 def create_app(test_config=None):
+    """Create and configure the MCST LMS Flask application instance.
+    Builds the Flask app with instance-relative config, trusts Render proxy
+    headers via ProxyFix, initializes the database and login manager,
+    registers all module blueprints, syncs DB-backed settings, wires error
+    handlers and template filters, and starts the backup scheduler.
+    Args:
+        test_config: Optional dict of config overrides for testing.
+    Returns:
+        Configured Flask application instance ready to serve requests.
+    """
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_object(Config)
 
@@ -70,20 +80,54 @@ def create_app(test_config=None):
 
 
 def register_error_handlers(app):
+    """Register HTTP error handlers for the Flask application.
+    Attaches handlers for 401, 403, 404, 405, and 500 codes so every
+    failure renders the shared errors/error.html template instead of a
+    default stack trace. Called once from create_app during startup.
+    Args:
+        app: Flask application instance to attach handlers to.
+    Returns:
+        None; handlers are registered on the app in place.
+    """
     @app.errorhandler(404)
     def not_found(e):
+        """Render the 404 Page Not Found error page.
+        Handles HTTP 404 when a URL matches no route. Renders
+        errors/error.html with code 404 and a moved-or-missing message.
+        Args:
+            e: Original 404 exception passed by Flask.
+        Returns:
+            Tuple of rendered error template and 404 status code.
+        """
         return render_template('errors/error.html',
                                code=404, title='Page Not Found',
                                message='The page you are looking for does not exist or may have been moved.'), 404
 
     @app.errorhandler(403)
     def forbidden(e):
+        """Render the 403 Access Denied error page.
+        Handles HTTP 403 when an authenticated user lacks permission.
+        Renders errors/error.html with code 403 and a permission message.
+        Args:
+            e: Original 403 exception passed by Flask.
+        Returns:
+            Tuple of rendered error template and 403 status code.
+        """
         return render_template('errors/error.html',
                                code=403, title='Access Denied',
                                message='You do not have permission to access this page.'), 403
 
     @app.errorhandler(401)
     def unauthorized(e):
+        """Handle HTTP 401 by redirecting protected areas or rendering 401.
+        Sends /admin and /librarian paths to the login page with a sign-in
+        flash and the original path as next, so post-login redirect works.
+        All other paths render errors/error.html with code 401.
+        Args:
+            e: Original 401 exception passed by Flask.
+        Returns:
+            Login redirect for admin/librarian paths, else rendered 401 page.
+        """
         if request.path.startswith(('/admin', '/librarian')):
             flash('Please sign in to access this page.', 'info')
             return redirect(url_for('auth.login', next=request.path))
@@ -93,12 +137,30 @@ def register_error_handlers(app):
 
     @app.errorhandler(405)
     def method_not_allowed(e):
+        """Render the 405 Method Not Allowed error page.
+        Handles HTTP 405 when a URL is hit with the wrong method (e.g.
+        resubmitting a form with the Back button). Renders
+        errors/error.html with code 405 and guidance to go back.
+        Args:
+            e: Original 405 exception passed by Flask.
+        Returns:
+            Tuple of rendered error template and 405 status code.
+        """
         return render_template('errors/error.html',
                                code=405, title='Method Not Allowed',
                                message='That action is not available here (for example, resubmitting a form with the Back button). Please go back and continue browsing.'), 405
 
     @app.errorhandler(500)
     def internal_error(e):
+        """Render the 500 Something Went Wrong error page.
+        Logs the real traceback and writes a system:error:500 audit row so
+        Render logs stay diagnosable, then renders errors/error.html with
+        code 500 and a generic retry-later message. Never raises itself.
+        Args:
+            e: Original 500 exception passed by Flask.
+        Returns:
+            Tuple of rendered error template and 500 status code.
+        """
         # Log the real traceback first: with debug off the browser only
         # sees the generic page, so Render logs are the only diagnosis.
         app.logger.exception('500 on %s', request.path)

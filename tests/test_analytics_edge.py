@@ -10,6 +10,7 @@ import re
 
 
 def _login(client, uid='3'):
+    """Test helper _login: build mocked data or DB stub for the test."""
     with client.session_transaction() as s:
         s['_user_id'] = uid
         s['_fresh'] = True
@@ -60,6 +61,7 @@ class TestEmptyDatabase:
 class TestHostileParams:
     @staticmethod
     def _ok_db(mock_db):
+        """Test helper _ok_db: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = []
 

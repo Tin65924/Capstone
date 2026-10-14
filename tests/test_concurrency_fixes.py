@@ -12,6 +12,7 @@ ACC = (10, '2024-00123', 5, 1, '2024-01-10', 'purchase')
 
 
 def _flashes(client):
+    """Test helper _flashes: build mocked data or DB stub for the test."""
     with client.session_transaction() as sess:
         return [msg for _cat, msg in sess.get('_flashes', [])]
 
@@ -33,6 +34,7 @@ class TestQueuePositionRetry:
         ]
 
         def _exec(q, p=None):
+            """Test helper _exec: build mocked data or DB stub for the test."""
             if 'INSERT INTO reservation_queue' in q:
                 if _exec.calls == 0:
                     _exec.calls += 1
@@ -129,6 +131,7 @@ class TestClaimCompensation:
         ]
 
         def _exec(q, p=None):
+            """Test helper _exec: build mocked data or DB stub for the test."""
             if "reservation_status = 'claimed'" in q:
                 raise RuntimeError('claim down')
             return 1
@@ -146,6 +149,7 @@ class TestClaimCompensation:
 
 class TestUserDailyQueueParity:
     def _daily_mocks(self, mock_db, queue_row):
+        """Test helper _daily_mocks: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].side_effect = [
             BOOK,
             BORROWER,

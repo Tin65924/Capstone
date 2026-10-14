@@ -11,26 +11,31 @@ BORROWER = (1, 1, '2024-0001', 'CS', 'active', None, None, None)
 
 
 def _tx(i):
+    """Test helper _tx: build mocked data or DB stub for the test."""
     return (i, date(2026, 8, 1), date(2026, 8, 2), None, 'overnight',
             'active', 0, 'Hist-Book-%02d' % i, 'Hist-Author', 'ACC-%02d' % i)
 
 
 def _fine(i):
+    """Test helper _fine: build mocked data or DB stub for the test."""
     return (i, 7, date(2026, 8, 2), None, 5.0, 'Fine-Book-%02d' % i,
             'Fine-Author')
 
 
 def _res(i):
+    """Test helper _res: build mocked data or DB stub for the test."""
     return (i, i, 'waiting', '2026-01-04', None, 'Res-Book-%02d' % i,
             'Res-Author')
 
 
 def _req(i):
+    """Test helper _req: build mocked data or DB stub for the test."""
     return (i, 'Req-Book-%02d' % i, 'Req-Author', 'pending_review',
             'Jan 5', None)
 
 
 def _install(mock_db, tx=(), req=(), res=(), fines=()):
+    """Test helper _install: build mocked data or DB stub for the test."""
     mock_db['fetch_one'].return_value = BORROWER
     # Cycle per request: each page load consumes the four fetches in
     # route-call order, so a plain list would be exhausted by request 2.
@@ -38,6 +43,7 @@ def _install(mock_db, tx=(), req=(), res=(), fines=()):
     calls = {'n': 0}
 
     def _next(*args, **kwargs):
+        """Test helper _next: build mocked data or DB stub for the test."""
         out = data[calls['n'] % len(data)]
         calls['n'] += 1
         return list(out)
@@ -146,6 +152,7 @@ class TestHistoryPagination:
 class TestNotificationsPageSize:
     @staticmethod
     def _rows(n):
+        """Test helper _rows: build mocked data or DB stub for the test."""
         return [(i, 'np-%03d-xyz' % i, 'borrow', str(i), '2026-01-05',
                  False) for i in range(1, n + 1)]
 

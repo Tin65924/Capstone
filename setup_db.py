@@ -29,7 +29,19 @@ ENV_FILE = os.path.join(os.path.dirname(__file__), '.env')
 
 
 def find_pg_data_dir():
-    """Locate PostgreSQL data directory."""
+    """Locate the local PostgreSQL data directory.
+
+    Probes well-known install paths (versions 18/17/16) plus any
+    ``C:\\Program Files\\PostgreSQL\\*\\data`` glob hit, returning the
+    first directory that actually contains ``pg_hba.conf``.
+
+    Returns:
+        str | None: Data-directory path, or None when no PostgreSQL
+            installation is found.
+
+    Side effects:
+        None; filesystem probes only.
+    """
     candidates = [
         r'C:\Program Files\PostgreSQL\18\data',
         r'C:\Program Files\PostgreSQL\17\data',
@@ -46,7 +58,18 @@ def find_pg_data_dir():
 
 
 def find_pg_bin_dir():
-    """Locate PostgreSQL bin directory from the data dir path."""
+    """Locate the PostgreSQL ``bin`` directory for the installed server.
+
+    Derives the server root from :func:`find_pg_data_dir` and returns
+    its ``bin`` subdirectory (home of ``pg_ctl.exe``/``psql.exe``).
+
+    Returns:
+        str | None: ``bin``-directory path, or None when the data
+            directory (or its ``bin`` folder) cannot be found.
+
+    Side effects:
+        None; filesystem probes only.
+    """
     data_dir = find_pg_data_dir()
     if not data_dir:
         return None
@@ -58,7 +81,22 @@ def find_pg_bin_dir():
 
 
 def reload_pg(data_dir):
-    """Reload PostgreSQL configuration."""
+    """Reload the PostgreSQL configuration without restarting the server.
+
+    Runs ``pg_ctl.exe reload -D <data_dir>`` so ``pg_hba.conf`` edits
+    take effect; prints a warning (instead of raising) when the reload
+    fails or ``pg_ctl`` cannot be located.
+
+    Args:
+        data_dir (str): PostgreSQL data-directory path passed to
+            ``pg_ctl reload -D``.
+
+    Returns:
+        None.
+
+    Side effects:
+        Spawns the ``pg_ctl`` subprocess; prints status/warnings.
+    """
     bin_dir = find_pg_bin_dir()
     if bin_dir:
         pg_ctl = os.path.join(bin_dir, 'pg_ctl.exe')
@@ -76,7 +114,22 @@ def reload_pg(data_dir):
 
 
 def enable_trust_auth(hba_path):
-    """Add trust auth rules at the top of pg_hba.conf."""
+    """Prepend temporary trust-auth rules to ``pg_hba.conf``.
+
+    Inserts a marked block (``local`` + IPv4/IPv6 ``host`` trust lines)
+    at the top of the file so the setup script can connect as
+    ``postgres`` without a password; the block is removed afterwards by
+    :func:`remove_trust_auth`.
+
+    Args:
+        hba_path (str): Path to ``pg_hba.conf``.
+
+    Returns:
+        None.
+
+    Side effects:
+        Rewrites ``pg_hba.conf`` (takes effect after ``reload_pg``).
+    """
     trust_lines = (
         '# --- LMS Setup: temporary trust auth ---\n'
         'local all all trust\n'
@@ -91,7 +144,21 @@ def enable_trust_auth(hba_path):
 
 
 def remove_trust_auth(hba_path):
-    """Remove the temporary trust auth lines from pg_hba.conf."""
+    """Remove the temporary trust-auth block from ``pg_hba.conf``.
+
+    Drops every line between (and including) the
+    ``--- LMS Setup: temporary trust auth ---`` markers written by
+    :func:`enable_trust_auth`, restoring the file's original rules.
+
+    Args:
+        hba_path (str): Path to ``pg_hba.conf``.
+
+    Returns:
+        None.
+
+    Side effects:
+        Rewrites ``pg_hba.conf`` (takes effect after ``reload_pg``).
+    """
     with open(hba_path, 'r') as f:
         lines = f.readlines()
     filtered = []
@@ -110,7 +177,22 @@ def remove_trust_auth(hba_path):
 
 
 def update_env(db_url):
-    """Update or add DATABASE_URL in .env."""
+    """Write ``DATABASE_URL`` into the project ``.env`` file.
+
+    Replaces the existing ``DATABASE_URL=`` line when present,
+    otherwise appends it; prints a manual-setup hint when no ``.env``
+    file exists instead of creating one.
+
+    Args:
+        db_url (str): Full SQLAlchemy/psycopg2 connection URL, e.g.
+            ``postgresql://postgres:postgres@localhost:5432/library_db``.
+
+    Returns:
+        None.
+
+    Side effects:
+        Rewrites ``.env``; prints a confirmation or manual hint.
+    """
     line = f'DATABASE_URL={db_url}\n'
     if os.path.isfile(ENV_FILE):
         with open(ENV_FILE, 'r') as f:
@@ -128,6 +210,22 @@ def update_env(db_url):
 
 
 def main():
+    """Run the one-shot local database bootstrap.
+
+    Backs up ``pg_hba.conf``, enables temporary trust auth, sets the
+    ``postgres`` password, drops/recreates ``library_db``, applies
+    ``app/schema.sql`` (tables + role seed), restores ``pg_hba.conf``
+    and reloads, then writes ``DATABASE_URL`` to ``.env``. On any
+    failure the original ``pg_hba.conf`` is restored and the process
+    exits non-zero.
+
+    Returns:
+        None.
+
+    Side effects:
+        Rewrites ``pg_hba.conf`` (temporarily), manages the
+        ``library_db`` database, writes ``.env``, prints progress.
+    """
     data_dir = find_pg_data_dir()
     if not data_dir:
         print('Could not find PostgreSQL data directory.')

@@ -6,6 +6,7 @@ from app.cataloging import models as cat
 
 
 def _last_query(mock_db):
+    """Test helper _last_query: build mocked data or DB stub for the test."""
     return mock_db['fetch_all'].call_args[0][0]
 
 
@@ -120,6 +121,7 @@ class TestOtherListingsSort:
 class TestSortRoute:
     @staticmethod
     def _page(client, mock_db, query=''):
+        """Test helper _page: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = []
         return client.get('/librarian/cataloging' + query)

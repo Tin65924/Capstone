@@ -13,6 +13,7 @@ FULL = (1, 'b.sql', 100, 'completed', 'manual', None, '2026-01-01')
 class TestPageEdges:
     @staticmethod
     def _empty(mock_db):
+        """Test helper _empty: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = []
         mock_db['execute'].return_value = []

@@ -4,6 +4,14 @@ from app.database import db
 
 
 def _date_filter(clause_prefix, column):
+    """Build WHERE fragments bounding a date column between start and end. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        clause_prefix: See implementation for usage.
+        column: See implementation for usage.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     parts, params = [], []
     if clause_prefix.get('start') is not None:
         parts.append('{} >= %s'.format(column))
@@ -15,6 +23,13 @@ def _date_filter(clause_prefix, column):
 
 
 def _normalize_departments(departments):
+    """Normalize the departments filter into a clean list of names. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        departments: Program names to filter by, or None for all programs.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     if departments is None:
         return []
     if isinstance(departments, str):
@@ -56,6 +71,16 @@ def _department_clause(departments, b_alias='b', r_alias='r'):
 
 def books_borrowed_per_program(start_date=None, end_date=None, departments=None,
                                 borrow_type=None):
+    """Count borrow transactions grouped by program label for the bar chart. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        start_date: Start of the date window, or None for open-ended.
+        end_date: End of the date window, or None for open-ended.
+        departments: Program names to filter by, or None for all programs.
+        borrow_type: Optional 'daily' or 'overnight' loan filter.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     parts, params = _date_filter({'start': start_date, 'end': end_date}, 'c.borrow_date')
     departments = _normalize_departments(departments)
     if departments:
@@ -101,6 +126,13 @@ _PROGRAM_LABEL = """COALESCE(NULLIF(b.department, ''),
 
 
 def _program_joins():
+    """Return the shared JOIN fragment linking circulation to borrower, account, and role. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        None.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     return (' JOIN borrowers b ON b.borrower_id = c.borrower_id'
             ' JOIN user_accounts u ON b.user_id = u.user_id'
             ' JOIN roles r ON u.role_id = r.role_id')
@@ -166,6 +198,14 @@ def department_summary(start_date=None, end_date=None, departments=None):
 
 
 def utilization_rate(start_date=None, end_date=None):
+    """Compute the share of copies currently on loan as a utilization percentage. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        start_date: Start of the date window, or None for open-ended.
+        end_date: End of the date window, or None for open-ended.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     total = db.fetch_one("SELECT COUNT(*) FROM book_catalog WHERE catalog_status = 'active'")
     parts, params = _date_filter({'start': start_date, 'end': end_date}, 'borrow_date')
     where = 'WHERE transaction_status = \'active\'' + (' AND ' + ' AND '.join(parts) if parts else '')
@@ -180,6 +220,15 @@ def utilization_rate(start_date=None, end_date=None):
 
 
 def most_borrowed_titles(start_date=None, end_date=None, limit=10):
+    """List the most borrowed titles by loan count for the top-titles table. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        start_date: Start of the date window, or None for open-ended.
+        end_date: End of the date window, or None for open-ended.
+        limit: Maximum rows to return.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     parts, params = _date_filter({'start': start_date, 'end': end_date}, 'c.borrow_date')
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     params.append(limit)
@@ -193,6 +242,15 @@ def most_borrowed_titles(start_date=None, end_date=None, limit=10):
 
 
 def underutilized_titles(start_date=None, end_date=None, limit=10):
+    """List titles with the fewest loans to surface underused stock. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        start_date: Start of the date window, or None for open-ended.
+        end_date: End of the date window, or None for open-ended.
+        limit: Maximum rows to return.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     parts, params = _date_filter({'start': start_date, 'end': end_date}, 'c.borrow_date')
     on_cond = ' AND ' + ' AND '.join(parts) if parts else ''
     try:
@@ -211,6 +269,16 @@ def underutilized_titles(start_date=None, end_date=None, limit=10):
 
 
 def save_report_snapshot(report_type, filter_params, kpi_data, generated_by):
+    """Persist a generated report payload to the analytics cache for reuse. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        report_type: See implementation for usage.
+        filter_params: See implementation for usage.
+        kpi_data: See implementation for usage.
+        generated_by: See implementation for usage.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     return db.execute(
         '''INSERT INTO analytics_cache (report_type, filter_params, kpi_data, generated_by)
            VALUES (%s, %s, %s, %s)''',
@@ -305,6 +373,15 @@ def set_dashboard_cache(filter_params, payload, generated_by=None):
 # ---------------------------------------------------------------------------
 
 def _range_clause(column, start_date, end_date):
+    """Build WHERE fragments bounding a timestamp column between start and end dates. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        column: See implementation for usage.
+        start_date: Start of the date window, or None for open-ended.
+        end_date: End of the date window, or None for open-ended.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     parts, params = [], []
     if start_date is not None:
         parts.append('{} >= %s'.format(column))
@@ -316,6 +393,13 @@ def _range_clause(column, start_date, end_date):
 
 
 def count_active_titles():
+    """Count active catalog titles for headline KPI cards. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        None.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     row = db.fetch_one(
         "SELECT COUNT(*) FROM book_catalog WHERE catalog_status = 'active'"
     )
@@ -323,6 +407,13 @@ def count_active_titles():
 
 
 def count_total_copies():
+    """Count all physical copies for headline KPI cards. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        None.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     row = db.fetch_one(
         '''SELECT COUNT(*) FROM accession_log a
            JOIN book_catalog b ON a.book_id = b.book_id
@@ -353,6 +444,14 @@ def count_circulation_status(start_date=None, end_date=None, borrow_type=None):
 
 
 def count_lost_flagged(start_date=None, end_date=None):
+    """Count copies flagged lost via loan or inventory channels. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        start_date: Start of the date window, or None for open-ended.
+        end_date: End of the date window, or None for open-ended.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     parts, params = _range_clause('borrow_date', start_date, end_date)
     parts.append('lost_flag = TRUE')
     return db.fetch_one(
@@ -362,6 +461,13 @@ def count_lost_flagged(start_date=None, end_date=None):
 
 
 def count_reservations():
+    """Count reservation rows for headline KPI cards. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        None.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     row = db.fetch_one(
         """SELECT COUNT(*) FROM reservation_queue
            WHERE reservation_status IN ('waiting', 'allocated')"""
@@ -370,6 +476,13 @@ def count_reservations():
 
 
 def inventory_state_counts():
+    """Count inventory rows grouped by state for the condition breakdown. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        None.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     return db.fetch_all(
         'SELECT inventory_state, COUNT(*) FROM inventory_status GROUP BY inventory_state'
     )
@@ -442,6 +555,16 @@ def collection_by_category(start_date=None, end_date=None, categories=None):
 
 def borrowings_trend(start_date=None, end_date=None, borrow_type=None,
                      departments=None):
+    """Aggregate borrow counts per day for the trend line chart. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        start_date: Start of the date window, or None for open-ended.
+        end_date: End of the date window, or None for open-ended.
+        borrow_type: Optional 'daily' or 'overnight' loan filter.
+        departments: Program names to filter by, or None for all programs.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     parts, params = _range_clause('c.borrow_date', start_date, end_date)
     joins = ''
     if borrow_type:
@@ -464,6 +587,16 @@ def borrowings_trend(start_date=None, end_date=None, borrow_type=None,
 
 def overdue_trend(start_date=None, end_date=None, borrow_type=None,
                      departments=None):
+    """Aggregate overdue counts per day for the overdue trend chart. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        start_date: Start of the date window, or None for open-ended.
+        end_date: End of the date window, or None for open-ended.
+        borrow_type: Optional 'daily' or 'overnight' loan filter.
+        departments: Program names to filter by, or None for all programs.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     # Group by due_date (not borrow_date): "daily overdue counts" means
     # when items became overdue. COALESCE covers legacy rows with NULL due.
     parts, params = _range_clause('COALESCE(c.due_date, c.borrow_date)', start_date, end_date)
@@ -610,6 +743,13 @@ def fines_by_program_for_title(title, start_date=None, end_date=None):
 
 
 def _request_program_joins():
+    """Return the shared JOIN fragment linking requests to borrower, account, and role. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        None.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     return (' JOIN borrowers b ON b.borrower_id = rr.requester_id'
             ' JOIN user_accounts u ON b.user_id = u.user_id'
             ' JOIN roles r ON u.role_id = r.role_id')
@@ -759,6 +899,16 @@ def fines_by_book(start_date=None, end_date=None, limit=10):
 
 
 def top_borrowed_categories(start_date=None, end_date=None, limit=6, borrow_type=None):
+    """List top subject classifications by borrow volume for the pie chart. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        start_date: Start of the date window, or None for open-ended.
+        end_date: End of the date window, or None for open-ended.
+        limit: Maximum rows to return.
+        borrow_type: Optional 'daily' or 'overnight' loan filter.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     parts, params = _range_clause('c.borrow_date', start_date, end_date)
     if borrow_type:
         parts.append('c.borrow_type = %s')
@@ -777,6 +927,17 @@ def top_borrowed_categories(start_date=None, end_date=None, limit=6, borrow_type
 
 def borrowings_by_user_type(start_date=None, end_date=None, roles=None,
                               borrow_type=None, departments=None):
+    """Count borrows grouped by role name for the user-type split. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        start_date: Start of the date window, or None for open-ended.
+        end_date: End of the date window, or None for open-ended.
+        roles: See implementation for usage.
+        borrow_type: Optional 'daily' or 'overnight' loan filter.
+        departments: Program names to filter by, or None for all programs.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     parts, params = _range_clause('c.borrow_date', start_date, end_date)
     roles = [r.strip() for r in (roles or []) if r and r.strip()]
     if roles:
@@ -828,6 +989,13 @@ def circulation_overview(start_date=None, end_date=None, departments=None):
         'SELECT COUNT(DISTINCT circulation_records.borrower_id) {}'.format(base), p)
 
     def _and(cond):
+        """Perform the  and analytics operation. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+        
+        Args:
+            cond: See implementation for usage.
+        
+        Returns:
+            Query rows or computed payload for the caller (see implementation for shape)."""
         return (where + ' AND ' + cond) if where else ('WHERE ' + cond)
 
     overdue = db.fetch_one(
@@ -874,6 +1042,17 @@ def circulation_overview(start_date=None, end_date=None, departments=None):
 
 def top_borrowed_books_detailed(start_date=None, end_date=None, limit=5,
                                   borrow_type=None, departments=None):
+    """List top titles with author and counts for the detailed top-books table. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        start_date: Start of the date window, or None for open-ended.
+        end_date: End of the date window, or None for open-ended.
+        limit: Maximum rows to return.
+        borrow_type: Optional 'daily' or 'overnight' loan filter.
+        departments: Program names to filter by, or None for all programs.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     parts, params = _range_clause('c.borrow_date', start_date, end_date)
     joins = ''
     if borrow_type:
@@ -965,6 +1144,14 @@ def title_demand_gaps(limit=8):
 
 
 def count_accessions(start_date=None, end_date=None):
+    """Perform the count accessions analytics operation. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        start_date: Start of the date window, or None for open-ended.
+        end_date: End of the date window, or None for open-ended.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     parts, params = _range_clause('date_accessioned', start_date, end_date)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     row = db.fetch_one(
@@ -975,6 +1162,16 @@ def count_accessions(start_date=None, end_date=None):
 
 
 def recent_circulation(limit=10, departments=None, start_date=None, end_date=None):
+    """Perform the recent circulation analytics operation. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        limit: Maximum rows to return.
+        departments: Program names to filter by, or None for all programs.
+        start_date: Start of the date window, or None for open-ended.
+        end_date: End of the date window, or None for open-ended.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     parts, params = _range_clause('c.borrow_date', start_date, end_date)
     dept_clause, dept_params = _department_clause(departments, 'br', 'r')
     if dept_clause:
@@ -997,6 +1194,13 @@ def recent_circulation(limit=10, departments=None, start_date=None, end_date=Non
 
 
 def recent_collection_status(limit=10):
+    """Perform the recent collection status analytics operation. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+    
+    Args:
+        limit: Maximum rows to return.
+    
+    Returns:
+        Query rows or computed payload for the caller (see implementation for shape)."""
     return db.fetch_all(
         '''SELECT a.accession_number, b.title,
                   COALESCE(NULLIF(b.subject_classification, ''), 'Others'),
@@ -1100,6 +1304,13 @@ def book_traffic_overview(book_id, start_date=None, end_date=None):
     p = tuple(params)
 
     def _and(cond):
+        """Perform the  and analytics operation. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
+        
+        Args:
+            cond: See implementation for usage.
+        
+        Returns:
+            Query rows or computed payload for the caller (see implementation for shape)."""
         return where + ' AND ' + cond
 
     total = db.fetch_one(

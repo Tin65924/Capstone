@@ -11,6 +11,20 @@ from app.auth.models import log_activity
 
 
 def _filtered_categories(allowed_keys):
+    """Build sidebar category dicts containing only the allowed keys.
+
+    Walks ``SETTING_CATEGORIES`` and keeps, per category, the fields
+    whose keys appear in both the category definition and the caller's
+    allowlist (admin-only vs librarian-editable). Drops categories left
+    with no fields so the template never renders an empty section.
+
+    Args:
+        allowed_keys: Set of setting keys the current role may see.
+
+    Returns:
+        List of dicts with id, title, icon, blurb, and fields (list of
+        (key, (label, kind, description)) tuples).
+    """
     categories = [
         {'id': anchor, 'title': title, 'icon': icon, 'blurb': blurb,
          'fields': [(key, SETTING_DEFS[key]) for key in keys
@@ -21,7 +35,24 @@ def _filtered_categories(allowed_keys):
 
 
 def _apply_updates(allowed_keys):
-    """Shared validation for both settings forms. Returns (updated, updated_keys, errors)."""
+    """Validate and persist settings form input for one role's allowlist.
+
+    Shared validation for both settings forms. Returns (updated, updated_keys, errors).
+    Walks every key in ``SETTING_DEFS`` by kind: times require HH:MM and
+    the opening/closing pair is only written when coherent (opening <
+    closing); bools parse checkbox+hidden-fallback getlists; floats/ints
+    enforce non-negativity, per-key caps (fines, borrow limits, day
+    counts), and SETTING_RANGES bounds. Disallowed keys and blank inputs
+    are skipped (blanks keep the stored value). Writes each valid key
+    immediately via ``update_setting`` with the actor's id.
+
+    Args:
+        allowed_keys: Set of setting keys this form may change.
+
+    Returns:
+        Tuple (updated, updated_keys, errors) with the count of writes,
+        the list of changed keys, and human-readable error strings.
+    """
     errors = []
     updated = 0
     updated_keys = []
@@ -129,6 +160,24 @@ def _apply_updates(allowed_keys):
 
 
 def _finish_update(updated, updated_keys, errors, redirect_endpoint):
+    """Sync config, reschedule backups, audit, flash, and redirect.
+
+    Re-syncs ``app.config`` from the database and re-applies the backup
+    cron schedule (both best-effort so a sync failure never breaks the
+    save), records a truncated ``settings:update:<n>:<keys>`` audit row
+    when anything changed, flashes per-field errors plus a success or
+    no-changes note, and redirects to the caller's settings page
+    (Post/Redirect/Get).
+
+    Args:
+        updated: Count of settings written.
+        updated_keys: List of changed setting keys for the audit row.
+        errors: List of validation error strings to flash.
+        redirect_endpoint: Flask endpoint name to redirect back to.
+
+    Returns:
+        A redirect response to ``redirect_endpoint``.
+    """
     try:
         sync_settings_to_config(current_app)
     except Exception:
@@ -158,6 +207,17 @@ def _finish_update(updated, updated_keys, errors, redirect_endpoint):
 @login_required
 @admin_required
 def settings_page():
+    """Render the admin-only backup schedule settings page.
+
+    Loads effective settings (flashing an error when the table is
+    unavailable) and shows only ``ADMIN_ONLY_KEYS`` categories with the
+    admin sidebar. Circulation constants stay database-backed but have
+    no UI surface here; librarians edit them at /librarian/settings.
+
+    Returns:
+        Rendered ``settings/settings.html`` with defs, values,
+        categories, sidebar, form action, and cancel URL.
+    """
     try:
         values = get_settings_dict()
     except Exception:
@@ -178,7 +238,18 @@ def settings_page():
 @login_required
 @librarian_required
 def librarian_settings_page():
-    """Circulation constants for librarians: due dates, fines, limits, pickup windows."""
+    """Render the librarian circulation-constants page.
+
+    Circulation constants for librarians: due dates, fines, limits, pickup windows.
+    Loads effective settings (flashing when the table is unavailable) and
+    shows only ``LIBRARIAN_EDITABLE_KEYS`` categories with the librarian
+    sidebar, so librarians can tune due dates, fines, borrow limits, and
+    pickup windows without touching backup/admin-only settings.
+
+    Returns:
+        Rendered ``settings/settings.html`` scoped to the librarian
+        allowlist with the librarian sidebar and form action.
+    """
     try:
         values = get_settings_dict()
     except Exception:
@@ -196,6 +267,15 @@ def librarian_settings_page():
 @login_required
 @admin_required
 def update_settings():
+    """Handle the admin backup-schedule settings POST.
+
+    Delegates validation and persistence to :func:`_apply_updates` with
+    the admin allowlist, then finishes via :func:`_finish_update` back
+    to the admin settings page. Thin route: all SQL lives in models.
+
+    Returns:
+        A redirect response to ``settings.settings_page``.
+    """
     updated, updated_keys, errors = _apply_updates(ADMIN_ONLY_KEYS)
     return _finish_update(updated, updated_keys, errors, 'settings.settings_page')
 
@@ -204,5 +284,15 @@ def update_settings():
 @login_required
 @librarian_required
 def update_librarian_settings():
+    """Handle the librarian circulation-constants settings POST.
+
+    Delegates validation and persistence to :func:`_apply_updates` with
+    the librarian allowlist, then finishes via :func:`_finish_update`
+    back to the librarian settings page. Thin route: all SQL lives in
+    models.
+
+    Returns:
+        A redirect response to ``settings.librarian_settings_page``.
+    """
     updated, updated_keys, errors = _apply_updates(LIBRARIAN_EDITABLE_KEYS)
     return _finish_update(updated, updated_keys, errors, 'settings.librarian_settings_page')

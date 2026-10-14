@@ -1,4 +1,4 @@
-﻿"""Regression tests for separated lost/damaged copy-condition workflows.
+"""Regression tests for separated lost/damaged copy-condition workflows.
 
 Return is a pure check-in now; mark-lost / mark-damaged (reason required)
 are standalone librarian actions; the cataloging copies table shows Lost
@@ -15,6 +15,7 @@ BOOK_ROW = (1, 'T', 'A', '', '', None, '', '', '', '', '', 'active',
 
 
 def _non_audit_writes(mock_db):
+    """Test helper _non_audit_writes: build mocked data or DB stub for the test."""
     return [c[0][0] for c in mock_db['execute'].call_args_list
             if 'audit_trail' not in c[0][0]]
 
@@ -209,6 +210,7 @@ class TestInventoryDamageReason:
 class TestCatalogConditionColumn:
     @staticmethod
     def _page(librarian_client, mock_db, conditions):
+        """Test helper _page: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].return_value = (1,)
         mock_db['fetch_all'].side_effect = [
             [BOOK_ROW],                     # books page
@@ -298,6 +300,7 @@ class TestCatalogConditionColumn:
 class TestInventoryReasonColumn:
     @staticmethod
     def _history(mock_db, rows):
+        """Test helper _history: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].side_effect = [[], rows]
 
@@ -425,6 +428,7 @@ BOOK16 = (1, 'Clean Code', 'R. Martin', '1st', 'Pub', 2008, 'SE', 'C1',
 class TestBookReasonColumn:
     @staticmethod
     def _page(librarian_client, mock_db, conditions, tab='damaged'):
+        """Test helper _page: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].return_value = (1,)
         mock_db['fetch_all'].side_effect = [
             [BOOK16],

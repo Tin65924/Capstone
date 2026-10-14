@@ -9,6 +9,7 @@ short request rows. Everything must degrade gracefully — never 500.
 
 def _base(mock_db, borrower=(5, 1, 'S1', 'BSIS', 'a', None, None, None),
           user=(1, 'e@x.ph', 'Student', 'Ann Santos')):
+    """Test helper _base: build mocked data or DB stub for the test."""
     mock_db['fetch_one'].side_effect = None
     mock_db['fetch_one'].return_value = user
     mock_db['fetch_all'].side_effect = None

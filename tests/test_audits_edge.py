@@ -62,6 +62,7 @@ class TestStatsEdges:
 class TestPageEdges:
     @staticmethod
     def _empty(mock_db):
+        """Test helper _empty: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = []
 

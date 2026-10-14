@@ -8,6 +8,7 @@ per-user history page.
 
 
 def _base(mock_db):
+    """Test helper _base: build mocked data or DB stub for the test."""
     mock_db['fetch_one'].side_effect = None
     mock_db['fetch_one'].return_value = (5, 1, 'S1', 'BSIS', 'a', None,
                                          None, None)

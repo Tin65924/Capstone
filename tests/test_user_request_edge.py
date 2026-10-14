@@ -9,6 +9,7 @@ the length-validation and badge-rendering fixes.
 
 
 def _borrower(mock_db, bid=5):
+    """Test helper _borrower: build mocked data or DB stub for the test."""
     mock_db['fetch_one'].return_value = (bid,)
     mock_db['fetch_all'].return_value = []
     mock_db['execute'].return_value = [(9,)]
@@ -85,6 +86,7 @@ class TestDuplicates:
 class TestDisplayStates:
     @staticmethod
     def _page(student_client, mock_db, rows):
+        """Test helper _page: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].return_value = (5,)
         mock_db['fetch_all'].return_value = rows
         return student_client.get('/user/request-book').data.decode()

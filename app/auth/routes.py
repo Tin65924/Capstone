@@ -36,6 +36,15 @@ SESSION_OAUTH_KEY = '_google_oauth_data'
 
 
 def _allowed_email(email):
+    """Check whether an email belongs to the allowed school domain.
+    Lowercases the address and requires the @mcst.edu.ph suffix, so
+    Google OAuth sign-ins from other domains are rejected before any
+    account lookup or creation happens.
+    Args:
+        email: Email string from the Google ID token.
+    Returns:
+        True when the email ends with the allowed domain, False otherwise.
+    """
     return email.lower().endswith(f'@{ALLOWED_DOMAIN}')
 
 
@@ -81,6 +90,15 @@ def _safe_next_url(fallback_endpoint='main.user_profile'):
 
 
 def _build_flow(redirect_uri=None):
+    """Build a Google OAuth 2.0 flow for sign-in and callback.
+    Constructs a Flow from the app client id/secret with openid, email,
+    and profile scopes. Defaults the redirect URI to the google_callback
+    endpoint so login initiation and token exchange stay consistent.
+    Args:
+        redirect_uri: Override OAuth redirect URI (defaults to callback URL).
+    Returns:
+        Configured google_auth_oauthlib Flow ready for authorization_url.
+    """
     if not redirect_uri:
         redirect_uri = url_for('auth.google_callback', _external=True)
     return Flow.from_client_config(
@@ -103,11 +121,31 @@ def _build_flow(redirect_uri=None):
 
 @auth_bp.route('/login', methods=['GET'])
 def login():
+    """Render the public sign-in page (GET /login).
+    Public endpoint with no RBAC guard. Serves auth/login.html where the
+    user picks Google sign-in. Takes no form or query args and writes no
+    audit row since no state changes.
+    Args:
+        None.
+    Returns:
+        Rendered login template response.
+    """
     return render_template('auth/login.html')
 
 
 @auth_bp.route('/login/google')
 def google_login():
+    """Start Google OAuth sign-in (GET /login/google).
+    Public endpoint with no RBAC guard. Stashes an optional ?next target
+    in the session, builds the OAuth flow with offline access and account
+    selection, stores state plus PKCE verifier, then redirects to Google.
+    Failures log system:login_failed:initiate, flash an error, and redirect
+    to login.
+    Args:
+        None (reads optional `next` query arg).
+    Returns:
+        Redirect to the Google authorization URL, or to login on failure.
+    """
     next_page = request.args.get('next')
     if next_page:
         session['next'] = next_page
@@ -133,6 +171,18 @@ def google_login():
 
 @auth_bp.route('/login/google/callback')
 def google_callback():
+    """Complete Google OAuth sign-in (GET /login/google/callback).
+    Public endpoint with no RBAC guard. Validates OAuth state, exchanges
+    the code for tokens, verifies the ID token and @mcst.edu.ph domain,
+    then either logs in a returning user, auto-creates the first Admin,
+    or stashes new-user data for role selection. Pending or disabled
+    accounts are blocked with flashes; each failure writes a
+    system:login_failed:* audit row and redirects to login.
+    Args:
+        None (reads OAuth `state` and `code` from the callback URL).
+    Returns:
+        Redirect to profile/next page, pending page, role select, or login.
+    """
     state = session.pop('_oauth_state', None)
     if not state:
         log_system_event('system:login_failed:invalid_state')
@@ -241,11 +291,33 @@ def google_callback():
 
 @auth_bp.route('/login/role-select', methods=['GET', 'POST'])
 def role_select():
+    """Collect role and borrower details for first-time OAuth users.
+    Public endpoint gated only by the OAuth session key (no login guard).
+    GET renders role_select with program/department vocab. POST validates
+    role, ID number format and uniqueness, and controlled-vocabulary
+    department, then creates a pending Faculty account or an active
+    Student account with a borrower row. Re-logs returning users found
+    mid-flow. Flashes validation errors and re-renders, or redirects to
+    pending page, profile, or login.
+    Args:
+        None (reads `role`, `id_number`, `department` form fields on POST).
+    Returns:
+        Rendered role select or pending page, or a redirect response.
+    """
     oauth_data = session.get(SESSION_OAUTH_KEY)
     if not oauth_data:
         return redirect(url_for('auth.login'))
 
     def _render_register(error=None):
+        """Re-render the role-select form with programs and departments.
+        Flashes the given validation error (if any) then renders
+        auth/role_select.html with fresh program/department options, so
+        the user keeps context instead of bouncing to a blank login page.
+        Args:
+            error: Optional flash-ready error message string.
+        Returns:
+            Rendered role-select template response.
+        """
         if error:
             flash(error, 'error')
         return render_template('auth/role_select.html',
@@ -360,6 +432,16 @@ def role_select():
 @login_required
 @librarian_required
 def admin_users():
+    """Render the User Management listing (GET /librarian/users).
+    Requires login plus Librarian or Admin role. Parses status, role,
+    scope, and page query args, applies staff/member visibility rules
+    and KPI counts, paginates 20 per page, and picks the admin or
+    librarian sidebar by scope. Writes no audit row (read-only).
+    Args:
+        None (reads `status`, `role`, `scope`, `page` query args).
+    Returns:
+        Rendered users/users.html with scoped users, pending, KPIs, and pager.
+    """
     users = get_all_users() or []
     pending = get_pending_users() or []
     status_filter = request.args.get('status', '')
@@ -426,6 +508,15 @@ def admin_users():
     departments_all = get_departments('department', include_inactive=True) or []
 
     def _only_active(rows):
+        """Filter department vocab rows down to active entries only.
+        Keeps inactive entries available for the management table while
+        registration and profile dropdowns receive just the active subset,
+        so retired values never appear as selectable options.
+        Args:
+            rows: Department vocab rows with status at index 3.
+        Returns:
+            List of rows whose status is active (defaults active if blank).
+        """
         return [r for r in (rows or [])
                 if (r[3] if len(r) > 3 and r[3] else 'active') == 'active']
 
@@ -462,7 +553,27 @@ _USER_COL = {'user_id': 0, 'email': 1, 'full_name': 2, 'role': 3, 'status': 4, '
 
 
 def _user_row_to_export(row):
+    """Convert a get_all_users tuple into an 8-column export row.
+    Maps positional cols (0 user_id through 7 department) to strings and
+    normalizes created_at from datetime, date, or string into an ISO
+    display value, tolerating None and short mock rows without failing.
+    Args:
+        row: Positional user tuple from get_all_users.
+    Returns:
+        List of 8 export-ready strings matching _USER_EXPORT_HEADERS.
+    """
     def _str(v):
+        """Coerce one export cell to string, mapping None to blank.
+
+        Keeps CSV/XLSX user exports stable when optional columns
+        (department, id_number) are NULL.
+
+        Args:
+            v: Raw cell value.
+
+        Returns:
+            Empty string for None, else str(v).
+        """
         return '' if v is None else str(v)
     # created_at may be datetime, date, or string (mock); handle all
     created = row[_USER_COL['created']] if len(row) > _USER_COL['created'] else None
@@ -486,6 +597,16 @@ def _user_row_to_export(row):
 
 
 def _style_user_xlsx(ws, headers):
+    """Style the header row and layout of the users XLSX export.
+    Applies the navy header fill, white bold font, centered wrapping,
+    thin borders, frozen top row, autofilter, and tuned column widths,
+    so the downloaded workbook matches the app theme and stays readable.
+    Args:
+        ws: Openpyxl worksheet whose row 1 holds the export.
+        headers: Header label list written into row 1.
+    Returns:
+        None; styles the worksheet in place.
+    """
     navy = PatternFill(start_color='1e3a8a', end_color='1e3a8a', fill_type='solid')
     white_font = Font(color='FFFFFF', bold=True, size=9, name='Calibri')
     thin = Side(style='thin', color='cbd5e1')
@@ -525,6 +646,16 @@ def _generate_user_csv(headers, rows):
 @login_required
 @librarian_required
 def export_users():
+    """Export filtered users as CSV or XLSX (GET /librarian/users/export).
+    Requires login plus Librarian or Admin role. Parses status, format,
+    scope, and role query args, applies the same visibility rules as the
+    manage page, builds a timestamped filename, logs
+    users:export:<filter>:<count>, and streams CSV or styled XLSX.
+    Args:
+        None (reads `status`, `format`, `scope`, `role` query args).
+    Returns:
+        File download Response with CSV or XLSX body and disposition.
+    """
     status = request.args.get('status', '').strip().lower()
     fmt = request.args.get('format', 'csv').strip().lower()
     if fmt not in ('csv', 'xlsx'):
@@ -617,6 +748,15 @@ def export_users():
 @login_required
 @librarian_required
 def approve_user_route(user_id):
+    """Approve a pending user account (POST, Librarian+Admin only).
+    Guarded by login_required then librarian_required. Looks up the user
+    row, approves via approve_user, logs approved_user:<id>:<name>,
+    flashes success, and redirects to the user list (Post/Redirect/Get).
+    Args:
+        user_id: Primary key of the pending user to approve.
+    Returns:
+        Redirect to the User Management listing with a flash message.
+    """
     user = db.fetch_one(
         '''SELECT u.user_id, u.email, r.role_name, u.full_name
            FROM user_accounts u
@@ -649,6 +789,16 @@ def _target_name(user_id):
 @login_required
 @admin_required
 def toggle_user_status_route(user_id):
+    """Toggle a user between active and disabled (POST, Admin only).
+    Guarded by login_required then admin_required. Refuses users not in
+    active/disabled states, flips via toggle_user_status, logs
+    toggled_user_status:<id>:<name>, flashes success, and redirects back
+    to the user list.
+    Args:
+        user_id: Primary key of the user whose status flips.
+    Returns:
+        Redirect to the User Management listing with a flash message.
+    """
     record = get_user_record(user_id)
     if not record:
         flash('User not found.', 'error')
@@ -666,6 +816,16 @@ def toggle_user_status_route(user_id):
 @login_required
 @admin_required
 def archive_user_route(user_id):
+    """Archive a user account (POST, Admin only).
+    Guarded by login_required then admin_required. Requires the user row
+    to exist, archives via archive_user, logs archived_user:<id>:<name>,
+    flashes success, and redirects to the user list for the later
+    archive-then-delete flow.
+    Args:
+        user_id: Primary key of the user to archive.
+    Returns:
+        Redirect to the User Management listing with a flash message.
+    """
     if not get_user_record(user_id):
         flash('User not found.', 'error')
         return redirect(url_for('auth.admin_users'))
@@ -679,6 +839,16 @@ def archive_user_route(user_id):
 @login_required
 @admin_required
 def unarchive_user_route(user_id):
+    """Restore an archived user account (POST, Admin only).
+    Guarded by login_required then admin_required. Requires the user row
+    to exist, restores via unarchive_user, logs
+    unarchived_user:<id>:<name>, flashes success, and redirects to the
+    user list.
+    Args:
+        user_id: Primary key of the archived user to restore.
+    Returns:
+        Redirect to the User Management listing with a flash message.
+    """
     if not get_user_record(user_id):
         flash('User not found.', 'error')
         return redirect(url_for('auth.admin_users'))
@@ -692,6 +862,16 @@ def unarchive_user_route(user_id):
 @login_required
 @admin_required
 def delete_user_route(user_id):
+    """Permanently delete an archived user (POST, Admin only).
+    Guarded by login_required then admin_required. Enforces
+    archive-then-delete, blocks self-deletion and FK-linked accounts via
+    get_user_deletion_blocker, deletes via delete_user, logs
+    deleted_user:<id>:<name>, and flashes the outcome before redirecting.
+    Args:
+        user_id: Primary key of the archived user to delete.
+    Returns:
+        Redirect to the User Management listing with a flash message.
+    """
     # Name first: the row is gone after delete_user().
     target_name = _target_name(user_id)
     user = get_user_record(user_id)
@@ -725,6 +905,16 @@ def delete_user_route(user_id):
 @login_required
 @admin_required
 def change_user_role(user_id):
+    """Change a user's role (POST, Admin only).
+    Guarded by login_required then admin_required. Parses role_id from
+    the form, validates the target row and role, protects the last admin
+    from demotion, updates via update_user_role, logs
+    changed_role:<id>:<old>~><new>:<name>, and redirects with a flash.
+    Args:
+        user_id: Primary key of the user whose role changes.
+    Returns:
+        Redirect to the User Management listing with a flash message.
+    """
     role_id = request.form.get('role_id')
     if role_id:
         target = get_user_record(user_id)
@@ -770,6 +960,17 @@ def change_user_role(user_id):
 @login_required
 @librarian_required
 def edit_user_route(user_id):
+    """Edit a user's name, ID number, and department (POST, staff only).
+    Guarded by login_required then librarian_required; non-admins may
+    edit only Student/Faculty accounts. Validates ID format and
+    uniqueness plus controlled-vocabulary department, updates via
+    update_user_details, marks the Bloom registry dirty, logs
+    edited_user:<id>:<name>, and redirects with modal status flags.
+    Args:
+        user_id: Primary key of the user being edited.
+    Returns:
+        Redirect to the user list with editModal status flags and flash.
+    """
     # Librarians may modify student/faculty information only — never
     # staff accounts. Admins may edit anyone.
     if current_user.role != 'Admin':
@@ -825,11 +1026,31 @@ def edit_user_route(user_id):
 @login_required
 @librarian_required
 def add_department_route():
+    """Add a program or department vocab entry (POST, Librarian+Admin).
+    Guarded by login_required then librarian_required. Parses name and
+    dept_type from the form, rejects blanks, bad types, and duplicates,
+    creates via create_department, logs added_department:<type>:<name>,
+    and returns JSON for AJAX or flash plus redirect otherwise.
+    Args:
+        None (reads `name` and `dept_type` form fields).
+    Returns:
+        JSON added payload for AJAX, else redirect with a flash message.
+    """
     name = request.form.get('name', '').strip()
     dept_type = request.form.get('dept_type', '').strip()
     wants_json = _wants_json()
 
     def _fail(message, code):
+        """Return an add-department failure as JSON or flash redirect.
+        Sends a JSON error with the status code for AJAX callers, or
+        flashes the message and redirects to the user list for form
+        posts, keeping both clients on one error path.
+        Args:
+            message: Human-readable error message.
+            code: HTTP status code for the JSON branch.
+        Returns:
+            JSON error tuple or a redirect response with a flash.
+        """
         if wants_json:
             return jsonify({'error': message}), code
         flash(message, 'error')
@@ -858,9 +1079,29 @@ def add_department_route():
 @login_required
 @admin_required
 def delete_department_route(department_id):
+    """Delete a program/department vocab entry (POST, Admin only).
+    Guarded by login_required then admin_required. Refuses missing rows
+    and entries still used by borrowers, deletes via delete_department,
+    logs deleted_department:<id>, and returns JSON for AJAX or flash
+    plus redirect otherwise.
+    Args:
+        department_id: Primary key of the vocab entry to delete.
+    Returns:
+        JSON deleted payload for AJAX, else redirect with a flash message.
+    """
     wants_json = _wants_json()
 
     def _fail(message, code):
+        """Return a delete-department failure as JSON or flash redirect.
+        Sends a JSON error with the status code for AJAX callers, or
+        flashes the message and redirects to the user list for form
+        posts, so missing rows and in-use entries share one handler.
+        Args:
+            message: Human-readable error message.
+            code: HTTP status code for the JSON branch.
+        Returns:
+            JSON error tuple or a redirect response with a flash.
+        """
         if wants_json:
             return jsonify({'error': message}), code
         flash(message, 'error')
@@ -889,10 +1130,31 @@ def update_department_status_route(department_id):
 
     Librarian-accessible (Admin included): inactive entries stay in the
     table but disappear from every registration/profile option.
+
+    Guarded by login_required then librarian_required. Parses the target
+    status from the form, no-ops when unchanged, updates via
+    update_department_status, logs department_status:<id>:<status>, and
+    returns JSON for AJAX or flash plus redirect otherwise.
+
+    Args:
+        department_id: Primary key of the vocab entry to update.
+
+    Returns:
+        JSON updated payload for AJAX, else redirect with a flash message.
     """
     wants_json = _wants_json()
 
     def _fail(message, code):
+        """Return a status-change failure as JSON or flash redirect.
+        Sends a JSON error with the status code for AJAX callers, or
+        flashes the message and redirects to the user list for form
+        posts, covering invalid status and missing-row failures alike.
+        Args:
+            message: Human-readable error message.
+            code: HTTP status code for the JSON branch.
+        Returns:
+            JSON error tuple or a redirect response with a flash.
+        """
         if wants_json:
             return jsonify({'error': message}), code
         flash(message, 'error')
@@ -928,6 +1190,15 @@ def _wants_json():
 @auth_bp.route('/logout')
 @login_required
 def logout():
+    """Sign out the current user (GET /logout, login required).
+    Requires login with no role restriction. Writes a logout audit row
+    via log_activity, clears the Flask-Login session, and redirects to
+    the public login page.
+    Args:
+        None.
+    Returns:
+        Redirect to the login page.
+    """
     log_activity(current_user.id, 'logout')
     logout_user()
     return redirect(url_for('auth.login'))

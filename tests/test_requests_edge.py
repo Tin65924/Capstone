@@ -10,6 +10,7 @@ matrix. Includes the `None`-list hardening and the request-date
 
 
 def _borrower(mock_db, bid=5):
+    """Test helper _borrower: build mocked data or DB stub for the test."""
     mock_db['fetch_one'].return_value = (bid,)
 
 
@@ -42,6 +43,7 @@ class TestEmptyDb:
 class TestHostileParams:
     @staticmethod
     def _ok(mock_db):
+        """Test helper _ok: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = []
 

@@ -106,9 +106,11 @@ class TestCirculationLoanFilters:
     @staticmethod
     def _loan(cid=1, borrow=None, due=None, btype='overnight',
               status='active', name='Alice', title='Book A', acc='ACC-1'):
+        """Test helper _loan: build mocked data or DB stub for the test."""
         return (cid, borrow, due, btype, status, name, 5, title, acc, 1)
 
     def _page(self, librarian_client, mock_db, loans, query=''):
+        """Test helper _page: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].side_effect = [
             (len(loans),),  # stats active loans
             (0,),           # stats overdue
@@ -633,6 +635,7 @@ class TestReservationFilters:
     ]
 
     def _mock_page(self, mock_db):
+        """Test helper _mock_page: build mocked data or DB stub for the test."""
         mock_db['fetch_all'].side_effect = [self.GROUPS, self.BOOK_A_ROWS, self.BOOK_B_ROWS]
 
     def test_no_filter_defaults_to_active(self, librarian_client, mock_db):
@@ -1464,6 +1467,7 @@ class TestStaffInheritFacultySettings:
 
     @staticmethod
     def _profile_mocks(mock_db, uid, email, role, name, borrower_id, id_number):
+        """Test helper _profile_mocks: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].side_effect = [
             (uid, email, role, name, borrower_id, id_number, 'HQ', '555', 'active'),  # profile
             (borrower_id, uid, id_number, 'HQ', '555', 'active', None, None),  # borrower

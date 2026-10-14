@@ -1037,6 +1037,7 @@ class TestBulkImport:
 
     @staticmethod
     def _make_csv(rows, headers=None):
+        """Test helper _make_csv: build mocked data or DB stub for the test."""
         if headers is None:
             headers = ['title', 'author', 'accession_number', 'isbn', 'edition', 'publisher',
                        'year', 'subject', 'call_number', 'material_type', 'description',
@@ -1049,12 +1050,14 @@ class TestBulkImport:
         return out.getvalue()
 
     def _assert_error(self, resp, expected_status=400):
+        """Test helper _assert_error: build mocked data or DB stub for the test."""
         assert resp.status_code == expected_status
         data = resp.get_json()
         assert data is not None
         assert 'error' in data
 
     def _assert_job(self, resp):
+        """Test helper _assert_job: build mocked data or DB stub for the test."""
         assert resp.status_code == 200
         data = resp.get_json()
         assert data is not None

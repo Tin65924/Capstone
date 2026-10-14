@@ -3,6 +3,28 @@ from app.database import db
 
 def create_book(title, author, edition, publisher, year_published, subject_classification,
                 call_number, isbn, material_type, description):
+    """Insert a new book title into the catalog as active and return its id.
+
+    Creates one row in book_catalog with catalog_status='active' holding
+    the bibliographic metadata. Physical copies are added separately via
+    create_accession; a title with no accessions simply shows zero
+    available copies.
+
+    Args:
+        title: Book title (required).
+        author: Author name(s) (required).
+        edition: Edition string, or None.
+        publisher: Publisher name, or None.
+        year_published: Publication year integer, or None.
+        subject_classification: Category/subject label for filtering.
+        call_number: Shelf call number, or None.
+        isbn: ISBN string, or None (duplicates allowed across editions).
+        material_type: e.g. 'Book' or 'E-Book'.
+        description: Summary/blurb, or None.
+
+    Returns:
+        New book_id integer, or None if the INSERT returned nothing.
+    """
     rows = db.execute(
         '''INSERT INTO book_catalog (title, author, edition, publisher, year_published,
            subject_classification, call_number, isbn, material_type, description, catalog_status)
@@ -24,6 +46,23 @@ ACCESSION_SUBQUERY = (
 )
 
 def search_books(query, field=None):
+    """Search the catalog with an ILIKE match, de-duplicated by title.
+
+    Returns DISTINCT ON (title, author, isbn) rows so duplicate edition
+    rows collapse to one hit. When field is one of title/author/isbn/
+    category only that column is matched; otherwise title, author, isbn,
+    and subject_classification are all searched. Only the sanitized
+    field name selects the column — the user query always travels as a
+    bound %pattern% parameter.
+
+    Args:
+        query: Substring to wrap in %...% for ILIKE matching.
+        field: Optional column scope ('title', 'author', 'isbn',
+            'category'), or None for all columns.
+
+    Returns:
+        List of book_catalog row tuples matching the query.
+    """
     pattern = f'%{query}%'
     if field == 'title':
         return db.fetch_all(
@@ -55,10 +94,35 @@ def search_books(query, field=None):
 
 
 def get_book_by_id(book_id):
+    """Fetch one catalog row by primary key regardless of status.
+
+    Used by edit, archive-check, detail, and history views that must see
+    archived books too (public search filters those out separately).
+
+    Args:
+        book_id: Primary key of book_catalog.
+
+    Returns:
+        Full book_catalog row tuple, or None if not found.
+    """
     return db.fetch_one('SELECT * FROM book_catalog WHERE book_id = %s', (book_id,))
 
 
 def get_book_by_title_author_isbn(title, author, isbn):
+    """Find a duplicate title by exact title/author/ISBN match.
+
+    Guards the add-book flow against double entry: when isbn is given
+    it must match exactly, otherwise the match requires isbn IS NULL so
+    an ISBN-less row never collides with an ISBN-bearing one.
+
+    Args:
+        title: Exact title to match.
+        author: Exact author to match.
+        isbn: Exact ISBN to match, or falsy to match NULL-ISBN rows.
+
+    Returns:
+        1-tuple (book_id,) of the duplicate, or None if unique.
+    """
     if isbn:
         return db.fetch_one(
             'SELECT book_id FROM book_catalog WHERE title = %s AND author = %s AND isbn = %s',
@@ -71,7 +135,22 @@ def get_book_by_title_author_isbn(title, author, isbn):
 
 
 def suggest_book_values(field, prefix, limit=8):
-    """Distinct existing values matching a prefix for autosuggestions."""
+    """Suggest distinct column values by prefix for form autocomplete.
+
+    Powers the add/edit-book autosuggest inputs: depending on field,
+    returns distinct titles, authors, publishers, subjects, ISBNs, or
+    (for 'search') the union of title/author/subject/isbn matches.
+    Matching is ILIKE prefix%, ordered alphabetically.
+
+    Args:
+        field: One of 'title', 'author', 'publisher', 'subject',
+            'isbn', or 'search' for the combined catalog box.
+        prefix: Typed prefix to match.
+        limit: Maximum suggestions to return.
+
+    Returns:
+        List of 1-tuples (value,) with distinct matches.
+    """
     pattern = f'{prefix}%'
     if field == 'title':
         return db.fetch_all(
@@ -143,6 +222,18 @@ def get_all_books():
 
 
 def _count_books(where, args):
+    """Count catalog rows for one WHERE fragment for pagination totals.
+
+    Shared helper behind every paginated staff/public listing so the
+    total matches exactly the rows the page query can return.
+
+    Args:
+        where: WHERE clause string including the WHERE keyword.
+        args: Bound parameters for that clause.
+
+    Returns:
+        Integer matching-row count (0 when none).
+    """
     row = db.fetch_one(f'SELECT COUNT(*) FROM book_catalog {where}', args)
     return row[0] if row else 0
 
@@ -311,6 +402,13 @@ def get_books_by_copy_status_paginated(copy_status, page=1, per_page=20, sort_by
 
 
 def get_distinct_categories():
+    """List every non-empty subject classification A-Z for filter options.
+
+    Feeds the category dropdown on the staff and public catalog pages.
+
+    Returns:
+        List of 1-tuples (subject_classification,) ordered alphabetically.
+    """
     return db.fetch_all(
         'SELECT DISTINCT subject_classification FROM book_catalog WHERE subject_classification IS NOT NULL AND subject_classification != \'\' ORDER BY subject_classification'
     )
@@ -449,6 +547,18 @@ def search_books_filtered(query, field=None, year_from=None, year_to=None, sort_
 
 
 def get_recent_books(limit=5):
+    """Fetch the most recently added titles for dashboard widgets.
+
+    Orders distinct titles by date_added DESC (duplicates collapsed by
+    DISTINCT ON) so the dashboard "new arrivals" strip shows fresh
+    catalog additions.
+
+    Args:
+        limit: Maximum titles to return.
+
+    Returns:
+        List of book_catalog row tuples, newest first.
+    """
     return db.fetch_all(
         f'SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog ORDER BY {DISTINCT_ORDER}, date_added DESC LIMIT %s',
         (limit,)
@@ -456,6 +566,21 @@ def get_recent_books(limit=5):
 
 
 def create_accession(accession_number, book_id, librarian_id, source=None):
+    """Add one physical copy of a book to the accession log.
+
+    Inserts into accession_log linking the copy (accession_number, which
+    must be unique) to its title and the processing librarian. Source
+    records acquisition origin ('purchase', 'donation', 'others').
+
+    Args:
+        accession_number: Unique copy barcode/number string.
+        book_id: FK into book_catalog for the title.
+        librarian_id: Acting staff user_id recorded as processor.
+        source: Acquisition source label, or None.
+
+    Returns:
+        Rowcount from the INSERT.
+    """
     return db.execute(
         '''INSERT INTO accession_log (accession_number, book_id, librarian_id, source)
            VALUES (%s, %s, %s, %s)''',
@@ -464,6 +589,18 @@ def create_accession(accession_number, book_id, librarian_id, source=None):
 
 
 def get_accessions_by_book(book_id):
+    """List every copy of one title in accession_id order.
+
+    Used by the book detail/edit modals to show all barcodes, sources,
+    and per-copy actions for a title. Returns [] (never None) so
+    templates can iterate directly.
+
+    Args:
+        book_id: FK into book_catalog.
+
+    Returns:
+        List of full accession_log row tuples for the title.
+    """
     return db.fetch_all(
         'SELECT * FROM accession_log WHERE book_id = %s ORDER BY accession_id',
         (book_id,)
@@ -471,6 +608,17 @@ def get_accessions_by_book(book_id):
 
 
 def get_accession_by_number(accession_number):
+    """Fetch one copy by its exact accession number string.
+
+    Used to detect duplicate barcodes before insert and to resolve
+    scans/returns typed by number.
+
+    Args:
+        accession_number: Exact copy number to look up.
+
+    Returns:
+        Full accession_log row tuple, or None if not found.
+    """
     return db.fetch_one(
         'SELECT * FROM accession_log WHERE accession_number = %s',
         (accession_number,)
@@ -478,6 +626,17 @@ def get_accession_by_number(accession_number):
 
 
 def get_accession_by_id(accession_id):
+    """Fetch one copy by its primary key.
+
+    Used by edit/delete-copy and circulation flows that carry the
+    numeric accession_id rather than the barcode string.
+
+    Args:
+        accession_id: Primary key of accession_log.
+
+    Returns:
+        Full accession_log row tuple, or None if not found.
+    """
     return db.fetch_one(
         'SELECT * FROM accession_log WHERE accession_id = %s',
         (accession_id,)
@@ -485,6 +644,19 @@ def get_accession_by_id(accession_id):
 
 
 def get_accessions_for_books(book_ids):
+    """Batch-fetch copy rows for many titles for list-page rendering.
+
+    Avoids N+1 queries on catalog tables by pulling (accession_id,
+    accession_number, book_id, source, date_accessioned) for all given
+    titles in one ANY(%s) query, ordered by accession_id. Empty input
+    short-circuits to [] without hitting the DB.
+
+    Args:
+        book_ids: Iterable of book_catalog primary keys.
+
+    Returns:
+        List of 5-tuple copy rows (possibly empty).
+    """
     if not book_ids:
         return []
     return db.fetch_all(
@@ -495,6 +667,20 @@ def get_accessions_for_books(book_ids):
 
 
 def update_accession(accession_id, accession_number, source, updated_by=None):
+    """Edit a copy's barcode number and acquisition source.
+
+    Updates accession_number (must stay unique — callers pre-check),
+    source, and audit stamps for one accession_log row.
+
+    Args:
+        accession_id: Target copy's primary key.
+        accession_number: New unique barcode string.
+        source: New source label ('purchase', 'donation', 'others').
+        updated_by: Acting staff user_id for the audit stamp.
+
+    Returns:
+        Rowcount from the UPDATE.
+    """
     return db.execute(
         'UPDATE accession_log SET accession_number=%s, source=%s, updated_at=NOW(), updated_by=%s WHERE accession_id=%s',
         (accession_number, source, updated_by, accession_id)
@@ -502,10 +688,32 @@ def update_accession(accession_id, accession_number, source, updated_by=None):
 
 
 def delete_accession(accession_id):
+    """Hard-delete one copy row by primary key.
+
+    Callers must first check accession_referenced and refuse when the
+    copy has circulation or inventory history, otherwise the DELETE
+    would hit a FK violation (500).
+
+    Args:
+        accession_id: Target copy's primary key.
+    """
     db.execute('DELETE FROM accession_log WHERE accession_id = %s', (accession_id,))
 
 
 def accession_referenced(accession_id):
+    """Check whether a copy has history blocking its deletion.
+
+    Returns True when any circulation_records or inventory_status row
+    references the accession_id, meaning delete_accession would violate
+    a foreign key. The delete-copy route uses this to show a friendly
+    refusal instead of a 500.
+
+    Args:
+        accession_id: Copy primary key to safety-check.
+
+    Returns:
+        True when the copy is referenced and must be kept.
+    """
     row = db.fetch_one(
         '''SELECT 1 WHERE EXISTS (SELECT 1 FROM circulation_records WHERE accession_id = %s)
               OR EXISTS (SELECT 1 FROM inventory_status WHERE accession_id = %s)''',
@@ -515,6 +723,18 @@ def accession_referenced(accession_id):
 
 
 def add_favorite(user_id, book_id):
+    """Star a book for a user, ignoring duplicates silently.
+
+    Inserts into user_favorites with ON CONFLICT DO NOTHING so
+    re-favoriting is a safe no-op powering the catalog heart toggle.
+
+    Args:
+        user_id: Owner of the favorites list.
+        book_id: Title to star.
+
+    Returns:
+        Rowcount from the INSERT (0 when already favorited).
+    """
     return db.execute(
         'INSERT INTO user_favorites (user_id, book_id) VALUES (%s, %s) ON CONFLICT DO NOTHING',
         (user_id, book_id)
@@ -522,6 +742,18 @@ def add_favorite(user_id, book_id):
 
 
 def remove_favorite(user_id, book_id):
+    """Unstar a book for a user.
+
+    Deletes the single user_favorites row for the pair; removing a
+    non-favorite simply affects zero rows.
+
+    Args:
+        user_id: Owner of the favorites list.
+        book_id: Title to unstar.
+
+    Returns:
+        Rowcount from the DELETE.
+    """
     return db.execute(
         'DELETE FROM user_favorites WHERE user_id = %s AND book_id = %s',
         (user_id, book_id)
@@ -529,6 +761,17 @@ def remove_favorite(user_id, book_id):
 
 
 def get_user_favorites(user_id):
+    """List a user's starred books newest-first.
+
+    Joins user_favorites to book_catalog so the favorites shelf renders
+    full title rows ordered by when they were starred.
+
+    Args:
+        user_id: Owner of the favorites list.
+
+    Returns:
+        List of book_catalog row tuples the user starred.
+    """
     return db.fetch_all(
         '''SELECT b.* FROM book_catalog b
            JOIN user_favorites f ON b.book_id = f.book_id
@@ -540,6 +783,23 @@ def get_user_favorites(user_id):
 def update_book(book_id, title, author, edition, publisher, year_published,
                 subject_classification, call_number, isbn, material_type, description,
                 updated_by=None):
+    """Overwrite a title's bibliographic metadata plus audit stamps.
+
+    Updates all editable book_catalog columns for one book_id and
+    stamps updated_at/updated_by. Copies (accessions) are untouched —
+    they are managed via the accession functions.
+
+    Args:
+        book_id: Target title's primary key.
+        title: New title. author: New author. edition: New edition.
+        publisher: New publisher. year_published: New year.
+        subject_classification: New category. call_number: New call no.
+        isbn: New ISBN. material_type: New type. description: New blurb.
+        updated_by: Acting staff user_id for the audit stamp.
+
+    Returns:
+        Rowcount from the UPDATE.
+    """
     return db.execute(
         '''UPDATE book_catalog SET title=%s, author=%s, edition=%s, publisher=%s,
            year_published=%s, subject_classification=%s, call_number=%s,
@@ -553,6 +813,19 @@ def update_book(book_id, title, author, edition, publisher, year_published,
 
 
 def get_books_by_status(status):
+    """List all titles with one catalog_status for exports and tab views.
+
+    Returns every book_catalog row with the given status (e.g.
+    'archived') plus its comma-joined accession numbers, ordered by
+    title. The staff page must use the paginated variant instead for
+    large result sets.
+
+    Args:
+        status: Required catalog_status value ('active'/'archived').
+
+    Returns:
+        List of (book_catalog.* + accession_numbers) row tuples.
+    """
     return db.fetch_all(
         f'SELECT *, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog WHERE catalog_status = %s ORDER BY title',
         (status,)
@@ -560,10 +833,33 @@ def get_books_by_status(status):
 
 
 def delete_book(book_id):
+    """Hard-delete one title row by primary key.
+
+    Callers must enforce archive-before-delete (refuse unless
+    catalog_status='archived') and ensure its accessions are already
+    cleared, otherwise the DELETE hits FK or policy violations.
+
+    Args:
+        book_id: Target title's primary key.
+    """
     db.execute('DELETE FROM book_catalog WHERE book_id = %s', (book_id,))
 
 
 def update_book_status(book_id, status, updated_by=None):
+    """Flip a title between active and archived plus audit stamps.
+
+    Implements the archive-before-delete workflow: archiving hides the
+    title from search and exports while preserving history; activating
+    restores it.
+
+    Args:
+        book_id: Target title's primary key.
+        status: New catalog_status ('active' or 'archived').
+        updated_by: Acting staff user_id for the audit stamp.
+
+    Returns:
+        Rowcount from the UPDATE.
+    """
     return db.execute(
         'UPDATE book_catalog SET catalog_status=%s, updated_at=NOW(), updated_by=%s WHERE book_id=%s',
         (status, updated_by, book_id)
@@ -571,6 +867,27 @@ def update_book_status(book_id, status, updated_by=None):
 
 
 def search_books_paginated(query, field, page, per_page, sort_by=None):
+    """Search active titles with staff-page pagination and sorting.
+
+    Builds an ILIKE WHERE for the field scope (title/author/isbn/
+    accession, or all columns plus accession numbers when unscoped),
+    always restricted to catalog_status='active' so archived books only
+    appear under ?status=archived. Returns the requested page plus the
+    total distinct-title count; non-default sorts wrap the deduped
+    query and re-sort outside because DISTINCT ON requires its own
+    inner ordering.
+
+    Args:
+        query: Search substring (empty means list all active).
+        field: Column scope or 'accession' for barcode search.
+        page: 1-based page number.
+        per_page: Rows per page.
+        sort_by: Allowlisted sort key, or None for title A-Z.
+
+    Returns:
+        Tuple (rows, total) where rows are (book_catalog.* +
+        accession_numbers) tuples for the page.
+    """
     offset = (page - 1) * per_page
     pattern = f'%{query}%'
 

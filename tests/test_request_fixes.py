@@ -15,11 +15,13 @@ from app.requests.models import check_duplicate_request
 
 
 def _request_inserts(mock_db):
+    """Test helper _request_inserts: build mocked data or DB stub for the test."""
     return [c for c in mock_db['execute'].call_args_list
             if 'INSERT INTO request_records' in c[0][0]]
 
 
 def _flashes(student_client):
+    """Test helper _flashes: build mocked data or DB stub for the test."""
     with student_client.session_transaction() as sess:
         return sess.get('_flashes', []) or []
 

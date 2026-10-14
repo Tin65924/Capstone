@@ -597,6 +597,7 @@ A failing analytics_cache write must not 500 the export."""
         orig_execute = mock_db['execute']
 
         def _fail_insert(query, params=None):
+            """Test helper _fail_insert: build mocked data or DB stub for the test."""
             if 'INSERT INTO analytics_cache' in query:
                 raise Exception('cache db down')
             return orig_execute(query, params) if callable(orig_execute) else []
@@ -627,6 +628,7 @@ A failing analytics_cache write must not 500 the export."""
 
 class TestReportCharts:
     def _export(self, librarian_client, kpi_type, **overrides):
+        """Test helper _export: build mocked data or DB stub for the test."""
         data = {'kpi_type': kpi_type, 'format': 'pdf'}
         data.update(overrides)
         resp = librarian_client.post('/librarian/analytics/export', data=data)
@@ -898,6 +900,7 @@ class TestForecastModels:
 
 class TestForecastJson:
     def _payload_calls(self, mock_db, trend, cats, overdue, accessions, weekday, gaps):
+        """Test helper _payload_calls: build mocked data or DB stub for the test."""
         mock_db['fetch_all'].side_effect = [trend, cats, overdue, weekday, gaps]
         mock_db['fetch_one'].return_value = (accessions,)
 
@@ -2127,6 +2130,7 @@ class TestBookHeaderDetails:
 class TestRequestChartsHostile:
     @staticmethod
     def _empty(mock_db):
+        """Test helper _empty: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = []
 

@@ -9,15 +9,18 @@ TODAY = date(2026, 9, 24)
 
 
 def _row(activity, ts, uid=1, name='Ann', role='Librarian'):
+    """Test helper _row: build mocked data or DB stub for the test."""
     return (activity, ts, uid, name, role)
 
 
 def _noon(days_ago=0):
+    """Test helper _noon: build mocked data or DB stub for the test."""
     return datetime(2026, 9, 24, 12, 0) - timedelta(days=days_ago)
 
 
 class TestAuditStats:
     def _sample_rows(self):
+        """Test helper _sample_rows: build mocked data or DB stub for the test."""
         now = _noon()
         return [
             _row('login', now, 1, 'Ann', 'Librarian'),
@@ -248,6 +251,7 @@ class TestAuditStatsRoute:
 class TestAuditChartsJs:
     @staticmethod
     def _js():
+        """Test helper _js: build mocked data or DB stub for the test."""
         from pathlib import Path
         return (Path(__file__).resolve().parent.parent / 'app' /
                 'static' / 'js' / 'charts.js').read_text()
@@ -275,6 +279,7 @@ class TestAuditChartsJs:
 
 class TestEnrichedWrites:
     def _audit_inserts(self, mock_db):
+        """Test helper _audit_inserts: build mocked data or DB stub for the test."""
         return [c for c in mock_db['execute'].call_args_list
                 if 'INSERT INTO audit_trail' in c[0][0]]
 

@@ -11,12 +11,39 @@ ABBREVIATIONS = {
 }
 
 def normalize_title(title):
+    """Normalize a hand-typed title for duplicate and fuzzy comparison.
+
+    Lowercases, strips punctuation, expands common abbreviations
+    (intro→introduction, prog→programming, etc.), and collapses
+    whitespace so "Intro. to Prog" and "introduction to programming"
+    compare equal. Pure helper with no DB access.
+
+    Args:
+        title: Raw title string.
+
+    Returns:
+        Normalized comparison string.
+    """
     title = title.lower()
     title = re.sub(r'[^\w\s]', '', title)
     words = [ABBREVIATIONS.get(w, w) for w in title.split()]
     return ' '.join(words)
 
 def create_request(requester_id, book_title, author=None):
+    """File a new book acquisition request as pending_review.
+
+    Inserts into request_records with status 'pending_review' and no
+    matched book; staff triage it via update_request_status. Routes
+    call the duplicate/catalog guards before reaching here.
+
+    Args:
+        requester_id: Requesting member's borrower FK.
+        book_title: Requested title as typed.
+        author: Optional author as typed.
+
+    Returns:
+        New request_id integer from the RETURNING clause.
+    """
     rows = db.execute(
         '''INSERT INTO request_records (requester_id, book_title, author, request_status, matched_book_id)
            VALUES (%s, %s, %s, %s, %s)
@@ -26,6 +53,18 @@ def create_request(requester_id, book_title, author=None):
     return rows[0][0]
 
 def get_borrower_by_user(user_id):
+    """Resolve a login user to their borrower id for request ownership.
+
+    Request records key off borrowers.borrower_id, so every user-side
+    request flow maps the Flask-Login user_id first. Returns just the
+    integer (unlike circulation's full-row variant).
+
+    Args:
+        user_id: user_accounts primary key.
+
+    Returns:
+        borrower_id integer, or None when the user has no borrower row.
+    """
     row = db.fetch_one(
         'SELECT borrower_id FROM borrowers WHERE user_id = %s',
         (user_id,)
@@ -33,6 +72,18 @@ def get_borrower_by_user(user_id):
     return row[0] if row else None
 
 def get_requests(status=None):
+    """List requests ordered for staff triage, optionally by one status.
+
+    A single status returns newest-first; the "All" view orders by
+    actionable priority (pending_review, approved, rejected, procured)
+    then newest-first so work needing action surfaces first.
+
+    Args:
+        status: Optional request_status to filter by.
+
+    Returns:
+        List of full request_records row tuples in triage order.
+    """
     if status:
         return db.fetch_all(
             'SELECT * FROM request_records WHERE request_status = %s ORDER BY request_date DESC',
@@ -61,6 +112,23 @@ STATUS_PRIORITY_ORDER = (
 PER_PAGE = 50
 
 def get_requests_with_details(status=None, search=None, page=1):
+    """List one page of requests joined to requester identity.
+
+    Joins request_records through borrowers, users, and roles to show
+    (request_id, requester_id, book_title, author, matched_book_id,
+    request_status, request_date, reviewed_by, review_date, remarks,
+    full_name, role_name, department). Optional status and ILIKE title
+    filters apply; a single status sorts newest-first while "All" uses
+    STATUS_PRIORITY_ORDER. Fixed PER_PAGE pages keep staff lists fast.
+
+    Args:
+        status: Optional request_status filter.
+        search: Optional title substring (ILIKE %...%).
+        page: 1-based page number.
+
+    Returns:
+        List of 13-tuple detail rows for the page.
+    """
     base_query = '''
         SELECT r.request_id, r.requester_id, r.book_title, r.author,
                r.matched_book_id, r.request_status, r.request_date,
@@ -97,6 +165,18 @@ def get_requests_with_details(status=None, search=None, page=1):
 
 
 def count_requests(status=None, search=None):
+    """Count requests matching the list filters for pagination totals.
+
+    Mirrors get_requests_with_details' status and title-search filters
+    so the total matches the rows paging can return.
+
+    Args:
+        status: Optional request_status filter.
+        search: Optional title substring filter.
+
+    Returns:
+        Integer matching-request count.
+    """
     base_query = 'SELECT COUNT(*) FROM request_records r'
     conditions = []
     params = []
@@ -130,6 +210,17 @@ def count_requests_by_status():
     return counts
 
 def get_request_by_id(request_id):
+    """Fetch one request row by primary key regardless of status.
+
+    Used by review/approve/reject/procure actions to confirm the row
+    exists and read its current status before transitioning it.
+
+    Args:
+        request_id: request_records primary key.
+
+    Returns:
+        Full request_records row tuple, or None if not found.
+    """
     return db.fetch_one(
         'SELECT * FROM request_records WHERE request_id = %s',
         (request_id,)
@@ -137,6 +228,21 @@ def get_request_by_id(request_id):
 
 
 def update_request_status(request_id, status, reviewer_id=None, remarks=None):
+    """Transition a request to a new status with reviewer audit stamps.
+
+    Sets request_status plus remarks and updated_by always; when a
+    reviewer is given it also stamps reviewed_by and review_date=NOW().
+    Used for approve/reject/procure/bulk-review flows.
+
+    Args:
+        request_id: Target request_records row.
+        status: New status ('approved', 'rejected', 'procured', etc.).
+        reviewer_id: Staff reviewer user_id, or None.
+        remarks: Staff note stored with the decision.
+
+    Returns:
+        Rowcount from the UPDATE.
+    """
     if reviewer_id:
         return db.execute(
             'UPDATE request_records SET request_status = %s, reviewed_by = %s, review_date = NOW(), remarks = %s, updated_at = NOW(), updated_by = %s WHERE request_id = %s',
@@ -149,6 +255,18 @@ def update_request_status(request_id, status, reviewer_id=None, remarks=None):
 
 
 def get_demand_count(book_title):
+    """Count exact-title requests for a demand badge.
+
+    Simple COUNT(*) where book_title matches exactly (no fuzzy
+    merging); the overview chart uses get_stacked_demand instead for
+    merged demand.
+
+    Args:
+        book_title: Exact title string to count.
+
+    Returns:
+        Integer request count for that spelling.
+    """
     row = db.fetch_one(
         'SELECT COUNT(*) FROM request_records WHERE book_title = %s',
         (book_title,)
@@ -157,6 +275,16 @@ def get_demand_count(book_title):
 
 
 def get_demand_by_role():
+    """Fetch raw per-title per-role demand rows for chart clustering.
+
+    Returns (book_title, role_name, count) over pending_review +
+    approved rows only, grouped by exact title spelling. Routes feed
+    these into build_stacked_chart/_cluster_demand to merge typo
+    variants before rendering.
+
+    Returns:
+        List of (book_title, role_name, count) tuples.
+    """
     return db.fetch_all(
         '''SELECT rr.book_title, r.role_name, COUNT(*) AS count
            FROM request_records rr
@@ -289,12 +417,38 @@ def build_variant_lookup(demand_rows):
     return lookup
 
 def get_requests_by_borrower(borrower_id):
+    """List one member's own requests newest-first for their requests page.
+
+    Returns the narrow user-facing shape (request_id, book_title,
+    author, request_status, request_date, remarks) so members can track
+    triage without seeing staff reviewer internals.
+
+    Args:
+        borrower_id: Requesting member's borrower FK.
+
+    Returns:
+        List of 6-tuple request rows.
+    """
     return db.fetch_all(
         'SELECT request_id, book_title, author, request_status, request_date, remarks FROM request_records WHERE requester_id = %s ORDER BY request_date DESC',
         (borrower_id,)
     )
 
 def check_duplicate_request(requester_id, book_title):
+    """Check whether a member already has a live request for a title.
+
+    Compares the normalized new title against the member's
+    pending_review + approved rows using exact match plus fuzzy
+    SequenceMatcher (>= 0.85), so "Introductin" still collides with
+    "Introduction". Prevents double-filing the same want.
+
+    Args:
+        requester_id: Member's borrower FK.
+        book_title: Newly typed title to test.
+
+    Returns:
+        True when a live duplicate exists.
+    """
     normalized = normalize_title(book_title)
     rows = db.fetch_all(
         "SELECT book_title FROM request_records WHERE requester_id = %s AND request_status IN ('pending_review', 'approved')",
@@ -310,7 +464,20 @@ def check_duplicate_request(requester_id, book_title):
 
 
 def _title_matches(existing_title, normalized):
-    """Normalized exact + fuzzy title comparison shared by existence checks."""
+    """Test one catalog/request title against a normalized query title.
+
+    Shared exact-plus-fuzzy comparison behind the existence guards:
+    normalized exact equality wins, otherwise SequenceMatcher ratio >=
+    TITLE_FUZZY_RATIO counts as a match. Never raises — bad inputs
+    simply return False.
+
+    Args:
+        existing_title: Title string from the DB row.
+        normalized: Already-normalized query title to compare.
+
+    Returns:
+        True when the titles match exactly or fuzzily.
+    """
     try:
         existing_normalized = normalize_title(existing_title or '')
     except Exception:

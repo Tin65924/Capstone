@@ -24,6 +24,7 @@ def _install(mock_db, loans=None, transactions=None, notifications=None,
     count = len(loans) if active_count is None else active_count
 
     def fake_fetch_one(query, params=None):
+        """Test helper fake_fetch_one: build mocked data or DB stub for the test."""
         q = str(query)
         if 'LEFT JOIN borrowers' in q:
             return FACULTY_PROFILE
@@ -40,6 +41,7 @@ def _install(mock_db, loans=None, transactions=None, notifications=None,
         return None
 
     def fake_fetch_all(query, params=None):
+        """Test helper fake_fetch_all: build mocked data or DB stub for the test."""
         q = str(query)
         if 'FROM notification_log' in q:
             return list(notifs)
@@ -62,15 +64,18 @@ def _install(mock_db, loans=None, transactions=None, notifications=None,
 
 
 def _profile_loan(cid, due, status='active', title='T', acc='ACC-1'):
+    """Test helper _profile_loan: build mocked data or DB stub for the test."""
     return (cid, '2026-01-01', due, 'daily_circulation', status, title, acc)
 
 
 def _history_tx(cid, due, status='active', returned=None, title='T'):
+    """Test helper _history_tx: build mocked data or DB stub for the test."""
     return (cid, '2026-01-01', due, returned, 'daily_circulation',
             status, 0.0, title, 'A', 'ACC-1')
 
 
 def _overdue_card_count(body):
+    """Test helper _overdue_card_count: build mocked data or DB stub for the test."""
     m = re.search(r'Overdue Books</p>\s*<h3[^>]*>(\d+)</h3>', body)
     assert m, 'overdue stat card not found'
     return int(m.group(1))
@@ -219,6 +224,7 @@ class TestSuggestionsFallback:
 class TestNotificationsPagination:
     @staticmethod
     def _rows(n):
+        """Test helper _rows: build mocked data or DB stub for the test."""
         return [(i, 'note-%03d-xyz' % i, 'borrow', str(i), '2026-01-05',
                  False) for i in range(1, n + 1)]
 

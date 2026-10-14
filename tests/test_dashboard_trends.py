@@ -40,12 +40,14 @@ class TestDailyBorrowsFill:
 class TestTrendsCard:
     @staticmethod
     def _rows(mock_db):
+        """Test helper _rows: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].return_value = (0,)
         activity = [('Ann', 1, 'Borrowed', 'Some Title', '2026-01-05',
                      None, None)]
         daily = [(date(2026, 10, 12), 4), (date(2026, 10, 13), 7)]
 
         def _fetch_all(query, params=None):
+            """Test helper _fetch_all: build mocked data or DB stub for the test."""
             q = str(query)
             if 'DATE(borrow_date)' in q:
                 return list(daily)

@@ -13,6 +13,7 @@ OPEN = {'LIBRARY_OPENING_TIME': '08:00', 'LIBRARY_CLOSING_TIME': '17:00'}
 
 
 def _at(hour, minute=0):
+    """Test helper _at: build mocked data or DB stub for the test."""
     return datetime(2026, 10, 6, hour, minute)
 
 

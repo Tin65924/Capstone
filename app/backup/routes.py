@@ -77,19 +77,64 @@ def _busy():
 
 
 def _backup_stats(logs):
+    """Summarize backup history for the health card and counters.
+
+    Counts completed rows and their total bytes, picks the newest
+    completed row as last, and marks healthy only when that backup is
+    within 35 days. A failed latest run shows Warning, never Healthy.
+
+    Args:
+        logs: List of padded backup_log row tuples newest-first.
+
+    Returns:
+        Dict with count, total_size, last row, and healthy boolean.
+    """
     def _status(row):
+        """Extract the status element of one backup row, or None.
+
+        Tolerates short or malformed rows so one legacy entry never
+        breaks the health computation.
+
+        Args:
+            row: Backup_log row tuple.
+
+        Returns:
+            Status string at index 3, or None.
+        """
         try:
             return row[3]
         except (IndexError, TypeError):
             return None
 
     def _size(row):
+        """Extract the byte size of one backup row as an integer.
+
+        Reads index 2, coercing None or garbage to 0 so totals stay
+        numeric even with legacy rows.
+
+        Args:
+            row: Backup_log row tuple.
+
+        Returns:
+            File size in bytes, or 0.
+        """
         try:
             return int(row[2] or 0)
         except (IndexError, TypeError, ValueError):
             return 0
 
     def _created(row):
+        """Extract the creation timestamp of one backup row, or None.
+
+        Reads index 6, tolerating short rows so health recency checks
+        degrade to unhealthy instead of raising.
+
+        Args:
+            row: Backup_log row tuple.
+
+        Returns:
+            Creation datetime, or None.
+        """
         try:
             return row[6]
         except (IndexError, TypeError):
@@ -135,6 +180,16 @@ def _pad_backup_row(row, width=7):
 @login_required
 @admin_required
 def backup_page():
+    """Render the admin backup history, health, and busy state.
+
+    GET guarded by login + Admin. Pads history rows for safe template
+    reads, computes health stats, shows the 10 newest failures, reads
+    retention config, detects a running worker, and renders
+    backup/backup.html with the restore button gated by settings.
+
+    Returns:
+        Rendered backup management template response.
+    """
     logs = [_pad_backup_row(row) for row in (get_backup_logs() or [])]
     stats = _backup_stats(logs or [])
     recovery_events = [row for row in (logs or [])
@@ -199,6 +254,19 @@ def create_backup_route():
 @login_required
 @admin_required
 def download_backup(backup_id):
+    """Download one backup file as an attachment after safety checks.
+
+    GET guarded by login + Admin. Verifies the history row exists,
+    validates the filename against path traversal, confirms the file
+    is on disk, then streams it. Missing rows, bad names, or absent
+    files flash an error and redirect to the backup page.
+
+    Args:
+        backup_id: Backup_log row to download.
+
+    Returns:
+        File download response, or a redirect with an error flash.
+    """
     row = get_backup_by_id(backup_id)
     if not row or len(row) < 2:
         flash('Backup not found.', 'error')

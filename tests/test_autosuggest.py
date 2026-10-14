@@ -2,7 +2,9 @@ import pytest
 
 
 def _mock_fetch_all_by_query(mock_db):
+    """Test helper _mock_fetch_all_by_query: build mocked data or DB stub for the test."""
     def side_effect(query, params=None):
+        """Test helper side_effect: build mocked data or DB stub for the test."""
         if 'SELECT DISTINCT title, author' in query:
             return [('The Great Gatsby', 'F. Scott Fitzgerald')]
         if 'UNION SELECT author' in query:

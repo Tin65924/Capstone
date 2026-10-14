@@ -270,6 +270,7 @@ class TestStackedChartGrouping:
 
 
 def _details_row(rid, title, name, role, dept, status='pending_review', day='05'):
+    """Test helper _details_row: build mocked data or DB stub for the test."""
     return (rid, rid + 100, title, '', None, status, f'2026-01-{day}',
             None, None, None, name, role, dept)
 

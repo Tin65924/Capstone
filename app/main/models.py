@@ -20,6 +20,18 @@ _stats_lock = threading.Lock()
 
 
 def _stats_cache_allowed():
+    """Check whether the in-process overview stats cache may be used.
+
+    Returns True only inside an app context when TESTING is off, so unit
+    tests with mocked db calls stay deterministic and cache-free. Guards
+    the librarian/admin dashboards that re-count headline stats per hit.
+
+    Args:
+        None.
+
+    Returns:
+        True when caching is allowed, False otherwise.
+    """
     try:
         from flask import current_app, has_app_context
         return has_app_context() and not current_app.config.get('TESTING')
@@ -28,6 +40,20 @@ def _stats_cache_allowed():
 
 
 def _cached_stats(key, compute):
+    """Return cached overview stats or compute and store them for 60s.
+
+    Checks the in-process _stats_cache under _stats_lock; a fresh hit
+    returns immediately while a miss or expired entry runs compute and
+    caches the result. Bypassed entirely when _stats_cache_allowed is
+    False so tests always hit the database mocks.
+
+    Args:
+        key: Cache key string ('dashboard' or 'admin_overview').
+        compute: Zero-arg callable producing the stats dict on a miss.
+
+    Returns:
+        Stats dict produced by compute or retrieved from the cache.
+    """
     if not _stats_cache_allowed():
         return compute()
     now = time.monotonic()
@@ -42,16 +68,56 @@ def _cached_stats(key, compute):
 
 
 def clear_stats_cache():
-    """Drop all cached Overview counts (tests, manual refresh)."""
+    """Drop all cached Overview counts (tests, manual refresh).
+
+    Clears the in-process _stats_cache under lock so the next dashboard
+    or admin overview hit recomputes from the database. Used by tests
+    and manual refresh paths to avoid stale headline counts.
+
+    Args:
+        None.
+
+    Returns:
+        None; empties the cache in place.
+    """
     with _stats_lock:
         _stats_cache.clear()
 
 
 def get_dashboard_stats():
+    """Return cached librarian dashboard headline counts.
+
+    Thin cached wrapper around _get_dashboard_stats via _cached_stats
+    with a 60s TTL, so repeat dashboard views avoid five recount
+    queries. Circulation-focused: collection, loans, requests, overdue.
+
+    Args:
+        None.
+
+    Returns:
+        Dict with total_collection, total_titles, total_accessions,
+        active_loans, open_requests, overdue_items, reservations_waiting,
+        and procurement_open counts.
+    """
     return _cached_stats('dashboard', _get_dashboard_stats)
 
 
 def _get_dashboard_stats():
+    """Compute uncached librarian dashboard headline counts.
+
+    Runs five COUNT queries for active titles, active accessions, active
+    loans, open requests, and overdue borrows, then adds waiting
+    reservations and open procurement via helper counters. Called only
+    through get_dashboard_stats so results are cached for 60s.
+
+    Args:
+        None.
+
+    Returns:
+        Dict with total_collection, total_titles, total_accessions,
+        active_loans, open_requests, overdue_items, reservations_waiting,
+        and procurement_open counts.
+    """
     titles = db.fetch_one(
         "SELECT COUNT(*) FROM book_catalog WHERE catalog_status = 'active'"
     )
@@ -84,7 +150,18 @@ def _get_dashboard_stats():
 
 
 def count_waiting_reservations():
-    """Reservations still needing librarian action (waiting + allocated)."""
+    """Reservations still needing librarian action (waiting + allocated).
+
+    Sums the waiting (row[4]) and allocated (row[5]) columns of every
+    get_reservations_grouped row, tolerating short or malformed rows so
+    one bad group never breaks the dashboard headline count.
+
+    Args:
+        None.
+
+    Returns:
+        Integer total of waiting plus allocated reservations.
+    """
     total = 0
     for row in get_reservations_grouped() or []:
         try:
@@ -95,13 +172,36 @@ def count_waiting_reservations():
 
 
 def count_open_procurement():
-    """Procurement items not yet delivered (for ordering + ordered)."""
+    """Procurement items not yet delivered (for ordering + ordered).
+
+    Counts rows in the for_ordering and ordered procurement buckets via
+    get_procurement_items, giving the dashboard the number of titles
+    still in the acquisition pipeline.
+
+    Args:
+        None.
+
+    Returns:
+        Integer total of for_ordering plus ordered procurement items.
+    """
     return len(get_procurement_items('for_ordering') or []) + \
         len(get_procurement_items('ordered') or [])
 
 
 def get_attention_summary():
-    """Action-needed counts for the dashboard attention panel."""
+    """Action-needed counts for the dashboard attention panel.
+
+    Combines circulation stats (overdue and due-soon loans) with pending
+    user approvals and waiting reservations, so librarians see every
+    queue needing action in one panel without extra queries per card.
+
+    Args:
+        None.
+
+    Returns:
+        Dict with overdue_items, due_soon, pending_users, and
+        waiting_reservations integer counts.
+    """
     circ = get_circulation_stats()
     return {
         'overdue_items': circ.get('overdue_items', 0),
@@ -119,12 +219,33 @@ def get_admin_overview_stats():
     this answers: how many accounts exist, who is waiting for approval,
     and how is staff distributed. Backup health is rendered separately
     from backup_log so this stays cheap to mock and test.
+
+    Args:
+        None.
+
+    Returns:
+        Dict with total_users, pending_users, active_librarians,
+        active_faculty, active_students, active_admins, total_collection,
+        total_titles, and total_accessions counts.
     """
     return _cached_stats('admin_overview', _get_admin_overview_stats)
 
 
 def _get_admin_overview_stats():
-    """Uncached admin overview counts (see get_admin_overview_stats)."""
+    """Uncached admin overview counts (see get_admin_overview_stats).
+
+    Counts total and pending users, groups active users by role, and
+    counts active titles plus active accessions. Called only through
+    get_admin_overview_stats so results are cached for 60s.
+
+    Args:
+        None.
+
+    Returns:
+        Dict with total_users, pending_users, active_librarians,
+        active_faculty, active_students, active_admins, total_collection,
+        total_titles, and total_accessions counts.
+    """
     from app.auth.models import (
         count_active_users_by_role,
         count_pending_users,
@@ -164,6 +285,19 @@ def _get_admin_overview_stats():
 
 
 def get_recent_activity(limit=5):
+    """Fetch recent borrow/return activity for the dashboard feed.
+
+    Joins circulation_records to book_catalog, borrowers, and
+    user_accounts to resolve who did what to which title, ordered by the
+    latest return or borrow date. Powers the librarian dashboard feed.
+
+    Args:
+        limit: Maximum rows to return (defaults to 5).
+
+    Returns:
+        List of positional tuples (full_name, user_id, action, title,
+        borrow_date, return_date, due_date) ordered newest first.
+    """
     return db.fetch_all(
         '''SELECT u.full_name, u.user_id,
                   CASE WHEN c.transaction_type = 'borrow' THEN 'Borrowed' ELSE 'Returned' END AS action,
@@ -179,6 +313,20 @@ def get_recent_activity(limit=5):
 
 
 def get_daily_borrows(days=6):
+    """Fetch per-day borrow counts for the trailing window chart.
+
+    Aggregates borrow transactions by date over the last days window,
+    then zero-fills quiet days so the dashboard axis always spans the
+    full trailing period. Clamps days to 1-31 and tolerates DATE,
+    datetime, and ISO-string day keys from mocks.
+
+    Args:
+        days: Trailing window length in days (defaults to 6, max 31).
+
+    Returns:
+        List of (day_date, borrow_count) tuples oldest-first, one per
+        day in the window.
+    """
     from datetime import date, timedelta
     try:
         days = int(days)

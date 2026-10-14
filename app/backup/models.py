@@ -11,7 +11,24 @@ log = logging.getLogger(__name__)
 
 def log_backup(filename, size_bytes=None, backup_type='manual',
                status='completed', error_msg=None):
-    """Record a backup run. Returns the new backup_id (or None)."""
+    """Record a backup run row and return its new id.
+
+    Inserts into ``backup_log`` with the file metadata, run type
+    (manual/scheduled), outcome status, and optional error text. Used
+    for finished runs, pre-inserted ``in_progress`` rows, and scheduled
+    failures. The filename uses the timestamped ``library_backup_*``
+    convention; failed scheduled runs use a sentinel name.
+
+    Args:
+        filename: Dump filename inside BACKUP_DIR (or sentinel).
+        size_bytes: File size in bytes, or None when unknown/failed.
+        backup_type: ``'manual'`` or ``'scheduled'``.
+        status: ``'completed'``, ``'failed'``, or ``'in_progress'``.
+        error_msg: Truncated failure text, or None on success.
+
+    Returns:
+        New backup_id integer, or None if the INSERT returned nothing.
+    """
     row = db.fetch_one(
         '''INSERT INTO backup_log (filename, size_bytes, status, backup_type, error_msg)
            VALUES (%s, %s, %s, %s, %s) RETURNING backup_id''',
@@ -21,7 +38,19 @@ def log_backup(filename, size_bytes=None, backup_type='manual',
 
 
 def get_backup_logs(limit=None):
-    """Newest-first backup history rows."""
+    """Fetch backup history rows newest-first for the admin table.
+
+    Returns the full tuple contract (backup_id, filename, size_bytes,
+    status, backup_type, error_msg, created_at) ordered by created_at
+    DESC. Powers the backup history table, retention scans, and the
+    pre-restore history snapshot. An optional limit bounds the page.
+
+    Args:
+        limit: Maximum rows to return, or None for all history.
+
+    Returns:
+        List of 7-tuples newest-first (possibly empty).
+    """
     query = (
         'SELECT backup_id, filename, size_bytes, status, backup_type, error_msg, created_at'
         ' FROM backup_log ORDER BY created_at DESC'
@@ -32,9 +61,17 @@ def get_backup_logs(limit=None):
 
 
 def get_in_progress_backup():
-    """Newest backup row still running, or None.
+    """Fetch the newest still-running backup row, or None.
 
-    Used as the concurrency guard: only one backup/restore runs at a time.
+    Newest backup row still running, or None. Used as the concurrency guard:
+    only one backup/restore runs at a time. The routes layer age-checks
+    the row (stale ``in_progress`` rows from a dead worker are flipped
+    to failed) before refusing new work.
+
+    Returns:
+        7-tuple (backup_id, filename, size_bytes, status, backup_type,
+        error_msg, created_at) for the newest ``in_progress`` row, or
+        None when no worker is running.
     """
     return db.fetch_one(
         'SELECT backup_id, filename, size_bytes, status, backup_type, error_msg, created_at'
@@ -45,7 +82,23 @@ def get_in_progress_backup():
 
 def update_backup_status(backup_id, status, filename=None, size_bytes=None,
                          error_msg=None):
-    """Update a backup row's outcome. Returns the updated rowcount."""
+    """Update a backup row's outcome fields and return the rowcount.
+
+    Always sets ``status``; optionally overwrites the placeholder
+    filename with the real dump name, records the file size, and stores
+    a truncated error message. Used by workers to flip ``in_progress``
+    rows to ``completed``/``failed`` and by the stale-row reaper.
+
+    Args:
+        backup_id: Target backup_log row.
+        status: New status (``completed``/``failed``/``in_progress``).
+        filename: Real dump filename to store, or None to keep.
+        size_bytes: File size to store, or None to keep.
+        error_msg: Failure text to store, or None to keep.
+
+    Returns:
+        Rowcount from the UPDATE.
+    """
     sets = ['status = %s']
     params = [status]
     if filename is not None:
@@ -65,7 +118,20 @@ def update_backup_status(backup_id, status, filename=None, size_bytes=None,
 
 
 def get_backup_by_id(backup_id):
-    """Single backup row by id, or None."""
+    """Fetch a single backup row by primary key, or None.
+
+    Returns the full 7-tuple contract for download/restore/delete
+    pre-checks (existence, ``completed`` status, filename). Callers
+    treat a None result as "Backup not found" and redirect with a flash
+    instead of touching the filesystem.
+
+    Args:
+        backup_id: Primary key of the backup_log row.
+
+    Returns:
+        7-tuple (backup_id, filename, size_bytes, status, backup_type,
+        error_msg, created_at), or None when missing.
+    """
     return db.fetch_one(
         'SELECT backup_id, filename, size_bytes, status, backup_type, error_msg, created_at'
         ' FROM backup_log WHERE backup_id = %s',
@@ -74,7 +140,19 @@ def get_backup_by_id(backup_id):
 
 
 def get_stale_backups(keep_n):
-    """Rows beyond the newest `keep_n` (candidates for retention deletion)."""
+    """Fetch rows beyond the newest keep_n for retention deletion.
+
+    Orders history newest-first and offsets past the ``keep_n`` rows to
+    keep, so everything returned is a deletion candidate (oldest
+    first among the stale set by position). The retention worker then
+    filters to ``completed`` rows only and removes both file and row.
+
+    Args:
+        keep_n: Number of newest history rows to retain.
+
+    Returns:
+        List of 7-tuples beyond the retention window (possibly empty).
+    """
     return db.fetch_all(
         'SELECT backup_id, filename, size_bytes, status, backup_type, error_msg, created_at'
         ' FROM backup_log ORDER BY created_at DESC OFFSET %s',
@@ -83,6 +161,15 @@ def get_stale_backups(keep_n):
 
 
 def delete_backup_row(backup_id):
+    """Delete one backup history row by primary key.
+
+    Used by retention cleanup after the dump file is removed from disk,
+    and by the delete-backup route. Only completed rows with real files
+    are candidates — in_progress and failed rows are never touched.
+
+    Args:
+        backup_id: Backup_log row to delete.
+    """
     db.execute('DELETE FROM backup_log WHERE backup_id = %s', (backup_id,))
 
 

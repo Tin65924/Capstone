@@ -18,6 +18,7 @@ ACC = (10, 'ACC-001', 1)
 class TestEmptyDb:
     @staticmethod
     def _empty(mock_db):
+        """Test helper _empty: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = []
         mock_db['execute'].return_value = []
@@ -41,6 +42,7 @@ class TestEmptyDb:
 class TestHostileParams:
     @staticmethod
     def _ok(mock_db):
+        """Test helper _ok: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = []
 

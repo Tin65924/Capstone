@@ -50,11 +50,29 @@ HEADER_MAP = {
 
 
 def _normalize_header(name):
+    """Normalize a CSV header for HEADER_MAP lookup.
+    Lowercases, turns underscores and hyphens into spaces, and collapses
+    extra whitespace, so variants like Book_Title, book-title, and
+    '  BOOK  TITLE ' all map to the same key.
+    Args:
+        name: Raw header string from the uploaded CSV.
+    Returns:
+        Normalized lowercase header string for map lookup.
+    """
     name = name.strip().lower().replace('_', ' ').replace('-', ' ')
     return ' '.join(name.split())
 
 
 def _map_headers(fieldnames):
+    """Map CSV headers to book column names via HEADER_MAP.
+    Normalizes each header and keeps only recognized ones, so unknown
+    columns are ignored while title, author, and accession variants all
+    resolve to their canonical DB columns for the import worker.
+    Args:
+        fieldnames: Raw header list from csv.DictReader.
+    Returns:
+        Dict mapping original header to DB column name.
+    """
     column_map = {}
     for h in fieldnames:
         db_col = HEADER_MAP.get(_normalize_header(h))
@@ -64,6 +82,15 @@ def _map_headers(fieldnames):
 
 
 def _decode_csv(raw):
+    """Decode uploaded CSV bytes trying common encodings in order.
+    Attempts utf-8-sig, utf-8, latin-1, then cp1252 so Excel-saved files
+    with BOM or Windows characters still import. Returns None only when
+    every decoding fails and the caller must reject the file.
+    Args:
+        raw: Raw uploaded file bytes.
+    Returns:
+        Decoded text string, or None when undecodable.
+    """
     for enc in ('utf-8-sig', 'utf-8', 'latin-1', 'cp1252'):
         try:
             return raw.decode(enc)
@@ -160,6 +187,16 @@ def _validate_accession_number(accession_number):
 @login_required
 @librarian_required
 def cataloging_page():
+    """Render the librarian catalog listing (GET /librarian/cataloging).
+    Requires login plus Librarian or Admin role. Parses q, field, status,
+    copy_status, sort_by, and page query args, fetches the matching page
+    plus accessions and copy conditions, and renders the catalog table
+    with clamped pagination. Read-only; writes no audit row.
+    Args:
+        None (reads `q`, `field`, `status`, `copy_status`, `sort_by`, `page`).
+    Returns:
+        Rendered cataloging/cataloging.html with books and copy details.
+    """
     query = request.args.get('q', '').strip()
     field = request.args.get('field', '')
     status_filter = request.args.get('status', '')
@@ -273,7 +310,27 @@ _BOOK_COL = {
 
 
 def _book_row_to_export(row):
+    """Convert a catalog book tuple into a 14-column export row.
+    Maps positional cols (0 book_id through 12 date_added) plus trailing
+    accession_numbers into strings, formatting date_added via isoformat
+    when possible. Tolerates short mock rows without raising.
+    Args:
+        row: Positional book tuple from the catalog queries.
+    Returns:
+        List of 14 export-ready strings matching _BOOK_EXPORT_HEADERS.
+    """
     def _str(v):
+        """Coerce one book export cell to string, mapping None to blank.
+
+        Keeps CSV/XLSX catalog exports stable across nullable columns
+        (edition, publisher, ISBN) and short mock rows.
+
+        Args:
+            v: Raw cell value.
+
+        Returns:
+            Empty string for None, else str(v).
+        """
         return '' if v is None else str(v)
     # accession_numbers is appended last by the catalog queries; date_added at 12
     date_added = row[_BOOK_COL['date_added']] if len(row) > _BOOK_COL['date_added'] else ''
@@ -314,6 +371,16 @@ def _generate_book_csv(headers, rows):
 
 
 def _style_xlsx_sheet(ws, headers):
+    """Style the header row and layout of the books XLSX export.
+    Applies the navy header fill, white bold font, centered wrapping,
+    thin borders, frozen top row, autofilter, and content-tuned column
+    widths so the downloaded catalog workbook stays readable.
+    Args:
+        ws: Openpyxl worksheet whose row 1 holds the export.
+        headers: Header label list written into row 1.
+    Returns:
+        None; styles the worksheet in place.
+    """
     navy = PatternFill(start_color='1e3a8a', end_color='1e3a8a', fill_type='solid')
     white_font = Font(color='FFFFFF', bold=True, size=9, name='Calibri')
     thin = Side(style='thin', color='cbd5e1')
@@ -337,6 +404,16 @@ def _style_xlsx_sheet(ws, headers):
 @login_required
 @librarian_required
 def export_books():
+    """Export filtered books as CSV or XLSX (GET, Librarian+Admin only).
+    Guarded by login_required then librarian_required. Parses status and
+    format query args, fetches all or status-filtered books, logs
+    cataloging:export_books:<filter>:<count>, and returns a timestamped
+    download with styled XLSX or streamed CSV body.
+    Args:
+        None (reads `status` and `format` query args).
+    Returns:
+        File download Response with CSV or XLSX body and disposition.
+    """
     status = request.args.get('status', '').strip().lower()
     fmt = request.args.get('format', 'csv').strip().lower()
     if fmt not in ('csv', 'xlsx'):
@@ -402,6 +479,17 @@ def export_books():
 @login_required
 @librarian_required
 def add_book():
+    """Add a book title or another copy (POST, Librarian+Admin only).
+    Guarded by login_required then librarian_required. Validates the book
+    form and optional 6-digit accession, rejects duplicates, merges into
+    the existing title when title/author/ISBN match or creates a new
+    title, marks the Bloom registry dirty, logs cataloging:add_book or
+    add_copy, and redirects with a flash (Post/Redirect/Get).
+    Args:
+        None (reads book fields plus `accession_number`, `source` forms).
+    Returns:
+        Redirect to the cataloging page with modal status and flash.
+    """
     error, fields = _validate_book_form(request.form)
     if error:
         flash(error, 'error')
@@ -462,6 +550,16 @@ def add_book():
 @login_required
 @librarian_required
 def edit_book(book_id):
+    """Edit a book title record (POST, Librarian+Admin only).
+    Guarded by login_required then librarian_required. Requires the book
+    row, validates the edited form, updates via update_book, marks the
+    Bloom registry dirty, logs cataloging:edit_book:<id> with a title
+    diff, flashes success, and redirects with modal flags.
+    Args:
+        book_id: Primary key of the book title to update.
+    Returns:
+        Redirect to the cataloging page with modal status and flash.
+    """
     book = get_book_by_id(book_id)
     if not book:
         flash('Book not found.', 'error')
@@ -503,6 +601,16 @@ def edit_book(book_id):
 @login_required
 @librarian_required
 def delete_book_route(book_id):
+    """Permanently delete an archived book (POST, Librarian+Admin only).
+    Guarded by login_required then librarian_required. Enforces
+    archive-then-delete via book[11], deletes via delete_book, marks the
+    Bloom registry dirty, logs cataloging:delete_book:<id>, flashes the
+    outcome, and redirects to the catalog page.
+    Args:
+        book_id: Primary key of the archived book to delete.
+    Returns:
+        Redirect to the cataloging page with a flash message.
+    """
     book = get_book_by_id(book_id)
     if not book:
         flash('Book not found.', 'error')
@@ -527,6 +635,16 @@ def delete_book_route(book_id):
 @login_required
 @librarian_required
 def toggle_book_status(book_id):
+    """Toggle a book between active and archived (POST, staff only).
+    Guarded by login_required then librarian_required. Requires the book
+    row, flips active to archived or back via update_book_status, logs
+    cataloging:toggle_status:<id>:<new>, flashes the new status, and
+    redirects to the catalog page.
+    Args:
+        book_id: Primary key of the book whose status flips.
+    Returns:
+        Redirect to the cataloging page with a flash message.
+    """
     book = get_book_by_id(book_id)
     if not book:
         flash('Book not found.', 'error')
@@ -550,6 +668,16 @@ def toggle_book_status(book_id):
 @login_required
 @librarian_required
 def add_accession(book_id):
+    """Add a physical copy to a book (POST, Librarian+Admin only).
+    Guarded by login_required then librarian_required. Requires the book
+    row, validates the 6-digit accession and rejects duplicates, creates
+    via create_accession, logs cataloging:add_accession:<book_id>,
+    flashes the new number, and redirects with modal flags.
+    Args:
+        book_id: Primary key of the book receiving the copy.
+    Returns:
+        Redirect to the cataloging page with modal status and flash.
+    """
     book = get_book_by_id(book_id)
     if not book:
         flash('Book not found.', 'error')
@@ -584,6 +712,16 @@ def add_accession(book_id):
 @login_required
 @librarian_required
 def edit_accession(accession_id):
+    """Edit an accession copy number/source (POST, staff only).
+    Guarded by login_required then librarian_required. Requires the
+    accession row, validates the new 6-digit number and rejects numbers
+    owned by other copies, updates via update_accession, logs
+    cataloging:edit_accession:<id>, and redirects with modal flags.
+    Args:
+        accession_id: Primary key of the accession copy to update.
+    Returns:
+        Redirect to the cataloging page with modal status and flash.
+    """
     acc = get_accession_by_id(accession_id)
     if not acc:
         flash('Accession copy not found.', 'error')
@@ -612,6 +750,16 @@ def edit_accession(accession_id):
 @login_required
 @librarian_required
 def delete_accession_route(accession_id):
+    """Delete an accession copy (POST, Librarian+Admin only).
+    Guarded by login_required then librarian_required. Requires the copy
+    row, refuses copies referenced by circulation or inventory records,
+    deletes via delete_accession, logs cataloging:delete_accession:<id>,
+    flashes the number deleted, and redirects.
+    Args:
+        accession_id: Primary key of the accession copy to delete.
+    Returns:
+        Redirect to the cataloging page with a flash message.
+    """
     acc = get_accession_by_id(accession_id)
     if not acc:
         flash('Accession copy not found.', 'error')
@@ -631,6 +779,16 @@ def delete_accession_route(accession_id):
 @login_required
 @librarian_required
 def bulk_import():
+    """Start a CSV bulk import job (POST, Librarian+Admin only).
+    Guarded by login_required then librarian_required. Validates the
+    uploaded .csv (size, decoding, headers with title/author/accession),
+    creates a _import_jobs entry, then runs the worker inline under
+    TESTING or in a daemon thread otherwise. Returns the job id as JSON.
+    Args:
+        None (reads the `file` upload from the multipart form).
+    Returns:
+        JSON with job_id and catalog redirect on success, else JSON error.
+    """
     if 'file' not in request.files:
         return jsonify({'error': 'No file selected.'}), 400
 
@@ -697,6 +855,15 @@ def bulk_import():
 @login_required
 @librarian_required
 def bulk_import_status(job_id):
+    """Poll a bulk import job (GET, Librarian+Admin only).
+    Guarded by login_required then librarian_required. Cleans jobs older
+    than 10 minutes, then returns the job's status, total, done count,
+    message, and first errors as JSON, or 404 when the id is unknown.
+    Args:
+        job_id: UUID string of the import job to poll.
+    Returns:
+        JSON job progress payload, or JSON not_found with 404 status.
+    """
     _cleanup_old_jobs()
     job = _import_jobs.get(job_id)
     if not job:
@@ -711,11 +878,35 @@ def bulk_import_status(job_id):
 
 
 def _get_current_app():
+    """Return the real Flask app object for the background import thread.
+    Unwraps the LocalProxy so the bulk-import worker keeps a usable app
+    reference with an app context after the request finishes. Needed
+    because daemon threads outlive the original request context.
+    Args:
+        None.
+    Returns:
+        Flask application instance behind the current_app proxy.
+    """
     from flask import current_app
     return current_app._get_current_object()
 
 
 def _bulk_import_worker(app, job_id, rows, column_map, user_id):
+    """Import CSV rows into books and accessions in the background.
+    Runs inside an app context with per-row guards so one bad row never
+    kills the job (background threads have no request error handler).
+    Deduplicates titles and accessions, normalizes source values, updates
+    job progress under lock, logs cataloging:bulk_import counts, marks
+    the Bloom registry dirty, and stores the final summary message.
+    Args:
+        app: Flask app providing the context for DB work.
+        job_id: UUID key of the _import_jobs entry to update.
+        rows: List of CSV DictReader row dicts to import.
+        column_map: Header-to-DB-column mapping from _map_headers.
+        user_id: Librarian id credited for created accessions.
+    Returns:
+        None; progress and results are written into _import_jobs.
+    """
     with app.app_context():
         from app.cataloging.models import create_book, create_accession, get_accession_by_number
         from app.database import db
@@ -846,6 +1037,15 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
 
 
 def _cleanup_old_jobs():
+    """Drop bulk-import jobs idle for more than 10 minutes.
+    Prevents the in-memory _import_jobs dict from growing across
+    restarts-free uptime. Called on every status poll so stale entries
+    disappear without a separate sweeper thread.
+    Args:
+        None.
+    Returns:
+        None; removes expired entries from _import_jobs in place.
+    """
     cutoff = datetime.now() - _IMPORT_EXPIRY
     stale = [jid for jid, j in _import_jobs.items()
              if j.get('updated_at') and j['updated_at'] < cutoff]
@@ -855,6 +1055,16 @@ def _cleanup_old_jobs():
 
 @cataloging_bp.route('/catalog')
 def public_catalog():
+    """Render the public searchable catalog (GET /catalog, no login).
+    Public endpoint with no RBAC guard. Parses q, field, year, category,
+    material, availability, sort, view, and page args; stays empty until
+    a term or filter is given, then queries search_books_filtered with
+    50 per page and clamped pagination. Writes no audit row.
+    Args:
+        None (reads search and filter query args).
+    Returns:
+        Rendered public/catalog.html with books, facets, and pager.
+    """
     query = request.args.get('q', '').strip()
     field = request.args.get('field', '')
     year_preset = request.args.get('year_preset', '').strip()
@@ -940,6 +1150,16 @@ def public_catalog():
 
 @cataloging_bp.route('/book/<int:book_id>')
 def book_info(book_id):
+    """Render one book's detail page (GET /book/<id>, no login).
+    Public endpoint with no RBAC guard. Loads the book row plus its
+    accessions, marks each copy available or borrowed, hides daily-loan
+    copies when an overnight allocation blocks them, and passes the
+    viewer profile when logged in. Missing books flash and redirect.
+    Args:
+        book_id: Primary key of the book title to display.
+    Returns:
+        Rendered public/bookinfo.html, or catalog redirect when missing.
+    """
     book = get_book_by_id(book_id)
     if not book:
         flash('Book not found.', 'error')

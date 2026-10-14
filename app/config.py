@@ -5,6 +5,21 @@ load_dotenv()
 
 
 def _int_env(name, default):
+    """Read an integer setting from the environment with a safe fallback.
+
+    Wraps ``os.getenv`` with int coercion so a missing, empty, or
+    non-numeric variable (e.g. a typo'd ``BACKUP_DAY=abc``) never raises
+    at import time. Used for ``BACKUP_DAY``/``BACKUP_HOUR``/``BACKUP_KEEP``
+    defaults on the :class:`Config` object.
+
+    Args:
+        name: Environment variable name to read.
+        default: Fallback value used when the variable is missing or
+            cannot be parsed as an integer.
+
+    Returns:
+        The parsed integer, or ``int(default)`` when parsing fails.
+    """
     try:
         return int(os.getenv(name, default))
     except (TypeError, ValueError):

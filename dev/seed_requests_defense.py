@@ -57,6 +57,20 @@ DEMO_REQUESTS = [
 
 
 def get_conn():
+    """Open a psycopg2 connection from ``DATABASE_URL`` in ``.env``.
+
+    Loads ``.env`` and connects with the ``DATABASE_URL`` value; exits
+    the process with a message when it is unset (hinting at
+    ``setup_db.py``), since the request seeder cannot run offline.
+
+    Returns:
+        psycopg2 connection: Open connection (``autocommit=False`` is
+            set by the caller); the caller owns close/commit.
+
+    Side effects:
+        Loads ``.env`` via ``load_dotenv``; calls ``sys.exit`` when
+        ``DATABASE_URL`` is missing.
+    """
     from dotenv import load_dotenv
 
     load_dotenv()
@@ -69,6 +83,23 @@ def get_conn():
 
 
 def reset_seed(cur):
+    """Delete prior SEEDREQ request-demo rows in dependency order.
+
+    Removes procurement/notification/request rows for ``SEEDREQ-*``
+    borrowers and audit rows for ``seedreq_*`` users, then the
+    borrowers and users themselves, so a rerun starts clean. Only
+    ``SEEDREQ``-tagged rows match; the real catalog is untouched.
+
+    Args:
+        cur: Open DB cursor on the seeding transaction.
+
+    Returns:
+        None.
+
+    Side effects:
+        DELETEs prior SEEDREQ rows across 6 tables; prints per-table
+        row counts.
+    """
     id_pattern = SEED_TAG + "-%"
     email_pattern = SEED_TAG.lower() + "_%@%s" % SEED_DOMAIN
     cur.execute("SELECT borrower_id FROM borrowers WHERE id_number LIKE %s", (id_pattern,))
@@ -93,6 +124,26 @@ def reset_seed(cur):
 
 
 def main(reset=True):
+    """Seed 7 demo users and stacked-demand book requests for defense.
+
+    Ensures all 4 roles exist, creates 3 Students + 2 Faculty (with
+    borrowers) + 1 Librarian + 1 Admin (``SEEDREQ``/``seedreq_*``), then
+    inserts ``DEMO_REQUESTS`` shaped for the stacked-bar overview (one
+    title with both student+faculty demand, student-only, faculty-only
+    and one pre-approved row; the rest stay ``pending_review`` for a
+    live approve/reject demo). Commits on success, rolls back on error.
+
+    Args:
+        reset (bool): When True (default), delete prior SEEDREQ rows
+            first; pass False (``--no-reset``) to append.
+
+    Returns:
+        None.
+
+    Side effects:
+        INSERTs roles, users, borrowers and request rows; commits on
+        success, rolls back on failure; prints seed/next-step summary.
+    """
     conn = get_conn()
     conn.autocommit = False
     cur = conn.cursor()

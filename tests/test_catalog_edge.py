@@ -20,6 +20,7 @@ ARCHIVED_BOOK = (2, 'Old', 'A', '', '', None, '', '', '', '', '', 'archived',
 class TestEmptyDb:
     @staticmethod
     def _empty(mock_db):
+        """Test helper _empty: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = []
         mock_db['execute'].return_value = []
@@ -59,6 +60,7 @@ class TestEmptyDb:
 class TestHostileParams:
     @staticmethod
     def _ok(mock_db):
+        """Test helper _ok: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = []
 
@@ -109,6 +111,7 @@ class TestHostileParams:
 class TestWrites:
     @staticmethod
     def _ok(mock_db):
+        """Test helper _ok: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = []
 
@@ -292,6 +295,7 @@ class TestNoneGuards:
 
 
 def _book15(title='Educated'):
+    """Test helper _book15: build mocked data or DB stub for the test."""
     # 15-col book_catalog row on current schema: updated_at[13] is a
     # timestamp, updated_by[14] is None (never edited, like seed data).
     return (1, title, 'T. Author', '1st', 'Pub', 2018, 'Auto', 'C1',
