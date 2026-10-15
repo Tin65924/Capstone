@@ -67,6 +67,53 @@ def create_app(test_config=None):
     from .circulation.models import format_due
     app.template_filter('duefmt')(format_due)
 
+    def _pht_filter(value, fmt='%Y-%m-%d %I:%M %p'):
+        """Render a DB timestamp in Philippine Time (UTC+8).
+
+        Render/Neon stores NOW() in UTC, so raw values read ~8h behind
+        the library wall clock. Naive values are assumed UTC and shifted
+        +8h for display; aware values are converted. Unparseable input
+        passes through as text instead of 500ing.
+        """
+        from datetime import datetime, date, timedelta
+        if value is None:
+            return '—'
+        dt = None
+        if isinstance(value, datetime):
+            dt = value
+        elif isinstance(value, date):
+            return value.strftime('%Y-%m-%d')
+        elif isinstance(value, str):
+            s = value.strip()
+            for parser in (
+                lambda v: datetime.fromisoformat(v),
+                lambda v: datetime.strptime(v[:19], '%Y-%m-%d %H:%M:%S'),
+                lambda v: datetime.strptime(v[:10], '%Y-%m-%d'),
+            ):
+                try:
+                    dt = parser(s)
+                    break
+                except (ValueError, TypeError):
+                    continue
+            if dt is None:
+                return value
+        else:
+            return str(value)
+        try:
+            if dt.tzinfo is None:
+                dt = dt + timedelta(hours=8)
+            else:
+                from datetime import timezone as _tz
+                dt = dt.astimezone(_tz(timedelta(hours=8)))
+        except Exception:
+            pass
+        try:
+            return dt.strftime(fmt)
+        except Exception:
+            return str(value)
+
+    app.template_filter('pht')(_pht_filter)
+
     try:
         if not app.config.get('TESTING'):
             from .backup.scheduler import start_scheduler

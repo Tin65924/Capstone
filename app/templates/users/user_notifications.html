@@ -58,7 +58,7 @@
                                 {% if not _read %}<span data-notif-dot class="w-2 h-2 rounded-full bg-primary"></span>{% endif %}
                             </div>
                             <p class="text-sm font-medium mt-1">{{ notif[1] }}</p>
-                            <p class="text-xs text-gray-400 mt-1">{{ notif[4] }}</p>
+                            <p class="text-xs text-gray-400 mt-1">{{ notif[4]|pht }} (PHT)</p>
                         </div>
                         {% if not _read %}
                         <form method="POST" action="{{ url_for('main.mark_notification_read_route', notification_id=notif[0], next=url_for('main.user_notifications')) }}" class="shrink-0" data-notif-read="{{ notif[0] }}">
