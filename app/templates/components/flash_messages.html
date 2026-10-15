@@ -29,3 +29,67 @@
     </script>
     {% endif %}
 {% endwith %}
+{% if current_user.is_authenticated %}
+<script>
+/* Global live pop-up toasts — runs on EVERY module (this snippet ships
+   inside flash_messages, which all pages include). Polls
+   /api/notifications/live every 15s; no reload needed. Students/faculty
+   get request/reservation/due updates; Librarian/Admin get new requests
+   and waiting reservations. */
+(function () {
+    if (window.__mcstLiveToasts) return;
+    window.__mcstLiveToasts = true;
+    var KEY = 'mcst_seen_notifs_v1';
+    function seenSet() {
+        try { return new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); }
+        catch (e) { return new Set(); }
+    }
+    function saveSeen(set) {
+        try { localStorage.setItem(KEY, JSON.stringify(Array.from(set).slice(-50))); } catch (e) {}
+    }
+    function popup(msg) {
+        if (window.AjaxUI && window.AjaxUI.toast) { window.AjaxUI.toast(msg, 'info'); return; }
+        var box = document.getElementById('mcst-live-toasts');
+        if (!box) {
+            box = document.createElement('div');
+            box.id = 'mcst-live-toasts';
+            box.style.cssText = 'position:fixed;right:1rem;bottom:1rem;z-index:9999;display:flex;flex-direction:column;gap:0.5rem;max-width:min(92vw,24rem);';
+            document.body.appendChild(box);
+        }
+        var el = document.createElement('div');
+        el.style.cssText = 'background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;border-radius:0.5rem;padding:0.625rem 0.875rem;font-size:0.875rem;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,0.12);';
+        el.textContent = msg;
+        box.appendChild(el);
+        setTimeout(function () { el.style.transition = 'opacity 0.4s'; el.style.opacity = '0'; setTimeout(function () { el.remove(); }, 450); }, 5000);
+    }
+    var first = true;
+    function check() {
+        fetch("{{ url_for('main.notifications_live') }}", { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) {
+                if (!data || !data.notifications) return;
+                var seen = seenSet();
+                var fresh = [];
+                data.notifications.forEach(function (n) {
+                    var key = String(n.id);
+                    if (!seen.has(key)) fresh.push(n);
+                });
+                if (first) {
+                    // baseline silently on first load so old items don't all pop at once;
+                    // only pop items arriving after this page opened
+                    data.notifications.forEach(function (n) { seen.add(String(n.id)); });
+                    saveSeen(seen);
+                    first = false;
+                    return;
+                }
+                fresh.slice().reverse().forEach(function (n) { popup(n.message); seen.add(String(n.id)); });
+                if (fresh.length) saveSeen(seen);
+                document.querySelectorAll('[data-unread-count]').forEach(function (el) { el.textContent = data.unread_count; });
+            })
+            .catch(function () {});
+    }
+    check();
+    setInterval(check, 15000);
+})();
+</script>
+{% endif %}

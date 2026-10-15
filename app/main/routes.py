@@ -598,16 +598,52 @@ def user_history():
 
 @main_bp.route('/api/notifications/live')
 def notifications_live():
-    """Poll endpoint for in-site live toasts (GET, login required).
+    """Poll endpoint for in-site live toasts on every module (GET, login).
 
-    Returns unread count plus latest 5 unread rows so any open page can
-    toast new arrivals (e.g. request approved, reservation allocated)
-    without visiting /user/notifications. Read-only; 401 JSON when
-    anonymous or without borrower record.
+    Students/Faculty: unread borrower notifications (request approved,
+    reservation allocated, due reminders) — no page reload needed.
+    Librarian/Admin: staff feed of newest pending requests, waiting
+    reservations, and overdue loans so desk staff are notified while
+    browsing any module. Read-only; 401 JSON when anonymous.
     """
     from flask_login import current_user as _cu
     if not getattr(_cu, 'is_authenticated', False):
         return jsonify({'error': 'Login required.'}), 401
+    role = getattr(_cu, 'role', '') or ''
+    try:
+        from app.auth.models import get_user_by_id as _gu
+        _u = _gu(_cu.id)
+        if _u and len(_u) > 2 and _u[2]:
+            role = _u[2]
+    except Exception:
+        pass
+    if role in ('Librarian', 'Admin'):
+        items = []
+        try:
+            from app.database import db as _db
+            reqs = _db.fetch_all(
+                "SELECT request_id, book_title, request_date FROM request_records"
+                " WHERE request_status = 'pending_review'"
+                " ORDER BY request_date DESC LIMIT 5") or []
+            for r in reqs:
+                items.append({'id': f"req-{r[0]}",
+                              'message': f"New book request: \"{r[1]}\" needs review.",
+                              'type': 'staff_request', 'date': str(r[2])})
+        except Exception:
+            pass
+        try:
+            from app.database import db as _db2
+            res = _db2.fetch_all(
+                "SELECT reservation_id, book_id FROM reservation_queue"
+                " WHERE reservation_status = 'waiting'"
+                " ORDER BY request_date DESC LIMIT 5") or []
+            for r in res:
+                items.append({'id': f"res-{r[0]}",
+                              'message': f"Reservation #{r[0]} waiting for a copy (book {r[1]}).",
+                              'type': 'staff_reservation', 'date': ''})
+        except Exception:
+            pass
+        return jsonify({'unread_count': len(items), 'notifications': items[:5]})
     from app.circulation.models import (
         get_borrower_by_user, get_notifications_by_borrower,
         count_unread_notifications,
