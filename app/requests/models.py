@@ -457,8 +457,14 @@ def check_duplicate_request(requester_id, book_title):
 
     for (title,) in rows:
         existing_normalized = normalize_title(title)
-        if existing_normalized == normalized or SequenceMatcher(None, existing_normalized, normalized).ratio() >= 0.85:
+        if existing_normalized == normalized:
             return True
+        if len(existing_normalized) >= 10 and len(normalized) >= 10:
+            try:
+                if SequenceMatcher(None, existing_normalized, normalized).ratio() >= 0.85:
+                    return True
+            except Exception:
+                continue
 
     return False
 
@@ -467,9 +473,11 @@ def _title_matches(existing_title, normalized):
     """Test one catalog/request title against a normalized query title.
 
     Shared exact-plus-fuzzy comparison behind the existence guards:
-    normalized exact equality wins, otherwise SequenceMatcher ratio >=
-    TITLE_FUZZY_RATIO counts as a match. Never raises — bad inputs
-    simply return False.
+    normalized exact equality always wins; SequenceMatcher ratio >=
+    TITLE_FUZZY_RATIO only counts for longer titles (both sides >= 10
+    chars) so short test-like titles differing by one character
+    ("test_01" vs "test_02", ratio 0.857) do not false-positive.
+    Never raises — bad inputs simply return False.
 
     Args:
         existing_title: Title string from the DB row.
@@ -486,6 +494,8 @@ def _title_matches(existing_title, normalized):
         return False
     if existing_normalized == normalized:
         return True
+    if len(existing_normalized) < 10 or len(normalized) < 10:
+        return False
     try:
         return SequenceMatcher(None, existing_normalized, normalized).ratio() >= TITLE_FUZZY_RATIO
     except Exception:
