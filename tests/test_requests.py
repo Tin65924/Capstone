@@ -306,10 +306,12 @@ class TestListRendering:
         assert {'all', 'pending_review', 'approved', 'rejected', 'procured'} <= statuses
         # Default view is Pending, so its card carries the active highlight.
         assert 'ring-primary' in body
-        # Original individual cards: one Approve/Reject pair per request row.
-        assert body.count('reject-form-1') >= 1
-        assert body.count('reject-form-2') >= 1
-        assert 'Approve all' not in body
+        # Grouped cards: typo variants merge to one card with per-role demand
+        # and bulk approve/reject for all pending ids in the group.
+        assert 'Faculty: 1' in body
+        assert 'Student: 1' in body
+        assert 'request_ids' in body
+        assert 'Approve' in body
 
     def test_sort_param_accepted(self, librarian_client, mock_db):
         """Validates sort param accepted `/librarian/requests?sort=recent` as librarian (expects 200) [TestListRendering / requests].

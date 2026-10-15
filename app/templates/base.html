@@ -45,6 +45,50 @@
 
     {% include 'components/footer.html' %}
 
+    <script src="{{ url_for('static', filename='js/ajax_ui.js') }}"></script>
+    {% if current_user.is_authenticated %}
+    <script>
+    /* Live in-site toasts: poll for new notifications on any module so
+       students/faculty see request approvals, allocations, and due
+       reminders while browsing without opening /user/notifications. */
+    (function () {
+        var KEY = 'mcst_last_notif_id';
+        var seen = null;
+        function toast(msg) {
+            if (window.AjaxUI && window.AjaxUI.toast) window.AjaxUI.toast(msg, 'info');
+            else alert(msg);
+        }
+        function check() {
+            fetch("{{ url_for('main.notifications_live') }}", { credentials: 'same-origin' })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (data) {
+                    if (!data || !data.notifications) return;
+                    var ids = data.notifications.map(function (n) { return n.id; });
+                    if (seen === null) {
+                        try { seen = parseInt(localStorage.getItem(KEY) || '0', 10) || 0; } catch (e) { seen = 0; }
+                        // first poll: toast only items newer than last seen
+                        data.notifications.slice().reverse().forEach(function (n) {
+                            if (n.id > seen) toast(n.message);
+                        });
+                    } else {
+                        data.notifications.slice().reverse().forEach(function (n) {
+                            if (ids.indexOf(n.id) >= 0 && n.id > seen) toast(n.message);
+                        });
+                    }
+                    var maxId = Math.max.apply(null, [seen].concat(ids));
+                    seen = maxId;
+                    try { localStorage.setItem(KEY, String(maxId)); } catch (e) {}
+                    document.querySelectorAll('[data-unread-count]').forEach(function (el) {
+                        el.textContent = data.unread_count;
+                    });
+                })
+                .catch(function () {});
+        }
+        check();
+        setInterval(check, 30000);
+    })();
+    </script>
+    {% endif %}
     {% block scripts %}{% endblock %}
 </body>
 </html>

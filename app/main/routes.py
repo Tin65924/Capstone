@@ -596,6 +596,51 @@ def user_history():
                            overdue_ids=overdue_ids)
 
 
+@main_bp.route('/api/notifications/live')
+def notifications_live():
+    """Poll endpoint for in-site live toasts (GET, login required).
+
+    Returns unread count plus latest 5 unread rows so any open page can
+    toast new arrivals (e.g. request approved, reservation allocated)
+    without visiting /user/notifications. Read-only; 401 JSON when
+    anonymous or without borrower record.
+    """
+    from flask_login import current_user as _cu
+    if not getattr(_cu, 'is_authenticated', False):
+        return jsonify({'error': 'Login required.'}), 401
+    from app.circulation.models import (
+        get_borrower_by_user, get_notifications_by_borrower,
+        count_unread_notifications,
+    )
+    borrower = get_borrower_by_user(_cu.id)
+    if not borrower:
+        return jsonify({'error': 'No borrower record.'}), 404
+    try:
+        all_notes = get_notifications_by_borrower(borrower[0]) or []
+    except Exception:
+        all_notes = []
+    unread = [n for n in all_notes if len(n) > 5 and not n[5]]
+    if not unread:
+        # fallback when is_read column missing/legacy shape
+        try:
+            unread = all_notes[:5]
+        except Exception:
+            unread = []
+    latest = unread[:5]
+    try:
+        unread_count = count_unread_notifications(borrower[0]) or 0
+    except Exception:
+        unread_count = len(unread)
+    return jsonify({
+        'unread_count': unread_count,
+        'notifications': [
+            {'id': n[0], 'message': n[1], 'type': n[2] if len(n) > 2 else '',
+             'date': str(n[4]) if len(n) > 4 else ''}
+            for n in latest if n and len(n) > 1
+        ],
+    })
+
+
 @main_bp.route('/api/bloom')
 def bloom_filters():
     """Serve Bloom filter payloads for client-side negative checks.
