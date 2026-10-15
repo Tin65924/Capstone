@@ -1393,3 +1393,20 @@ def create_notification(recipient_id, message, notif_type, related_reference=Non
         'INSERT INTO notification_log (recipient_id, message, notif_type, related_reference) VALUES (%s, %s, %s, %s)',
         (recipient_id, message, notif_type, related_reference)
     )
+
+
+def is_low_stock(book_id, threshold=2):
+    try:
+        return (count_available_accessions(book_id) or 0) <= int(threshold)
+    except Exception:
+        return False
+
+
+def is_aged_for_weeding(year_published, lifespan_years=10):
+    try:
+        if not year_published: return False
+        from datetime import date as _d
+        return (_d.today().year - int(year_published)) >= int(lifespan_years)
+    except Exception:
+        return False
+

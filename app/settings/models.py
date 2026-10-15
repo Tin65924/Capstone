@@ -79,8 +79,17 @@ SETTING_CATEGORIES = [
      'Overdue fines and grace periods.',
      ['OVERDUE_FINE_PER_DAY', 'OVERDUE_GRACE_DAYS']),
     ('reservations', 'Reservation Settings', 'bookmark',
-     'Pickup windows and due-date reminders.',
-     ['RESERVATION_CLAIM_HOURS', 'RESERVATION_CLAIM_DAYS', 'DUE_SOON_NOTIFY_DAYS']),
+     'Pickup windows and due-date reminders. Reservations close at 3PM; after cutoff pickup is next day.',
+     ['RESERVATION_CLAIM_HOURS', 'RESERVATION_CLAIM_DAYS', 'DUE_SOON_NOTIFY_DAYS',
+      'RESERVATION_CUTOFF_TIME']),
+    ('operations', 'Library Operations Schedule', 'calendar_month',
+     'Weekday, Saturday, semestral-break hours and closed days. Sunday and holidays allow no reservations.',
+     ['LIBRARY_SATURDAY_OPENING_TIME', 'LIBRARY_SATURDAY_CLOSING_TIME',
+      'LIBRARY_SEMBREAK_OPENING_TIME', 'LIBRARY_SEMBREAK_CLOSING_TIME',
+      'LIBRARY_CLOSED_DAYS']),
+    ('collection', 'Collection Thresholds', 'inventory_2',
+     'Low-stock alert and weeding lifespan for reports.',
+     ['LOW_STOCK_THRESHOLD', 'BOOK_LIFESPAN_YEARS', 'DAILY_MAX_HOURS']),
     ('backup-schedule', 'Backup Schedule', 'settings_backup_restore',
      'Automatic monthly backups and retention. Admin only.',
      ['BACKUP_DAY', 'BACKUP_HOUR', 'BACKUP_KEEP', 'BACKUP_RESTORE_ENABLED']),
@@ -99,11 +108,16 @@ ADMIN_ONLY_KEYS = frozenset({'BACKUP_DAY', 'BACKUP_HOUR', 'BACKUP_KEEP',
 LIBRARIAN_EDITABLE_KEYS = frozenset({
     'MAX_BORROW_LIMIT_STUDENT', 'MAX_BORROW_LIMIT_FACULTY',
     'LIBRARY_OPENING_TIME', 'LIBRARY_CLOSING_TIME',
+    'LIBRARY_SATURDAY_OPENING_TIME', 'LIBRARY_SATURDAY_CLOSING_TIME',
+    'LIBRARY_SEMBREAK_OPENING_TIME', 'LIBRARY_SEMBREAK_CLOSING_TIME',
+    'LIBRARY_CLOSED_DAYS',
     'OVERNIGHT_DUE_DAYS_STUDENT', 'OVERNIGHT_DUE_DAYS_FACULTY',
-    'DAILY_CIRCULATION_DUE_DAYS',
+    'DAILY_CIRCULATION_DUE_DAYS', 'DAILY_MAX_HOURS',
     'OVERDUE_FINE_PER_DAY', 'OVERDUE_GRACE_DAYS',
     'RESERVATION_CLAIM_HOURS', 'RESERVATION_CLAIM_DAYS',
+    'RESERVATION_CUTOFF_TIME',
     'DUE_SOON_NOTIFY_DAYS',
+    'LOW_STOCK_THRESHOLD', 'BOOK_LIFESPAN_YEARS',
 })
 
 
@@ -120,6 +134,15 @@ SETTING_DEFS = {
     'OVERDUE_GRACE_DAYS': ('Overdue grace days', 'int', 'Grace days before fines accrue'),
     'RESERVATION_CLAIM_DAYS': ('Reservation claim days (legacy)', 'int', 'Days to claim an allocated reservation (used only when claim hours is empty)'),
     'RESERVATION_CLAIM_HOURS': ('Reservation claim hours', 'float', 'Hours to claim an allocated reservation (2 = 2-hour pickup window)'),
+    'RESERVATION_CUTOFF_TIME': ('Reservation cutoff (daily)', 'time', 'Reservations close at 15:00; bookings after cutoff are for next open day'),
+    'LIBRARY_SATURDAY_OPENING_TIME': ('Saturday opening', 'time', 'Saturday opening hour; blank means same as weekday'),
+    'LIBRARY_SATURDAY_CLOSING_TIME': ('Saturday closing', 'time', 'Saturday closing hour; blank means closed Saturday — set hours if open'),
+    'LIBRARY_SEMBREAK_OPENING_TIME': ('Sem-break opening', 'time', 'Semestral break opening hour'),
+    'LIBRARY_SEMBREAK_CLOSING_TIME': ('Sem-break closing', 'time', 'Semestral break closing hour'),
+    'LIBRARY_CLOSED_DAYS': ('Closed days', 'str', 'Comma list e.g. Sunday,holiday. Sunday and holidays allow no reservations'),
+    'LOW_STOCK_THRESHOLD': ('Low-stock threshold', 'int', 'Alert when available copies are at or below this (default 2)'),
+    'BOOK_LIFESPAN_YEARS': ('Book lifespan (years)', 'int', 'Flag titles older than this for weeding review (default 10)'),
+    'DAILY_MAX_HOURS': ('Daily use max hours', 'int', 'In-library daily loans capped at this many hours (default 2, within 5PM closing)'),
     'DUE_SOON_NOTIFY_DAYS': ('Due-soon reminder days', 'int', 'Days before due date to send due-soon reminders'),
     'BACKUP_DAY': ('Auto-backup day of month', 'int', 'Day of month for the automatic backup (1-28)'),
     'BACKUP_HOUR': ('Auto-backup hour (0-23)', 'int', 'Hour of day for the automatic backup'),
@@ -147,6 +170,15 @@ DEFAULTS = {
     'OVERDUE_GRACE_DAYS': '0',
     'RESERVATION_CLAIM_DAYS': '2',
     'RESERVATION_CLAIM_HOURS': '2',
+    'RESERVATION_CUTOFF_TIME': '15:00',
+    'LIBRARY_SATURDAY_OPENING_TIME': '08:00',
+    'LIBRARY_SATURDAY_CLOSING_TIME': '12:00',
+    'LIBRARY_SEMBREAK_OPENING_TIME': '08:00',
+    'LIBRARY_SEMBREAK_CLOSING_TIME': '17:00',
+    'LIBRARY_CLOSED_DAYS': 'Sunday,holiday',
+    'LOW_STOCK_THRESHOLD': '2',
+    'BOOK_LIFESPAN_YEARS': '10',
+    'DAILY_MAX_HOURS': '2',
     'DUE_SOON_NOTIFY_DAYS': '2',
     'BACKUP_DAY': _env_default('BACKUP_DAY', 1),
     'BACKUP_HOUR': _env_default('BACKUP_HOUR', 2),
@@ -429,3 +461,72 @@ def get_closing_time(config=None):
     cfg = config if config is not None else current_app.config
     parsed = parse_hhmm(cfg.get('LIBRARY_CLOSING_TIME') or '')
     return parsed or (17, 0)
+
+
+def get_reservation_cutoff(config=None):
+    """Daily reservation cutoff as (hour, minute); default 15:00.
+
+    Bookings at/after cutoff are served the next open day per panel
+    revision (reservations close 3PM).
+    """
+    cfg = config if config is not None else current_app.config
+    return parse_hhmm(cfg.get('RESERVATION_CUTOFF_TIME') or '') or (15, 0)
+
+
+def is_after_reservation_cutoff(now=None, config=None):
+    """True when now is at/after the 3PM reservation cutoff."""
+    now = now or library_now()
+    cutoff = get_reservation_cutoff(config)
+    try:
+        return (now.hour, now.minute) >= cutoff
+    except (AttributeError, TypeError):
+        return False
+
+
+def get_closed_days(config=None):
+    """Closed weekday names lowercased from LIBRARY_CLOSED_DAYS."""
+    cfg = config if config is not None else current_app.config
+    raw = str(cfg.get('LIBRARY_CLOSED_DAYS') or '').lower()
+    return {p.strip() for p in raw.replace(';', ',').split(',') if p.strip()}
+
+
+def is_closed_day(day=None, config=None):
+    """True for Sunday/holiday closures — no reservations allowed.
+
+    Checks weekday name against LIBRARY_CLOSED_DAYS (default
+    Sunday,holiday). Saturday uses its own hours; callers pass the
+    target pickup date so post-3PM next-day rollover can skip Sundays.
+    """
+    day = day or library_today()
+    try:
+        weekday = day.strftime('%A').lower()
+    except Exception:
+        return False
+    return weekday in get_closed_days(config)
+
+
+def get_low_stock_threshold(config=None):
+    """Copies-at-or-below count that triggers low-stock alert (default 2)."""
+    cfg = config if config is not None else current_app.config
+    try:
+        return max(0, int(float(cfg.get('LOW_STOCK_THRESHOLD', 2))))
+    except (TypeError, ValueError):
+        return 2
+
+
+def get_book_lifespan_years(config=None):
+    """Years after which a title is flagged for weeding review (default 10)."""
+    cfg = config if config is not None else current_app.config
+    try:
+        return max(1, int(float(cfg.get('BOOK_LIFESPAN_YEARS', 10))))
+    except (TypeError, ValueError):
+        return 10
+
+
+def get_daily_max_hours(config=None):
+    """Max in-library daily loan hours (default 2, always within 5PM close)."""
+    cfg = config if config is not None else current_app.config
+    try:
+        return max(1, min(8, int(float(cfg.get('DAILY_MAX_HOURS', 2)))))
+    except (TypeError, ValueError):
+        return 2

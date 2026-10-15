@@ -103,6 +103,17 @@
                     </div>
                 {% endif %}
             </div>
+            {% if home_notifications %}
+            <div class="flex flex-col gap-3 mt-6">
+                <div class="flex items-center justify-between border-b border-[#e7ebf3] pb-3">
+                    <h3 class="text-xl font-bold">Notifications</h3>
+                    <a class="text-primary text-sm font-bold hover:underline" href="{{ url_for('main.user_notifications') }}">View all</a>
+                </div>
+                {% for n in home_notifications %}
+                <div class="bg-white rounded-xl border p-4 text-sm">{{ n[1] }} <span class="text-gray-400">· {{ n[4] }}</span></div>
+                {% endfor %}
+            </div>
+            {% endif %}
         </div>
     </div>
 </main>

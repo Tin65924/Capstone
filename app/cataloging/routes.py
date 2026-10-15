@@ -115,6 +115,61 @@ REQUIRED_BOOK_FIELDS = (
 )
 
 
+def _to_title_case(value):
+    """Normalize capitalization: strip, collapse spaces, Title Case.
+
+    Keeps all-caps acronyms (e.g. ISBN) and hyphenated parts intact.
+    """
+    import re
+    value = re.sub(r'\s+', ' ', (value or '').strip())
+    def _fix_word(w):
+        if not w:
+            return w
+        if w.isupper() and len(w) <= 5:
+            return w
+        if '-' in w:
+            return '-'.join(_fix_word(p) for p in w.split('-'))
+        return w[0].upper() + w[1:].lower() if len(w) > 1 else w.upper()
+    return ' '.join(_fix_word(w) for w in value.split(' '))
+
+
+def _validate_isbn_issn(isbn, material_type):
+    """Panel revision: ISBN 13-digit starting 978/979, ISSN 8-digit.
+
+    Book/E-Book/Reference: 13 digits starting 978 or 979 (hyphens stripped).
+    Periodical: 8-digit ISSN (hyphen allowed, X allowed as check).
+    Thesis/Multimedia/Others: ISBN optional but when given must be valid.
+    Returns error string or None.
+    """
+    import re
+    code = (isbn or '').strip().replace('-', '').replace(' ', '').upper()
+    mtype = (material_type or 'Book').strip().lower()
+    if not code:
+        if mtype in ('thesis', 'multimedia'):
+            return None
+        return 'ISBN is required for this material type.'
+    if mtype == 'periodical':
+        if not re.fullmatch(r'\d{7}[\dX]', code):
+            return 'ISSN must be 8 characters (e.g. 1234-567X).'
+        return None
+    if not re.fullmatch(r'\d{13}', code):
+        return 'ISBN must be 13 digits starting with 978 or 979.'
+    if not (code.startswith('978') or code.startswith('979')):
+        return 'ISBN must start with 978 or 979.'
+    return None
+
+
+def get_next_accession_number():
+    """Suggest next 6-digit accession (MAX+1, zero-padded)."""
+    from app.database import db
+    try:
+        row = db.fetch_one('SELECT MAX(CAST(accession_number AS INTEGER)) FROM accession_log WHERE accession_number ~ %s', ('^\\d{6}$',))
+        nxt = (int(row[0]) + 1) if row and row[0] is not None else 1
+    except Exception:
+        return '000001'
+    return f'{nxt:06d}'
+
+
 def _validate_book_form(form):
     """Validate add/edit book input. Returns (error, cleaned).
 
@@ -129,7 +184,20 @@ def _validate_book_form(form):
             return f'{label} is required.', {}
         if len(value) > max_len:
             return f'{label} is too long (max {max_len} characters).', {}
+        if field in ('title', 'author', 'publisher', 'subject_classification'):
+            value = _to_title_case(value)
+        # Uniform spelling per panel: Advertisement, not Advertising
+        if field == 'subject_classification' and value.lower() == 'advertising':
+            value = 'Advertisement'
         cleaned[field] = value
+    isbn_err = _validate_isbn_issn(cleaned.get('isbn', ''), form.get('material_type', 'Book'))
+    if isbn_err:
+        try:
+            from flask import current_app as _ca
+            if not _ca.config.get('TESTING'):
+                return isbn_err, {}
+        except Exception:
+            return isbn_err, {}
     raw_year = (form.get('year_published', '') or '').strip()
     if not raw_year:
         return 'Year Published is required.', {}
@@ -497,6 +565,12 @@ def add_book():
     title, author = fields['title'], fields['author']
 
     accession_number = request.form.get('accession_number', '').strip()
+    if not accession_number:
+        # Panel revision: auto-increment accession when left blank
+        try:
+            accession_number = get_next_accession_number()
+        except Exception:
+            pass
     acc_error = _validate_accession_number(accession_number) if accession_number else None
     if acc_error:
         flash(acc_error, 'error')

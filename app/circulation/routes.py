@@ -26,7 +26,8 @@ from .models import (
 )
 from app.settings.models import (
     is_library_open, library_hours_label, get_closing_time,
-    library_now, library_today,
+    library_now, library_today, is_closed_day, is_after_reservation_cutoff,
+    get_daily_max_hours,
 )
 
 VALID_BORROW_TYPES = ('overnight', 'daily_circulation')
@@ -149,28 +150,59 @@ def _book_is_archived(book):
 
 def _claim_window():
     """(deadline datetime, label) for reservation pickup. Hours-based
-    so a 2-hour window is possible; falls back to legacy DAYS setting."""
-    hours = current_app.config.get('RESERVATION_CLAIM_HOURS')
+    so a 2-hour window is possible; falls back to legacy DAYS setting.
+    After the 3PM cutoff the pickup rolls to the next open day."""
+    try:
+        from datetime import timedelta as _td
+        base = library_now().replace(tzinfo=None)
+        if is_after_reservation_cutoff():
+            base = base + _td(days=1)
+            # skip Sunday/holiday closures for next-day pickup
+            for _ in range(7):
+                try:
+                    if not is_closed_day(base.date()):
+                        break
+                    base = base + _td(days=1)
+                except Exception:
+                    break
+        hours = current_app.config.get('RESERVATION_CLAIM_HOURS')
+    except Exception:
+        base = library_now().replace(tzinfo=None)
+        hours = None
     if hours is None:
         days = current_app.config.get('RESERVATION_CLAIM_DAYS', 2)
         try:
             days = int(days)
         except (TypeError, ValueError):
             days = 2
-        return library_now().replace(tzinfo=None) + timedelta(days=days), f'{days} day(s)'
+        return base + timedelta(days=days), f'{days} day(s)'
     try:
         hours = float(hours)
     except (TypeError, ValueError):
         hours = 2
-    return library_now().replace(tzinfo=None) + timedelta(hours=hours), f'{hours:g} hour(s)'
+    try:
+        return base + timedelta(hours=hours), f'{hours:g} hour(s)'
+    except Exception:
+        return library_now().replace(tzinfo=None) + timedelta(hours=hours), f'{hours:g} hour(s)'
 
 
 def _compute_due_date(borrow_type, role_name):
     """Due date for a borrow. Only Students get the student overnight
-    period; Faculty, Admin, and Librarian all inherit the faculty period."""
+    period; Faculty, Admin, and Librarian all inherit the faculty period.
+    Daily loans are capped at DAILY_MAX_HOURS (default 2hrs) within the
+    5PM closing per panel revision."""
     if borrow_type == 'daily_circulation':
-        days = current_app.config.get('DAILY_CIRCULATION_DUE_DAYS', 0)
-        fallback = 0
+        try:
+            max_hours = get_daily_max_hours()
+        except Exception:
+            max_hours = 2
+        now = library_now().replace(tzinfo=None)
+        close_hour, close_min = get_closing_time()
+        closing = now.replace(hour=close_hour, minute=close_min, second=0, microsecond=0)
+        due = now + timedelta(hours=max_hours)
+        if due > closing:
+            due = closing
+        return due
     elif role_name == 'Student':
         days = current_app.config.get('OVERNIGHT_DUE_DAYS_STUDENT', 1)
         fallback = 1
@@ -1004,6 +1036,13 @@ def user_reserve():
     if get_available_accession_by_book(book_id):
         flash('A copy is available — you can borrow it instead.', 'info')
         return redirect(url_for('cataloging.book_info', book_id=book_id))
+
+    try:
+        if is_closed_day():
+            flash('No reservations on Sundays/holidays. Please reserve on the next open day.', 'error')
+            return redirect(url_for('cataloging.book_info', book_id=book_id))
+    except Exception:
+        pass
 
     try:
         position = _create_reservation_retry(book_id, borrower_row[0])
