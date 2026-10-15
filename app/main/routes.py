@@ -113,23 +113,16 @@ def _overdue_loan_ids(loans, today, id_idx=0, due_idx=2, status_idx=4):
 @main_bp.route('/')
 def index():
     """Render the public landing page (GET /, no login).
-    Shows new arrivals plus notification preview on home per panel
-    revision (notification moved to home). Read-only with no audit row.
+    Public endpoint with no RBAC guard. Fetches five recent books for the
+    new-arrivals section and renders the homepage. Notifications arrive
+    via global live toast popups; read-only with no audit row.
+    Args:
+        None.
+    Returns:
+        Rendered public/index.html with new arrivals.
     """
     new_arrivals = get_recent_books(5)
-    home_notifications = []
-    try:
-        from flask_login import current_user as _cu
-        if getattr(_cu, 'is_authenticated', False):
-            from app.circulation.models import get_borrower_by_user as _gbu
-            from app.circulation.models import get_notifications_by_borrower as _gn
-            _b = _gbu(_cu.id)
-            if _b:
-                home_notifications = (_gn(_b[0], limit=5) or [])[:5]
-    except Exception:
-        home_notifications = []
-    return render_template('public/index.html', new_arrivals=new_arrivals,
-                           home_notifications=home_notifications)
+    return render_template('public/index.html', new_arrivals=new_arrivals)
 
 
 @main_bp.route('/health')
