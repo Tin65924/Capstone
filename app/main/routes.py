@@ -636,6 +636,20 @@ def notifications_live():
                               'type': 'staff_reservation', 'date': ''})
         except Exception:
             pass
+        try:
+            from app.database import db as _db3
+            recent = _db3.fetch_all(
+                "SELECT circulation_id, transaction_type, borrow_date, return_date"
+                " FROM circulation_records"
+                " ORDER BY COALESCE(return_date, borrow_date) DESC, circulation_id DESC"
+                " LIMIT 5") or []
+            for r in recent:
+                verb = 'returned' if (len(r) > 1 and r[1] == 'return') else 'borrowed'
+                items.append({'id': f"circ-{r[0]}",
+                              'message': f"Copy {verb} (loan #{r[0]}).",
+                              'type': 'staff_circulation', 'date': ''})
+        except Exception:
+            pass
         return jsonify({'unread_count': len(items), 'notifications': items[:5]})
     from app.circulation.models import (
         get_borrower_by_user, get_notifications_by_borrower,

@@ -78,10 +78,14 @@
                     if (!seen.has(key)) fresh.push(n);
                 });
                 if (first) {
-                    // first poll in this tab session: pop up to 3 current
-                    // items so nothing is missed without a reload, then
-                    // only brand-new arrivals pop afterwards
-                    data.notifications.slice(0, 3).slice().reverse().forEach(function (n) { popup(n.message); seen.add(String(n.id)); });
+                    // first poll in this tab session: pop only not-yet-seen
+                    // items (max 2) so reloads and module switches stay
+                    // quiet, then only brand-new arrivals pop afterwards
+                    var fresh0 = [];
+                    data.notifications.forEach(function (n) {
+                        if (!seen.has(String(n.id))) fresh0.push(n);
+                    });
+                    fresh0.slice(0, 2).slice().reverse().forEach(function (n) { popup(n.message); });
                     data.notifications.forEach(function (n) { seen.add(String(n.id)); });
                     saveSeen(seen);
                     first = false;
