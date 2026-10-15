@@ -89,11 +89,24 @@
                     data.notifications.forEach(function (n) { seen.add(String(n.id)); });
                     saveSeen(seen);
                     first = false;
+                    document.querySelectorAll('[data-unread-count]').forEach(function (el) {
+                        el.textContent = data.unread_count;
+                        if (el.hasAttribute('data-notif-badge')) {
+                            if (data.unread_count > 0) el.classList.remove('hidden');
+                            else el.classList.add('hidden');
+                        }
+                    });
                     return;
                 }
                 fresh.slice().reverse().forEach(function (n) { popup(n.message); seen.add(String(n.id)); });
                 if (fresh.length) saveSeen(seen);
-                document.querySelectorAll('[data-unread-count]').forEach(function (el) { el.textContent = data.unread_count; });
+                document.querySelectorAll('[data-unread-count]').forEach(function (el) {
+                    el.textContent = data.unread_count;
+                    if (el.hasAttribute('data-notif-badge')) {
+                        if (data.unread_count > 0) el.classList.remove('hidden');
+                        else el.classList.add('hidden');
+                    }
+                });
             })
             .catch(function () {});
     }

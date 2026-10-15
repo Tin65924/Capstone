@@ -114,6 +114,43 @@ def create_app(test_config=None):
 
     app.template_filter('pht')(_pht_filter)
 
+    @app.context_processor
+    def _inject_notif_unread():
+        """Header badge count for the notification bell (all pages).
+
+        Borrowers: unread notification_log rows. Staff: pending requests
+        plus waiting reservations. Fail-open to 0 so a DB blip never
+        breaks page renders; the 15s live poll corrects it anyway.
+        """
+        try:
+            from flask_login import current_user as _cu
+            if not getattr(_cu, 'is_authenticated', False):
+                return {'notif_unread': 0}
+            role = getattr(_cu, 'role', '') or ''
+            if role in ('Librarian', 'Admin'):
+                from app.database import db as _db
+                total = 0
+                try:
+                    r = _db.fetch_one(
+                        "SELECT COUNT(*) FROM request_records WHERE request_status = 'pending_review'")
+                    total += (r[0] or 0) if r else 0
+                except Exception:
+                    pass
+                try:
+                    r = _db.fetch_one(
+                        "SELECT COUNT(*) FROM reservation_queue WHERE reservation_status = 'waiting'")
+                    total += (r[0] or 0) if r else 0
+                except Exception:
+                    pass
+                return {'notif_unread': total}
+            from app.circulation.models import get_borrower_by_user, count_unread_notifications
+            b = get_borrower_by_user(_cu.id)
+            if not b:
+                return {'notif_unread': 0}
+            return {'notif_unread': count_unread_notifications(b[0]) or 0}
+        except Exception:
+            return {'notif_unread': 0}
+
     try:
         if not app.config.get('TESTING'):
             from .backup.scheduler import start_scheduler
