@@ -39,13 +39,16 @@
 (function () {
     if (window.__mcstLiveToasts) return;
     window.__mcstLiveToasts = true;
+    // session-scoped so each fresh tab/session pops current pending items
+    // once (demo-proof: librarian opening the page after a request still
+    // gets the toast), then only brand-new arrivals pop without reload.
     var KEY = 'mcst_seen_notifs_v1';
     function seenSet() {
-        try { return new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); }
+        try { return new Set(JSON.parse(sessionStorage.getItem(KEY) || '[]')); }
         catch (e) { return new Set(); }
     }
     function saveSeen(set) {
-        try { localStorage.setItem(KEY, JSON.stringify(Array.from(set).slice(-50))); } catch (e) {}
+        try { sessionStorage.setItem(KEY, JSON.stringify(Array.from(set).slice(-50))); } catch (e) {}
     }
     function popup(msg) {
         if (window.AjaxUI && window.AjaxUI.toast) { window.AjaxUI.toast(msg, 'info'); return; }
@@ -75,8 +78,10 @@
                     if (!seen.has(key)) fresh.push(n);
                 });
                 if (first) {
-                    // baseline silently on first load so old items don't all pop at once;
-                    // only pop items arriving after this page opened
+                    // first poll in this tab session: pop up to 3 current
+                    // items so nothing is missed without a reload, then
+                    // only brand-new arrivals pop afterwards
+                    data.notifications.slice(0, 3).slice().reverse().forEach(function (n) { popup(n.message); seen.add(String(n.id)); });
                     data.notifications.forEach(function (n) { seen.add(String(n.id)); });
                     saveSeen(seen);
                     first = false;
