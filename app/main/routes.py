@@ -335,7 +335,7 @@ def update_profile():
     department = request.form.get('department', '').strip() or None
 
     if request.form.get('id_number', '').strip():
-        flash('Student ID cannot be changed. Contact the librarian for ID corrections.', 'error')
+        flash('ID number cannot be changed. Contact the librarian for ID corrections.', 'error')
         return redirect(url_for('main.user_profile'))
 
     if not full_name:
