@@ -171,6 +171,24 @@
         .animate-in {
             animation: fadeIn 0.4s ease-out forwards;
         }
+
+        .search-input {
+            width: 100%; padding: 0.75rem 1.25rem; background: #f8fafc;
+            border: 1px solid var(--border-color); border-radius: 10px;
+            outline: none; transition: all 0.2s; font-size: 0.875rem;
+        }
+        .search-input:focus { border-color: var(--primary); background: white; box-shadow: 0 0 0 4px rgba(30,58,138,0.08); }
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 0.625rem 1.25rem; border-radius: 10px; font-weight: 600;
+            font-size: 0.875rem; transition: all 0.2s; gap: 0.5rem; cursor: pointer;
+            border: none; text-decoration: none;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); }
+        .btn-outline { background: transparent; border: 1px solid var(--border-color); color: var(--text-main); }
+        .btn-outline:hover { background: #f8fafc; border-color: var(--primary); color: var(--primary); }
+        .btn-sm { padding: 0.375rem 0.75rem; font-size: 0.75rem; }
     </style>
 </head>
 <body>
@@ -263,41 +281,84 @@
             </div>
         </div>
 
+        <!-- Search & Filter (mirrors cataloging) -->
+        <form method="GET" action="{{ url_for('auth.admin_users') }}" class="flex flex-col gap-3 mb-6 sm:mb-8 animate-in relative z-20" style="animation-delay: 0.05s;">
+            <input type="hidden" name="scope" value="{{ scope }}">
+            <input type="hidden" name="status" value="{{ status_filter }}">
+            <input type="hidden" name="role" value="{{ role_filter }}">
+            <div class="flex flex-col sm:flex-row gap-2 sm:gap-2 w-full relative z-20">
+                <div class="relative w-full sm:w-auto sm:min-w-[160px] z-30" id="user-field-select-wrapper">
+                    <select name="field" id="user-field-select-native" class="sr-only" tabindex="-1" aria-hidden="true">
+                        <option value="" {% if not search_field %}selected{% endif %}>All Fields</option>
+                        <option value="name" {% if search_field == 'name' %}selected{% endif %}>Name</option>
+                        <option value="email" {% if search_field == 'email' %}selected{% endif %}>Email</option>
+                        <option value="id" {% if search_field == 'id' %}selected{% endif %}>ID Number</option>
+                        <option value="department" {% if search_field == 'department' %}selected{% endif %}>Department</option>
+                    </select>
+                    <button type="button" id="user-field-select-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="user-field-select-dropdown"
+                        class="w-full flex items-center justify-between gap-2 bg-white border border-[#e2e8f0] px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg text-sm font-medium text-slate-700 hover:border-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
+                        <span id="user-field-select-label" class="min-w-0 flex-1 truncate text-left">{% if search_field == 'name' %}Name{% elif search_field == 'email' %}Email{% elif search_field == 'id' %}ID Number{% elif search_field == 'department' %}Department{% else %}All Fields{% endif %}</span>
+                        <span class="material-symbols-outlined text-slate-400 text-[20px] shrink-0 transition-transform duration-200" id="user-field-select-arrow">expand_more</span>
+                    </button>
+                    <ul id="user-field-select-dropdown" role="listbox" tabindex="-1"
+                        class="hidden absolute z-50 top-full left-0 mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden py-1.5 text-sm">
+                        <li role="option" data-value="" tabindex="0" aria-selected="{% if not search_field %}true{% else %}false{% endif %}" class="user-field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if not search_field %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>All Fields</span>{% if not search_field %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
+                        <li role="option" data-value="name" tabindex="0" aria-selected="{% if search_field == 'name' %}true{% else %}false{% endif %}" class="user-field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if search_field == 'name' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>Name</span>{% if search_field == 'name' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
+                        <li role="option" data-value="email" tabindex="0" aria-selected="{% if search_field == 'email' %}true{% else %}false{% endif %}" class="user-field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if search_field == 'email' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>Email</span>{% if search_field == 'email' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
+                        <li role="option" data-value="id" tabindex="0" aria-selected="{% if search_field == 'id' %}true{% else %}false{% endif %}" class="user-field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if search_field == 'id' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>ID Number</span>{% if search_field == 'id' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
+                        <li role="option" data-value="department" tabindex="0" aria-selected="{% if search_field == 'department' %}true{% else %}false{% endif %}" class="user-field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if search_field == 'department' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>Department</span>{% if search_field == 'department' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
+                    </ul>
+                </div>
+                <div class="relative flex-1 w-full">
+                    <input type="text" name="q" value="{{ search_query or '' }}" class="search-input w-full text-sm" placeholder="Search users by name, email, ID, department...">
+                </div>
+                <div class="flex gap-2 shrink-0">
+                    <button type="submit" class="btn btn-primary btn-sm flex-1 sm:flex-none justify-center"><span class="material-symbols-outlined text-[18px]">search</span> Search</button>
+                    {% if search_query %}
+                    <a href="{{ url_for('auth.admin_users', scope=scope, status=status_filter, role=role_filter) }}" class="btn btn-outline btn-sm flex-1 sm:flex-none justify-center">Clear</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% if search_query %}
+            <p class="text-xs text-gray-500">Showing results for <span class="font-bold text-gray-700">&ldquo;{{ search_query }}&rdquo;</span>{% if search_field %} in <span class="font-bold text-gray-700">{{ search_field|capitalize }}</span>{% endif %}.</p>
+            {% endif %}
+        </form>
+
 
         <div class="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-2 sm:gap-4 mb-6 sm:mb-8 animate-in" style="animation-delay: 0.1s;">
-            <a href="{{ url_for('auth.admin_users', scope=scope) }}"
+            <a href="{{ url_for('auth.admin_users', scope=scope, q=search_query, field=search_field) }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if not status_filter and not role_filter %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">group</span></div>
                 <div class="min-w-0 flex-1"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider break-words leading-tight" title="Total">Total</div><div class="text-base sm:text-xl font-bold">{{ total }}</div></div>
             </a>
-            <a href="{{ url_for('auth.admin_users', scope=scope, status='active') }}"
+            <a href="{{ url_for('auth.admin_users', scope=scope, status='active', q=search_query, field=search_field) }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if status_filter == 'active' %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">verified_user</span></div>
                 <div class="min-w-0 flex-1"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider break-words leading-tight" title="Active">Active</div><div class="text-base sm:text-xl font-bold">{{ active }}</div></div>
             </a>
             {% if not is_staff_view|default(false) %}
-            <a href="{{ url_for('auth.admin_users', scope=scope, role='Student') }}"
+            <a href="{{ url_for('auth.admin_users', scope=scope, role='Student', q=search_query, field=search_field) }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if role_filter == 'Student' %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">school</span></div>
                 <div class="min-w-0 flex-1"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider break-words leading-tight" title="Students">Students</div><div class="text-base sm:text-xl font-bold">{{ students }}</div></div>
             </a>
-            <a href="{{ url_for('auth.admin_users', scope=scope, role='Faculty') }}"
+            <a href="{{ url_for('auth.admin_users', scope=scope, role='Faculty', q=search_query, field=search_field) }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if role_filter == 'Faculty' %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">person</span></div>
                 <div class="min-w-0 flex-1"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider break-words leading-tight" title="Faculty">Faculty</div><div class="text-base sm:text-xl font-bold">{{ faculty }}</div></div>
             </a>
             {% endif %}
-            <a href="{{ url_for('auth.admin_users', scope=scope, status='disabled') }}"
+            <a href="{{ url_for('auth.admin_users', scope=scope, status='disabled', q=search_query, field=search_field) }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if status_filter == 'disabled' %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">person_off</span></div>
                 <div class="min-w-0 flex-1"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider break-words leading-tight" title="Inactive">Inactive</div><div class="text-base sm:text-xl font-bold">{{ inactive }}</div></div>
             </a>
-            <a href="{{ url_for('auth.admin_users', scope=scope, status='archived') }}"
+            <a href="{{ url_for('auth.admin_users', scope=scope, status='archived', q=search_query, field=search_field) }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if status_filter == 'archived' %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">archive</span></div>
                 <div class="min-w-0 flex-1"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider break-words leading-tight" title="Archived">Archived</div><div class="text-base sm:text-xl font-bold">{{ archived }}</div></div>
             </a>
-            <a href="{{ url_for('auth.admin_users', scope=scope, status='pending') }}"
+            <a href="{{ url_for('auth.admin_users', scope=scope, status='pending', q=search_query, field=search_field) }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if status_filter == 'pending' %}ring-2 ring-primary{% endif %}">
                 <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[18px] sm:text-[24px]">pending_actions</span></div>
                 <div class="min-w-0 flex-1"><div class="text-[11px] sm:text-sm text-gray-400 font-bold uppercase tracking-wider break-words leading-tight" title="Pending">Pending</div><div class="text-base sm:text-xl font-bold">{{ pending|length }}</div></div>
@@ -445,23 +506,23 @@
         <!-- Users Table -->
         <div class="card animate-in overflow-hidden" style="animation-delay: 0.2s;">
             <div class="p-3 sm:p-4 border-b border-gray-100 flex items-center gap-1.5 sm:gap-2 bg-gray-50/20 overflow-x-auto">
-                <a href="{{ url_for('auth.admin_users', scope=scope) }}"
+                <a href="{{ url_for('auth.admin_users', scope=scope, q=search_query, field=search_field) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if not status_filter and not role_filter %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     All
                 </a>{% if role_filter %}<span class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md whitespace-nowrap bg-primary text-white">{{ role_filter }}s</span>{% endif %}
-                <a href="{{ url_for('auth.admin_users', scope=scope, status='active') }}"
+                <a href="{{ url_for('auth.admin_users', scope=scope, status='active', q=search_query, field=search_field) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if status_filter == 'active' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Active
                 </a>
-                <a href="{{ url_for('auth.admin_users', scope=scope, status='disabled') }}"
+                <a href="{{ url_for('auth.admin_users', scope=scope, status='disabled', q=search_query, field=search_field) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if status_filter == 'disabled' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Inactive
                 </a>
-                <a href="{{ url_for('auth.admin_users', scope=scope, status='pending') }}"
+                <a href="{{ url_for('auth.admin_users', scope=scope, status='pending', q=search_query, field=search_field) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if status_filter == 'pending' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Pending
                 </a>
-                <a href="{{ url_for('auth.admin_users', scope=scope, status='archived') }}"
+                <a href="{{ url_for('auth.admin_users', scope=scope, status='archived', q=search_query, field=search_field) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if status_filter == 'archived' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Archived
                 </a>
@@ -583,6 +644,16 @@
                                 </div>
                             </td>
                         </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center py-16 text-gray-400">
+                                <div class="flex flex-col items-center gap-2">
+                                    <span class="material-symbols-outlined text-4xl">search_off</span>
+                                    <span class="font-medium">No users found</span>
+                                    <span class="text-sm">Try adjusting your search or filters.</span>
+                                </div>
+                            </td>
+                        </tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -643,19 +714,27 @@
                     </form>
                     {% endif %}
                 </div>
+                {% else %}
+                <div class="p-8 text-center text-gray-400">
+                    <div class="flex flex-col items-center gap-2">
+                        <span class="material-symbols-outlined text-3xl">search_off</span>
+                        <span class="font-medium text-sm">No users found</span>
+                        <span class="text-xs">Try adjusting your search or filters.</span>
+                    </div>
+                </div>
                 {% endfor %}
             </div>
         </div>
         {% if total_pages > 1 %}
         <div class="flex items-center justify-center gap-2 mb-6 flex-wrap">
-            <a href="{{ url_for('auth.admin_users', scope=scope, status=status_filter, role=role_filter, page=current_page - 1) if current_page > 1 else '#' }}"
+            <a href="{{ url_for('auth.admin_users', scope=scope, status=status_filter, role=role_filter, q=search_query, field=search_field, page=current_page - 1) if current_page > 1 else '#' }}"
                class="px-4 py-2 rounded-lg text-sm font-bold border border-gray-200 {% if current_page <= 1 %}text-gray-300 pointer-events-none{% else %}text-gray-700 hover:bg-gray-50{% endif %}">
                 Previous
             </a>
             <span class="text-sm text-gray-500 px-2">
                 Page {{ current_page }} of {{ total_pages }}
             </span>
-            <a href="{{ url_for('auth.admin_users', scope=scope, status=status_filter, role=role_filter, page=current_page + 1) if current_page < total_pages else '#' }}"
+            <a href="{{ url_for('auth.admin_users', scope=scope, status=status_filter, role=role_filter, q=search_query, field=search_field, page=current_page + 1) if current_page < total_pages else '#' }}"
                class="px-4 py-2 rounded-lg text-sm font-bold border border-gray-200 {% if current_page >= total_pages %}text-gray-300 pointer-events-none{% else %}text-gray-700 hover:bg-gray-50{% endif %}">
                 Next
             </a>
@@ -726,15 +805,15 @@
                 <span class="material-symbols-outlined">close</span>
             </button>
         </div>
-        <p class="text-sm text-gray-500 mb-4">Choose a file format. Current filter: <span class="font-bold text-gray-700">{{ 'All' if not status_filter else ('Inactive' if status_filter == 'disabled' else status_filter|capitalize) }}{{ (' · ' + role_filter + 's') if role_filter else '' }}{{ (' · ' + scope|capitalize) if scope else '' }}</span> — export respects the active tab.</p>
+        <p class="text-sm text-gray-500 mb-4">Choose a file format. Current filter: <span class="font-bold text-gray-700">{{ 'All' if not status_filter else ('Inactive' if status_filter == 'disabled' else status_filter|capitalize) }}{{ (' · ' + role_filter + 's') if role_filter else '' }}{{ (' · ' + scope|capitalize) if scope else '' }}{{ (' · “' + search_query + '”') if search_query else '' }}</span> — export respects the active tab and search.</p>
         <div class="grid grid-cols-2 gap-3">
-            <a href="{{ url_for('auth.export_users', status=status_filter, role=role_filter, scope=scope, format='csv') }}"
+            <a href="{{ url_for('auth.export_users', status=status_filter, role=role_filter, scope=scope, q=search_query, field=search_field, format='csv') }}"
                class="flex flex-col items-center gap-1.5 p-4 border border-gray-200 rounded-xl hover:border-primary hover:bg-primary/5 transition-all text-center">
                 <span class="material-symbols-outlined text-3xl text-emerald-600">table_rows</span>
                 <span class="text-sm font-bold">CSV</span>
                 <span class="text-[11px] text-gray-400">Spreadsheet</span>
             </a>
-            <a href="{{ url_for('auth.export_users', status=status_filter, role=role_filter, scope=scope, format='xlsx') }}"
+            <a href="{{ url_for('auth.export_users', status=status_filter, role=role_filter, scope=scope, q=search_query, field=search_field, format='xlsx') }}"
                class="flex flex-col items-center gap-1.5 p-4 border border-gray-200 rounded-xl hover:border-primary hover:bg-primary/5 transition-all text-center">
                 <span class="material-symbols-outlined text-3xl text-primary">grid_on</span>
                 <span class="text-sm font-bold">XLSX</span>
@@ -913,6 +992,52 @@ if (_editModal) { _editModal.addEventListener('click', function(e) {
             if (dropdown && !wrapper.contains(e.target)) { dropdown.classList.add('hidden'); if (btn) btn.setAttribute('aria-expanded','false'); if (arrow) arrow.style.transform=''; }
         });
     });
+})();
+</script>
+<script>
+// User search field select — mirrors cataloging field picker
+(function() {
+    var btn = document.getElementById('user-field-select-btn');
+    var dropdown = document.getElementById('user-field-select-dropdown');
+    var label = document.getElementById('user-field-select-label');
+    var arrow = document.getElementById('user-field-select-arrow');
+    var native = document.getElementById('user-field-select-native');
+    var wrapper = document.getElementById('user-field-select-wrapper');
+    if (!btn || !dropdown || !native) return;
+    function setExpanded(expanded) { btn.setAttribute('aria-expanded', expanded ? 'true' : 'false'); dropdown.classList.toggle('hidden', !expanded); if (arrow) arrow.style.transform = expanded ? 'rotate(180deg)' : ''; }
+    function isOpen() { return !dropdown.classList.contains('hidden'); }
+    function paint(value) {
+        if (label) {
+            var current = dropdown.querySelector('[data-value="' + value + '"] span');
+            if (current) label.textContent = current.textContent.trim();
+        }
+        dropdown.querySelectorAll('[role="option"]').forEach(function(opt) {
+            var isSel = opt.getAttribute('data-value') === value;
+            opt.setAttribute('aria-selected', isSel ? 'true' : 'false');
+            opt.classList.toggle('bg-primary/10', isSel);
+            opt.classList.toggle('text-primary', isSel);
+            opt.classList.toggle('font-semibold', isSel);
+            var check = opt.querySelector('.material-symbols-outlined');
+            if (isSel) {
+                if (!check) { var c = document.createElement('span'); c.className = 'material-symbols-outlined text-[18px] text-primary'; c.textContent = 'check'; opt.appendChild(c); }
+            } else { if (check) check.remove(); }
+        });
+    }
+    btn.addEventListener('click', function(e) { e.stopPropagation(); setExpanded(!isOpen()); });
+    dropdown.querySelectorAll('[role="option"]').forEach(function(opt) {
+        opt.addEventListener('click', function() { native.value = opt.getAttribute('data-value'); paint(native.value); });
+        opt.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); opt.click(); }
+            else if (e.key === 'ArrowDown') { e.preventDefault(); var n = opt.nextElementSibling; if (n) n.focus(); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); var p = opt.previousElementSibling; if (p) p.focus(); else btn.focus(); }
+            else if (e.key === 'Escape') { setExpanded(false); btn.focus(); }
+        });
+    });
+    btn.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!isOpen()) setExpanded(true); var f = dropdown.querySelector('[role="option"]'); if (f) f.focus(); }
+        else if (e.key === 'Escape' && isOpen()) setExpanded(false);
+    });
+    document.addEventListener('click', function(e) { if (isOpen() && wrapper && !wrapper.contains(e.target)) setExpanded(false); });
 })();
 </script>
 

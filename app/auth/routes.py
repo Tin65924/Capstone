@@ -446,6 +446,10 @@ def admin_users():
     pending = get_pending_users() or []
     status_filter = request.args.get('status', '')
     role_filter = request.args.get('role', '')
+    search_query = (request.args.get('q', '') or '').strip()
+    search_field = (request.args.get('field', '') or '').strip().lower()
+    if search_field not in ('', 'name', 'email', 'id', 'department'):
+        search_field = ''
     scope = (request.args.get('scope', '') or '').strip().lower()
     if scope not in ('', 'staff', 'members', 'all'):
         scope = ''
@@ -478,6 +482,36 @@ def admin_users():
     faculty = sum(1 for u in users if u[3] == 'Faculty')
     inactive = sum(1 for u in users if u[4] == 'disabled')
     archived = sum(1 for u in users if u[4] == 'archived')
+    # Cataloging-style text search (q + field). Applied after KPI counts
+    # so the cards stay scope-wide, like the status/role filters.
+    # users rows: (id, email, full_name, role, status, created, id_number, dept)
+    # pending rows: (id, email, full_name, role, created, id_number, dept)
+    if search_query:
+        _q = search_query.lower()
+
+        def _user_targets(u):
+            return {
+                'name': str(u[2] or '').lower(),
+                'email': str(u[1] or '').lower(),
+                'id': str(u[6] or '').lower(),
+                'department': str(u[7] or '').lower(),
+            }
+
+        def _pending_targets(p):
+            return {
+                'name': str(p[2] or '').lower(),
+                'email': str(p[1] or '').lower(),
+                'id': str(p[5] or '').lower(),
+                'department': str(p[6] or '').lower(),
+            }
+
+        def _matches(targets):
+            if search_field:
+                return _q in targets.get(search_field, '')
+            return any(_q in v for v in targets.values())
+
+        users = [u for u in users if _matches(_user_targets(u))]
+        pending = [p for p in pending if _matches(_pending_targets(p))]
     if status_filter:
         users = [u for u in users if u[4] == status_filter]
     if role_filter:
@@ -526,9 +560,11 @@ def admin_users():
                                active=active, students=students,
                                faculty=faculty,
                                inactive=inactive, archived=archived,
-                           status_filter=status_filter,
-                           role_filter=role_filter,
-                           scope=scope,
+                            status_filter=status_filter,
+                            role_filter=role_filter,
+                            search_query=search_query,
+                            search_field=search_field,
+                            scope=scope,
                            current_page=page,
                            total_pages=total_pages,
                            is_staff_view=(scope == 'staff'),
@@ -690,6 +726,20 @@ def export_users():
     role = request.args.get('role', '').strip()
     if role:
         users = [u for u in users if u[_USER_COL['role']] == role]
+    search_query = (request.args.get('q', '') or '').strip().lower()
+    search_field = (request.args.get('field', '') or '').strip().lower()
+    if search_field not in ('', 'name', 'email', 'id', 'department'):
+        search_field = ''
+    if search_query:
+        _col = {'name': _USER_COL['full_name'], 'email': _USER_COL['email'],
+                'id': _USER_COL['id_number'], 'department': _USER_COL['dept']}
+
+        def _export_match(u):
+            if search_field:
+                return search_query in str(u[_col[search_field]] or '').lower()
+            return any(search_query in str(u[c] or '').lower() for c in _col.values())
+
+        users = [u for u in users if _export_match(u)]
 
     rows = [_user_row_to_export(u) for u in users]
     stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
