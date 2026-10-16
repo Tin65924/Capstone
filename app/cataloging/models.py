@@ -30,6 +30,72 @@ def is_valid_isbn13(code):
     return total % 10 == 0
 
 
+def clean_ebook_url(value):
+    """Trimmed e-book link, or None when blank."""
+    value = (value or '').strip()
+    return value or None
+
+
+def validate_ebook_url(value, material_type):
+    """Validate an e-book link, returning (cleaned, error).
+
+    Blank is allowed except for E-Book titles, which need their access
+    link. Non-blank values must be http(s) URLs within the column
+    width. Used by the book form and bulk import alike.
+    """
+    cleaned = clean_ebook_url(value)
+    if not cleaned:
+        if (material_type or '').strip() == 'E-Book':
+            return None, 'E-Book link is required for E-Book.'
+        return None, None
+    if len(cleaned) > 500:
+        return None, 'E-Book link is too long (max 500 characters).'
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(cleaned)
+    except Exception:
+        return None, 'E-Book link must be a valid http(s) URL.'
+    if parsed.scheme not in ('http', 'https') or not parsed.hostname:
+        return None, 'E-Book link must be a valid http(s) URL.'
+    return cleaned, None
+
+
+def ebook_link_info(url):
+    """Classify an e-book link for access buttons.
+
+    Returns (kind, file_id): kind 'drive' with the Drive file id when
+    the URL points at a previewable Drive file (/file/d/<id>, open?id=,
+    uc?id=); kind 'external' for anything else linkable (including
+    Drive folders, which cannot file-preview); (None, None) when blank.
+    Only Google Drive file links support embedded preview — publisher
+    and other links open in a new tab instead.
+    """
+    url = (url or '').strip()
+    if not url:
+        return None, None
+    try:
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(url)
+        host = (parsed.hostname or '').lower()
+        if 'drive.google.com' in host:
+            import re
+            match = re.search(r'/file/d/([-\w]+)', parsed.path)
+            if match:
+                return 'drive', match.group(1)
+            query_id = parse_qs(parsed.query).get('id', [None])[0]
+            if query_id and '/folders/' not in parsed.path:
+                return 'drive', query_id
+            return 'external', None
+        return 'external', None
+    except Exception:
+        return 'external', None
+
+
+def drive_preview_url(file_id):
+    """Embeddable preview URL for a Drive file id."""
+    return 'https://drive.google.com/file/d/%s/preview' % file_id
+
+
 def _isbn_search_text(value):
     """Strip hyphens/spaces from a search term for the ISBN column.
 
@@ -103,7 +169,8 @@ def multi_cat_available():
 
 
 def create_book(title, author, edition, publisher, year_published, subject_classification,
-                call_number, isbn, material_type, description, category_id=None):
+                call_number, isbn, material_type, description, category_id=None,
+                ebook_url=None):
     """Insert a new book title into the catalog as active and return its id.
 
     Creates one row in book_catalog with catalog_status='active' holding
@@ -124,6 +191,7 @@ def create_book(title, author, edition, publisher, year_published, subject_class
         description: Summary/blurb, or None.
         category_id: FK into categories, or None to auto-resolve from
             subject_classification (case-insensitive match or create).
+        ebook_url: E-book access link (Drive/publisher), or None.
 
     Returns:
         New book_id integer, or None if the INSERT returned nothing.
@@ -131,13 +199,14 @@ def create_book(title, author, edition, publisher, year_published, subject_class
     if category_id is None:
         category_id, _ = resolve_category(subject_classification)
     isbn = normalize_isbn(isbn) or None
+    ebook_url = clean_ebook_url(ebook_url)
     rows = db.execute(
         '''INSERT INTO book_catalog (title, author, edition, publisher, year_published,
-           subject_classification, call_number, isbn, material_type, description, catalog_status, category_id)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+           subject_classification, call_number, isbn, material_type, description, catalog_status, category_id, ebook_url)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
            RETURNING book_id''',
         (title, author, edition, publisher, year_published, subject_classification,
-         call_number, isbn, material_type, description, 'active', category_id)
+         call_number, isbn, material_type, description, 'active', category_id, ebook_url)
     )
     return rows[0][0] if rows else None
 
@@ -340,7 +409,7 @@ def get_all_books():
     """
     extra = f', {EXTRA_CATEGORIES_SUBQUERY} AS extra_categories' if multi_cat_available() else ''
     return db.fetch_all(
-        f"SELECT DISTINCT ON ({DISTINCT_ORDER}) *,{extra} {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog WHERE catalog_status = 'active' ORDER BY {DISTINCT_ORDER}")
+        f"SELECT DISTINCT ON ({DISTINCT_ORDER}) *{extra}, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog WHERE catalog_status = 'active' ORDER BY {DISTINCT_ORDER}")
 
 
 def _count_books(where, args):
@@ -875,29 +944,26 @@ def get_recent_books(limit=5):
     )
 
 
-def create_accession(accession_number, book_id, librarian_id, source=None,
-                     shelf_location=None):
+def create_accession(accession_number, book_id, librarian_id, source=None):
     """Add one physical copy of a book to the accession log.
 
     Inserts into accession_log linking the copy (accession_number, which
     must be unique) to its title and the processing librarian. Source
-    records acquisition origin ('purchase', 'donation', 'others');
-    shelf_location records where staff expect to find it (e.g. '2F-A3').
+    records acquisition origin ('purchase', 'donation', 'others').
 
     Args:
         accession_number: Unique copy barcode/number string.
         book_id: FK into book_catalog for the title.
         librarian_id: Acting staff user_id recorded as processor.
         source: Acquisition source label, or None.
-        shelf_location: Shelf locator string, or None.
 
     Returns:
         Rowcount from the INSERT.
     """
     return db.execute(
-        '''INSERT INTO accession_log (accession_number, book_id, librarian_id, source, shelf_location)
-           VALUES (%s, %s, %s, %s, %s)''',
-        (accession_number, book_id, librarian_id, source, shelf_location)
+        '''INSERT INTO accession_log (accession_number, book_id, librarian_id, source)
+           VALUES (%s, %s, %s, %s)''',
+        (accession_number, book_id, librarian_id, source)
     )
 
 
@@ -960,57 +1026,43 @@ def get_accessions_for_books(book_ids):
     """Batch-fetch copy rows for many titles for list-page rendering.
 
     Avoids N+1 queries on catalog tables by pulling (accession_id,
-    accession_number, book_id, source, date_accessioned, shelf_location)
-    for all given titles in one ANY(%s) query, ordered by accession_id.
-    Empty input short-circuits to [] without hitting the DB.
+    accession_number, book_id, source, date_accessioned) for all given
+    titles in one ANY(%s) query, ordered by accession_id. Empty input
+    short-circuits to [] without hitting the DB.
 
     Args:
         book_ids: Iterable of book_catalog primary keys.
 
     Returns:
-        List of 6-tuple copy rows (possibly empty).
+        List of 5-tuple copy rows (possibly empty).
     """
     if not book_ids:
         return []
-    try:
-        return db.fetch_all(
-            'SELECT accession_id, accession_number, book_id, source, date_accessioned, shelf_location '
-            'FROM accession_log WHERE book_id = ANY(%s) ORDER BY accession_id',
-            (book_ids,)
-        ) or []
-    except Exception as e:
-        if not _is_missing_relation(e):
-            raise
-        # Unmigrated database (no shelf_location yet): serve the legacy
-        # 5-tuple shape so list pages render; templates guard index 5.
-        _warn_schema_mismatch('accession_log.shelf_location')
-        return db.fetch_all(
-            'SELECT accession_id, accession_number, book_id, source, date_accessioned '
-            'FROM accession_log WHERE book_id = ANY(%s) ORDER BY accession_id',
-            (book_ids,)
-        ) or []
+    return db.fetch_all(
+        'SELECT accession_id, accession_number, book_id, source, date_accessioned '
+        'FROM accession_log WHERE book_id = ANY(%s) ORDER BY accession_id',
+        (book_ids,)
+    ) or []
 
 
-def update_accession(accession_id, accession_number, source,
-                     shelf_location=None, updated_by=None):
-    """Edit a copy's barcode number, acquisition source, and shelf.
+def update_accession(accession_id, accession_number, source, updated_by=None):
+    """Edit a copy's barcode number and acquisition source.
 
     Updates accession_number (must stay unique — callers pre-check),
-    source, shelf_location, and audit stamps for one accession_log row.
+    source, and audit stamps for one accession_log row.
 
     Args:
         accession_id: Target copy's primary key.
         accession_number: New unique barcode string.
         source: New source label ('purchase', 'donation', 'others').
-        shelf_location: New shelf locator string, or None.
         updated_by: Acting staff user_id for the audit stamp.
 
     Returns:
         Rowcount from the UPDATE.
     """
     return db.execute(
-        'UPDATE accession_log SET accession_number=%s, source=%s, shelf_location=%s, updated_at=NOW(), updated_by=%s WHERE accession_id=%s',
-        (accession_number, source, shelf_location, updated_by, accession_id)
+        'UPDATE accession_log SET accession_number=%s, source=%s, updated_at=NOW(), updated_by=%s WHERE accession_id=%s',
+        (accession_number, source, updated_by, accession_id)
     )
 
 
@@ -1109,7 +1161,7 @@ def get_user_favorites(user_id):
 
 def update_book(book_id, title, author, edition, publisher, year_published,
                 subject_classification, call_number, isbn, material_type, description,
-                updated_by=None, category_id=None):
+                updated_by=None, category_id=None, ebook_url=None):
     """Overwrite a title's bibliographic metadata plus audit stamps.
 
     Updates all editable book_catalog columns for one book_id and
@@ -1132,15 +1184,16 @@ def update_book(book_id, title, author, edition, publisher, year_published,
     if category_id is None:
         category_id, _ = resolve_category(subject_classification)
     isbn = normalize_isbn(isbn) or None
+    ebook_url = clean_ebook_url(ebook_url)
     return db.execute(
         '''UPDATE book_catalog SET title=%s, author=%s, edition=%s, publisher=%s,
            year_published=%s, subject_classification=%s, call_number=%s,
-           isbn=%s, material_type=%s, description=%s, category_id=%s,
+           isbn=%s, material_type=%s, description=%s, category_id=%s, ebook_url=%s,
            updated_at=NOW(), updated_by=%s
            WHERE book_id=%s''',
         (title, author, edition, publisher, year_published,
          subject_classification, call_number, isbn, material_type, description,
-         category_id, updated_by, book_id)
+         category_id, ebook_url, updated_by, book_id)
     )
 
 
@@ -1162,7 +1215,7 @@ def get_books_by_status(status):
     """
     extra = f', {EXTRA_CATEGORIES_SUBQUERY} AS extra_categories' if multi_cat_available() else ''
     return db.fetch_all(
-        f'SELECT *,{extra} {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog WHERE catalog_status = %s ORDER BY title',
+        f'SELECT *{extra}, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog WHERE catalog_status = %s ORDER BY title',
         (status,)
     )
 

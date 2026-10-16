@@ -304,6 +304,10 @@ CREATE TABLE IF NOT EXISTS book_categories (
 -- they stay searchable, editable, and borrowable. Idempotent.
 UPDATE book_catalog SET material_type = 'Book' WHERE material_type = 'Multimedia';
 
+-- E-book access link (Google Drive / publisher URL). Nullable: only
+-- meaningful for E-Book titles, shown as Read/Preview actions.
+ALTER TABLE book_catalog ADD COLUMN IF NOT EXISTS ebook_url VARCHAR(500);
+
 -- Controlled vocabulary for borrower programs (students) and departments
 -- (faculty). Registration, profile, and user-management forms only accept
 -- values from this table; borrowers.department stores the canonical name.
@@ -336,9 +340,6 @@ ALTER TABLE book_catalog ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
 ALTER TABLE book_catalog ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
 ALTER TABLE accession_log ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
 ALTER TABLE accession_log ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
--- Shelf location per physical copy (e.g. '2F-A3'). Nullable: older copies
--- simply show no shelf until edited.
-ALTER TABLE accession_log ADD COLUMN IF NOT EXISTS shelf_location VARCHAR(50);
 ALTER TABLE request_records ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
 ALTER TABLE request_records ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
 ALTER TABLE procurement_log ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;

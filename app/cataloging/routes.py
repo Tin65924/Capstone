@@ -21,7 +21,7 @@ from app.cataloging.models import (
     get_book_by_title_author_isbn, search_books_paginated,
     get_categories, get_categories_for_books, get_book_categories,
     resolve_category, set_book_categories, normalize_isbn,
-    is_valid_isbn10, is_valid_isbn13
+    is_valid_isbn10, is_valid_isbn13, validate_ebook_url
 )
 from app.auth.models import log_activity
 from app.bloom_registry import bloom_registry
@@ -49,8 +49,7 @@ HEADER_MAP = {
     'accession number': 'accession_number', 'accession_number': 'accession_number',
     'accession': 'accession_number', 'accession no': 'accession_number',
     'source': 'source', 'acquisition source': 'source', 'acquisition_source': 'source',
-    'shelf location': 'shelf_location', 'shelf_location': 'shelf_location',
-    'shelf': 'shelf_location', 'location': 'shelf_location',
+    'ebook url': 'ebook_url', 'ebook_url': 'ebook_url', 'ebook link': 'ebook_url',
 }
 
 
@@ -231,6 +230,10 @@ def _validate_book_form(form):
             value = 'Advertisement'
         cleaned[field] = value
     cleaned['material_type'] = material_type
+    ebook_url, url_err = validate_ebook_url(form.get('ebook_url', ''), material_type)
+    if url_err:
+        return url_err, {}
+    cleaned['ebook_url'] = ebook_url
     isbn_err = _validate_isbn_issn(cleaned.get('isbn') or '', material_type)
     if isbn_err:
         try:
@@ -319,21 +322,6 @@ def _pop_stashed_book_form():
         return data if isinstance(data, dict) else {}
     except Exception:
         return {}
-
-
-def _clean_shelf_location(form):
-    """Error message + value for an optional shelf locator, (None, None) when blank.
-
-    Shelf locations are short staff labels (e.g. '2F-A3', max 50 chars
-    mirroring the VARCHAR width) shown on copy rows so borrowers know
-    where to find the copy.
-    """
-    shelf = (form.get('shelf_location', '') or '').strip()
-    if not shelf:
-        return None, None
-    if len(shelf) > 50:
-        return None, 'Shelf location is too long (max 50 characters).'
-    return shelf, None
 
 
 @cataloging_bp.route('/librarian/cataloging')
@@ -466,7 +454,7 @@ def cataloging_page():
 _BOOK_EXPORT_HEADERS = [
     'Book ID', 'Title', 'Author', 'Edition', 'Publisher', 'Year Published',
     'Subject Classification', 'Call Number', 'ISBN', 'Material Type',
-    'Description', 'Status', 'Date Added', 'Other Categories', 'Accession Numbers',
+    'Description', 'Status', 'Date Added', 'E-Book Link', 'Other Categories', 'Accession Numbers',
 ]
 
 
@@ -486,14 +474,15 @@ _BOOK_COL = {
 
 
 def _book_row_to_export(row):
-    """Convert a catalog book tuple into a 15-column export row.
+    """Convert a catalog book tuple into a 16-column export row.
     Maps positional cols (0 book_id through 12 date_added) plus trailing
-    extra_categories/accession_numbers into strings, formatting date_added
-    via isoformat when possible. Tolerates short mock rows without raising.
+    ebook link, extra_categories and accession_numbers into strings,
+    formatting date_added via isoformat when possible. Tolerates short
+    mock rows without raising.
     Args:
         row: Positional book tuple from the catalog queries.
     Returns:
-        List of 15 export-ready strings matching _BOOK_EXPORT_HEADERS.
+        List of 16 export-ready strings matching _BOOK_EXPORT_HEADERS.
     """
     def _str(v):
         """Coerce one book export cell to string, mapping None to blank.
@@ -509,10 +498,12 @@ def _book_row_to_export(row):
         """
         return '' if v is None else str(v)
     # accession_numbers is appended last by the catalog queries; date_added at 12.
-    # extra_categories sits second-to-last on full-shaped rows only.
+    # extra_categories sits second-to-last and ebook_url at book index 16 on
+    # full-shaped rows only.
     date_added = row[_BOOK_COL['date_added']] if len(row) > _BOOK_COL['date_added'] else ''
     acc = row[_BOOK_COL['accessions']] if len(row) > 0 else ''
     extra = row[-2] if len(row) > 16 else ''
+    ebook_link = row[16] if len(row) > 17 else ''
     return [
         _str(row[_BOOK_COL['book_id']] if len(row) > _BOOK_COL['book_id'] else ''),
         _str(row[_BOOK_COL['title']] if len(row) > _BOOK_COL['title'] else ''),
@@ -527,6 +518,7 @@ def _book_row_to_export(row):
         _str(row[_BOOK_COL['description']] if len(row) > _BOOK_COL['description'] else ''),
         _str(row[_BOOK_COL['status']] if len(row) > _BOOK_COL['status'] else ''),
         date_added.isoformat() if hasattr(date_added, 'isoformat') else _str(date_added),
+        _str(ebook_link),
         _str(extra),
         _str(acc),
     ]
@@ -574,7 +566,7 @@ def _style_xlsx_sheet(ws, headers):
     ws.freeze_panes = 'A2'
     ws.auto_filter.ref = ws.dimensions
     # widths tuned for content
-    widths = [8, 30, 22, 10, 18, 10, 22, 14, 14, 12, 32, 10, 12, 24, 24]
+    widths = [8, 30, 22, 10, 18, 10, 22, 14, 14, 12, 32, 10, 12, 30, 24, 24]
     for i, w in enumerate(widths, 1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
 
@@ -698,17 +690,12 @@ def add_book():
     isbn = fields['isbn']
     existing_book = get_book_by_title_author_isbn(title, author, isbn)
     source = request.form.get('source', '').strip() or None
-    shelf_location, shelf_error = _clean_shelf_location(request.form)
-    if shelf_error:
-        flash(shelf_error, 'error')
-        _stash_book_form('addBookModal')
-        return redirect(url_for('cataloging.cataloging_page', modal='addBookModal', mstatus='error'))
     category_id, canonical_subject = resolve_category(fields['subject_classification'])
     fields['subject_classification'] = canonical_subject or fields['subject_classification']
     if existing_book:
         book_id = existing_book[0]
         if accession_number:
-            create_accession(accession_number, book_id, current_user.id, source, shelf_location)
+            create_accession(accession_number, book_id, current_user.id, source)
             log_activity(current_user.id, f'cataloging:add_copy:{book_id}')
             flash(f'"{title}" already exists; accession {accession_number} added as another copy.', 'success')
         else:
@@ -728,6 +715,7 @@ def add_book():
         material_type=fields['material_type'],
         description=request.form.get('description', '').strip() or None,
         category_id=category_id,
+        ebook_url=fields['ebook_url'],
     )
     bloom_registry.mark_dirty()
     if accession_number:
@@ -736,7 +724,6 @@ def add_book():
             book_id=book_id,
             librarian_id=current_user.id,
             source=source,
-            shelf_location=shelf_location,
         )
     try:
         set_book_categories(book_id, request.form.getlist('extra_categories'))
@@ -791,6 +778,7 @@ def edit_book(book_id):
         description=request.form.get('description', '').strip() or None,
         updated_by=current_user.id,
         category_id=category_id,
+        ebook_url=fields['ebook_url'],
     )
     bloom_registry.mark_dirty()
     try:
@@ -895,12 +883,6 @@ def add_accession(book_id):
 
     accession_number = request.form.get('accession_number', '').strip()
     source = request.form.get('source', '').strip() or None
-    shelf_location, shelf_error = _clean_shelf_location(request.form)
-    if shelf_error:
-        flash(shelf_error, 'error')
-        return redirect(url_for('cataloging.cataloging_page', modal='addAccessionModal',
-                                action=url_for('cataloging.add_accession', book_id=book_id),
-                                mstatus='error'))
 
     acc_error = _validate_accession_number(accession_number)
     if acc_error:
@@ -916,7 +898,7 @@ def add_accession(book_id):
                                 action=url_for('cataloging.add_accession', book_id=book_id),
                                 mstatus='error'))
 
-    create_accession(accession_number, book_id, current_user.id, source, shelf_location)
+    create_accession(accession_number, book_id, current_user.id, source)
     log_activity(current_user.id, f'cataloging:add_accession:{book_id}')
     flash(f'Accession {accession_number} added.', 'success')
     return redirect(url_for('cataloging.cataloging_page', modal='addAccessionModal',
@@ -945,10 +927,6 @@ def edit_accession(accession_id):
 
     accession_number = request.form.get('accession_number', '').strip()
     source = request.form.get('source', '').strip() or None
-    shelf_location, shelf_error = _clean_shelf_location(request.form)
-    if shelf_error:
-        flash(shelf_error, 'error')
-        return redirect(url_for('cataloging.cataloging_page', modal='editAccessionModal', mstatus='error'))
 
     acc_error = _validate_accession_number(accession_number)
     if acc_error:
@@ -960,7 +938,7 @@ def edit_accession(accession_id):
         flash(f'Accession number {accession_number} already exists.', 'error')
         return redirect(url_for('cataloging.cataloging_page', modal='editAccessionModal', mstatus='error'))
 
-    update_accession(accession_id, accession_number, source, shelf_location, updated_by=current_user.id)
+    update_accession(accession_id, accession_number, source, updated_by=current_user.id)
     log_activity(current_user.id, f'cataloging:edit_accession:{accession_id}')
     flash(f'Accession {accession_number} updated.', 'success')
     return redirect(url_for('cataloging.cataloging_page', modal='editAccessionModal', mstatus='success'))
@@ -1226,6 +1204,15 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                     raw_subjects = [s for s in raw_subjects if s]
                     primary_raw = raw_subjects[0] if raw_subjects else None
                     subject_id, subject_canonical = resolve_category(primary_raw)
+                    row_material = book_data.get('material_type', 'Book') or 'Book'
+                    row_ebook_url, url_err = validate_ebook_url(
+                        book_data.get('ebook_url', ''), row_material)
+                    if url_err:
+                        errors.append(f'Row {i}: {url_err}')
+                        with _import_lock:
+                            _import_jobs[job_id]['done'] = imported + len(errors)
+                            _import_jobs[job_id]['updated_at'] = datetime.now()
+                        continue
                     book_id = create_book(
                         title=title,
                         author=author,
@@ -1235,9 +1222,10 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                         subject_classification=subject_canonical or primary_raw,
                         call_number=book_data.get('call_number') or None,
                         isbn=isbn or None,
-                        material_type=book_data.get('material_type', 'Book') or 'Book',
+                        material_type=row_material,
                         description=book_data.get('description') or None,
                         category_id=subject_id,
+                        ebook_url=row_ebook_url,
                     )
                     if book_id is None:
                         errors.append(f'Row {i}: could not create book record')
@@ -1265,19 +1253,11 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                     source = source.lower()
                     if source not in ('purchase', 'donation', 'others'):
                         source = None
-                shelf_location = (book_data.get('shelf_location', '') or '').strip() or None
-                if shelf_location and len(shelf_location) > 50:
-                    errors.append(f'Row {i}: shelf location too long (max 50 characters)')
-                    with _import_lock:
-                        _import_jobs[job_id]['done'] = imported + len(errors)
-                        _import_jobs[job_id]['updated_at'] = datetime.now()
-                    continue
                 create_accession(
                     accession_number=accession_number,
                     book_id=book_id,
                     librarian_id=user_id,
                     source=source,
-                    shelf_location=shelf_location,
                 )
                 imported += 1
             except Exception as e:
@@ -1483,7 +1463,13 @@ def book_info(book_id):
         extra_categories = get_book_categories(book_id)
     except Exception:
         extra_categories = []
+    from app.cataloging.models import ebook_link_info, drive_preview_url
+    _ebook_url = book[16] if len(book) > 16 else None
+    _ebook_kind, _ebook_file = ebook_link_info(_ebook_url)
     return render_template('public/bookinfo.html', book=book,
                            accessions=accessions_with_status, any_available=any_available,
                            borrower_map=borrower_map, user_data=user_data,
-                           extra_categories=extra_categories)
+                           extra_categories=extra_categories,
+                           ebook_url=_ebook_url or '',
+                           ebook_kind=_ebook_kind or '',
+                           ebook_preview=drive_preview_url(_ebook_file) if _ebook_file else '')

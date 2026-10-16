@@ -166,6 +166,21 @@
                     <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[7] or '—' }}</p>
                 </div>
             </div>
+            {% if ebook_url %}
+            <div class="mt-8">
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Online Access</h3>
+                {% if ebook_kind == 'drive' and ebook_preview %}
+                <div class="rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <iframe src="{{ ebook_preview }}" class="w-full" height="600" loading="lazy" title="E-book preview"></iframe>
+                </div>
+                <a href="{{ ebook_url }}" target="_blank" rel="noopener"
+                    class="mt-3 inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-primary text-primary text-sm font-bold hover:bg-primary/5 transition-colors">Open in Google Drive <span class="material-symbols-outlined text-[18px]">open_in_new</span></a>
+                {% else %}
+                <a href="{{ ebook_url }}" target="_blank" rel="noopener"
+                    class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-colors">Read Online <span class="material-symbols-outlined text-[18px]">open_in_new</span></a>
+                {% endif %}
+            </div>
+            {% endif %}
         </div>
     </div>
 

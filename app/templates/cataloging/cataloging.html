@@ -432,7 +432,6 @@
                                             <tr class="bg-gray-100 text-left text-xs text-gray-500 uppercase tracking-wider">
                                                 <th class="px-4 py-2">Accession Number</th>
                                                 <th class="px-4 py-2">Source</th>
-                                                <th class="px-4 py-2">Shelf</th>
                                                 <th class="px-4 py-2">Date Accessioned</th>
                                                 <th class="px-4 py-2">Condition</th>
                                                 <th class="px-4 py-2">Actions</th>
@@ -444,7 +443,6 @@
                                             <tr class="border-t border-gray-100 bg-white">
                                                 <td class="px-4 py-2 font-mono text-xs">{{ copy[1] }}</td>
                                                 <td class="px-4 py-2 text-xs">{{ copy[3] or '—' }}</td>
-                                                <td class="px-4 py-2 text-xs">{{ copy[5] if copy|length > 5 and copy[5] else '—' }}</td>
                                                 <td class="px-4 py-2 text-xs">{{ copy[4] }}</td>
                                                 <td class="px-4 py-2 text-xs">
                                                     {% if cd and cd.lost %}
@@ -539,7 +537,7 @@
                             <div class="flex items-center justify-between p-2 border-b border-gray-100 last:border-0 bg-white gap-2">
                                 <div class="min-w-0 flex-1">
                                     <div class="font-mono text-xs truncate">{{ copy[1] }}</div>
-                                    <div class="text-[11px] text-gray-500 truncate">{{ copy[3] or '—' }} · {{ copy[4] }}{% if copy|length > 5 and copy[5] %} · Shelf {{ copy[5] }}{% endif %}</div>
+                                    <div class="text-[11px] text-gray-500 truncate">{{ copy[3] or '—' }} · {{ copy[4] }}</div>
                                     {% if cd and cd.lost %}
                                     <div class="mt-1"><span class="status-badge status-lost" style="font-size:10px;">Lost</span></div>
                                     {% if cd.reason %}<div class="text-[11px] text-gray-500 break-words">{{ cd.reason }}</div>{% endif %}
@@ -681,6 +679,11 @@
                         <input type="text" name="call_number" maxlength="50" class="form-input" placeholder="e.g. QA76.73" value="{{ _add.get('call_number', '') }}">
                     </div>
                     <div>
+                        <label class="form-label">E-Book Link</label>
+                        <input type="text" name="ebook_url" maxlength="500" class="form-input" placeholder="https://drive.google.com/... or publisher link" value="{{ _add.get('ebook_url', '') }}">
+                        <p class="text-[11px] text-gray-400 mt-1">Required for E-Book. Drive links embed a preview; other links open in a new tab.</p>
+                    </div>
+                    <div>
                         <label class="form-label">Source</label>
                         <select name="source" class="form-input">
                             <option value="">— Select —</option>
@@ -688,10 +691,6 @@
                             <option value="{{ _src }}" {% if _add.get('source', '') == _src %}selected{% endif %}>{{ _src|title }}</option>
                             {% endfor %}
                         </select>
-                    </div>
-                    <div>
-                        <label class="form-label">Shelf Location</label>
-                        <input type="text" name="shelf_location" maxlength="50" class="form-input" placeholder="e.g. 2F-A3" value="{{ _add.get('shelf_location', '') }}">
                     </div>
                     <div class="col-span-2">
                         <label class="form-label">Category *</label>
@@ -795,6 +794,11 @@
                     <div>
                         <label class="form-label">Call Number / LOC Class. *</label>
                         <input type="text" name="call_number" id="edit_call_number" maxlength="50" class="form-input">
+                    </div>
+                    <div>
+                        <label class="form-label">E-Book Link</label>
+                        <input type="text" name="ebook_url" id="edit_ebook_url" maxlength="500" class="form-input" placeholder="https://drive.google.com/... or publisher link">
+                        <p class="text-[11px] text-gray-400 mt-1">Required for E-Book. Drive links embed a preview; other links open in a new tab.</p>
                     </div>
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Category *</label>
@@ -924,10 +928,6 @@
                             <option value="others">Others</option>
                         </select>
                     </div>
-                    <div class="col-span-1 sm:col-span-2">
-                        <label class="form-label">Shelf Location</label>
-                        <input type="text" name="shelf_location" maxlength="50" class="form-input" placeholder="e.g. 2F-A3">
-                    </div>
                 </div>
                 <div class="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-4 border-t border-gray-100">
                     <button type="button" class="btn btn-outline w-full sm:w-auto justify-center" onclick="closeModal(null, 'addAccessionModal')">Cancel</button>
@@ -975,10 +975,6 @@
                             <option value="donation">Donation</option>
                             <option value="others">Others</option>
                         </select>
-                    </div>
-                    <div class="col-span-1 sm:col-span-2">
-                        <label class="form-label">Shelf Location</label>
-                        <input type="text" name="shelf_location" id="edit_acc_shelf" maxlength="50" class="form-input" placeholder="e.g. 2F-A3">
                     </div>
                 </div>
                 <div class="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-4 border-t border-gray-100">
@@ -1101,6 +1097,22 @@
                     validateIsbnInput(input);
                 }
             });
+            var linkInput = form.querySelector('[name="ebook_url"]');
+            if (linkInput) {
+                var linkNeed = mtype === 'E-Book';
+                if (linkNeed) linkInput.setAttribute('required', '');
+                else linkInput.removeAttribute('required');
+                var lwrap = linkInput.closest('div');
+                var llabel = lwrap ? lwrap.querySelector('label') : null;
+                if (llabel) {
+                    var lbase = llabel.getAttribute('data-base-label');
+                    if (!lbase) {
+                        lbase = llabel.textContent.replace(/\s*\*\s*$/, '');
+                        llabel.setAttribute('data-base-label', lbase);
+                    }
+                    llabel.textContent = linkNeed ? lbase + ' *' : lbase;
+                }
+            }
         }
         function isbn10Ok(code) {
             if (!/^\d{9}[\dX]$/.test(code)) return false;
@@ -1236,6 +1248,7 @@
             document.getElementById('edit_isbn').value = b[8] || '';
             document.getElementById('edit_material_type').value = b[9] || 'Book';
             document.getElementById('edit_description').value = b[10] || '';
+            document.getElementById('edit_ebook_url').value = (b.length > 17 ? b[16] : '') || '';
             applyMaterialType('edit');
             openModal('editBookModal');
         }
@@ -1460,7 +1473,6 @@
             document.getElementById('editAccessionForm').action = '/librarian/cataloging/accession/' + c[0] + '/edit';
             document.getElementById('edit_acc_number').value = c[1];
             document.getElementById('edit_acc_source').value = c[3] || '';
-            document.getElementById('edit_acc_shelf').value = (c.length > 5 && c[5]) || '';
             openModal('editAccessionModal');
         }
 

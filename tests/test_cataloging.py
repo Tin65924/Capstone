@@ -390,36 +390,8 @@ class TestCatalogingCopies:
         assert 'UPDATE accession_log' in call_args[0][0]
         assert 'updated_at' in call_args[0][0]
         assert 'updated_by' in call_args[0][0]
-        assert 'shelf_location' in call_args[0][0]
-        assert call_args[0][1] == ('250099', 'donation', None, '3', 21)
-
-    def test_edit_accession_shelf_saved(self, librarian_client, mock_db):
-        """Validates edit accession shelf saved `/librarian/cataloging/accession/21/edit` as librarian (expects 302) [TestCatalogingCopies / cataloging].
-    If fails: likely wrong/absent SQL call or placeholder mismatch.
-    Failure indicates catalog data or listing/sort is wrong."""
-        mock_db['fetch_one'].side_effect = [SAMPLE_ACC_ROW, None]
-        resp = librarian_client.post('/librarian/cataloging/accession/21/edit', data={
-            'accession_number': '250099',
-            'source': 'donation',
-            'shelf_location': '2F-A3',
-        })
-        assert resp.status_code == 302
-        assert 'mstatus=success' in resp.location
-        call_args = mock_db['execute'].call_args_list[0]
-        assert call_args[0][1] == ('250099', 'donation', '2F-A3', '3', 21)
-
-    def test_edit_accession_shelf_too_long(self, librarian_client, mock_db):
-        """Validates edit accession shelf too long `/librarian/cataloging/accession/21/edit` as librarian (expects 302) [TestCatalogingCopies / cataloging].
-    If fails: likely unexpected DB write (validation/pre-check bypassed).
-    Failure indicates catalog data or listing/sort is wrong."""
-        mock_db['fetch_one'].return_value = SAMPLE_ACC_ROW
-        resp = librarian_client.post('/librarian/cataloging/accession/21/edit', data={
-            'accession_number': '250099',
-            'shelf_location': 'S' * 51,
-        })
-        assert resp.status_code == 302
-        assert 'mstatus=error' in resp.location
-        assert all('UPDATE accession_log' not in c[0][0] for c in mock_db['execute'].call_args_list)
+        assert 'shelf_location' not in call_args[0][0]
+        assert call_args[0][1] == ('250099', 'donation', '3', 21)
 
     def test_edit_accession_duplicate(self, librarian_client, mock_db):
         """Validates edit accession duplicate `/librarian/cataloging/accession/21/edit` as librarian (expects 302) [TestCatalogingCopies / cataloging].
@@ -1471,120 +1443,6 @@ No stray worker threads: under TESTING the import runs inline so
         assert 'others' in acc_calls[0][0][1]
 
 
-class TestShelfLocation:
-    """Per-copy shelf locators on accession rows."""
-
-    def test_create_accession_stores_shelf(self, mock_db):
-        """Validates create accession stores shelf [TestShelfLocation / cataloging].
-    If fails: likely model SQL changed (INSERT INTO).
-    Failure indicates catalog data or listing/sort is wrong."""
-        from app.cataloging.models import create_accession
-        mock_db['execute'].return_value = 1
-        create_accession('250001', 1, 3, 'purchase', '2F-A3')
-        query, params = mock_db['execute'].call_args[0]
-        assert 'shelf_location' in query
-        assert params == ('250001', 1, 3, 'purchase', '2F-A3')
-
-    def test_update_accession_stores_shelf(self, mock_db):
-        """Validates update accession stores shelf [TestShelfLocation / cataloging].
-    If fails: likely model SQL changed (UPDATE).
-    Failure indicates catalog data or listing/sort is wrong."""
-        from app.cataloging.models import update_accession
-        mock_db['execute'].return_value = 1
-        update_accession(21, '250099', 'donation', '2F-A3', updated_by='3')
-        query, params = mock_db['execute'].call_args[0]
-        assert 'shelf_location' in query
-        assert params == ('250099', 'donation', '2F-A3', '3', 21)
-
-    def test_for_books_selects_shelf(self, mock_db):
-        """Validates for books selects shelf [TestShelfLocation / cataloging].
-    If fails: likely model SQL changed (SELECT).
-    Failure indicates catalog data or listing/sort is wrong."""
-        from app.cataloging.models import get_accessions_for_books
-        mock_db['fetch_all'].return_value = []
-        get_accessions_for_books([1])
-        query = mock_db['fetch_all'].call_args[0][0]
-        assert 'shelf_location' in query
-
-    def test_for_books_falls_back_without_shelf_column(self, mock_db):
-        """Validates for books falls back without shelf column [TestShelfLocation / cataloging].
-    If fails: likely fallback removed or error misclassified.
-    Failure indicates catalog data or listing/sort is wrong."""
-        from app.cataloging.models import get_accessions_for_books
-        missing = Exception('column "shelf_location" does not exist')
-        missing.pgcode = '42703'
-        legacy = [(1, 'ACC-001', 7, 'purchase', '2024-01-15')]
-        mock_db['fetch_all'].side_effect = [missing, legacy]
-        assert get_accessions_for_books([7]) == legacy
-        assert 'shelf_location' not in mock_db['fetch_all'].call_args[0][0]
-
-    def test_for_books_reraises_other_errors(self, mock_db):
-        """Validates for books reraises other errors [TestShelfLocation / cataloging].
-    If fails: likely fallback over-broadened (masks real bugs).
-    Failure indicates catalog data or listing/sort is wrong."""
-        import pytest
-        from app.cataloging.models import get_accessions_for_books
-        mock_db['fetch_all'].side_effect = ValueError('boom')
-        with pytest.raises(ValueError):
-            get_accessions_for_books([7])
-
-    def test_add_accession_passes_shelf(self, librarian_client, mock_db):
-        """Validates add accession passes shelf `/librarian/cataloging/1/accession/add` as librarian (expects 302) [TestShelfLocation / cataloging].
-    If fails: likely wrong/absent SQL call or placeholder mismatch.
-    Failure indicates catalog data or listing/sort is wrong."""
-        mock_db['fetch_one'].side_effect = [SAMPLE_BOOKS[0], None]
-        resp = librarian_client.post('/librarian/cataloging/1/accession/add', data={
-            'accession_number': '250099',
-            'shelf_location': '2F-A3',
-        })
-        assert resp.status_code == 302
-        assert 'mstatus=success' in resp.location
-        acc_calls = [c for c in mock_db['execute'].call_args_list
-                     if 'INSERT INTO accession_log' in c[0][0]]
-        assert acc_calls[0][0][1] == ('250099', 1, '3', None, '2F-A3')
-
-    def test_add_accession_shelf_too_long(self, librarian_client, mock_db):
-        """Validates add accession shelf too long `/librarian/cataloging/1/accession/add` as librarian (expects 302) [TestShelfLocation / cataloging].
-    If fails: likely unexpected DB write (validation/pre-check bypassed).
-    Failure indicates catalog data or listing/sort is wrong."""
-        mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
-        resp = librarian_client.post('/librarian/cataloging/1/accession/add', data={
-            'accession_number': '250099',
-            'shelf_location': 'S' * 51,
-        })
-        assert resp.status_code == 302
-        assert 'mstatus=error' in resp.location
-        assert all('INSERT INTO accession_log' not in c[0][0]
-                   for c in mock_db['execute'].call_args_list)
-
-    def test_bulk_import_maps_shelf_header(self, librarian_client, mock_db):
-        """Validates bulk import maps shelf header `/librarian/cataloging/bulk-import` as librarian (expects 200) [TestShelfLocation / cataloging].
-    If fails: likely header mapping changed or column dropped.
-    Failure indicates catalog data or listing/sort is wrong."""
-        from app.cataloging.routes import _map_headers
-        assert _map_headers(['shelf location']) == {'shelf location': 'shelf_location'}
-        assert _map_headers(['shelf']) == {'shelf': 'shelf_location'}
-
-    def test_staff_page_shows_shelf(self, librarian_client, mock_db):
-        """Validates staff page shows shelf `/librarian/cataloging` as librarian (expects 200) [TestShelfLocation / cataloging].
-    If fails: likely template text/context changed or mock fetch_* shape mismatched.
-    Failure indicates catalog data or listing/sort is wrong."""
-        book = SAMPLE_BOOKS[0] + ('ACC-001',)
-        mock_db['fetch_one'].return_value = (1,)
-        mock_db['fetch_all'].side_effect = [
-            [book],                                                    # books page
-            [(1, 'ACC-001', 1, 'purchase', '2024-01-15', '2F-A3')],     # accessions
-            [],                                                        # secondaries batch
-            [],                                                        # conditions
-            [],                                                        # categories
-        ]
-        body = librarian_client.get('/librarian/cataloging').data.decode()
-        assert 'Shelf' in body
-        assert '2F-A3' in body
-        assert 'name="shelf_location"' in body
-        assert 'edit_acc_shelf' in body
-
-
 class TestCategories:
     """Controlled category vocabulary with case-insensitive convergence."""
 
@@ -1651,7 +1509,8 @@ class TestCategories:
         assert book_id == 9
         query, params = mock_db['execute'].call_args[0]
         assert 'category_id' in query
-        assert params[-2:] == ('active', 3)
+        assert 'ebook_url' in query
+        assert params[-3:] == ('active', 3, None)
 
     def test_add_book_canonicalizes_subject(self, librarian_client, mock_db):
         """Validates add book canonicalizes subject `/librarian/cataloging/add` as librarian (expects 302) [TestCategories / cataloging].
@@ -1885,7 +1744,8 @@ class TestMaterialTypes:
                  'isbn': '978-1234567890',
                  'subject_classification': 'Fiction', 'call_number': 'QA1'},
         'E-Book': {'title': 'E', 'author': 'A', 'year_published': '2021',
-                   'subject_classification': 'Tech'},
+                   'subject_classification': 'Tech',
+                   'ebook_url': 'https://drive.google.com/file/d/ABC123/view'},
         'Reference': {'title': 'R', 'author': 'A', 'edition': '2nd',
                       'publisher': 'P', 'year_published': '2019',
                       'subject_classification': 'Science',
@@ -1921,7 +1781,7 @@ class TestMaterialTypes:
     Failure indicates catalog data or listing/sort is wrong."""
         cases = [('Thesis', 'author'), ('Periodical', 'publisher'),
                  ('Reference', 'call_number'),
-                 ('E-Book', 'author'), ('Book', 'isbn')]
+                 ('E-Book', 'author'), ('E-Book', 'ebook_url'), ('Book', 'isbn')]
         for mtype, drop in cases:
             mock_db['execute'].return_value = [(1,)]
             mock_db['fetch_one'].return_value = None
@@ -2206,3 +2066,122 @@ class TestCategoryManager:
         resp = client.post('/librarian/cataloging/categories', data={'name': 'X'})
         assert resp.status_code == 302
         assert '/login' in resp.location
+
+
+class TestEbookUrl:
+    """E-book access links: validation, Drive detection, surfaces."""
+
+    def test_validate_ebook_url(self, mock_db):
+        """Validates validate ebook url [TestEbookUrl / cataloging].
+    If fails: likely URL validation changed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.models import validate_ebook_url
+        assert validate_ebook_url('', 'E-Book') == (None, 'E-Book link is required for E-Book.')
+        assert validate_ebook_url('', 'Book') == (None, None)
+        assert validate_ebook_url('not a url', 'Book') == (None, 'E-Book link must be a valid http(s) URL.')
+        assert validate_ebook_url('ftp://x.com/f', 'Book') == (None, 'E-Book link must be a valid http(s) URL.')
+        assert validate_ebook_url('https://example.com/ebook.pdf', 'Reference') == (
+            'https://example.com/ebook.pdf', None)
+        assert validate_ebook_url('  https://example.com/e  ', 'Book') == (
+            'https://example.com/e', None)
+        too_long = 'https://example.com/' + 'a' * 500
+        assert validate_ebook_url(too_long, 'Book')[1] == 'E-Book link is too long (max 500 characters).'
+
+    def test_ebook_link_info(self, mock_db):
+        """Validates ebook link info [TestEbookUrl / cataloging].
+    If fails: likely Drive detection changed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.models import ebook_link_info, drive_preview_url
+        assert ebook_link_info('https://drive.google.com/file/d/ABC123/view') == ('drive', 'ABC123')
+        assert ebook_link_info('https://drive.google.com/open?id=XYZ789') == ('drive', 'XYZ789')
+        assert ebook_link_info('https://drive.google.com/uc?id=QWE123') == ('drive', 'QWE123')
+        assert ebook_link_info('https://drive.google.com/drive/folders/ABC123') == ('external', None)
+        assert ebook_link_info('https://publisher.com/book.pdf') == ('external', None)
+        assert ebook_link_info('') == (None, None)
+        assert drive_preview_url('ABC123') == 'https://drive.google.com/file/d/ABC123/preview'
+
+    def test_add_ebook_without_link_rejected(self, librarian_client, mock_db):
+        """Validates add ebook without link rejected `/librarian/cataloging/add` as librarian (expects 302) [TestEbookUrl / cataloging].
+    If fails: likely E-Book link requirement changed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['fetch_one'].return_value = None
+        resp = librarian_client.post('/librarian/cataloging/add', data={
+            'title': 'E', 'author': 'A', 'year_published': '2021',
+            'subject_classification': 'Tech', 'material_type': 'E-Book',
+            'accession_number': '250001',
+        })
+        assert resp.status_code == 302
+        assert 'mstatus=error' in resp.location
+        assert mock_db['execute'].call_count == 0
+
+    def test_add_ebook_bad_link_rejected(self, librarian_client, mock_db):
+        """Validates add ebook bad link rejected `/librarian/cataloging/add` as librarian (expects 302) [TestEbookUrl / cataloging].
+    If fails: likely E-Book link validation changed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['fetch_one'].return_value = None
+        resp = librarian_client.post('/librarian/cataloging/add', data={
+            'title': 'E', 'author': 'A', 'year_published': '2021',
+            'subject_classification': 'Tech', 'material_type': 'E-Book',
+            'accession_number': '250001', 'ebook_url': 'notaurl',
+        })
+        assert resp.status_code == 302
+        assert 'mstatus=error' in resp.location
+        assert mock_db['execute'].call_count == 0
+
+    def test_add_ebook_link_stored(self, librarian_client, mock_db):
+        """Validates add ebook link stored `/librarian/cataloging/add` as librarian (expects 302) [TestEbookUrl / cataloging].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
+        resp = librarian_client.post('/librarian/cataloging/add', data={
+            'title': 'E', 'author': 'A', 'year_published': '2021',
+            'subject_classification': 'Tech', 'material_type': 'E-Book',
+            'accession_number': '250001',
+            'ebook_url': 'https://drive.google.com/file/d/ABC123/view',
+        })
+        assert 'mstatus=success' in resp.location
+        book_calls = [c for c in mock_db['execute'].call_args_list
+                      if 'INSERT INTO book_catalog' in c[0][0]]
+        assert book_calls
+        assert 'ebook_url' in book_calls[0][0][0]
+        assert 'https://drive.google.com/file/d/ABC123/view' in book_calls[0][0][1]
+
+    def test_bookinfo_embeds_drive_preview(self, client, mock_db):
+        """Validates bookinfo embeds drive preview `/book/1` (expects 200) [TestEbookUrl / cataloging].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates catalog data or listing/sort is wrong."""
+        book = (1, 'E Title', 'A', None, None, 2021, 'Tech', None, None,
+                'E-Book', 'D', 'active', '2024-01-01', None, None, None,
+                'https://drive.google.com/file/d/ABC123/view')
+        mock_db['fetch_one'].return_value = book
+        mock_db['fetch_all'].return_value = []
+        body = client.get('/book/1').data.decode()
+        assert 'https://drive.google.com/file/d/ABC123/preview' in body
+        assert 'Open in Google Drive' in body
+
+    def test_bookinfo_external_link_button(self, client, mock_db):
+        """Validates bookinfo external link button `/book/1` (expects 200) [TestEbookUrl / cataloging].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates catalog data or listing/sort is wrong."""
+        book = (1, 'E Title', 'A', None, None, 2021, 'Tech', None, None,
+                'E-Book', 'D', 'active', '2024-01-01', None, None, None,
+                'https://publisher.com/e.pdf')
+        mock_db['fetch_one'].return_value = book
+        mock_db['fetch_all'].return_value = []
+        body = client.get('/book/1').data.decode()
+        assert 'Read Online' in body
+        assert 'drive.google.com/file/d' not in body
+
+    def test_catalog_card_read_online(self, client, mock_db):
+        """Validates catalog card read online `/catalog?q=E` (expects 200) [TestEbookUrl / cataloging].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates catalog data or listing/sort is wrong."""
+        book = (1, 'E Title', 'A', None, None, 2021, 'Tech', None, None,
+                'E-Book', 'D', 'active', '2024-01-01', None, None, None,
+                'https://publisher.com/e.pdf', 'available', 1)
+        mock_db['fetch_one'].return_value = (1,)
+        mock_db['fetch_all'].side_effect = [[book], [], []]
+        body = client.get('/catalog?q=E').data.decode()
+        assert 'Read Online' in body
+        assert 'https://publisher.com/e.pdf' in body

@@ -2649,3 +2649,21 @@ class TestSchemaGate:
         with patch('app.cataloging.models.multi_cat_available', return_value=False):
             get_all_books()
             assert 'extra_categories' not in mock_db['fetch_all'].call_args[0][0]
+
+    def test_export_queries_have_valid_commas(self, mock_db):
+        """Validates export queries have valid commas [TestSchemaGate / cataloging].
+    If fails: likely column gating broke SELECT syntax (double comma).
+    Failure indicates catalog data or listing/sort is wrong."""
+        from unittest.mock import patch
+        from app.cataloging.models import get_all_books, get_books_by_status
+        mock_db['fetch_all'].return_value = []
+        for gated in (True, False):
+            with patch('app.cataloging.models.multi_cat_available', return_value=gated):
+                get_all_books()
+                query = mock_db['fetch_all'].call_args[0][0]
+                assert ',,' not in query.replace(' ', '')
+                assert ('extra_categories' in query) == gated
+                get_books_by_status('active')
+                query = mock_db['fetch_all'].call_args[0][0]
+                assert ',,' not in query.replace(' ', '')
+                assert ('extra_categories' in query) == gated

@@ -326,6 +326,7 @@
                     {% set is_ebook = book[9] == 'E-Book' %}
                     {% set avail_status = book[-2] if book|length > 14 else 'available' %}
                     {% set avail_count = book[-1] if book|length > 14 else 1 %}
+                    {% set eurl = (book[16] if book|length > 17 else '') or '' %}
                     {% if is_ebook %}
                         {% set has_available = true %}
                     {% elif book|length > 14 %}
@@ -352,7 +353,9 @@
                         </div>
                         <div class="flex items-center gap-2 shrink-0">
                             <a href="{{ url_for('cataloging.book_info', book_id=book[0]) }}" class="text-primary text-xs font-bold hover:underline whitespace-nowrap">View Details</a>
-                            {% if has_available %}
+                            {% if is_ebook and eurl %}
+                            <a href="{{ eurl }}" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-primary text-white hover:bg-primary/90 whitespace-nowrap">Read Online</a>
+                            {% elif has_available %}
                             <a href="{{ url_for('cataloging.book_info', book_id=book[0]) }}" class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-primary text-white hover:bg-primary/90 whitespace-nowrap">Borrow</a>
                             {% else %}
                             <form method="post" action="{{ url_for('circulation.user_reserve') }}" class="inline">
@@ -384,6 +387,7 @@
                     {% set is_ebook = book[9] == 'E-Book' %}
                     {% set avail_status = book[-2] if book|length > 14 else 'available' %}
                     {% set avail_count = book[-1] if book|length > 14 else 1 %}
+                    {% set eurl = (book[16] if book|length > 17 else '') or '' %}
                     {% if is_ebook %}
                         {% set has_available = true %}
                     {% elif book|length > 14 %}
@@ -420,7 +424,10 @@
                                         {% if is_ebook %}Available online{% elif has_available %}{% if book|length > 14 %}{{ avail_count }} cop{{ 'y' if (avail_count|string|int(0)) == 1 else 'ies' }} available{% else %}Available{% endif %}{% else %}No copies available{% endif %}
                                     </span>
                                     <div class="flex items-center gap-2 shrink-0">
-                                        {% if has_available %}
+                                        {% if is_ebook and eurl %}
+                                        <a href="{{ eurl }}" target="_blank" rel="noopener"
+                                            class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-primary text-white hover:bg-primary/90 transition-colors">Read Online</a>
+                                        {% elif has_available %}
                                         <a href="{{ url_for('cataloging.book_info', book_id=book[0]) }}"
                                             class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-primary text-white hover:bg-primary/90 transition-colors">Borrow</a>
                                         {% else %}
