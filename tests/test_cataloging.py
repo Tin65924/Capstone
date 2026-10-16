@@ -522,7 +522,8 @@ class TestCatalogingSearch:
         )
         sql, args = search_call[0]
         assert 'accession_log' in sql
-        assert args == ('%ACC-123456%', '%ACC-123456%', '%ACC-123456%', '%ACC-123456%', '%ACC-123456%', 20, 0)
+        # The isbn arm compares de-hyphenated (stored ISBNs are normalized).
+        assert args == ('%ACC-123456%', '%ACC-123456%', '%ACC123456%', '%ACC-123456%', '%ACC-123456%', 20, 0)
 
     def test_pagination(self, librarian_client, mock_db):
         """Validates pagination `/librarian/cataloging?page=1` as librarian (expects 200) [TestCatalogingSearch / cataloging].
@@ -1937,19 +1938,68 @@ class TestMaterialTypes:
                       if 'INSERT INTO book_catalog' in c[0][0]]
         assert book_calls and 'Thesis' in book_calls[0][0][1]
 
-    def test_isbn_any_prefix_accepted(self, mock_db):
-        """Validates isbn any prefix accepted [TestMaterialTypes / cataloging].
+    def test_isbn_checksums_accepted(self, mock_db):
+        """Validates isbn checksums accepted [TestMaterialTypes / cataloging].
     If fails: likely ISBN validation changed.
     Failure indicates catalog data or listing/sort is wrong."""
         from app.cataloging.routes import _validate_isbn_issn
-        assert _validate_isbn_issn('1111111111111', 'Book') is None
-        assert _validate_isbn_issn('978-1-234567-89-0', 'Reference') is None
+        assert _validate_isbn_issn('9780306406157', 'Book') is None
+        assert _validate_isbn_issn('978-0-306-40615-7', 'Reference') is None
+        assert _validate_isbn_issn('0306406152', 'Book') is None
+        assert _validate_isbn_issn('080442957X', 'E-Book') is None
         assert _validate_isbn_issn('1234-567X', 'Periodical') is None
         assert _validate_isbn_issn('', 'Thesis') is None
         assert _validate_isbn_issn('', 'E-Book') is None
-        assert _validate_isbn_issn('123', 'Book') == 'ISBN must be 13 digits.'
+        assert _validate_isbn_issn('9780306406158', 'Book') == 'Invalid ISBN-13 check digit.'
+        assert _validate_isbn_issn('0306406153', 'Book') == 'Invalid ISBN-10 check digit.'
+        assert _validate_isbn_issn('123', 'Book') == 'ISBN must be 10 or 13 digits.'
         assert _validate_isbn_issn('', 'Book') == 'ISBN is required for this material type.'
         assert _validate_isbn_issn('123', 'Periodical') == 'ISSN must be 8 characters (e.g. 1234-567X).'
+
+    def test_isbn_helpers(self, mock_db):
+        """Validates isbn helpers [TestMaterialTypes / cataloging].
+    If fails: likely ISBN helpers changed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.models import normalize_isbn, is_valid_isbn10, is_valid_isbn13
+        assert normalize_isbn('978-0-306-40615-7') == '9780306406157'
+        assert normalize_isbn('080442957x') == '080442957X'
+        assert normalize_isbn(None) == ''
+        assert is_valid_isbn10('0306406152') is True
+        assert is_valid_isbn10('080442957X') is True
+        assert is_valid_isbn10('0306406153') is False
+        assert is_valid_isbn13('9780306406157') is True
+        assert is_valid_isbn13('9780306406158') is False
+
+    def test_isbn_normalized_on_save(self, librarian_client, mock_db):
+        """Validates isbn normalized on save `/librarian/cataloging/add` as librarian (expects 302) [TestMaterialTypes / cataloging].
+    If fails: likely ISBN normalization changed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
+        resp = self._post_minimal(librarian_client, 'Book', isbn='978-0-306-40615-7')
+        assert 'mstatus=success' in resp.location
+        book_calls = [c for c in mock_db['execute'].call_args_list
+                      if 'INSERT INTO book_catalog' in c[0][0]]
+        assert book_calls and '9780306406157' in book_calls[0][0][1]
+        assert all('978-0-306-40615-7' not in str(c[0][1]) for c in book_calls)
+
+    def test_dedup_normalizes_isbn(self, mock_db):
+        """Validates dedup normalizes isbn [TestMaterialTypes / cataloging].
+    If fails: likely dedup lookup changed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.models import get_book_by_title_author_isbn
+        mock_db['fetch_one'].return_value = (5,)
+        assert get_book_by_title_author_isbn('T', 'A', '978-0-306-40615-7') == (5,)
+        assert mock_db['fetch_one'].call_args[0][1] == ('T', 'A', '9780306406157')
+
+    def test_isbn_search_normalizes_pattern(self, mock_db):
+        """Validates isbn search normalizes pattern [TestMaterialTypes / cataloging].
+    If fails: likely search pattern changed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.models import search_books
+        mock_db['fetch_all'].return_value = []
+        search_books('978-0-306', field='isbn')
+        assert mock_db['fetch_all'].call_args[0][1] == ('%9780306%',)
 
 
 class TestFormPersistence:
@@ -2058,3 +2108,7 @@ class TestFormPersistence:
         # Conditionally-required inputs carry no static required attribute.
         assert 'name="author" maxlength=' in body
         assert 'name="author" required' not in body
+        # Live ISBN feedback hooks in both modals (inputs + hint spots + JS selectors).
+        assert body.count('data-isbn-input') == 3
+        assert body.count('data-isbn-hint') == 3
+        assert 'validateIsbnInput' in body

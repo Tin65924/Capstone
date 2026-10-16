@@ -20,7 +20,8 @@ from app.cataloging.models import (
     delete_accession, accession_referenced,
     get_book_by_title_author_isbn, search_books_paginated,
     get_categories, get_categories_for_books, get_book_categories,
-    resolve_category, set_book_categories
+    resolve_category, set_book_categories, normalize_isbn,
+    is_valid_isbn10, is_valid_isbn13
 )
 from app.auth.models import log_activity
 from app.bloom_registry import bloom_registry
@@ -158,15 +159,15 @@ def _to_title_case(value):
 
 
 def _validate_isbn_issn(isbn, material_type):
-    """Panel revision: ISBN must be 13 digits, ISSN 8-digit.
+    """Validate ISBN-10/ISBN-13 (check digits) or ISSN.
 
-    Book/E-Book/Reference: 13 digits (hyphens stripped, any prefix).
-    Periodical: 8-digit ISSN (hyphen allowed, X allowed as check).
-    Thesis: ISBN optional but when given must be valid.
-    Returns error string or None.
+    Book/E-Book/Reference: ISBN-10 (9 digits + digit/X, mod-11) or
+    ISBN-13 (13 digits, mod-10); hyphens/spaces ignored. Periodical:
+    8-digit ISSN (hyphen allowed, X allowed as check). Thesis: ISBN
+    optional but when given must be valid. Returns error string or None.
     """
     import re
-    code = (isbn or '').strip().replace('-', '').replace(' ', '').upper()
+    code = normalize_isbn(isbn)
     mtype = (material_type or 'Book').strip().lower()
     if not code:
         # ISBN/ISSN optional for these types (see MATERIAL_REQUIRED_FIELDS).
@@ -177,9 +178,15 @@ def _validate_isbn_issn(isbn, material_type):
         if not re.fullmatch(r'\d{7}[\dX]', code):
             return 'ISSN must be 8 characters (e.g. 1234-567X).'
         return None
-    if not re.fullmatch(r'\d{13}', code):
-        return 'ISBN must be 13 digits.'
-    return None
+    if len(code) == 10:
+        if not is_valid_isbn10(code):
+            return 'Invalid ISBN-10 check digit.'
+        return None
+    if len(code) == 13:
+        if not is_valid_isbn13(code):
+            return 'Invalid ISBN-13 check digit.'
+        return None
+    return 'ISBN must be 10 or 13 digits.'
 
 
 def get_next_accession_number():

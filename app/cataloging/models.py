@@ -1,6 +1,46 @@
 from app.database import db
 
 
+def normalize_isbn(value):
+    """Canonical ISBN form: hyphens/spaces stripped, uppercased.
+
+    Stored values and dedup lookups both go through this so
+    '978-0-306-40615-7' and '9780306406157' are the same book.
+    """
+    return (value or '').strip().replace('-', '').replace(' ', '').upper()
+
+
+def is_valid_isbn10(code):
+    """ISBN-10 checksum: 9 digits + digit/X, weighted mod-11."""
+    if len(code) != 10 or not code[:9].isdigit():
+        return False
+    if not (code[9].isdigit() or code[9] == 'X'):
+        return False
+    total = sum(((10 if ch == 'X' else int(ch)) * (10 - i))
+                for i, ch in enumerate(code))
+    return total % 11 == 0
+
+
+def is_valid_isbn13(code):
+    """ISBN-13 checksum: 13 digits, alternating 1/3 weights mod-10."""
+    if len(code) != 13 or not code.isdigit():
+        return False
+    total = sum(int(ch) * (1 if i % 2 == 0 else 3)
+                for i, ch in enumerate(code))
+    return total % 10 == 0
+
+
+def _isbn_search_text(value):
+    """Strip hyphens/spaces from a search term for the ISBN column.
+
+    Stored ISBNs are normalized (no hyphens), so the isbn arm of a
+    search must compare de-hyphenated too. Unlike normalize_isbn this
+    preserves case — ILIKE is already case-insensitive, and keeping
+    the original case avoids noise in the other search arms.
+    """
+    return (value or '').replace('-', '').replace(' ', '')
+
+
 def _is_missing_relation(exc):
     """True for missing-table/column errors (unmigrated database).
 
@@ -58,6 +98,7 @@ def create_book(title, author, edition, publisher, year_published, subject_class
     """
     if category_id is None:
         category_id, _ = resolve_category(subject_classification)
+    isbn = normalize_isbn(isbn) or None
     rows = db.execute(
         '''INSERT INTO book_catalog (title, author, edition, publisher, year_published,
            subject_classification, call_number, isbn, material_type, description, catalog_status, category_id)
@@ -105,6 +146,9 @@ def search_books(query, field=None):
         List of book_catalog row tuples matching the query.
     """
     pattern = f'%{query}%'
+    # Stored ISBNs are normalized (no hyphens); strip them from the
+    # query so hyphenated searches still match.
+    isbn_pattern = f'%{_isbn_search_text(query)}%'
     if field == 'title':
         return db.fetch_all(
             f'SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog WHERE title ILIKE %s ORDER BY {DISTINCT_ORDER}',
@@ -118,7 +162,7 @@ def search_books(query, field=None):
     elif field == 'isbn':
         return db.fetch_all(
             f'SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog WHERE isbn ILIKE %s ORDER BY {DISTINCT_ORDER}',
-            (pattern,)
+            (isbn_pattern,)
         )
     elif field == 'category':
         return db.fetch_all(
@@ -130,7 +174,7 @@ def search_books(query, field=None):
            WHERE title ILIKE %s OR author ILIKE %s OR isbn ILIKE %s
               OR subject_classification ILIKE %s
            ORDER BY {DISTINCT_ORDER}''',
-        (pattern, pattern, pattern, pattern)
+        (pattern, pattern, isbn_pattern, pattern)
     )
 
 
@@ -154,7 +198,8 @@ def get_book_by_title_author_isbn(title, author, isbn):
 
     Guards the add-book flow against double entry: when isbn is given
     it must match exactly, otherwise the match requires isbn IS NULL so
-    an ISBN-less row never collides with an ISBN-bearing one.
+    an ISBN-less row never collides with an ISBN-bearing one. The ISBN
+    is normalized first so hyphenated and bare forms match the same row.
 
     Args:
         title: Exact title to match.
@@ -164,6 +209,7 @@ def get_book_by_title_author_isbn(title, author, isbn):
     Returns:
         1-tuple (book_id,) of the duplicate, or None if unique.
     """
+    isbn = normalize_isbn(isbn) or None
     if isbn:
         return db.fetch_one(
             'SELECT book_id FROM book_catalog WHERE title = %s AND author = %s AND isbn = %s',
@@ -193,6 +239,7 @@ def suggest_book_values(field, prefix, limit=8):
         List of 1-tuples (value,) with distinct matches.
     """
     pattern = f'{prefix}%'
+    isbn_pattern = f'{_isbn_search_text(prefix)}%'
     if field == 'title':
         return db.fetch_all(
             'SELECT DISTINCT title FROM book_catalog WHERE title ILIKE %s ORDER BY title LIMIT %s',
@@ -220,7 +267,7 @@ def suggest_book_values(field, prefix, limit=8):
         return db.fetch_all(
             "SELECT DISTINCT isbn FROM book_catalog WHERE isbn IS NOT NULL AND isbn != '' "
             "AND isbn ILIKE %s ORDER BY isbn LIMIT %s",
-            (pattern, limit)
+            (isbn_pattern, limit)
         )
     # 'search' — the catalog search box matches any of these columns
     return db.fetch_all(
@@ -231,7 +278,7 @@ def suggest_book_values(field, prefix, limit=8):
         "AND subject_classification != '' AND subject_classification ILIKE %s "
         "UNION SELECT isbn FROM book_catalog WHERE isbn IS NOT NULL AND isbn != '' AND isbn ILIKE %s"
         ") s WHERE value IS NOT NULL AND value != '' ORDER BY value LIMIT %s",
-        (pattern, pattern, pattern, pattern, limit)
+        (pattern, pattern, pattern, isbn_pattern, limit)
     )
 
 
@@ -626,6 +673,7 @@ def _filtered_where(query, field=None, year_from=None, year_to=None,
     conditions = ["catalog_status = 'active'"]
     args = []
     pattern = f'%{query}%' if query else None
+    isbn_pattern = f'%{_isbn_search_text(query)}%' if query else None
 
     if query:
         if field == 'title':
@@ -636,13 +684,13 @@ def _filtered_where(query, field=None, year_from=None, year_to=None,
             args.append(pattern)
         elif field == 'isbn':
             conditions.append('isbn ILIKE %s')
-            args.append(pattern)
+            args.append(isbn_pattern)
         elif field == 'category':
             conditions.append('subject_classification ILIKE %s')
             args.append(pattern)
         else:
             conditions.append('(title ILIKE %s OR author ILIKE %s OR isbn ILIKE %s OR subject_classification ILIKE %s)')
-            args.extend([pattern, pattern, pattern, pattern])
+            args.extend([pattern, pattern, isbn_pattern, pattern])
 
     if year_from:
         try:
@@ -1035,6 +1083,7 @@ def update_book(book_id, title, author, edition, publisher, year_published,
     """
     if category_id is None:
         category_id, _ = resolve_category(subject_classification)
+    isbn = normalize_isbn(isbn) or None
     return db.execute(
         '''UPDATE book_catalog SET title=%s, author=%s, edition=%s, publisher=%s,
            year_published=%s, subject_classification=%s, call_number=%s,
@@ -1125,6 +1174,7 @@ def search_books_paginated(query, field, page, per_page, sort_by=None):
     """
     offset = (page - 1) * per_page
     pattern = f'%{query}%'
+    isbn_pattern = f'%{_isbn_search_text(query)}%'
 
     if field == 'title':
         where = 'WHERE title ILIKE %s'
@@ -1134,7 +1184,7 @@ def search_books_paginated(query, field, page, per_page, sort_by=None):
         args = (pattern,)
     elif field == 'isbn':
         where = 'WHERE isbn ILIKE %s'
-        args = (pattern,)
+        args = (isbn_pattern,)
     elif field == 'accession':
         where = 'WHERE book_id IN (SELECT book_id FROM accession_log WHERE accession_number ILIKE %s)'
         args = (pattern,)
@@ -1145,7 +1195,7 @@ def search_books_paginated(query, field, page, per_page, sort_by=None):
         where = '''WHERE title ILIKE %s OR author ILIKE %s OR isbn ILIKE %s
                       OR subject_classification ILIKE %s
                       OR book_id IN (SELECT book_id FROM accession_log WHERE accession_number ILIKE %s)'''
-        args = (pattern, pattern, pattern, pattern, pattern)
+        args = (pattern, pattern, isbn_pattern, pattern, pattern)
     else:
         where = ''
         args = ()

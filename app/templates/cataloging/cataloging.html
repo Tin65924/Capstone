@@ -670,7 +670,8 @@
                     </div>
                     <div>
                         <label class="form-label">ISBN *</label>
-                        <input type="text" name="isbn" maxlength="20" class="form-input" placeholder="ISBN number" data-suggest="book_isbn" value="{{ _add.get('isbn', '') }}">
+                        <input type="text" name="isbn" maxlength="20" class="form-input" placeholder="ISBN number" data-suggest="book_isbn" value="{{ _add.get('isbn', '') }}" data-isbn-input>
+                        <p data-isbn-hint class="hidden mt-1 text-[11px] font-medium"></p>
                     </div>
                     <div>
                         <label class="form-label">Call Number / LOC Class. *</label>
@@ -778,7 +779,8 @@
                     </div>
                     <div>
                         <label class="form-label">ISBN *</label>
-                        <input type="text" name="isbn" id="edit_isbn" maxlength="20" class="form-input" data-suggest="book_isbn">
+                        <input type="text" name="isbn" id="edit_isbn" maxlength="20" class="form-input" data-suggest="book_isbn" data-isbn-input>
+                        <p data-isbn-hint class="hidden mt-1 text-[11px] font-medium"></p>
                     </div>
                     <div>
                         <label class="form-label">Call Number / LOC Class. *</label>
@@ -1029,12 +1031,65 @@
                 }
                 if (name === 'isbn') {
                     input.placeholder = (mtype === 'Periodical') ? 'e.g. 1234-567X' : 'ISBN number';
+                    validateIsbnInput(input);
                 }
             });
+        }
+        function isbn10Ok(code) {
+            if (!/^\d{9}[\dX]$/.test(code)) return false;
+            var total = 0;
+            for (var i = 0; i < 10; i++) {
+                total += (code[i] === 'X' ? 10 : +code[i]) * (10 - i);
+            }
+            return total % 11 === 0;
+        }
+        function isbn13Ok(code) {
+            if (!/^\d{13}$/.test(code)) return false;
+            var total = 0;
+            for (var j = 0; j < 13; j++) {
+                total += (+code[j]) * (j % 2 === 0 ? 1 : 3);
+            }
+            return total % 10 === 0;
+        }
+        // Immediate ISBN/ISSN feedback under the add/edit boxes (mirrors
+        // _validate_isbn_issn checksums — the backend remains authoritative).
+        function validateIsbnInput(input) {
+            if (!input) return;
+            var form = input.closest('form');
+            var wrap = input.closest('div');
+            var hint = wrap ? wrap.querySelector('[data-isbn-hint]') : null;
+            if (!hint) return;
+            var sel = form ? form.querySelector('[name="material_type"]') : null;
+            var mtype = (sel && sel.value) || 'Book';
+            var code = (input.value || '').replace(/[-\s]/g, '').toUpperCase();
+            var msg = '', ok = false;
+            if (!code) {
+                hint.classList.add('hidden');
+                return;
+            }
+            if (mtype === 'Periodical') {
+                ok = /^\d{7}[\dX]$/.test(code);
+                msg = ok ? 'Valid ISSN.' : 'ISSN must be 8 characters (e.g. 1234-567X).';
+            } else if (code.length === 10) {
+                ok = isbn10Ok(code);
+                msg = ok ? 'Valid ISBN-10.' : 'Invalid ISBN-10 check digit.';
+            } else if (code.length === 13) {
+                ok = isbn13Ok(code);
+                msg = ok ? 'Valid ISBN-13.' : 'Invalid ISBN-13 check digit.';
+            } else {
+                msg = 'ISBN must be 10 or 13 digits.';
+            }
+            hint.textContent = msg;
+            hint.style.color = ok ? '#15803d' : '#b91c1c';
+            hint.classList.remove('hidden');
         }
         document.addEventListener('DOMContentLoaded', function () {
             applyMaterialType('add');
             applyMaterialType('edit');
+            document.querySelectorAll('[data-isbn-input]').forEach(function (input) {
+                input.addEventListener('input', function () { validateIsbnInput(input); });
+                validateIsbnInput(input);
+            });
         });
 
         // Reopen a modal after a PRG redirect so flash feedback shows inside it
