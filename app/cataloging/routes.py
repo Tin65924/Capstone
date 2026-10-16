@@ -18,7 +18,8 @@ from app.cataloging.models import (
     get_accessions_by_book, get_accession_by_number,
     get_accession_by_id, get_accessions_for_books, update_accession,
     delete_accession, accession_referenced,
-    get_book_by_title_author_isbn, search_books_paginated
+    get_book_by_title_author_isbn, search_books_paginated,
+    get_categories, resolve_category
 )
 from app.auth.models import log_activity
 from app.bloom_registry import bloom_registry
@@ -46,6 +47,8 @@ HEADER_MAP = {
     'accession number': 'accession_number', 'accession_number': 'accession_number',
     'accession': 'accession_number', 'accession no': 'accession_number',
     'source': 'source', 'acquisition source': 'source', 'acquisition_source': 'source',
+    'shelf location': 'shelf_location', 'shelf_location': 'shelf_location',
+    'shelf': 'shelf_location', 'location': 'shelf_location',
 }
 
 
@@ -99,12 +102,10 @@ def _decode_csv(raw):
     return None
 
 
-# Required book fields with their DB column caps (schema.sql). Title and
-# author were always required; category, ISBN, edition, publisher, year,
-# and call number (LOC class) are required too so catalog records are
-# complete at entry. Lengths mirror the VARCHAR widths so oversized
-# input is rejected gracefully instead of 500ing on the INSERT.
-REQUIRED_BOOK_FIELDS = (
+# Required book fields with their DB column caps (schema.sql). Lengths
+# mirror the VARCHAR widths so oversized input is rejected gracefully
+# instead of 500ing on the INSERT.
+BOOK_FIELD_CAPS = (
     ('title', 'Title', 255),
     ('author', 'Author', 150),
     ('edition', 'Edition', 30),
@@ -113,6 +114,30 @@ REQUIRED_BOOK_FIELDS = (
     ('subject_classification', 'Category', 100),
     ('call_number', 'Call Number / LOC Class', 50),
 )
+
+# Every material type the catalog supports (Add/Edit dropdowns).
+MATERIAL_TYPES = ('Book', 'E-Book', 'Reference', 'Periodical', 'Thesis', 'Multimedia')
+
+# Bibliographic fields each material type requires. Title, year, and
+# category apply to every type; the rest vary (a thesis needs no ISBN,
+# a periodical needs its publisher and ISSN instead of author/edition).
+# Mirrored in the add/edit modal JS (MATERIAL_REQUIRED) — keep in sync.
+MATERIAL_REQUIRED_FIELDS = {
+    'Book': frozenset({'title', 'author', 'edition', 'publisher',
+                        'year_published', 'isbn', 'subject_classification',
+                        'call_number'}),
+    'E-Book': frozenset({'title', 'author', 'year_published',
+                          'subject_classification'}),
+    'Reference': frozenset({'title', 'author', 'edition', 'publisher',
+                             'year_published', 'subject_classification',
+                             'call_number'}),
+    'Periodical': frozenset({'title', 'publisher', 'year_published', 'isbn',
+                              'subject_classification'}),
+    'Thesis': frozenset({'title', 'author', 'year_published',
+                          'subject_classification'}),
+    'Multimedia': frozenset({'title', 'year_published',
+                              'subject_classification'}),
+}
 
 
 def _to_title_case(value):
@@ -145,7 +170,8 @@ def _validate_isbn_issn(isbn, material_type):
     code = (isbn or '').strip().replace('-', '').replace(' ', '').upper()
     mtype = (material_type or 'Book').strip().lower()
     if not code:
-        if mtype in ('thesis', 'multimedia'):
+        # ISBN/ISSN optional for these types (see MATERIAL_REQUIRED_FIELDS).
+        if mtype in ('thesis', 'multimedia', 'e-book'):
             return None
         return 'ISBN is required for this material type.'
     if mtype == 'periodical':
@@ -173,15 +199,25 @@ def get_next_accession_number():
 def _validate_book_form(form):
     """Validate add/edit book input. Returns (error, cleaned).
 
-    error is a flash-ready message (None when valid); cleaned holds
-    stripped values plus parsed year_published (int). Material type,
-    source, and description stay optional.
+    Required fields come from MATERIAL_REQUIRED_FIELDS for the posted
+    material type (unknown types are rejected; missing defaults to
+    'Book'). Optional fields pass through as None when blank. error is
+    a flash-ready message (None when valid); cleaned holds stripped
+    values plus parsed year_published (int). Source and description
+    stay optional for every type.
     """
+    material_type = (form.get('material_type', '') or '').strip() or 'Book'
+    if material_type not in MATERIAL_TYPES:
+        return f'Invalid material type "{material_type}".', {}
+    required = MATERIAL_REQUIRED_FIELDS[material_type]
     cleaned = {}
-    for field, label, max_len in REQUIRED_BOOK_FIELDS:
+    for field, label, max_len in BOOK_FIELD_CAPS:
         value = (form.get(field, '') or '').strip()
         if not value:
-            return f'{label} is required.', {}
+            if field in required:
+                return f'{label} is required for {material_type}.', {}
+            cleaned[field] = None
+            continue
         if len(value) > max_len:
             return f'{label} is too long (max {max_len} characters).', {}
         if field in ('title', 'author', 'publisher', 'subject_classification'):
@@ -190,7 +226,8 @@ def _validate_book_form(form):
         if field == 'subject_classification' and value.lower() == 'advertising':
             value = 'Advertisement'
         cleaned[field] = value
-    isbn_err = _validate_isbn_issn(cleaned.get('isbn', ''), form.get('material_type', 'Book'))
+    cleaned['material_type'] = material_type
+    isbn_err = _validate_isbn_issn(cleaned.get('isbn') or '', material_type)
     if isbn_err:
         try:
             from flask import current_app as _ca
@@ -249,6 +286,21 @@ def _validate_accession_number(accession_number):
     if not re.fullmatch(r'\d{6}', accession_number):
         return 'Accession number must be exactly 6 digits (e.g. 000001).'
     return None
+
+
+def _clean_shelf_location(form):
+    """Error message + value for an optional shelf locator, (None, None) when blank.
+
+    Shelf locations are short staff labels (e.g. '2F-A3', max 50 chars
+    mirroring the VARCHAR width) shown on copy rows so borrowers know
+    where to find the copy.
+    """
+    shelf = (form.get('shelf_location', '') or '').strip()
+    if not shelf:
+        return None, None
+    if len(shelf) > 50:
+        return None, 'Shelf location is too long (max 50 characters).'
+    return shelf, None
 
 
 @cataloging_bp.route('/librarian/cataloging')
@@ -346,6 +398,11 @@ def cataloging_page():
                         seen.append(display['reason'])
             reasons_by_book[book_id] = ' | '.join(seen) if seen else '—'
 
+    try:
+        all_categories = [row[1] for row in get_categories() or [] if row and len(row) > 1 and row[1]]
+    except Exception:
+        all_categories = []
+
     return render_template('cataloging/cataloging.html', books=books,
                            total=total, search_query=query,
                            search_field=field, status_filter=status_filter,
@@ -355,7 +412,8 @@ def cataloging_page():
                            conditions_by_accession=conditions_by_accession,
                            copy_conditions=copy_conditions,
                            reasons_by_book=reasons_by_book,
-                           show_reason_col=show_reason_col)
+                           show_reason_col=show_reason_col,
+                           all_categories=all_categories)
 
 
 _BOOK_EXPORT_HEADERS = [
@@ -584,10 +642,16 @@ def add_book():
     isbn = fields['isbn']
     existing_book = get_book_by_title_author_isbn(title, author, isbn)
     source = request.form.get('source', '').strip() or None
+    shelf_location, shelf_error = _clean_shelf_location(request.form)
+    if shelf_error:
+        flash(shelf_error, 'error')
+        return redirect(url_for('cataloging.cataloging_page', modal='addBookModal', mstatus='error'))
+    category_id, canonical_subject = resolve_category(fields['subject_classification'])
+    fields['subject_classification'] = canonical_subject or fields['subject_classification']
     if existing_book:
         book_id = existing_book[0]
         if accession_number:
-            create_accession(accession_number, book_id, current_user.id, source)
+            create_accession(accession_number, book_id, current_user.id, source, shelf_location)
             log_activity(current_user.id, f'cataloging:add_copy:{book_id}')
             flash(f'"{title}" already exists; accession {accession_number} added as another copy.', 'success')
         else:
@@ -604,8 +668,9 @@ def add_book():
         subject_classification=fields['subject_classification'],
         call_number=fields['call_number'],
         isbn=isbn,
-        material_type=request.form.get('material_type', 'Book'),
+        material_type=fields['material_type'],
         description=request.form.get('description', '').strip() or None,
+        category_id=category_id,
     )
     bloom_registry.mark_dirty()
     if accession_number:
@@ -614,6 +679,7 @@ def add_book():
             book_id=book_id,
             librarian_id=current_user.id,
             source=source,
+            shelf_location=shelf_location,
         )
     log_activity(current_user.id, 'cataloging:add_book')
     flash('Book added to catalog.', 'success')
@@ -646,6 +712,9 @@ def edit_book(book_id):
                                 book_id=book_id, mstatus='error'))
     title, author = fields['title'], fields['author']
 
+    category_id, canonical_subject = resolve_category(fields['subject_classification'])
+    fields['subject_classification'] = canonical_subject or fields['subject_classification']
+
     update_book(
         book_id=book_id,
         title=title,
@@ -656,9 +725,10 @@ def edit_book(book_id):
         subject_classification=fields['subject_classification'],
         call_number=fields['call_number'],
         isbn=fields['isbn'],
-        material_type=request.form.get('material_type', 'Book'),
+        material_type=fields['material_type'],
         description=request.form.get('description', '').strip() or None,
         updated_by=current_user.id,
+        category_id=category_id,
     )
     bloom_registry.mark_dirty()
     from app.auth.models import audit_text
@@ -759,6 +829,12 @@ def add_accession(book_id):
 
     accession_number = request.form.get('accession_number', '').strip()
     source = request.form.get('source', '').strip() or None
+    shelf_location, shelf_error = _clean_shelf_location(request.form)
+    if shelf_error:
+        flash(shelf_error, 'error')
+        return redirect(url_for('cataloging.cataloging_page', modal='addAccessionModal',
+                                action=url_for('cataloging.add_accession', book_id=book_id),
+                                mstatus='error'))
 
     acc_error = _validate_accession_number(accession_number)
     if acc_error:
@@ -774,7 +850,7 @@ def add_accession(book_id):
                                 action=url_for('cataloging.add_accession', book_id=book_id),
                                 mstatus='error'))
 
-    create_accession(accession_number, book_id, current_user.id, source)
+    create_accession(accession_number, book_id, current_user.id, source, shelf_location)
     log_activity(current_user.id, f'cataloging:add_accession:{book_id}')
     flash(f'Accession {accession_number} added.', 'success')
     return redirect(url_for('cataloging.cataloging_page', modal='addAccessionModal',
@@ -803,6 +879,10 @@ def edit_accession(accession_id):
 
     accession_number = request.form.get('accession_number', '').strip()
     source = request.form.get('source', '').strip() or None
+    shelf_location, shelf_error = _clean_shelf_location(request.form)
+    if shelf_error:
+        flash(shelf_error, 'error')
+        return redirect(url_for('cataloging.cataloging_page', modal='editAccessionModal', mstatus='error'))
 
     acc_error = _validate_accession_number(accession_number)
     if acc_error:
@@ -814,7 +894,7 @@ def edit_accession(accession_id):
         flash(f'Accession number {accession_number} already exists.', 'error')
         return redirect(url_for('cataloging.cataloging_page', modal='editAccessionModal', mstatus='error'))
 
-    update_accession(accession_id, accession_number, source, updated_by=current_user.id)
+    update_accession(accession_id, accession_number, source, shelf_location, updated_by=current_user.id)
     log_activity(current_user.id, f'cataloging:edit_accession:{accession_id}')
     flash(f'Accession {accession_number} updated.', 'success')
     return redirect(url_for('cataloging.cataloging_page', modal='editAccessionModal', mstatus='success'))
@@ -1045,17 +1125,20 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                 else:
                     year_str = book_data.get('year_published', '')
                     year = int(year_str) if year_str and year_str.isdigit() else None
+                    raw_subject = book_data.get('subject_classification') or None
+                    subject_id, subject_canonical = resolve_category(raw_subject)
                     book_id = create_book(
                         title=title,
                         author=author,
                         edition=book_data.get('edition') or None,
                         publisher=book_data.get('publisher') or None,
                         year_published=year,
-                        subject_classification=book_data.get('subject_classification') or None,
+                        subject_classification=subject_canonical or raw_subject,
                         call_number=book_data.get('call_number') or None,
                         isbn=isbn or None,
                         material_type=book_data.get('material_type', 'Book') or 'Book',
                         description=book_data.get('description') or None,
+                        category_id=subject_id,
                     )
                     if book_id is None:
                         errors.append(f'Row {i}: could not create book record')
@@ -1069,11 +1152,19 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                     source = source.lower()
                     if source not in ('purchase', 'donation', 'others'):
                         source = None
+                shelf_location = (book_data.get('shelf_location', '') or '').strip() or None
+                if shelf_location and len(shelf_location) > 50:
+                    errors.append(f'Row {i}: shelf location too long (max 50 characters)')
+                    with _import_lock:
+                        _import_jobs[job_id]['done'] = imported + len(errors)
+                        _import_jobs[job_id]['updated_at'] = datetime.now()
+                    continue
                 create_accession(
                     accession_number=accession_number,
                     book_id=book_id,
                     librarian_id=user_id,
                     source=source,
+                    shelf_location=shelf_location,
                 )
                 imported += 1
             except Exception as e:

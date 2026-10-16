@@ -768,7 +768,7 @@ class TestChartFilterModels:
         mock_db['fetch_all'].return_value = [('Science', 3)]
         assert collection_by_category(None, None, ['Science', 'Arts']) == [('Science', 3)]
         query, params = mock_db['fetch_all'].call_args[0]
-        assert 'LOWER(b.subject_classification) IN (%s, %s)' in query
+        assert 'LOWER(COALESCE(ct.name, b.subject_classification)) IN (%s, %s)' in query
         assert params == ('science', 'arts')
 
     def test_collection_category_case_insensitive_and_others(self, mock_db):
@@ -779,7 +779,7 @@ class TestChartFilterModels:
         mock_db['fetch_all'].return_value = []
         collection_by_category(None, None, ['PHYSICS', 'Others', '  '])
         query, params = mock_db['fetch_all'].call_args[0]
-        assert 'LOWER(b.subject_classification) IN (%s)' in query
+        assert 'LOWER(COALESCE(ct.name, b.subject_classification)) IN (%s)' in query
         assert "b.subject_classification = ''" in query
         assert params == ('physics',)
 
@@ -1109,7 +1109,7 @@ class TestChartJson:
             '/librarian/analytics/chart?name=collection_by_category&category=Science&category= &preset=all')
         assert resp.get_json()['filters'] == {'categories': ['Science']}
         query, params = mock_db['fetch_all'].call_args[0]
-        assert 'LOWER(b.subject_classification) IN (%s)' in query
+        assert 'LOWER(COALESCE(ct.name, b.subject_classification)) IN (%s)' in query
         assert params == ('science',)
 
     def test_chart_custom_dates(self, librarian_client, mock_db):
@@ -2495,3 +2495,57 @@ class TestExportAliasRegression:
                       'kpi_types': 'top_books,most_borrowed_titles'})
         assert resp.status_code == 200
         assert resp.mimetype == 'application/pdf'
+
+
+class TestCanonicalCategories:
+    """Analytics groups by the canonical category vocabulary."""
+
+    @staticmethod
+    def _query(mock_db):
+        return mock_db['fetch_all'].call_args[0][0]
+
+    def test_top_borrowed_categories_uses_vocabulary(self, mock_db):
+        """Validates top borrowed categories uses vocabulary [TestCanonicalCategories / analytics].
+    If fails: likely model SQL changed (SELECT).
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        from app.analytics.models import top_borrowed_categories
+        mock_db['fetch_all'].return_value = []
+        top_borrowed_categories()
+        query = self._query(mock_db)
+        assert 'LEFT JOIN categories ct' in query
+        assert 'ct.name' in query
+
+    def test_top_categories_by_program_uses_vocabulary(self, mock_db):
+        """Validates top categories by program uses vocabulary [TestCanonicalCategories / analytics].
+    If fails: likely model SQL changed (SELECT).
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        from app.analytics.models import top_categories_by_program
+        mock_db['fetch_all'].return_value = []
+        top_categories_by_program()
+        query = self._query(mock_db)
+        assert 'LEFT JOIN categories ct' in query
+        assert 'ct.name' in query
+        assert 'JOIN book_catalog bk ON' in query
+
+    def test_category_drilldown_uses_vocabulary(self, mock_db):
+        """Validates category drilldown uses vocabulary [TestCanonicalCategories / analytics].
+    If fails: likely model SQL changed (SELECT).
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        from app.analytics.models import category_borrowings_by_program
+        mock_db['fetch_all'].return_value = []
+        category_borrowings_by_program('Computer Science')
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'LEFT JOIN categories ct' in query
+        assert 'ct.name' in query
+        assert params[0] == 'Computer Science'
+
+    def test_collection_by_category_uses_vocabulary(self, mock_db):
+        """Validates collection by category uses vocabulary [TestCanonicalCategories / analytics].
+    If fails: likely model SQL changed (SELECT).
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        from app.analytics.models import collection_by_category
+        mock_db['fetch_all'].return_value = []
+        collection_by_category()
+        query = self._query(mock_db)
+        assert 'LEFT JOIN categories ct' in query
+        assert 'ct.name' in query

@@ -264,6 +264,33 @@ INSERT INTO library_settings (setting_key, setting_value, description) VALUES
     ('LIBRARY_MONTH_DAYS', '', 'Per-date open map YYYY-MM:bits for the current month (empty = weekly pattern applies)')
 ON CONFLICT (setting_key) DO NOTHING;
 
+-- Controlled vocabulary for book categories. Cataloging stores the
+-- canonical name in book_catalog.subject_classification and the FK in
+-- book_catalog.category_id (resolved case-insensitively so 'computer
+-- science' and 'Computer Science' share one row). Analytics GROUP BYs
+-- read the canonical name through the FK.
+CREATE TABLE IF NOT EXISTS categories (
+    category_id SERIAL PRIMARY KEY,
+    name        VARCHAR(100) UNIQUE NOT NULL
+);
+
+ALTER TABLE book_catalog ADD COLUMN IF NOT EXISTS category_id INT REFERENCES categories(category_id);
+
+-- Backfill: one category per distinct subject (case-insensitive dedup,
+-- alphabetically-first casing wins), then link every unlinked book
+-- case-insensitively. Idempotent: re-runs only fill gaps.
+INSERT INTO categories (name)
+SELECT DISTINCT ON (LOWER(TRIM(subject_classification))) TRIM(subject_classification)
+FROM book_catalog
+WHERE subject_classification IS NOT NULL AND TRIM(subject_classification) != ''
+ORDER BY LOWER(TRIM(subject_classification)), TRIM(subject_classification)
+ON CONFLICT (name) DO NOTHING;
+
+UPDATE book_catalog SET category_id = categories.category_id FROM categories
+WHERE book_catalog.category_id IS NULL
+  AND book_catalog.subject_classification IS NOT NULL
+  AND LOWER(categories.name) = LOWER(TRIM(book_catalog.subject_classification));
+
 -- Controlled vocabulary for borrower programs (students) and departments
 -- (faculty). Registration, profile, and user-management forms only accept
 -- values from this table; borrowers.department stores the canonical name.
@@ -296,6 +323,9 @@ ALTER TABLE book_catalog ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
 ALTER TABLE book_catalog ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
 ALTER TABLE accession_log ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
 ALTER TABLE accession_log ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
+-- Shelf location per physical copy (e.g. '2F-A3'). Nullable: older copies
+-- simply show no shelf until edited.
+ALTER TABLE accession_log ADD COLUMN IF NOT EXISTS shelf_location VARCHAR(50);
 ALTER TABLE request_records ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
 ALTER TABLE request_records ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id);
 ALTER TABLE procurement_log ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;

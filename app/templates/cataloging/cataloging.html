@@ -432,6 +432,7 @@
                                             <tr class="bg-gray-100 text-left text-xs text-gray-500 uppercase tracking-wider">
                                                 <th class="px-4 py-2">Accession Number</th>
                                                 <th class="px-4 py-2">Source</th>
+                                                <th class="px-4 py-2">Shelf</th>
                                                 <th class="px-4 py-2">Date Accessioned</th>
                                                 <th class="px-4 py-2">Condition</th>
                                                 <th class="px-4 py-2">Actions</th>
@@ -443,6 +444,7 @@
                                             <tr class="border-t border-gray-100 bg-white">
                                                 <td class="px-4 py-2 font-mono text-xs">{{ copy[1] }}</td>
                                                 <td class="px-4 py-2 text-xs">{{ copy[3] or '—' }}</td>
+                                                <td class="px-4 py-2 text-xs">{{ copy[5] if copy|length > 5 and copy[5] else '—' }}</td>
                                                 <td class="px-4 py-2 text-xs">{{ copy[4] }}</td>
                                                 <td class="px-4 py-2 text-xs">
                                                     {% if cd and cd.lost %}
@@ -537,7 +539,7 @@
                             <div class="flex items-center justify-between p-2 border-b border-gray-100 last:border-0 bg-white gap-2">
                                 <div class="min-w-0 flex-1">
                                     <div class="font-mono text-xs truncate">{{ copy[1] }}</div>
-                                    <div class="text-[11px] text-gray-500 truncate">{{ copy[3] or '—' }} · {{ copy[4] }}</div>
+                                    <div class="text-[11px] text-gray-500 truncate">{{ copy[3] or '—' }} · {{ copy[4] }}{% if copy|length > 5 and copy[5] %} · Shelf {{ copy[5] }}{% endif %}</div>
                                     {% if cd and cd.lost %}
                                     <div class="mt-1"><span class="status-badge status-lost" style="font-size:10px;">Lost</span></div>
                                     {% if cd.reason %}<div class="text-[11px] text-gray-500 break-words">{{ cd.reason }}</div>{% endif %}
@@ -629,9 +631,20 @@
                 {% endwith %}
             </div>
             {% endif %}
-            <form method="POST" action="{{ url_for('cataloging.add_book') }}" class="p-4 sm:p-6 space-y-4" data-exists-book data-exists-accession>
+            <form method="POST" action="{{ url_for('cataloging.add_book') }}" class="p-4 sm:p-6 space-y-4" data-exists-book data-exists-accession id="addBookForm">
                 <p data-exists-msg class="hidden mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm font-medium text-red-700 dark:text-red-300"></p>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div class="col-span-2">
+                        <label class="form-label">Material Type</label>
+                        <select name="material_type" id="add_material_type" class="form-input" onchange="applyMaterialType('add')">
+                            <option value="Book">Book</option>
+                            <option value="E-Book">E-Book</option>
+                            <option value="Reference">Reference</option>
+                            <option value="Periodical">Periodical</option>
+                            <option value="Thesis">Thesis</option>
+                            <option value="Multimedia">Multimedia</option>
+                        </select>
+                    </div>
                     <div class="col-span-2">
                         <label class="form-label">Accession Number *</label>
                         <input type="text" name="accession_number" required class="form-input" placeholder="e.g. 000001" pattern="\d{6}" maxlength="6" title="6-digit accession number (e.g. 000001)">
@@ -643,26 +656,15 @@
                     </div>
                     <div>
                         <label class="form-label">Author *</label>
-                        <input type="text" name="author" required maxlength="150" class="form-input" placeholder="Author name" data-suggest="book_author">
-                    </div>
-                    <div>
-                        <label class="form-label">Material Type</label>
-                        <select name="material_type" class="form-input">
-                            <option value="Book">Book</option>
-                            <option value="E-Book">E-Book</option>
-                            <option value="Reference">Reference</option>
-                            <option value="Periodical">Periodical</option>
-                            <option value="Thesis">Thesis</option>
-                            <option value="Multimedia">Multimedia</option>
-                        </select>
+                        <input type="text" name="author" maxlength="150" class="form-input" placeholder="Author name" data-suggest="book_author">
                     </div>
                     <div>
                         <label class="form-label">Edition *</label>
-                        <input type="text" name="edition" required maxlength="30" class="form-input" placeholder="e.g. 3rd">
+                        <input type="text" name="edition" maxlength="30" class="form-input" placeholder="e.g. 3rd">
                     </div>
                     <div>
                         <label class="form-label">Publisher *</label>
-                        <input type="text" name="publisher" required maxlength="150" class="form-input" placeholder="Publisher name" data-suggest="book_publisher">
+                        <input type="text" name="publisher" maxlength="150" class="form-input" placeholder="Publisher name" data-suggest="book_publisher">
                     </div>
                     <div>
                         <label class="form-label">Year Published *</label>
@@ -670,11 +672,11 @@
                     </div>
                     <div>
                         <label class="form-label">ISBN *</label>
-                        <input type="text" name="isbn" required maxlength="20" class="form-input" placeholder="ISBN number" data-suggest="book_isbn">
+                        <input type="text" name="isbn" maxlength="20" class="form-input" placeholder="ISBN number" data-suggest="book_isbn">
                     </div>
                     <div>
                         <label class="form-label">Call Number / LOC Class. *</label>
-                        <input type="text" name="call_number" required maxlength="50" class="form-input" placeholder="e.g. QA76.73">
+                        <input type="text" name="call_number" maxlength="50" class="form-input" placeholder="e.g. QA76.73">
                     </div>
                     <div>
                         <label class="form-label">Source</label>
@@ -685,9 +687,18 @@
                             <option value="others">Others</option>
                         </select>
                     </div>
+                    <div>
+                        <label class="form-label">Shelf Location</label>
+                        <input type="text" name="shelf_location" maxlength="50" class="form-input" placeholder="e.g. 2F-A3">
+                    </div>
                     <div class="col-span-2">
                         <label class="form-label">Category *</label>
-                        <input type="text" name="subject_classification" required maxlength="100" class="form-input" placeholder="e.g. Computer Science" data-suggest="book_subject">
+                        <input type="text" name="subject_classification" required maxlength="100" class="form-input" placeholder="e.g. Computer Science" data-suggest="book_subject" list="categoryListAdd">
+                        <datalist id="categoryListAdd">
+                            {% for cat in all_categories|default([]) %}
+                            <option value="{{ cat }}"></option>
+                            {% endfor %}
+                        </datalist>
                     </div>
                     <div class="col-span-2">
                         <label class="form-label">Description</label>
@@ -734,11 +745,11 @@
                     </div>
                     <div>
                         <label class="form-label">Author *</label>
-                        <input type="text" name="author" id="edit_author" required maxlength="150" class="form-input" data-suggest="book_author">
+                        <input type="text" name="author" id="edit_author" maxlength="150" class="form-input" data-suggest="book_author">
                     </div>
                     <div>
                         <label class="form-label">Material Type</label>
-                        <select name="material_type" id="edit_material_type" class="form-input">
+                        <select name="material_type" id="edit_material_type" class="form-input" onchange="applyMaterialType('edit')">
                             <option value="Book">Book</option>
                             <option value="E-Book">E-Book</option>
                             <option value="Reference">Reference</option>
@@ -749,11 +760,11 @@
                     </div>
                     <div>
                         <label class="form-label">Edition *</label>
-                        <input type="text" name="edition" id="edit_edition" required maxlength="30" class="form-input">
+                        <input type="text" name="edition" id="edit_edition" maxlength="30" class="form-input">
                     </div>
                     <div>
                         <label class="form-label">Publisher *</label>
-                        <input type="text" name="publisher" id="edit_publisher" required maxlength="150" class="form-input" data-suggest="book_publisher">
+                        <input type="text" name="publisher" id="edit_publisher" maxlength="150" class="form-input" data-suggest="book_publisher">
                     </div>
                     <div>
                         <label class="form-label">Year Published *</label>
@@ -761,15 +772,20 @@
                     </div>
                     <div>
                         <label class="form-label">ISBN *</label>
-                        <input type="text" name="isbn" id="edit_isbn" required maxlength="20" class="form-input" data-suggest="book_isbn">
+                        <input type="text" name="isbn" id="edit_isbn" maxlength="20" class="form-input" data-suggest="book_isbn">
                     </div>
                     <div>
                         <label class="form-label">Call Number / LOC Class. *</label>
-                        <input type="text" name="call_number" id="edit_call_number" required maxlength="50" class="form-input">
+                        <input type="text" name="call_number" id="edit_call_number" maxlength="50" class="form-input">
                     </div>
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Category *</label>
-                        <input type="text" name="subject_classification" id="edit_subject" required maxlength="100" class="form-input" placeholder="e.g. Computer Science" data-suggest="book_subject">
+                        <input type="text" name="subject_classification" id="edit_subject" required maxlength="100" class="form-input" placeholder="e.g. Computer Science" data-suggest="book_subject" list="categoryListEdit">
+                        <datalist id="categoryListEdit">
+                            {% for cat in all_categories|default([]) %}
+                            <option value="{{ cat }}"></option>
+                            {% endfor %}
+                        </datalist>
                     </div>
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Description</label>
@@ -824,6 +840,10 @@
                             <option value="others">Others</option>
                         </select>
                     </div>
+                    <div class="col-span-1 sm:col-span-2">
+                        <label class="form-label">Shelf Location</label>
+                        <input type="text" name="shelf_location" maxlength="50" class="form-input" placeholder="e.g. 2F-A3">
+                    </div>
                 </div>
                 <div class="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-4 border-t border-gray-100">
                     <button type="button" class="btn btn-outline w-full sm:w-auto justify-center" onclick="closeModal(null, 'addAccessionModal')">Cancel</button>
@@ -871,6 +891,10 @@
                             <option value="donation">Donation</option>
                             <option value="others">Others</option>
                         </select>
+                    </div>
+                    <div class="col-span-1 sm:col-span-2">
+                        <label class="form-label">Shelf Location</label>
+                        <input type="text" name="shelf_location" id="edit_acc_shelf" maxlength="50" class="form-input" placeholder="e.g. 2F-A3">
                     </div>
                 </div>
                 <div class="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-4 border-t border-gray-100">
@@ -1002,8 +1026,55 @@
             document.getElementById('edit_isbn').value = b[8] || '';
             document.getElementById('edit_material_type').value = b[9] || 'Book';
             document.getElementById('edit_description').value = b[10] || '';
+            applyMaterialType('edit');
             openModal('editBookModal');
         }
+
+        // Required bibliographic fields per material type (mirrors
+        // MATERIAL_REQUIRED_FIELDS in cataloging/routes.py — keep in sync).
+        // All fields stay visible; only required markers, the required
+        // attribute, and the ISBN/ISSN label change with the type.
+        var MATERIAL_REQUIRED = {
+            'Book': ['title', 'author', 'edition', 'publisher', 'year_published', 'isbn', 'subject_classification', 'call_number'],
+            'E-Book': ['title', 'author', 'year_published', 'subject_classification'],
+            'Reference': ['title', 'author', 'edition', 'publisher', 'year_published', 'subject_classification', 'call_number'],
+            'Periodical': ['title', 'publisher', 'year_published', 'isbn', 'subject_classification'],
+            'Thesis': ['title', 'author', 'year_published', 'subject_classification'],
+            'Multimedia': ['title', 'year_published', 'subject_classification']
+        };
+        var MATERIAL_FIELDS = ['title', 'author', 'edition', 'publisher', 'year_published', 'isbn', 'subject_classification', 'call_number'];
+        function applyMaterialType(prefix) {
+            var form = document.getElementById(prefix === 'edit' ? 'editBookForm' : 'addBookForm');
+            if (!form) return;
+            var sel = document.getElementById(prefix === 'edit' ? 'edit_material_type' : 'add_material_type');
+            var mtype = (sel && sel.value) || 'Book';
+            var required = MATERIAL_REQUIRED[mtype] || MATERIAL_REQUIRED['Book'];
+            MATERIAL_FIELDS.forEach(function (name) {
+                var input = form.querySelector('[name="' + name + '"]');
+                if (!input) return;
+                var need = required.indexOf(name) !== -1;
+                if (need) input.setAttribute('required', '');
+                else input.removeAttribute('required');
+                var wrap = input.closest('div');
+                var label = wrap ? wrap.querySelector('label') : null;
+                if (label) {
+                    var base = label.getAttribute('data-base-label');
+                    if (!base) {
+                        base = label.textContent.replace(/\s*\*\s*$/, '');
+                        label.setAttribute('data-base-label', base);
+                    }
+                    var text = (name === 'isbn' && mtype === 'Periodical') ? 'ISSN' : base;
+                    label.textContent = need ? text + ' *' : text;
+                }
+                if (name === 'isbn') {
+                    input.placeholder = (mtype === 'Periodical') ? 'e.g. 1234-567X' : 'ISBN number';
+                }
+            });
+        }
+        document.addEventListener('DOMContentLoaded', function () {
+            applyMaterialType('add');
+            applyMaterialType('edit');
+        });
 
         // Add Accession Copy (dedicated action, not part of edit)
         function openAccessionModal(btn) {
@@ -1027,6 +1098,7 @@
             document.getElementById('editAccessionForm').action = '/librarian/cataloging/accession/' + c[0] + '/edit';
             document.getElementById('edit_acc_number').value = c[1];
             document.getElementById('edit_acc_source').value = c[3] || '';
+            document.getElementById('edit_acc_shelf').value = (c.length > 5 && c[5]) || '';
             openModal('editAccessionModal');
         }
 

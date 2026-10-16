@@ -2,7 +2,7 @@ from app.database import db
 
 
 def create_book(title, author, edition, publisher, year_published, subject_classification,
-                call_number, isbn, material_type, description):
+                call_number, isbn, material_type, description, category_id=None):
     """Insert a new book title into the catalog as active and return its id.
 
     Creates one row in book_catalog with catalog_status='active' holding
@@ -21,17 +21,21 @@ def create_book(title, author, edition, publisher, year_published, subject_class
         isbn: ISBN string, or None (duplicates allowed across editions).
         material_type: e.g. 'Book' or 'E-Book'.
         description: Summary/blurb, or None.
+        category_id: FK into categories, or None to auto-resolve from
+            subject_classification (case-insensitive match or create).
 
     Returns:
         New book_id integer, or None if the INSERT returned nothing.
     """
+    if category_id is None:
+        category_id, _ = resolve_category(subject_classification)
     rows = db.execute(
         '''INSERT INTO book_catalog (title, author, edition, publisher, year_published,
-           subject_classification, call_number, isbn, material_type, description, catalog_status)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+           subject_classification, call_number, isbn, material_type, description, catalog_status, category_id)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
            RETURNING book_id''',
         (title, author, edition, publisher, year_published, subject_classification,
-         call_number, isbn, material_type, description, 'active')
+         call_number, isbn, material_type, description, 'active', category_id)
     )
     return rows[0][0] if rows else None
 
@@ -414,6 +418,57 @@ def get_distinct_categories():
     )
 
 
+def get_categories():
+    """List the controlled category vocabulary A-Z for form dropdowns.
+
+    Returns:
+        List of (category_id, name) tuples ordered case-insensitively.
+    """
+    return db.fetch_all(
+        'SELECT category_id, name FROM categories ORDER BY LOWER(name), name'
+    ) or []
+
+
+def resolve_category(name):
+    """Resolve a subject label to (category_id, canonical_name).
+
+    Matches case-insensitively against the vocabulary so 'computer
+    science' reuses 'Computer Science'; creates the entry when absent
+    so cataloging converges on one spelling per category. Blank input
+    resolves to (None, None). Tolerates short rows and rowcount ints
+    (mock/test shapes) and re-reads after a lost insert race instead
+    of failing.
+
+    Args:
+        name: Raw subject label from a form or CSV row.
+
+    Returns:
+        Tuple (category_id or None, canonical name or None).
+    """
+    clean = (name or '').strip()
+    if not clean:
+        return None, None
+    for attempt in ('select', 'insert', 'select'):
+        if attempt == 'insert':
+            inserted = db.execute(
+                'INSERT INTO categories (name) VALUES (%s) '
+                'ON CONFLICT (name) DO NOTHING RETURNING category_id, name',
+                (clean,)
+            )
+            if isinstance(inserted, (list, tuple)) and inserted:
+                first = inserted[0]
+                if isinstance(first, (list, tuple)) and len(first) > 0:
+                    return first[0], (first[1] if len(first) > 1 else clean)
+        else:
+            row = db.fetch_one(
+                'SELECT category_id, name FROM categories WHERE LOWER(name) = LOWER(%s)',
+                (clean,)
+            )
+            if isinstance(row, (list, tuple)) and len(row) > 0:
+                return row[0], (row[1] if len(row) > 1 else clean)
+    return None, clean
+
+
 def get_distinct_material_types():
     """Book types that have at least one active catalogued item.
 
@@ -585,26 +640,29 @@ def get_recent_books(limit=5):
     )
 
 
-def create_accession(accession_number, book_id, librarian_id, source=None):
+def create_accession(accession_number, book_id, librarian_id, source=None,
+                     shelf_location=None):
     """Add one physical copy of a book to the accession log.
 
     Inserts into accession_log linking the copy (accession_number, which
     must be unique) to its title and the processing librarian. Source
-    records acquisition origin ('purchase', 'donation', 'others').
+    records acquisition origin ('purchase', 'donation', 'others');
+    shelf_location records where staff expect to find it (e.g. '2F-A3').
 
     Args:
         accession_number: Unique copy barcode/number string.
         book_id: FK into book_catalog for the title.
         librarian_id: Acting staff user_id recorded as processor.
         source: Acquisition source label, or None.
+        shelf_location: Shelf locator string, or None.
 
     Returns:
         Rowcount from the INSERT.
     """
     return db.execute(
-        '''INSERT INTO accession_log (accession_number, book_id, librarian_id, source)
-           VALUES (%s, %s, %s, %s)''',
-        (accession_number, book_id, librarian_id, source)
+        '''INSERT INTO accession_log (accession_number, book_id, librarian_id, source, shelf_location)
+           VALUES (%s, %s, %s, %s, %s)''',
+        (accession_number, book_id, librarian_id, source, shelf_location)
     )
 
 
@@ -667,43 +725,45 @@ def get_accessions_for_books(book_ids):
     """Batch-fetch copy rows for many titles for list-page rendering.
 
     Avoids N+1 queries on catalog tables by pulling (accession_id,
-    accession_number, book_id, source, date_accessioned) for all given
-    titles in one ANY(%s) query, ordered by accession_id. Empty input
-    short-circuits to [] without hitting the DB.
+    accession_number, book_id, source, date_accessioned, shelf_location)
+    for all given titles in one ANY(%s) query, ordered by accession_id.
+    Empty input short-circuits to [] without hitting the DB.
 
     Args:
         book_ids: Iterable of book_catalog primary keys.
 
     Returns:
-        List of 5-tuple copy rows (possibly empty).
+        List of 6-tuple copy rows (possibly empty).
     """
     if not book_ids:
         return []
     return db.fetch_all(
-        'SELECT accession_id, accession_number, book_id, source, date_accessioned '
+        'SELECT accession_id, accession_number, book_id, source, date_accessioned, shelf_location '
         'FROM accession_log WHERE book_id = ANY(%s) ORDER BY accession_id',
         (book_ids,)
     ) or []
 
 
-def update_accession(accession_id, accession_number, source, updated_by=None):
-    """Edit a copy's barcode number and acquisition source.
+def update_accession(accession_id, accession_number, source,
+                     shelf_location=None, updated_by=None):
+    """Edit a copy's barcode number, acquisition source, and shelf.
 
     Updates accession_number (must stay unique — callers pre-check),
-    source, and audit stamps for one accession_log row.
+    source, shelf_location, and audit stamps for one accession_log row.
 
     Args:
         accession_id: Target copy's primary key.
         accession_number: New unique barcode string.
         source: New source label ('purchase', 'donation', 'others').
+        shelf_location: New shelf locator string, or None.
         updated_by: Acting staff user_id for the audit stamp.
 
     Returns:
         Rowcount from the UPDATE.
     """
     return db.execute(
-        'UPDATE accession_log SET accession_number=%s, source=%s, updated_at=NOW(), updated_by=%s WHERE accession_id=%s',
-        (accession_number, source, updated_by, accession_id)
+        'UPDATE accession_log SET accession_number=%s, source=%s, shelf_location=%s, updated_at=NOW(), updated_by=%s WHERE accession_id=%s',
+        (accession_number, source, shelf_location, updated_by, accession_id)
     )
 
 
@@ -802,7 +862,7 @@ def get_user_favorites(user_id):
 
 def update_book(book_id, title, author, edition, publisher, year_published,
                 subject_classification, call_number, isbn, material_type, description,
-                updated_by=None):
+                updated_by=None, category_id=None):
     """Overwrite a title's bibliographic metadata plus audit stamps.
 
     Updates all editable book_catalog columns for one book_id and
@@ -816,19 +876,23 @@ def update_book(book_id, title, author, edition, publisher, year_published,
         subject_classification: New category. call_number: New call no.
         isbn: New ISBN. material_type: New type. description: New blurb.
         updated_by: Acting staff user_id for the audit stamp.
+        category_id: FK into categories, or None to auto-resolve from
+            subject_classification (case-insensitive match or create).
 
     Returns:
         Rowcount from the UPDATE.
     """
+    if category_id is None:
+        category_id, _ = resolve_category(subject_classification)
     return db.execute(
         '''UPDATE book_catalog SET title=%s, author=%s, edition=%s, publisher=%s,
            year_published=%s, subject_classification=%s, call_number=%s,
-           isbn=%s, material_type=%s, description=%s,
+           isbn=%s, material_type=%s, description=%s, category_id=%s,
            updated_at=NOW(), updated_by=%s
            WHERE book_id=%s''',
         (title, author, edition, publisher, year_published,
          subject_classification, call_number, isbn, material_type, description,
-         updated_by, book_id)
+         category_id, updated_by, book_id)
     )
 
 

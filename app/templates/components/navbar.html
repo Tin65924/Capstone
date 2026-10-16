@@ -15,10 +15,8 @@
                 {% endif %}
             </nav>
             {% if current_user.is_authenticated %}
-            <a href="{{ url_for('main.user_notifications') }}" aria-label="Notifications" class="relative inline-flex items-center justify-center p-2 rounded-lg text-[#0f172a] dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                <span class="material-symbols-outlined">notifications</span>
-                <span data-unread-count data-notif-badge class="absolute -top-0.5 -right-0.5 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold leading-[1.1rem] text-center {% if not notif_unread %}hidden{% endif %}">{{ notif_unread or 0 }}</span>
-            </a>
+            {% set notif_trigger = 'icon' %}
+            {% include 'components/notif_panel.html' %}
             {% endif %}
             <button id="mobile-menu-btn" type="button" aria-label="Toggle menu" aria-expanded="false" class="md:hidden inline-flex items-center justify-center p-2 rounded-lg text-[#0f172a] dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                 <span class="material-symbols-outlined" id="mobile-menu-icon">menu</span>

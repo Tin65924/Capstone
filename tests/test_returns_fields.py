@@ -73,8 +73,8 @@ class TestRequiredBookFields:
         resp = _post_add(librarian_client)
         assert resp.status_code == 302
         assert mock_db['execute'].call_count >= 1
-        assert 'INSERT INTO book_catalog' in \
-            mock_db['execute'].call_args_list[0][0][0]
+        stmts = [c[0][0] for c in mock_db['execute'].call_args_list]
+        assert any('INSERT INTO book_catalog' in s for s in stmts)
 
     def test_edit_requires_fields(self, librarian_client, mock_db):
         """Validates edit requires fields `/librarian/cataloging/1/edit` as librarian (expects 302) [TestRequiredBookFields / returns fields].

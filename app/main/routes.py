@@ -607,6 +607,150 @@ def user_history():
                            overdue_ids=overdue_ids)
 
 
+def _staff_feed_items():
+    """Newest staff attention items (pending requests, waiting reservations,
+    recent circulation). Same rows the header badge counts; fail-open to []
+    so a DB blip never breaks the bell panel. IDs are stable feed keys
+    (req-<id>, res-<id>, circ-<id>), not notification_log rows — staff
+    dismiss them client-side since there is no persistent staff inbox."""
+    items = []
+    try:
+        from app.database import db as _db
+        reqs = _db.fetch_all(
+            "SELECT request_id, book_title, request_date FROM request_records"
+            " WHERE request_status = 'pending_review'"
+            " ORDER BY request_date DESC LIMIT 5") or []
+        for r in reqs:
+            items.append({'id': f"req-{r[0]}",
+                          'message': f"New book request: \"{r[1]}\" needs review.",
+                          'type': 'staff_request', 'date': str(r[2])})
+    except Exception:
+        pass
+    try:
+        from app.database import db as _db2
+        res = _db2.fetch_all(
+            "SELECT reservation_id, book_id FROM reservation_queue"
+            " WHERE reservation_status = 'waiting'"
+            " ORDER BY request_date DESC LIMIT 5") or []
+        for r in res:
+            items.append({'id': f"res-{r[0]}",
+                          'message': f"Reservation #{r[0]} waiting for a copy (book {r[1]}).",
+                          'type': 'staff_reservation', 'date': ''})
+    except Exception:
+        pass
+    try:
+        from app.database import db as _db3
+        recent = _db3.fetch_all(
+            "SELECT circulation_id, transaction_type, borrow_date, return_date"
+            " FROM circulation_records"
+            " ORDER BY COALESCE(return_date, borrow_date) DESC, circulation_id DESC"
+            " LIMIT 5") or []
+        for r in recent:
+            verb = 'returned' if (len(r) > 1 and r[1] == 'return') else 'borrowed'
+            items.append({'id': f"circ-{r[0]}",
+                          'message': f"Copy {verb} (loan #{r[0]}).",
+                          'type': 'staff_circulation', 'date': ''})
+    except Exception:
+        pass
+    return items
+
+
+def _notif_date_pht(value):
+    """Format a notification timestamp as 'YYYY-MM-DD hh:MM AM (PHT)'.
+
+    Tolerates datetimes, ISO strings, and garbage (falls back to str).
+    Naive values are library-wall-clock already, so +8h; aware values
+    convert to Asia/Manila. Mirrors the `pht` template filter.
+    """
+    from datetime import datetime, timedelta, timezone
+    dt = None
+    if hasattr(value, 'strftime'):
+        try:
+            dt = value
+        except Exception:
+            return str(value)
+    else:
+        s = str(value or '')
+        for parser in (
+                lambda v: datetime.strptime(v[:19], '%Y-%m-%d %H:%M:%S'),
+                lambda v: datetime.strptime(v[:10], '%Y-%m-%d')):
+            try:
+                dt = parser(s)
+                break
+            except (ValueError, TypeError):
+                continue
+        if dt is None:
+            return s
+    try:
+        if dt.tzinfo is None:
+            dt = dt + timedelta(hours=8)
+        else:
+            dt = dt.astimezone(timezone(timedelta(hours=8)))
+    except Exception:
+        pass
+    try:
+        return dt.strftime('%Y-%m-%d %I:%M %p') + ' (PHT)'
+    except Exception:
+        return str(value)
+
+
+@main_bp.route('/api/notifications')
+def notifications_feed():
+    """Bell-panel payload for every role (GET, login).
+
+    Members get their latest notification_log rows (read state
+    included); staff get the live attention feed (dismissible,
+    client-side). Honors ?limit= (1-20, default 8). Read-only; 401
+    JSON when anonymous, 404 JSON for members without a borrower row.
+    """
+    from flask_login import current_user as _cu
+    if not getattr(_cu, 'is_authenticated', False):
+        return jsonify({'error': 'Login required.'}), 401
+    try:
+        limit = int(request.args.get('limit', 8))
+    except (TypeError, ValueError):
+        limit = 8
+    limit = max(1, min(limit, 20))
+    role = getattr(_cu, 'role', '') or ''
+    try:
+        from app.auth.models import get_user_by_id as _gu
+        _u = _gu(_cu.id)
+        if _u and len(_u) > 2 and _u[2]:
+            role = _u[2]
+    except Exception:
+        pass
+    if role in ('Librarian', 'Admin'):
+        items = _staff_feed_items()[:limit]
+        for item in items:
+            item['dismissible'] = True
+        return jsonify({'unread_count': len(items), 'notifications': items})
+    from app.circulation.models import (
+        get_borrower_by_user, get_notifications_by_borrower,
+        count_unread_notifications,
+    )
+    borrower = get_borrower_by_user(_cu.id)
+    if not borrower:
+        return jsonify({'error': 'No borrower record.'}), 404
+    try:
+        all_notes = get_notifications_by_borrower(borrower[0], limit=limit) or []
+    except Exception:
+        all_notes = []
+    try:
+        unread_count = count_unread_notifications(borrower[0]) or 0
+    except Exception:
+        unread_count = 0
+    return jsonify({
+        'unread_count': unread_count,
+        'notifications': [
+            {'id': n[0], 'message': n[1],
+             'type': n[2] if len(n) > 2 else '',
+             'date': _notif_date_pht(n[4]) if len(n) > 4 else '',
+             'read': bool(n[5]) if len(n) > 5 else False}
+            for n in all_notes if n and len(n) > 1
+        ],
+    })
+
+
 @main_bp.route('/api/notifications/live')
 def notifications_live():
     """Poll endpoint for in-site live toasts on every module (GET, login).
@@ -629,45 +773,7 @@ def notifications_live():
     except Exception:
         pass
     if role in ('Librarian', 'Admin'):
-        items = []
-        try:
-            from app.database import db as _db
-            reqs = _db.fetch_all(
-                "SELECT request_id, book_title, request_date FROM request_records"
-                " WHERE request_status = 'pending_review'"
-                " ORDER BY request_date DESC LIMIT 5") or []
-            for r in reqs:
-                items.append({'id': f"req-{r[0]}",
-                              'message': f"New book request: \"{r[1]}\" needs review.",
-                              'type': 'staff_request', 'date': str(r[2])})
-        except Exception:
-            pass
-        try:
-            from app.database import db as _db2
-            res = _db2.fetch_all(
-                "SELECT reservation_id, book_id FROM reservation_queue"
-                " WHERE reservation_status = 'waiting'"
-                " ORDER BY request_date DESC LIMIT 5") or []
-            for r in res:
-                items.append({'id': f"res-{r[0]}",
-                              'message': f"Reservation #{r[0]} waiting for a copy (book {r[1]}).",
-                              'type': 'staff_reservation', 'date': ''})
-        except Exception:
-            pass
-        try:
-            from app.database import db as _db3
-            recent = _db3.fetch_all(
-                "SELECT circulation_id, transaction_type, borrow_date, return_date"
-                " FROM circulation_records"
-                " ORDER BY COALESCE(return_date, borrow_date) DESC, circulation_id DESC"
-                " LIMIT 5") or []
-            for r in recent:
-                verb = 'returned' if (len(r) > 1 and r[1] == 'return') else 'borrowed'
-                items.append({'id': f"circ-{r[0]}",
-                              'message': f"Copy {verb} (loan #{r[0]}).",
-                              'type': 'staff_circulation', 'date': ''})
-        except Exception:
-            pass
+        items = _staff_feed_items()
         return jsonify({'unread_count': len(items), 'notifications': items[:5]})
     from app.circulation.models import (
         get_borrower_by_user, get_notifications_by_borrower,

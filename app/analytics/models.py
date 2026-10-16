@@ -550,7 +550,12 @@ def copies_by_status_summary(start_date=None, end_date=None, borrow_type=None):
 
 
 def collection_by_category(start_date=None, end_date=None, categories=None):
-    """Return [(category, titles)] grouped by subject_classification.
+    """Return [(category, titles)] grouped by canonical category name.
+
+    Groups through the categories vocabulary (LEFT JOIN) with the
+    legacy free-text subject as fallback, so case variants of one
+    subject collapse to a single row. Unlinked blanks report as
+    'Others'.
 
     categories optionally restricts to the named categories
     (case-insensitive; 'Others' matches blank classifications).
@@ -561,18 +566,19 @@ def collection_by_category(start_date=None, end_date=None, categories=None):
         conds = []
         exact = [c for c in categories if c.lower() != 'others']
         if exact:
-            conds.append('LOWER(b.subject_classification) IN ({})'.format(
+            conds.append('LOWER(COALESCE(ct.name, b.subject_classification)) IN ({})'.format(
                 ', '.join(['%s'] * len(exact))))
             params.extend([c.lower() for c in exact])
         if len(exact) != len(categories):
-            conds.append("(b.subject_classification IS NULL OR b.subject_classification = '')")
+            conds.append("(ct.category_id IS NULL AND (b.subject_classification IS NULL OR b.subject_classification = ''))")
         parts.append('(' + ' OR '.join(conds) + ')')
     where = 'WHERE b.catalog_status = \'active\'' + (
         ' AND ' + ' AND '.join(parts) if parts else '')
     return db.fetch_all(
-        '''SELECT COALESCE(NULLIF(b.subject_classification, ''), 'Others'),
+        '''SELECT COALESCE(NULLIF(ct.name, ''), NULLIF(b.subject_classification, ''), 'Others'),
                   COUNT(DISTINCT b.book_id)
-           FROM book_catalog b {} GROUP BY 1 ORDER BY 2 DESC'''.format(where),
+           FROM book_catalog b LEFT JOIN categories ct ON ct.category_id = b.category_id
+           {} GROUP BY 1 ORDER BY 2 DESC'''.format(where),
         tuple(params) if params else None
     )
 
@@ -722,10 +728,10 @@ def category_borrowings_by_program(category, start_date=None, end_date=None,
     """Return [(program_label, count)] borrows in one category by program.
 
     Powers the Top Borrowed Categories drill-down (donut slice / legend
-    click). Category matches the card's label expression, so 'Others'
-    covers blank classifications. Period-scoped like the card.
+    click). Category matches the card's canonical label expression, so
+    'Others' covers blank classifications. Period-scoped like the card.
     """
-    parts = ["COALESCE(NULLIF(bk.subject_classification, ''), 'Others') = %s"]
+    parts = ["COALESCE(NULLIF(ct.name, ''), NULLIF(bk.subject_classification, ''), 'Others') = %s"]
     params = [category]
     range_parts, range_params = _range_clause('c.borrow_date', start_date,
                                              end_date)
@@ -737,7 +743,8 @@ def category_borrowings_by_program(category, start_date=None, end_date=None,
     return db.fetch_all(
         '''SELECT {}, COUNT(c.circulation_id)
            FROM circulation_records c
-           JOIN book_catalog bk ON c.book_id = bk.book_id{}
+           JOIN book_catalog bk ON c.book_id = bk.book_id
+           LEFT JOIN categories ct ON ct.category_id = bk.category_id{}
            WHERE {} GROUP BY 1 ORDER BY 2 DESC'''.format(
             _PROGRAM_LABEL, _program_joins(), ' AND '.join(parts)),
         tuple(params)
@@ -887,10 +894,11 @@ def top_categories_by_program(start_date=None, end_date=None, limit=20,
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     params.append(limit)
     return db.fetch_all(
-        '''SELECT COALESCE(NULLIF(bk.subject_classification, ''), 'Others'),
+        '''SELECT COALESCE(NULLIF(ct.name, ''), NULLIF(bk.subject_classification, ''), 'Others'),
                   {}, COUNT(c.circulation_id)
            FROM circulation_records c
-           JOIN book_catalog bk ON c.book_id = bk.book_id{} {} GROUP BY 1, 2
+           JOIN book_catalog bk ON c.book_id = bk.book_id
+           LEFT JOIN categories ct ON ct.category_id = bk.category_id{} {} GROUP BY 1, 2
            ORDER BY 3 DESC LIMIT %s'''.format(_PROGRAM_LABEL, _program_joins(), where),
         tuple(params)
     )
@@ -942,10 +950,11 @@ def top_borrowed_categories(start_date=None, end_date=None, limit=6, borrow_type
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     params.append(limit)
     return db.fetch_all(
-        '''SELECT COALESCE(NULLIF(b.subject_classification, ''), 'Others'),
+        '''SELECT COALESCE(NULLIF(ct.name, ''), NULLIF(b.subject_classification, ''), 'Others'),
                   COUNT(c.circulation_id)
            FROM circulation_records c
            JOIN book_catalog b ON c.book_id = b.book_id
+           LEFT JOIN categories ct ON ct.category_id = b.category_id
            {} GROUP BY 1 ORDER BY 2 DESC LIMIT %s'''.format(where),
         tuple(params)
     )
