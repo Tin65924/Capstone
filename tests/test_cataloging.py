@@ -1505,6 +1505,28 @@ class TestShelfLocation:
         query = mock_db['fetch_all'].call_args[0][0]
         assert 'shelf_location' in query
 
+    def test_for_books_falls_back_without_shelf_column(self, mock_db):
+        """Validates for books falls back without shelf column [TestShelfLocation / cataloging].
+    If fails: likely fallback removed or error misclassified.
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.models import get_accessions_for_books
+        missing = Exception('column "shelf_location" does not exist')
+        missing.pgcode = '42703'
+        legacy = [(1, 'ACC-001', 7, 'purchase', '2024-01-15')]
+        mock_db['fetch_all'].side_effect = [missing, legacy]
+        assert get_accessions_for_books([7]) == legacy
+        assert 'shelf_location' not in mock_db['fetch_all'].call_args[0][0]
+
+    def test_for_books_reraises_other_errors(self, mock_db):
+        """Validates for books reraises other errors [TestShelfLocation / cataloging].
+    If fails: likely fallback over-broadened (masks real bugs).
+    Failure indicates catalog data or listing/sort is wrong."""
+        import pytest
+        from app.cataloging.models import get_accessions_for_books
+        mock_db['fetch_all'].side_effect = ValueError('boom')
+        with pytest.raises(ValueError):
+            get_accessions_for_books([7])
+
     def test_add_accession_passes_shelf(self, librarian_client, mock_db):
         """Validates add accession passes shelf `/librarian/cataloging/1/accession/add` as librarian (expects 302) [TestShelfLocation / cataloging].
     If fails: likely wrong/absent SQL call or placeholder mismatch.
@@ -1594,6 +1616,26 @@ class TestCategories:
         assert resolve_category('   ') == (None, None)
         assert mock_db['fetch_one'].call_count == 0
         assert mock_db['execute'].call_count == 0
+
+    def test_resolve_missing_table_keeps_spelling(self, mock_db):
+        """Validates resolve missing table keeps spelling [TestCategories / cataloging].
+    If fails: likely fallback removed or error misclassified.
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.models import resolve_category
+        missing = Exception('relation "categories" does not exist')
+        missing.pgcode = '42P01'
+        mock_db['fetch_one'].side_effect = missing
+        assert resolve_category('Physics') == (None, 'Physics')
+
+    def test_resolve_reraises_other_errors(self, mock_db):
+        """Validates resolve reraises other errors [TestCategories / cataloging].
+    If fails: likely fallback over-broadened (masks real bugs).
+    Failure indicates catalog data or listing/sort is wrong."""
+        import pytest
+        from app.cataloging.models import resolve_category
+        mock_db['fetch_one'].side_effect = RuntimeError('boom')
+        with pytest.raises(RuntimeError):
+            resolve_category('Physics')
 
     def test_create_book_links_category(self, mock_db):
         """Validates create book links category [TestCategories / cataloging].

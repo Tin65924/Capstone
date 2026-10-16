@@ -1,6 +1,35 @@
 from app.database import db
 
 
+def _is_missing_relation(exc):
+    """True for missing-table/column errors (unmigrated database).
+
+    Lets read paths degrade instead of 500ing when a deploy serving
+    new code hits a database whose startup migration has not applied
+    yet (e.g. Render serving traffic mid-restart). Only Postgres
+    undefined-table/column codes qualify — every other DB error still
+    propagates.
+    """
+    if getattr(exc, 'pgcode', '') in ('42P01', '42703'):
+        return True
+    try:
+        from psycopg2 import errors as _pg_errors
+        return isinstance(exc, (_pg_errors.UndefinedTable,
+                                _pg_errors.UndefinedColumn))
+    except Exception:
+        return False
+
+
+def _warn_schema_mismatch(what):
+    try:
+        from flask import current_app
+        current_app.logger.warning(
+            'cataloging: %s missing from database (migration not applied); '
+            'degrading gracefully', what)
+    except Exception:
+        pass
+
+
 def create_book(title, author, edition, publisher, year_published, subject_classification,
                 call_number, isbn, material_type, description, category_id=None):
     """Insert a new book title into the catalog as active and return its id.
@@ -448,24 +477,32 @@ def resolve_category(name):
     clean = (name or '').strip()
     if not clean:
         return None, None
-    for attempt in ('select', 'insert', 'select'):
-        if attempt == 'insert':
-            inserted = db.execute(
-                'INSERT INTO categories (name) VALUES (%s) '
-                'ON CONFLICT (name) DO NOTHING RETURNING category_id, name',
-                (clean,)
-            )
-            if isinstance(inserted, (list, tuple)) and inserted:
-                first = inserted[0]
-                if isinstance(first, (list, tuple)) and len(first) > 0:
-                    return first[0], (first[1] if len(first) > 1 else clean)
-        else:
-            row = db.fetch_one(
-                'SELECT category_id, name FROM categories WHERE LOWER(name) = LOWER(%s)',
-                (clean,)
-            )
-            if isinstance(row, (list, tuple)) and len(row) > 0:
-                return row[0], (row[1] if len(row) > 1 else clean)
+    try:
+        for attempt in ('select', 'insert', 'select'):
+            if attempt == 'insert':
+                inserted = db.execute(
+                    'INSERT INTO categories (name) VALUES (%s) '
+                    'ON CONFLICT (name) DO NOTHING RETURNING category_id, name',
+                    (clean,)
+                )
+                if isinstance(inserted, (list, tuple)) and inserted:
+                    first = inserted[0]
+                    if isinstance(first, (list, tuple)) and len(first) > 0:
+                        return first[0], (first[1] if len(first) > 1 else clean)
+            else:
+                row = db.fetch_one(
+                    'SELECT category_id, name FROM categories WHERE LOWER(name) = LOWER(%s)',
+                    (clean,)
+                )
+                if isinstance(row, (list, tuple)) and len(row) > 0:
+                    return row[0], (row[1] if len(row) > 1 else clean)
+    except Exception as e:
+        if not _is_missing_relation(e):
+            raise
+        # Unmigrated database (no categories table yet): keep the
+        # entered spelling and leave the FK unset; the startup backfill
+        # links such rows once the migration applies.
+        _warn_schema_mismatch('categories')
     return None, clean
 
 
@@ -737,11 +774,23 @@ def get_accessions_for_books(book_ids):
     """
     if not book_ids:
         return []
-    return db.fetch_all(
-        'SELECT accession_id, accession_number, book_id, source, date_accessioned, shelf_location '
-        'FROM accession_log WHERE book_id = ANY(%s) ORDER BY accession_id',
-        (book_ids,)
-    ) or []
+    try:
+        return db.fetch_all(
+            'SELECT accession_id, accession_number, book_id, source, date_accessioned, shelf_location '
+            'FROM accession_log WHERE book_id = ANY(%s) ORDER BY accession_id',
+            (book_ids,)
+        ) or []
+    except Exception as e:
+        if not _is_missing_relation(e):
+            raise
+        # Unmigrated database (no shelf_location yet): serve the legacy
+        # 5-tuple shape so list pages render; templates guard index 5.
+        _warn_schema_mismatch('accession_log.shelf_location')
+        return db.fetch_all(
+            'SELECT accession_id, accession_number, book_id, source, date_accessioned '
+            'FROM accession_log WHERE book_id = ANY(%s) ORDER BY accession_id',
+            (book_ids,)
+        ) or []
 
 
 def update_accession(accession_id, accession_number, source,
