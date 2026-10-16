@@ -2399,3 +2399,99 @@ class TestDatePresets:
         assert 'replaceState' in body
         assert "'usage'" in body
         assert 'preset=year&tab=' in body
+
+
+class TestExportAliasRegression:
+    """Duplicate-alias 500s: program queries must not reuse the `b` alias.
+
+    Postgres rejects `JOIN book_catalog b` alongside the shared
+    `borrowers b` program join (DuplicateAlias), and mocks never catch
+    it — these tests pin the emitted SQL shape instead."""
+
+    @staticmethod
+    def _last_query(mock_db):
+        return mock_db['fetch_all'].call_args[0][0]
+
+    def test_top_books_breakdown_aliases(self, mock_db):
+        """Validates top books breakdown aliases [TestExportAliasRegression / analytics].
+    If fails: likely model SQL changed (SELECT).
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        import re
+        from app.analytics.models import top_books_program_breakdown
+        mock_db['fetch_all'].return_value = []
+        top_books_program_breakdown(None, None, 20, None, ['BSIS'])
+        q = self._last_query(mock_db)
+        assert 'JOIN book_catalog bk ON' in q
+        assert 'JOIN borrowers b ON' in q
+        assert 'JOIN book_catalog b ' not in q
+        assert not re.search(r'\bbr\.', q)
+        assert 'b.department = %s' in q
+
+    def test_top_categories_breakdown_aliases(self, mock_db):
+        """Validates top categories breakdown aliases [TestExportAliasRegression / analytics].
+    If fails: likely model SQL changed (SELECT).
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        from app.analytics.models import top_categories_by_program
+        mock_db['fetch_all'].return_value = []
+        top_categories_by_program()
+        q = self._last_query(mock_db)
+        assert 'JOIN book_catalog bk ON' in q
+        assert 'JOIN borrowers b ON' in q
+        assert 'JOIN book_catalog b ' not in q
+
+    def test_trend_breakdown_dept_alias(self, mock_db):
+        """Validates trend breakdown dept alias [TestExportAliasRegression / analytics].
+    If fails: likely model SQL changed (SELECT).
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        import re
+        from app.analytics.models import borrowings_trend_by_program
+        mock_db['fetch_all'].return_value = []
+        borrowings_trend_by_program(None, None, None, ['BSIS'])
+        q = self._last_query(mock_db)
+        assert not re.search(r'\bbr\.', q)
+        assert 'b.department = %s' in q
+
+    def test_report_types_cover_exportable(self):
+        """Validates report types cover exportable [TestExportAliasRegression / analytics].
+    If fails: likely model SQL changed (SELECT).
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        from app.analytics.models import ANALYTICS_REPORT_TYPES
+        from app.analytics.routes import EXPORTABLE_KPIS
+        assert set(EXPORTABLE_KPIS) <= set(ANALYTICS_REPORT_TYPES)
+
+    def test_schema_check_lists_report_types(self):
+        """Validates schema check lists report types [TestExportAliasRegression / analytics].
+    If fails: likely model SQL changed (SELECT).
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        import os
+        from app.analytics.models import ANALYTICS_REPORT_TYPES
+        schema_path = os.path.join(os.path.dirname(__file__), '..',
+                                   'app', 'schema.sql')
+        with open(schema_path, encoding='utf-8') as f:
+            schema_text = f.read()
+        for report_type in ANALYTICS_REPORT_TYPES:
+            assert f"'{report_type}'" in schema_text, report_type
+
+    def test_export_degrades_on_kpi_failure(
+            self, librarian_client, mock_db):
+        """Validates export degrades on kpi failure `/librarian/analytics/export` as librarian (expects 200) [TestExportAliasRegression / analytics].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        from unittest.mock import patch
+        from app.analytics import routes as analytics_routes
+        mock_db['fetch_all'].return_value = []
+        mock_db['fetch_one'].return_value = (0,)
+        real_run_kpi = analytics_routes._run_kpi
+
+        def _flaky(kt, *args, **kwargs):
+            if kt == 'top_books':
+                raise RuntimeError('boom')
+            return real_run_kpi(kt, *args, **kwargs)
+
+        with patch.object(analytics_routes, '_run_kpi', side_effect=_flaky):
+            resp = librarian_client.post(
+                '/librarian/analytics/export',
+                data={'kpi_type': 'all',
+                      'kpi_types': 'top_books,most_borrowed_titles'})
+        assert resp.status_code == 200
+        assert resp.mimetype == 'application/pdf'

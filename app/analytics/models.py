@@ -268,6 +268,30 @@ def underutilized_titles(start_date=None, end_date=None, limit=10):
     )
 
 
+# Every report_type ever written to analytics_cache: the four board KPIs
+# plus every dashboard export section. Single source of truth for the
+# table CHECK (see schema.sql and database.run_schema): any exportable
+# KPI missing here fails the INSERT and silently drops its audit
+# snapshot. A test asserts routes.EXPORTABLE_KPIS stays a subset.
+ANALYTICS_REPORT_TYPES = (
+    'books_borrowed_per_program', 'utilization_rate',
+    'most_borrowed_titles', 'underutilized_titles',
+    'online_resource_usage',
+    'trend_borrowings', 'trend_overdue',
+    'trend_borrowings_by_program', 'trend_overdue_by_program',
+    'top_categories', 'top_categories_by_program',
+    'peak_periods', 'top_books', 'top_books_by_program',
+    'fines_by_book', 'high_demand', 'by_user_type',
+    'collection_by_category', 'copies_by_status',
+    'recent_circulation', 'recent_collection',
+    'circulation_summary',
+    'borrowers_by_department', 'overdue_by_department',
+    'department_leaderboard',
+    'top_requested_titles', 'requests_by_role',
+    'requests_trend', 'requests_by_program',
+)
+
+
 def save_report_snapshot(report_type, filter_params, kpi_data, generated_by):
     """Persist a generated report payload to the analytics cache for reuse. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
     
@@ -634,7 +658,7 @@ def borrowings_trend_by_program(start_date=None, end_date=None, borrow_type=None
     if borrow_type:
         parts.append('c.borrow_type = %s')
         params.append(borrow_type)
-    dept_clause, dept_params = _department_clause(departments, 'br', 'r')
+    dept_clause, dept_params = _department_clause(departments, 'b', 'r')
     if dept_clause:
         parts.append(dept_clause)
         params.extend(dept_params)
@@ -831,16 +855,18 @@ def top_books_program_breakdown(start_date=None, end_date=None, limit=20,
     if borrow_type:
         parts.append('c.borrow_type = %s')
         params.append(borrow_type)
-    dept_clause, dept_params = _department_clause(departments, 'br', 'r')
+    # Borrowers are aliased 'b' by _program_joins(); book_catalog takes
+    # 'bk' so the two never collide (duplicate 'b' 500s on Postgres).
+    dept_clause, dept_params = _department_clause(departments, 'b', 'r')
     if dept_clause:
         parts.append(dept_clause)
         params.extend(dept_params)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     params.append(limit)
     return db.fetch_all(
-        '''SELECT b.title, {}, COUNT(c.circulation_id)
+        '''SELECT bk.title, {}, COUNT(c.circulation_id)
            FROM circulation_records c
-           JOIN book_catalog b ON c.book_id = b.book_id{} {} GROUP BY b.title, 2
+           JOIN book_catalog bk ON c.book_id = bk.book_id{} {} GROUP BY bk.title, 2
            ORDER BY 3 DESC LIMIT %s'''.format(_PROGRAM_LABEL, _program_joins(), where),
         tuple(params)
     )
@@ -861,10 +887,10 @@ def top_categories_by_program(start_date=None, end_date=None, limit=20,
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     params.append(limit)
     return db.fetch_all(
-        '''SELECT COALESCE(NULLIF(b.subject_classification, ''), 'Others'),
+        '''SELECT COALESCE(NULLIF(bk.subject_classification, ''), 'Others'),
                   {}, COUNT(c.circulation_id)
            FROM circulation_records c
-           JOIN book_catalog b ON c.book_id = b.book_id{} {} GROUP BY 1, 2
+           JOIN book_catalog bk ON c.book_id = bk.book_id{} {} GROUP BY 1, 2
            ORDER BY 3 DESC LIMIT %s'''.format(_PROGRAM_LABEL, _program_joins(), where),
         tuple(params)
     )

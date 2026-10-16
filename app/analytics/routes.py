@@ -2505,7 +2505,15 @@ def export_report():
     dept_list = departments or None
     dept_label = ', '.join(departments)
     for kt in kpi_types:
-        kpi_data = _run_kpi(kt, start_date, end_date, dept_list)
+        try:
+            kpi_data = _run_kpi(kt, start_date, end_date, dept_list)
+        except Exception:
+            # One failing section must not 500 the whole report: log it
+            # and render the section empty (the PDF marks it unrenderable
+            # only when even empty rows fail; [] shows the no-records box).
+            from flask import current_app
+            current_app.logger.warning('export KPI %s failed; section left empty', kt, exc_info=True)
+            kpi_data = []
         try:
             models.save_report_snapshot(
                 kt,

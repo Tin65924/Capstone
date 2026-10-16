@@ -302,6 +302,23 @@ def run_schema(app):
         # bodies): one failing statement must never roll back the whole
         # schema into an empty database again.
         ok, failed = _exec_each(schema_sql.split(';'))
+        # Analytics-cache CHECK must cover every exportable report type
+        # (single source: analytics.models.ANALYTICS_REPORT_TYPES), or
+        # export snapshots for newer sections fail the INSERT and are
+        # silently dropped. Built dynamically so the next new KPI cannot
+        # drift out of sync; falls back to no patch when unimportable.
+        try:
+            from app.analytics.models import ANALYTICS_REPORT_TYPES
+            _rt_list = ', '.join("'%s'" % t for t in ANALYTICS_REPORT_TYPES)
+        except Exception:
+            _rt_list = None
+        _cache_patches = []
+        if _rt_list:
+            _cache_patches = [
+                'ALTER TABLE analytics_cache DROP CONSTRAINT IF EXISTS analytics_cache_report_type_check;',
+                'ALTER TABLE analytics_cache ADD CONSTRAINT analytics_cache_report_type_check '
+                'CHECK (report_type IN (%s));' % _rt_list,
+            ]
         ok2, failed2 = _exec_each([
             """
                 ALTER TABLE user_accounts
@@ -347,25 +364,7 @@ def run_schema(app):
                                       'borrow', 'return', 'request_update', 'fine',
                                       'due_soon', 'reservation'));
             """,
-            """
-                ALTER TABLE analytics_cache
-                DROP CONSTRAINT IF EXISTS analytics_cache_report_type_check;
-            """,
-            """
-                ALTER TABLE analytics_cache
-                ADD CONSTRAINT analytics_cache_report_type_check
-                CHECK (report_type IN (
-                    'books_borrowed_per_program', 'utilization_rate',
-                    'most_borrowed_titles', 'underutilized_titles',
-                    'online_resource_usage',
-                    'trend_borrowings', 'trend_overdue', 'top_categories',
-                    'top_books', 'high_demand', 'by_user_type',
-                    'collection_by_category', 'copies_by_status',
-                    'recent_circulation', 'recent_collection',
-                    'circulation_summary'
-                ));
-            """,
-        ])
+        ] + _cache_patches)
         app.logger.info('Database schema initialized: %d applied, %d skipped.',
                         ok + ok2, failed + failed2)
     except Exception as e:
