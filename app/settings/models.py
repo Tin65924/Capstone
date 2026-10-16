@@ -1,4 +1,5 @@
 from flask import current_app
+from calendar import monthrange
 from datetime import datetime, date, timedelta, timezone
 from app.database import db
 import os
@@ -79,9 +80,8 @@ SETTING_CATEGORIES = [
      'How many books each role may hold at once.',
      ['MAX_BORROW_LIMIT_STUDENT', 'MAX_BORROW_LIMIT_FACULTY']),
     ('hours', 'Library Hours', 'schedule',
-     'Daily opening/closing hours and open days. Borrowing is blocked on unchecked days and outside open hours.',
-     ['LIBRARY_OPENING_TIME', 'LIBRARY_CLOSING_TIME',
-      'LIBRARY_OPEN_DAYS']),
+     'Daily opening and closing hours. Borrowing is blocked outside open hours.',
+     ['LIBRARY_OPENING_TIME', 'LIBRARY_CLOSING_TIME']),
     ('due-dates', 'Due Date Settings', 'event',
      'Loan periods for overnight and in-library use.',
      ['OVERNIGHT_DUE_DAYS_STUDENT', 'OVERNIGHT_DUE_DAYS_FACULTY',
@@ -94,10 +94,11 @@ SETTING_CATEGORIES = [
      ['RESERVATION_CLAIM_HOURS', 'RESERVATION_CLAIM_DAYS', 'DUE_SOON_NOTIFY_DAYS',
       'RESERVATION_CUTOFF_TIME']),
     ('operations', 'Library Operations Schedule', 'calendar_month',
-     'Weekday, Saturday, semestral-break hours and closed days. Sunday and holidays allow no reservations.',
+     'Weekday, Saturday, semestral-break hours, closed days, and open days. '
+     'Unchecked days allow no borrowing; Sunday and holidays allow no reservations.',
      ['LIBRARY_SATURDAY_OPENING_TIME', 'LIBRARY_SATURDAY_CLOSING_TIME',
       'LIBRARY_SEMBREAK_OPENING_TIME', 'LIBRARY_SEMBREAK_CLOSING_TIME',
-      'LIBRARY_CLOSED_DAYS']),
+      'LIBRARY_CLOSED_DAYS', 'LIBRARY_OPEN_DAYS', 'LIBRARY_MONTH_DAYS']),
     ('collection', 'Collection Thresholds', 'inventory_2',
      'Low-stock alert and weeding lifespan for reports.',
      ['LOW_STOCK_THRESHOLD', 'BOOK_LIFESPAN_YEARS', 'DAILY_MAX_HOURS']),
@@ -121,7 +122,7 @@ LIBRARIAN_EDITABLE_KEYS = frozenset({
     'LIBRARY_OPENING_TIME', 'LIBRARY_CLOSING_TIME', 'LIBRARY_OPEN_DAYS',
     'LIBRARY_SATURDAY_OPENING_TIME', 'LIBRARY_SATURDAY_CLOSING_TIME',
     'LIBRARY_SEMBREAK_OPENING_TIME', 'LIBRARY_SEMBREAK_CLOSING_TIME',
-    'LIBRARY_CLOSED_DAYS',
+    'LIBRARY_CLOSED_DAYS', 'LIBRARY_OPEN_DAYS', 'LIBRARY_MONTH_DAYS',
     'OVERNIGHT_DUE_DAYS_STUDENT', 'OVERNIGHT_DUE_DAYS_FACULTY',
     'DAILY_CIRCULATION_DUE_DAYS', 'DAILY_MAX_HOURS',
     'OVERDUE_FINE_PER_DAY', 'OVERDUE_GRACE_DAYS',
@@ -132,13 +133,14 @@ LIBRARIAN_EDITABLE_KEYS = frozenset({
 })
 
 
-# key -> (label, kind, description). Kinds: int, float, bool, time, days.
+# key -> (label, kind, description). Kinds: int, float, bool, time, days, monthdays.
 SETTING_DEFS = {
     'MAX_BORROW_LIMIT_STUDENT': ('Max borrows (Student)', 'int', 'Max active loans for students'),
     'MAX_BORROW_LIMIT_FACULTY': ('Max borrows (Faculty)', 'int', 'Max active loans for faculty'),
     'LIBRARY_OPENING_TIME': ('Opening hour', 'time', 'Daily opening hour (24-hour clock)'),
     'LIBRARY_CLOSING_TIME': ('Closing hour', 'time', 'Daily closing hour (must be after opening)'),
     'LIBRARY_OPEN_DAYS': ('Open days', 'days', 'Checked days are open — borrowing is blocked on unchecked days'),
+    'LIBRARY_MONTH_DAYS': ('Open days in month', 'monthdays', 'Per-date overrides for the current month — a checked date is open even when its weekday is not'),
     'OVERNIGHT_DUE_DAYS_STUDENT': ('Overnight due days (Student)', 'int', 'Overnight loan due days for students'),
     'OVERNIGHT_DUE_DAYS_FACULTY': ('Overnight due days (Faculty)', 'int', 'Overnight loan due days for faculty'),
     'DAILY_CIRCULATION_DUE_DAYS': ('Daily circulation due days', 'int', 'Daily circulation due days (0 = same day)'),
@@ -176,6 +178,7 @@ DEFAULTS = {
     'LIBRARY_OPENING_TIME': '08:00',
     'LIBRARY_CLOSING_TIME': '17:00',
     'LIBRARY_OPEN_DAYS': DEFAULT_OPEN_DAYS,
+    'LIBRARY_MONTH_DAYS': '',
     'OVERNIGHT_DUE_DAYS_STUDENT': '1',
     'OVERNIGHT_DUE_DAYS_FACULTY': '7',
     'DAILY_CIRCULATION_DUE_DAYS': '0',
@@ -328,7 +331,8 @@ def sync_settings_to_config(app=None):
     Reads the effective settings dict and writes each key into
     ``app.config`` by its declared kind: bools become 0/1, times stay
     ``HH:MM`` strings (skipped when invalid), day lists stay
-    comma-joined strings, floats/ints are coerced
+    comma-joined strings and month maps stay ``YYYY-MM:bits`` strings,
+    floats/ints are coerced
     numerically. Unparseable values are skipped, never raising, so one
     corrupt row cannot break app startup or a settings save. Borrowing,
     fines, and backup code then read plain ``current_app.config``.
@@ -355,6 +359,10 @@ def sync_settings_to_config(app=None):
             elif kind == 'days':
                 # Comma-joined weekday names stay a string (may be '' when
                 # every day is unchecked — that means closed all week).
+                value = str(raw or '').strip()
+            elif kind == 'monthdays':
+                # 'YYYY-MM:bits' per-date map stays a string ('' = no
+                # overrides, weekly pattern applies to every date).
                 value = str(raw or '').strip()
             else:
                 value = float(raw) if kind == 'float' else int(float(raw))
@@ -555,12 +563,77 @@ def get_open_days(config=None):
             if p.strip()}.intersection(WEEKDAYS)
 
 
+def get_month_days(config=None):
+    """Per-date open map from LIBRARY_MONTH_DAYS, or None.
+
+    Parses the stored ``'YYYY-MM:bits'`` value (one ``0``/``1`` char per
+    calendar date, ``1`` = open). Returns None when unconfigured, blank,
+    malformed, or when the bit count disagrees with the real days in
+    that month — callers then fall back to the weekly pattern. A stale
+    month (not the date being tested) is not itself a failure: the
+    caller only applies the map when its month matches.
+
+    Args:
+        config: Optional config mapping (defaults to
+            ``current_app.config``).
+
+    Returns:
+        Tuple (ym, bits) with ym ``'YYYY-MM'``, or None.
+    """
+    cfg = config if config is not None else current_app.config
+    raw = str(cfg.get('LIBRARY_MONTH_DAYS') or '').strip()
+    if not raw:
+        return None
+    match = re.fullmatch(r'(\d{4}-(?:0[1-9]|1[0-2])):([01]{28,31})', raw)
+    if not match:
+        return None
+    year, month = int(match.group(1)[:4]), int(match.group(1)[5:7])
+    bits = match.group(2)
+    if len(bits) != monthrange(year, month)[1]:
+        return None
+    return match.group(1), bits
+
+
+def month_grid(year, month, config=None):
+    """Effective open state for every date of a real calendar month.
+
+    Returns [{n, weekday, iso, open}] with ``n`` the day of month,
+    ``weekday`` the short name (Mon..Sun), ``iso`` the ``YYYY-MM-DD``
+    form value, and ``open`` the effective state (per-date override
+    wins, else the weekly pattern). Raises ValueError on an impossible
+    month so form handlers fail loudly instead of rendering a wrong
+    grid.
+
+    Args:
+        year: Four-digit year.
+        month: Month 1-12.
+        config: Optional config mapping (defaults to
+            ``current_app.config``).
+
+    Returns:
+        List of per-date dicts in calendar order.
+    """
+    count = monthrange(year, month)[1]
+    grid = []
+    for day_num in range(1, count + 1):
+        day = date(year, month, day_num)
+        grid.append({
+            'n': day_num,
+            'weekday': day.strftime('%a'),
+            'iso': day.isoformat(),
+            'open': is_open_day(day, config),
+        })
+    return grid
+
+
 def is_open_day(day=None, config=None):
     """True when the library is open on a given date.
 
-    Unconfigured open days (key absent) fail open; corrupt day values
-    fail open too. Only an explicitly stored day list gates — a date
-    whose weekday is unchecked counts as closed.
+    A stored per-date override for the date's month wins over the
+    weekly pattern (so holidays can close an open weekday and special
+    days can open a closed one); otherwise the weekday must be checked
+    in LIBRARY_OPEN_DAYS. Unconfigured days fail open; corrupt values
+    fail open too. Only an explicitly stored schedule gates.
 
     Args:
         day: Date to test (defaults to :func:`library_today`).
@@ -570,13 +643,20 @@ def is_open_day(day=None, config=None):
     Returns:
         True when borrowing is allowed that day, False when closed.
     """
-    days = get_open_days(config)
-    if days is None:
-        return True
     day = day or library_today()
     try:
+        ym = day.strftime('%Y-%m')
+        idx = day.day - 1
         name = day.strftime('%A')
     except Exception:
+        return True
+    month_map = get_month_days(config)
+    if month_map is not None and month_map[0] == ym:
+        bits = month_map[1]
+        if 0 <= idx < len(bits):
+            return bits[idx] == '1'
+    days = get_open_days(config)
+    if days is None:
         return True
     return name in days
 

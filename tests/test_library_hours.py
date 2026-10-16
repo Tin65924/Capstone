@@ -383,3 +383,165 @@ class TestOpenDays:
                   if 'INSERT INTO library_settings' in c[0][0]]
         assert any(w[0] == 'LIBRARY_OPEN_DAYS' and w[1] == ''
                    for w in writes)
+
+
+class TestMonthDays:
+    """Per-date month overrides: precedence, real-calendar grid, saves."""
+
+    def test_override_closes_open_weekday(self):
+        """Validates override closes open weekday [TestMonthDays / library hours].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        from datetime import date
+        # Tuesday 2026-10-06 is weekly-open but explicitly closed.
+        bits = '1' * 5 + '0' + '1' * 25
+        cfg = {'LIBRARY_OPENING_TIME': '08:00',
+               'LIBRARY_CLOSING_TIME': '17:00',
+               'LIBRARY_OPEN_DAYS': OPEN_DAYS['LIBRARY_OPEN_DAYS'],
+               'LIBRARY_MONTH_DAYS': f'2026-10:{bits}'}
+        assert is_open_day(date(2026, 10, 6), cfg) is False
+        assert is_open_day(date(2026, 10, 7), cfg) is True
+        assert is_library_open(datetime(2026, 10, 6, 12, 0), cfg) is False
+
+    def test_override_opens_closed_weekday(self):
+        """Validates override opens closed weekday [TestMonthDays / library hours].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        from datetime import date
+        # Sunday 2026-10-04 is weekly-closed but explicitly opened.
+        bits = '0' * 3 + '1' + '0' * 27
+        cfg = {'LIBRARY_OPEN_DAYS': 'Monday,Tuesday,Wednesday,Thursday,Friday',
+               'LIBRARY_MONTH_DAYS': f'2026-10:{bits}'}
+        assert is_open_day(date(2026, 10, 4), cfg) is True
+        assert is_open_day(date(2026, 10, 11), cfg) is False
+
+    def test_stale_month_ignored(self):
+        """Validates stale month ignored [TestMonthDays / library hours].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        from datetime import date
+        cfg = {'LIBRARY_OPEN_DAYS': OPEN_DAYS['LIBRARY_OPEN_DAYS'],
+               'LIBRARY_MONTH_DAYS': '2026-09:' + '0' * 30}
+        # September map must not close October dates.
+        assert is_open_day(date(2026, 10, 6), cfg) is True
+
+    def test_malformed_map_ignored(self):
+        """Validates malformed map ignored [TestMonthDays / library hours].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        from datetime import date
+        for bad in ('2026-10:111', '2026-13:' + '1' * 31, 'nope',
+                    '2026-10:' + '1' * 30):
+            cfg = {'LIBRARY_OPEN_DAYS': OPEN_DAYS['LIBRARY_OPEN_DAYS'],
+                   'LIBRARY_MONTH_DAYS': bad}
+            assert is_open_day(date(2026, 10, 6), cfg) is True, bad
+
+    def test_month_grid_uses_real_calendar(self):
+        """Validates month grid uses real calendar [TestMonthDays / library hours].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        from app.settings.models import month_grid
+        october = month_grid(2026, 10, {})
+        assert len(october) == 31
+        assert october[0]['iso'] == '2026-10-01'
+        assert october[0]['weekday'] == 'Thu'
+        assert october[-1]['iso'] == '2026-10-31'
+        assert october[-1]['weekday'] == 'Sat'
+        assert len(month_grid(2026, 2, {})) == 28
+        assert len(month_grid(2024, 2, {})) == 29
+
+    def test_librarian_page_shows_month_grid(
+            self, librarian_client, mock_db):
+        """Validates librarian page shows month grid `/librarian/settings` as librarian [TestMonthDays / library hours].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        from datetime import datetime, timedelta, timezone
+        from calendar import monthrange
+        mock_db['fetch_all'].return_value = []
+        body = librarian_client.get('/librarian/settings').data.decode()
+        assert 'Open Days In Week' in body
+        assert 'Open Days In Month (' in body
+        assert 'LIBRARY_MONTH_DAYS' in body
+        assert 'name="open_month"' in body
+        manila = datetime.now(timezone(timedelta(hours=8)))
+        expected = monthrange(manila.year, manila.month)[1]
+        # One checkbox per real calendar date plus the hidden fallback.
+        assert body.count('name="LIBRARY_MONTH_DAYS"') == expected + 1
+
+    def test_admin_page_hides_month_grid(self, admin_client, mock_db):
+        """Validates admin page hides month grid `/admin/settings` as admin [TestMonthDays / library hours].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        mock_db['fetch_all'].return_value = []
+        body = admin_client.get('/admin/settings').data.decode()
+        assert 'LIBRARY_MONTH_DAYS' not in body
+        assert 'Open Days In Month' not in body
+
+    def test_valid_month_days_stored(self, librarian_client, mock_db):
+        """Validates valid month days stored `/librarian/settings/update` as librarian (expects 302) [TestMonthDays / library hours].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        mock_db['fetch_all'].return_value = []
+        mock_db['execute'].return_value = 1
+        resp = librarian_client.post('/librarian/settings/update', data={
+            'LIBRARY_MONTH_DAYS': ['2026-10-01', '2026-10-31'],
+        })
+        assert resp.status_code == 302
+        writes = [c[0][1] for c in mock_db['execute'].call_args_list
+                  if 'INSERT INTO library_settings' in c[0][0]]
+        assert any(w[0] == 'LIBRARY_MONTH_DAYS'
+                   and w[1] == '2026-10:' + '1' + '0' * 29 + '1'
+                   for w in writes)
+
+    def test_mixed_months_rejected(self, librarian_client, mock_db):
+        """Validates mixed months rejected `/librarian/settings/update` as librarian (expects 302) [TestMonthDays / library hours].
+    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.post('/librarian/settings/update', data={
+            'LIBRARY_MONTH_DAYS': ['2026-10-01', '2026-11-01'],
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_impossible_day_rejected(self, librarian_client, mock_db):
+        """Validates impossible day rejected `/librarian/settings/update` as librarian (expects 302) [TestMonthDays / library hours].
+    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        mock_db['fetch_all'].return_value = []
+        # February 2026 has 28 days — the 29th cannot exist.
+        resp = librarian_client.post('/librarian/settings/update', data={
+            'LIBRARY_MONTH_DAYS': ['2026-02-29'],
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_all_unchecked_month_stores_closed(
+            self, librarian_client, mock_db):
+        """Validates all unchecked month stores closed `/librarian/settings/update` as librarian (expects 302) [TestMonthDays / library hours].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        mock_db['fetch_all'].return_value = []
+        mock_db['execute'].return_value = 1
+        resp = librarian_client.post('/librarian/settings/update', data={
+            'LIBRARY_MONTH_DAYS': '',
+            'open_month': '2026-10',
+        })
+        assert resp.status_code == 302
+        writes = [c[0][1] for c in mock_db['execute'].call_args_list
+                  if 'INSERT INTO library_settings' in c[0][0]]
+        assert any(w[0] == 'LIBRARY_MONTH_DAYS'
+                   and w[1] == '2026-10:' + '0' * 31
+                   for w in writes)
+
+    def test_unchecked_without_month_rejected(
+            self, librarian_client, mock_db):
+        """Validates unchecked without month rejected `/librarian/settings/update` as librarian (expects 302) [TestMonthDays / library hours].
+    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.post('/librarian/settings/update', data={
+            'LIBRARY_MONTH_DAYS': '',
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0

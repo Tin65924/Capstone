@@ -42,7 +42,8 @@ def _apply_updates(allowed_keys):
     the opening/closing pair is only written when coherent (opening <
     closing); bools parse checkbox+hidden-fallback getlists; day lists
     accept weekday checkboxes in canonical Mon–Sun order (all unchecked
-    stores empty = closed every day); floats/ints
+    stores empty = closed every day); month maps accept per-date
+    checkboxes as 'YYYY-MM:bits'; floats/ints
     enforce non-negativity, per-key caps (fines, borrow limits, day
     counts), and SETTING_RANGES bounds. Disallowed keys and blank inputs
     are skipped (blanks keep the stored value). Writes each valid key
@@ -125,6 +126,68 @@ def _apply_updates(allowed_keys):
                 continue
             picked.sort(key=WEEKDAYS.index)
             update_setting(key, ','.join(picked), current_user.id)
+            updated += 1
+            updated_keys.append(key)
+            continue
+        if kind == 'monthdays':
+            # Per-date checkboxes submit 'YYYY-MM-DD' per checked date
+            # plus a hidden '' fallback. Absent entirely means the field
+            # wasn't rendered — leave the stored value alone. All dates
+            # must belong to one real month with valid day numbers; the
+            # map stores as 'YYYY-MM:bits' (one 0/1 per calendar date).
+            from calendar import monthrange as _monthrange
+            raws = [(r or '').strip() for r in request.form.getlist(key)]
+            if not raws:
+                continue
+            if key not in allowed_keys:
+                errors.append(f'{label}: not editable here.')
+                continue
+            months = set()
+            checked = set()
+            bad = []
+            for r in raws:
+                if not r:
+                    continue
+                match = re.fullmatch(
+                    r'(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])', r)
+                if not match:
+                    bad.append(r)
+                    continue
+                months.add(r[:7])
+                checked.add(int(r[8:10]))
+            if bad:
+                errors.append(
+                    f'{label}: unknown date(s) {", ".join(bad)}.')
+                continue
+            if not months:
+                # Every date unchecked: only the hidden fallbacks
+                # submitted. The grid always posts its month alongside,
+                # so store all-closed for that month.
+                hint = (request.form.get('open_month') or '').strip()
+                if not re.fullmatch(r'\d{4}-(?:0[1-9]|1[0-2])', hint):
+                    errors.append(
+                        f'{label}: dates must all belong to one month.')
+                    continue
+                ym = hint
+                day_count = _monthrange(int(ym[:4]), int(ym[5:7]))[1]
+                update_setting(key, f'{ym}:{"0" * day_count}',
+                               current_user.id)
+                updated += 1
+                updated_keys.append(key)
+                continue
+            if len(months) != 1:
+                errors.append(
+                    f'{label}: dates must all belong to one month.')
+                continue
+            ym = next(iter(months))
+            day_count = _monthrange(int(ym[:4]), int(ym[5:7]))[1]
+            if any(d < 1 or d > day_count for d in checked):
+                errors.append(
+                    f'{label}: {ym} has {day_count} days.')
+                continue
+            bits = ''.join('1' if d in checked else '0'
+                           for d in range(1, day_count + 1))
+            update_setting(key, f'{ym}:{bits}', current_user.id)
             updated += 1
             updated_keys.append(key)
             continue
@@ -289,8 +352,20 @@ def librarian_settings_page():
         values = {}
         flash('Library settings table is not available yet.', 'error')
     categories = _filtered_categories(LIBRARIAN_EDITABLE_KEYS)
+    try:
+        from app.settings.models import library_today, month_grid
+        _today = library_today()
+        month_days = month_grid(_today.year, _today.month, values)
+        month_label = _today.strftime('%B %Y')
+        month_ym = _today.strftime('%Y-%m')
+    except Exception:
+        month_days = []
+        month_label = ''
+        month_ym = ''
     return render_template('settings/settings.html', defs=SETTING_DEFS,
                            values=values, categories=categories,
+                           month_days=month_days, month_label=month_label,
+                           month_ym=month_ym,
                            sidebar='components/librarian_sidebar_nav.html',
                            form_action=url_for('settings.update_librarian_settings'),
                            cancel_url=url_for('main.librarian_dashboard'))

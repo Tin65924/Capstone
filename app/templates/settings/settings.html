@@ -195,15 +195,31 @@
                             {% elif meta[1] == 'days' %}
                             {% set _open_days = ((values.get(key, '') or '').split(',')) %}
                             <div class="w-full sm:w-auto sm:max-w-md shrink-0">
-                                <div class="flex flex-wrap gap-2" role="group" aria-label="{{ meta[0] }}">
+                                <p class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Open Days In Week</p>
+                                <div class="flex flex-wrap gap-2 sm:gap-3" role="group" aria-label="Open days in week">
                                     {% for d in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] %}
-                                    <label class="inline-flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5 dark:has-[:checked]:bg-primary/10 transition-colors">
-                                        <input type="checkbox" name="{{ key }}" value="{{ d }}" {% if d in _open_days %}checked{% endif %} class="accent-blue-900 rounded">
-                                        <span class="font-medium text-slate-700 dark:text-slate-200">{{ d }}</span>
+                                    <label class="flex flex-col items-center gap-1 cursor-pointer" title="{{ d }}">
+                                        <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400">{{ d[:3]|upper }}</span>
+                                        <input type="checkbox" name="{{ key }}" value="{{ d }}" {% if d in _open_days %}checked{% endif %} class="h-6 w-6 accent-blue-900 rounded cursor-pointer">
                                     </label>
                                     {% endfor %}
                                 </div>
                                 <input type="hidden" name="{{ key }}" value="">
+                            </div>
+                            {% elif meta[1] == 'monthdays' %}
+                            <div class="w-full shrink-0">
+                                <p class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Open Days In Month ({{ month_label|default('') }})</p>
+                                <div class="flex flex-wrap gap-2 sm:gap-3" role="group" aria-label="Open days in month">
+                                    {% for d in month_days|default([]) %}
+                                    <label class="flex flex-col items-center gap-1 cursor-pointer" title="{{ d.iso }}">
+                                        <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400">{{ d.n }}</span>
+                                        <input type="checkbox" name="{{ key }}" value="{{ d.iso }}" {% if d.open %}checked{% endif %} class="h-6 w-6 accent-blue-900 rounded cursor-pointer">
+                                        <span class="text-[10px] text-slate-400">{{ d.weekday }}</span>
+                                    </label>
+                                    {% endfor %}
+                                </div>
+                                <input type="hidden" name="{{ key }}" value="">
+                                <input type="hidden" name="open_month" value="{{ month_ym|default('') }}">
                             </div>
                             {% else %}
                             <input id="setting-{{ key }}" name="{{ key }}" type="number" {% if meta[1] == 'float' %}step="0.01"{% else %}step="1"{% endif %} min="0"

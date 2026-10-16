@@ -253,7 +253,8 @@ INSERT INTO library_settings (setting_key, setting_value, description) VALUES
     ('DUE_SOON_NOTIFY_DAYS', '2', 'Days before due date to send due-soon reminders'),
     ('LIBRARY_OPENING_TIME', '08:00', 'Daily opening hour (HH:MM, 24-hour)'),
     ('LIBRARY_CLOSING_TIME', '17:00', 'Daily closing hour (HH:MM, 24-hour)'),
-    ('LIBRARY_OPEN_DAYS', 'Monday,Tuesday,Wednesday,Thursday,Friday,Saturday', 'Days the library is open (borrowing blocked on other days)')
+    ('LIBRARY_OPEN_DAYS', 'Monday,Tuesday,Wednesday,Thursday,Friday,Saturday', 'Days the library is open (borrowing blocked on other days)'),
+    ('LIBRARY_MONTH_DAYS', '', 'Per-date open map YYYY-MM:bits for the current month (empty = weekly pattern applies)')
 ON CONFLICT (setting_key) DO NOTHING;
 
 -- Controlled vocabulary for borrower programs (students) and departments
