@@ -494,23 +494,31 @@
 <!-- All Categories Modal - moved outside aside to prevent overlapping top bar -->
 <div id="categoryModal" class="fixed inset-0 z-[70] hidden bg-black/40 flex items-center justify-center p-4">
     <div class="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-md mx-4 p-6 max-h-[80vh] flex flex-col overflow-hidden">
-        <div class="flex items-center justify-between mb-4 shrink-0">
+        <div class="flex items-center justify-between mb-3 shrink-0">
             <h3 class="text-lg font-bold text-slate-800 dark:text-white">All Categories</h3>
             <button type="button" onclick="closeCategoryModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                 <span class="material-symbols-outlined">close</span>
             </button>
         </div>
-        <div class="overflow-y-auto space-y-1.5 text-[13px] pr-1">
-            <button type="button" data-cat="" onclick="selectCategory(this.dataset.cat)"
+        <div class="relative mb-3 shrink-0">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="material-symbols-outlined text-slate-400 text-[20px]">search</span>
+            </span>
+            <input id="categorySearch" type="search" oninput="filterCategoryList()" placeholder="Search categories..." autocomplete="off"
+                class="w-full pl-10 pr-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm placeholder-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+        </div>
+        <div id="categoryList" class="overflow-y-auto space-y-1.5 text-[13px] pr-1">
+            <button type="button" data-cat="" data-name="all categories" onclick="selectCategory(this.dataset.cat)"
                 class="w-full flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded px-2 py-1.5 text-left">
                 <span class="text-slate-700 dark:text-slate-300">All categories</span>
             </button>
-            {% for cat in categories %}
-            <button type="button" data-cat="{{ cat|e }}" onclick="selectCategory(this.dataset.cat)"
+            {% for cat in categories|sort %}
+            <button type="button" data-cat="{{ cat|e }}" data-name="{{ cat|lower|e }}" onclick="selectCategory(this.dataset.cat)"
                 class="w-full flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded px-2 py-1.5 text-left">
                 <span class="text-slate-700 dark:text-slate-300">{{ cat }}</span>
             </button>
             {% endfor %}
+            <p id="categoryNoMatch" class="hidden px-2 py-4 text-center text-slate-400 text-sm">No categories match your search.</p>
         </div>
     </div>
 </div>
@@ -531,6 +539,25 @@
         }
         document.getElementById('categoryModal').classList.remove('hidden');
         document.body.style.overflow = 'hidden';
+        // Reset the search so the full A-Z list shows on every open.
+        var catSearch = document.getElementById('categorySearch');
+        if (catSearch) {
+            catSearch.value = '';
+            filterCategoryList();
+        }
+    }
+    function filterCategoryList() {
+        var q = ((document.getElementById('categorySearch') || {}).value || '').toLowerCase();
+        var btns = document.querySelectorAll('#categoryList button[data-cat]');
+        var visible = 0;
+        for (var i = 0; i < btns.length; i++) {
+            var name = (btns[i].getAttribute('data-name') || '').toLowerCase();
+            var show = !q || name.indexOf(q) !== -1;
+            btns[i].style.display = show ? '' : 'none';
+            if (show) visible++;
+        }
+        var noMatch = document.getElementById('categoryNoMatch');
+        if (noMatch) noMatch.classList.toggle('hidden', visible > 0);
     }
     function closeCategoryModal() {
         document.getElementById('categoryModal').classList.add('hidden');

@@ -135,7 +135,7 @@
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div class="min-w-0">
                             <h2 class="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">Profile Information</h2>
-                            <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Update your contact details. Your {{ 'faculty number (9 digits)' if current_user.role == 'Faculty' else 'student ID (0000-00000)' }} cannot be changed here.</p>
+                            <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Update your contact details. Your {{ 'faculty number (9 digits)' if current_user.role == 'Faculty' else ('librarian ID' if current_user.role == 'Librarian' else ('admin ID' if current_user.role == 'Admin' else 'student ID (0000-00000)')) }} cannot be changed here.</p>
                         </div>
                         <button type="button" onclick="openProfileModal()"
                             class="shrink-0 px-4 py-2 text-sm font-bold text-primary border border-primary rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all">Edit Profile</button>
@@ -146,7 +146,7 @@
                             <p class="font-semibold text-gray-900 dark:text-white truncate">{{ (profile[3] if profile and profile|length > 3 else (user_data[3] if user_data else current_user.full_name)) }}</p>
                         </div>
                         <div>
-                            <p class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ 'Faculty Number' if current_user.role == 'Faculty' else 'Student ID Number' }}</p>
+                            <p class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ 'Faculty Number' if current_user.role == 'Faculty' else ('Librarian ID Number' if current_user.role == 'Librarian' else ('Admin ID Number' if current_user.role == 'Admin' else 'Student ID Number')) }}</p>
                             <p class="font-semibold text-gray-900 dark:text-white truncate">{{ (profile[5] if profile and profile|length > 5 and profile[5] else '—') }}</p>
                         </div>
                         <div>
@@ -459,11 +459,11 @@
                         class="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">{{ 'Faculty Number (locked)' if current_user.role == 'Faculty' else 'Student ID Number (locked)' }}</label>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">{{ 'Faculty Number (locked)' if current_user.role == 'Faculty' else ('Librarian ID (locked)' if current_user.role == 'Librarian' else ('Admin ID (locked)' if current_user.role == 'Admin' else 'Student ID Number (locked)')) }}</label>
                     <input type="text" disabled value="{{ (profile[5] if profile and profile|length > 5 and profile[5] else '') }}"
-                        placeholder="{{ 'e.g. 123456789' if current_user.role == 'Faculty' else 'e.g. 2024-00123' }}"
+                        placeholder="{{ 'e.g. 123456789' if current_user.role == 'Faculty' else ('e.g. 2024-00123' if current_user.role == 'Student' else 'No ID on file') }}"
                         class="w-full px-3 py-2.5 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-gray-500 cursor-not-allowed">
-                    <p class="text-[11px] text-gray-400 mt-1">{{ 'Faculty numbers cannot be changed here. Contact the librarian for corrections.' if current_user.role == 'Faculty' else 'Students are not allowed to change their student IDs.' }}</p>
+                    <p class="text-[11px] text-gray-400 mt-1">{{ 'Faculty numbers cannot be changed here. Contact the librarian for corrections.' if current_user.role == 'Faculty' else ('Staff IDs cannot be changed here. Contact the system administrator for corrections.' if current_user.role in ('Librarian', 'Admin') else 'Students are not allowed to change their student IDs.') }}</p>
                 </div>
                 <div>
                     <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1" for="profile-dept">{{ 'Program' if current_user.role == 'Student' else ('Department' if current_user.role == 'Faculty' else 'Program / Department') }}</label>
