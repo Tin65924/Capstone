@@ -631,8 +631,8 @@
                                         <span class="material-symbols-outlined text-lg">delete_forever</span>
                                     </button>
                                     {% endif %}
-                                    <form method="POST" action="{{ url_for('auth.change_user_role', user_id=u[0]) }}" class="relative inline-block shrink-0" title="Change role of {{ u[2] }}">
-                                        <select name="role_id" onchange="this.form.submit()" class="appearance-none cursor-pointer bg-white border border-gray-200 rounded-lg pl-3 pr-8 py-2 text-xs font-semibold text-gray-700 shadow-sm hover:border-primary/50 hover:shadow focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all min-w-[132px]">
+                                    <form method="POST" action="{{ url_for('auth.change_user_role', user_id=u[0]) }}" class="relative inline-block shrink-0" title="Change role of {{ u[2] }}" data-user-name="{{ u[2] }}">
+                                        <select name="role_id" onchange="confirmRoleChange(this)" class="appearance-none cursor-pointer bg-white border border-gray-200 rounded-lg pl-3 pr-8 py-2 text-xs font-semibold text-gray-700 shadow-sm hover:border-primary/50 hover:shadow focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all min-w-[132px]">
                                             {% for r in roles %}
                                             <option value="{{ r[0] }}" {% if r[1] == u[3] %}selected{% endif %}>{{ r[1] }}</option>
                                             {% endfor %}
@@ -691,7 +691,7 @@
                         {% endif %}
                     </div>
                     {% if is_admin_view|default(false) %}
-                    <form method="POST" action="{{ url_for('auth.change_user_role', user_id=u[0]) }}" class="mt-2">
+                    <form method="POST" action="{{ url_for('auth.change_user_role', user_id=u[0]) }}" class="mt-2" data-user-name="{{ u[2] }}">
                         <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Change Role</label>
                         <div class="relative" id="role-select-wrapper-{{ u[0] }}">
                             <select name="role_id" id="role-select-native-{{ u[0] }}" class="sr-only" tabindex="-1" aria-hidden="true">
@@ -947,8 +947,7 @@ if (_editModal) { _editModal.addEventListener('click', function(e) {
         if (!btn || !dropdown || !native) return;
         function setExpanded(expanded) { btn.setAttribute('aria-expanded', expanded ? 'true' : 'false'); dropdown.classList.toggle('hidden', !expanded); if (arrow) arrow.style.transform = expanded ? 'rotate(180deg)' : ''; }
         function isOpen() { return !dropdown.classList.contains('hidden'); }
-        function selectValue(value, text) {
-            native.value = value;
+        function paintRoleOptions(value, text) {
             if (label) label.textContent = text;
             dropdown.querySelectorAll('[role="option"]').forEach(function(opt) {
                 var isSel = opt.getAttribute('data-value') === value;
@@ -959,7 +958,17 @@ if (_editModal) { _editModal.addEventListener('click', function(e) {
                 var check = opt.querySelector('.material-symbols-outlined');
                 if (isSel) { if (!check) { var c = document.createElement('span'); c.className = 'material-symbols-outlined text-[16px] text-primary'; c.textContent = 'check'; opt.appendChild(c); } } else { if (check) check.remove(); }
             });
-            native.form.submit();
+        }
+        function selectValue(value, text) {
+            var prevValue = native.value;
+            if (value === prevValue) { setExpanded(false); return; }
+            native.value = value;
+            paintRoleOptions(value, text);
+            requestRoleChange(native, prevValue, function() {
+                native.value = prevValue;
+                var prevOpt = dropdown.querySelector('[data-value="' + prevValue + '"] span');
+                paintRoleOptions(prevValue, prevOpt ? prevOpt.textContent.trim() : '');
+            });
         }
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
@@ -1260,5 +1269,73 @@ document.addEventListener('keydown', function (e) {
 </script>
 
 {% include 'components/confirm_modal.html' %}
+{% if is_admin_view|default(false) %}
+<script>
+// Role change confirmation — desktop native select and mobile custom
+// dropdown both pause here instead of submitting immediately. Confirm
+// submits the original role form; cancel reverts the visible selection.
+// Admin-only: the role forms themselves render for admins only.
+var pendingRoleChange = null;
+
+function closeAllRoleDropdowns() {
+    document.querySelectorAll('[id^="role-select-dropdown-"]').forEach(function(d){ d.classList.add('hidden'); });
+    document.querySelectorAll('[id^="role-select-arrow-"]').forEach(function(a){ a.style.transform = ''; });
+    document.querySelectorAll('[id^="role-select-btn-"]').forEach(function(b){ b.setAttribute('aria-expanded', 'false'); });
+}
+
+function requestRoleChange(selectEl, prevValue, revertFn) {
+    var newOpt = selectEl.options[selectEl.selectedIndex];
+    if (!newOpt || newOpt.value === prevValue) return;
+    var prevText = '';
+    for (var i = 0; i < selectEl.options.length; i++) {
+        if (selectEl.options[i].value === prevValue) { prevText = selectEl.options[i].text; break; }
+    }
+    var form = selectEl.form;
+    var userName = (form && form.getAttribute('data-user-name')) || 'this user';
+    pendingRoleChange = { revert: revertFn };
+    openConfirmModal(
+        'Change Role',
+        'Change "' + userName + '" from ' + prevText + ' to ' + newOpt.text + '?',
+        form ? form.action : '#',
+        'Change Role',
+        'bg-primary hover:bg-blue-800',
+        'manage_accounts'
+    );
+    // The shared modal posts its own form — hijack submit so the original
+    // role form (with its role_id field) is posted instead.
+    document.getElementById('confirmForm').onsubmit = function(e) {
+        e.preventDefault();
+        pendingRoleChange = null;
+        document.getElementById('confirmForm').onsubmit = null;
+        _baseCloseConfirmModal();
+        form.submit();
+    };
+}
+
+function confirmRoleChange(selectEl) {
+    var prevValue = null;
+    for (var i = 0; i < selectEl.options.length; i++) {
+        if (selectEl.options[i].defaultSelected) { prevValue = selectEl.options[i].value; break; }
+    }
+    if (prevValue === null || selectEl.value === prevValue) return;
+    requestRoleChange(selectEl, prevValue, function() { selectEl.value = prevValue; });
+}
+
+// Wrap the shared closer: revert any unconfirmed role pick, clear the
+// submit hijack, and collapse role dropdowns — the other confirm flows
+// (deactivate, archive, delete) pass through untouched.
+var _baseCloseConfirmModal = window.closeConfirmModal;
+window.closeConfirmModal = function() {
+    if (pendingRoleChange) {
+        try { if (pendingRoleChange.revert) pendingRoleChange.revert(); } catch (err) {}
+        pendingRoleChange = null;
+    }
+    var cf = document.getElementById('confirmForm');
+    if (cf) cf.onsubmit = null;
+    closeAllRoleDropdowns();
+    _baseCloseConfirmModal();
+};
+</script>
+{% endif %}
 </body>
 </html>
