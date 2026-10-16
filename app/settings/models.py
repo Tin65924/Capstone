@@ -94,11 +94,8 @@ SETTING_CATEGORIES = [
      ['RESERVATION_CLAIM_HOURS', 'RESERVATION_CLAIM_DAYS', 'DUE_SOON_NOTIFY_DAYS',
       'RESERVATION_CUTOFF_TIME']),
     ('operations', 'Library Operations Schedule', 'calendar_month',
-     'Weekday, Saturday, semestral-break hours, closed days, and open days. '
-     'Unchecked days allow no borrowing; Sunday and holidays allow no reservations.',
-     ['LIBRARY_SATURDAY_OPENING_TIME', 'LIBRARY_SATURDAY_CLOSING_TIME',
-      'LIBRARY_SEMBREAK_OPENING_TIME', 'LIBRARY_SEMBREAK_CLOSING_TIME',
-      'LIBRARY_CLOSED_DAYS', 'LIBRARY_OPEN_DAYS', 'LIBRARY_MONTH_DAYS']),
+     'Days the library is open. Unchecked days allow no borrowing and no reservations.',
+     ['LIBRARY_OPEN_DAYS', 'LIBRARY_MONTH_DAYS']),
     ('collection', 'Collection Thresholds', 'inventory_2',
      'Low-stock alert and weeding lifespan for reports.',
      ['LOW_STOCK_THRESHOLD', 'BOOK_LIFESPAN_YEARS', 'DAILY_MAX_HOURS']),
@@ -119,10 +116,8 @@ ADMIN_ONLY_KEYS = frozenset({'BACKUP_DAY', 'BACKUP_HOUR', 'BACKUP_KEEP',
 # without touching backup/admin-only settings.
 LIBRARIAN_EDITABLE_KEYS = frozenset({
     'MAX_BORROW_LIMIT_STUDENT', 'MAX_BORROW_LIMIT_FACULTY',
-    'LIBRARY_OPENING_TIME', 'LIBRARY_CLOSING_TIME', 'LIBRARY_OPEN_DAYS',
-    'LIBRARY_SATURDAY_OPENING_TIME', 'LIBRARY_SATURDAY_CLOSING_TIME',
-    'LIBRARY_SEMBREAK_OPENING_TIME', 'LIBRARY_SEMBREAK_CLOSING_TIME',
-    'LIBRARY_CLOSED_DAYS', 'LIBRARY_OPEN_DAYS', 'LIBRARY_MONTH_DAYS',
+    'LIBRARY_OPENING_TIME', 'LIBRARY_CLOSING_TIME',
+    'LIBRARY_OPEN_DAYS', 'LIBRARY_MONTH_DAYS',
     'OVERNIGHT_DUE_DAYS_STUDENT', 'OVERNIGHT_DUE_DAYS_FACULTY',
     'DAILY_CIRCULATION_DUE_DAYS', 'DAILY_MAX_HOURS',
     'OVERDUE_FINE_PER_DAY', 'OVERDUE_GRACE_DAYS',
@@ -149,11 +144,6 @@ SETTING_DEFS = {
     'RESERVATION_CLAIM_DAYS': ('Reservation claim days (legacy)', 'int', 'Days to claim an allocated reservation (used only when claim hours is empty)'),
     'RESERVATION_CLAIM_HOURS': ('Reservation claim hours', 'float', 'Hours to claim an allocated reservation (2 = 2-hour pickup window)'),
     'RESERVATION_CUTOFF_TIME': ('Reservation cutoff (daily)', 'time', 'Reservations close at 15:00; bookings after cutoff are for next open day'),
-    'LIBRARY_SATURDAY_OPENING_TIME': ('Saturday opening', 'time', 'Saturday opening hour; blank means same as weekday'),
-    'LIBRARY_SATURDAY_CLOSING_TIME': ('Saturday closing', 'time', 'Saturday closing hour; blank means closed Saturday — set hours if open'),
-    'LIBRARY_SEMBREAK_OPENING_TIME': ('Sem-break opening', 'time', 'Semestral break opening hour'),
-    'LIBRARY_SEMBREAK_CLOSING_TIME': ('Sem-break closing', 'time', 'Semestral break closing hour'),
-    'LIBRARY_CLOSED_DAYS': ('Closed days', 'str', 'Comma list e.g. Sunday,holiday. Sunday and holidays allow no reservations'),
     'LOW_STOCK_THRESHOLD': ('Low-stock threshold', 'int', 'Alert when available copies are at or below this (default 2)'),
     'BOOK_LIFESPAN_YEARS': ('Book lifespan (years)', 'int', 'Flag titles older than this for weeding review (default 10)'),
     'DAILY_MAX_HOURS': ('Daily use max hours', 'int', 'In-library daily loans capped at this many hours (default 2, within 5PM closing)'),
@@ -187,11 +177,6 @@ DEFAULTS = {
     'RESERVATION_CLAIM_DAYS': '2',
     'RESERVATION_CLAIM_HOURS': '2',
     'RESERVATION_CUTOFF_TIME': '15:00',
-    'LIBRARY_SATURDAY_OPENING_TIME': '08:00',
-    'LIBRARY_SATURDAY_CLOSING_TIME': '12:00',
-    'LIBRARY_SEMBREAK_OPENING_TIME': '08:00',
-    'LIBRARY_SEMBREAK_CLOSING_TIME': '17:00',
-    'LIBRARY_CLOSED_DAYS': 'Sunday,holiday',
     'LOW_STOCK_THRESHOLD': '2',
     'BOOK_LIFESPAN_YEARS': '10',
     'DAILY_MAX_HOURS': '2',
@@ -518,25 +503,33 @@ def is_after_reservation_cutoff(now=None, config=None):
 
 
 def get_closed_days(config=None):
-    """Closed weekday names lowercased from LIBRARY_CLOSED_DAYS."""
-    cfg = config if config is not None else current_app.config
-    raw = str(cfg.get('LIBRARY_CLOSED_DAYS') or '').lower()
-    return {p.strip() for p in raw.replace(';', ',').split(',') if p.strip()}
+    """Closed weekday names (lowercase) derived from the open days.
+
+    A weekday with its box unchecked counts as closed. Unconfigured
+    open days mean no closures (fail open), matching the old behavior
+    where an absent closed-days list closed nothing.
+    """
+    days = get_open_days(config)
+    if days is None:
+        return set()
+    return {d.lower() for d in WEEKDAYS if d not in days}
 
 
 def is_closed_day(day=None, config=None):
-    """True for Sunday/holiday closures — no reservations allowed.
+    """True for closed days — no reservations allowed.
 
-    Checks weekday name against LIBRARY_CLOSED_DAYS (default
-    Sunday,holiday). Saturday uses its own hours; callers pass the
-    target pickup date so post-3PM next-day rollover can skip Sundays.
+    A date counts as closed exactly when borrowing is disallowed that
+    day (unchecked weekday, or a per-date month override closing it),
+    so reservation blocking always agrees with the Operations open-days
+    grid. Callers pass the target pickup date so post-3PM next-day
+    rollover can skip closed days.
     """
     day = day or library_today()
     try:
-        weekday = day.strftime('%A').lower()
+        day.strftime('%A')
     except Exception:
         return False
-    return weekday in get_closed_days(config)
+    return not is_open_day(day, config)
 
 
 def get_open_days(config=None):

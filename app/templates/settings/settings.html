@@ -176,7 +176,7 @@
                     </div>
                     <div class="divide-y divide-slate-100 dark:divide-slate-800">
                         {% for key, meta in cat.fields %}
-                        <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-4 sm:px-6 py-4">
+                        <div class="flex flex-col {% if meta[1] != 'monthdays' %}sm:flex-row sm:items-center{% endif %} gap-2 sm:gap-4 px-4 sm:px-6 py-4">
                             <div class="flex-1 min-w-0">
                                 <label for="setting-{{ key }}" class="block text-sm font-bold text-slate-800 dark:text-slate-100">{{ meta[0] }}</label>
                                 <p class="text-xs text-slate-500">{{ meta[2] }} <span class="font-mono text-slate-400">{{ key }}</span></p>

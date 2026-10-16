@@ -545,3 +545,43 @@ class TestMonthDays:
         })
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 0
+
+
+class TestOperationsCleanup:
+    """Operations holds only open-days fields; closures follow them."""
+
+    def test_operations_shows_only_open_days(
+            self, librarian_client, mock_db):
+        """Validates operations shows only open days `/librarian/settings` as librarian [TestOperationsCleanup / library hours].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        mock_db['fetch_all'].return_value = []
+        body = librarian_client.get('/librarian/settings').data.decode()
+        assert 'Library Operations Schedule' in body
+        assert 'LIBRARY_OPEN_DAYS' in body
+        assert 'LIBRARY_MONTH_DAYS' in body
+        for gone in ('LIBRARY_SATURDAY_OPENING_TIME',
+                     'LIBRARY_SATURDAY_CLOSING_TIME',
+                     'LIBRARY_SEMBREAK_OPENING_TIME',
+                     'LIBRARY_SEMBREAK_CLOSING_TIME',
+                     'LIBRARY_CLOSED_DAYS'):
+            assert gone not in body, gone
+
+    def test_closed_day_follows_open_days(self):
+        """Validates closed day follows open days [TestOperationsCleanup / library hours].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        from datetime import date
+        from app.settings.models import is_closed_day, get_closed_days
+        cfg = {'LIBRARY_OPEN_DAYS': OPEN_DAYS['LIBRARY_OPEN_DAYS']}
+        # Sunday unchecked -> closed (keeps the old Sunday reservation block).
+        assert is_closed_day(date(2026, 10, 4), cfg) is True
+        assert is_closed_day(date(2026, 10, 6), cfg) is False
+        assert get_closed_days(cfg) == {'sunday'}
+        # Per-date override closing a Monday counts as closed too.
+        bits = '1' * 5 + '0' + '1' * 25
+        cfg2 = dict(cfg, LIBRARY_MONTH_DAYS=f'2026-10:{bits}')
+        assert is_closed_day(date(2026, 10, 6), cfg2) is True
+        # Unconfigured days fail open, as before.
+        assert is_closed_day(date(2026, 10, 4), {}) is False
+        assert get_closed_days({}) == set()

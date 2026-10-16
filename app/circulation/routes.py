@@ -1053,7 +1053,7 @@ def user_reserve():
 
     try:
         if is_closed_day():
-            flash('No reservations on Sundays/holidays. Please reserve on the next open day.', 'error')
+            flash('No reservations on closed days. Please reserve on the next open day.', 'error')
             return redirect(url_for('cataloging.book_info', book_id=book_id))
     except Exception:
         pass
