@@ -192,6 +192,19 @@
                             <input id="setting-{{ key }}" name="{{ key }}" type="time"
                                 value="{{ values.get(key, '') }}"
                                 class="w-full sm:w-40 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+                            {% elif meta[1] == 'days' %}
+                            {% set _open_days = ((values.get(key, '') or '').split(',')) %}
+                            <div class="w-full sm:w-auto sm:max-w-md shrink-0">
+                                <div class="flex flex-wrap gap-2" role="group" aria-label="{{ meta[0] }}">
+                                    {% for d in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] %}
+                                    <label class="inline-flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5 dark:has-[:checked]:bg-primary/10 transition-colors">
+                                        <input type="checkbox" name="{{ key }}" value="{{ d }}" {% if d in _open_days %}checked{% endif %} class="accent-blue-900 rounded">
+                                        <span class="font-medium text-slate-700 dark:text-slate-200">{{ d }}</span>
+                                    </label>
+                                    {% endfor %}
+                                </div>
+                                <input type="hidden" name="{{ key }}" value="">
+                            </div>
                             {% else %}
                             <input id="setting-{{ key }}" name="{{ key }}" type="number" {% if meta[1] == 'float' %}step="0.01"{% else %}step="1"{% endif %} min="0"
                                 value="{{ values.get(key, '') }}"

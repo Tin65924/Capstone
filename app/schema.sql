@@ -252,7 +252,8 @@ INSERT INTO library_settings (setting_key, setting_value, description) VALUES
     ('RESERVATION_CLAIM_HOURS', '2', 'Hours to claim an allocated reservation (2-hour pickup window)'),
     ('DUE_SOON_NOTIFY_DAYS', '2', 'Days before due date to send due-soon reminders'),
     ('LIBRARY_OPENING_TIME', '08:00', 'Daily opening hour (HH:MM, 24-hour)'),
-    ('LIBRARY_CLOSING_TIME', '17:00', 'Daily closing hour (HH:MM, 24-hour)')
+    ('LIBRARY_CLOSING_TIME', '17:00', 'Daily closing hour (HH:MM, 24-hour)'),
+    ('LIBRARY_OPEN_DAYS', 'Monday,Tuesday,Wednesday,Thursday,Friday,Saturday', 'Days the library is open (borrowing blocked on other days)')
 ON CONFLICT (setting_key) DO NOTHING;
 
 -- Controlled vocabulary for borrower programs (students) and departments

@@ -40,7 +40,9 @@ def _apply_updates(allowed_keys):
     Shared validation for both settings forms. Returns (updated, updated_keys, errors).
     Walks every key in ``SETTING_DEFS`` by kind: times require HH:MM and
     the opening/closing pair is only written when coherent (opening <
-    closing); bools parse checkbox+hidden-fallback getlists; floats/ints
+    closing); bools parse checkbox+hidden-fallback getlists; day lists
+    accept weekday checkboxes in canonical Mon–Sun order (all unchecked
+    stores empty = closed every day); floats/ints
     enforce non-negativity, per-key caps (fines, borrow limits, day
     counts), and SETTING_RANGES bounds. Disallowed keys and blank inputs
     are skipped (blanks keep the stored value). Writes each valid key
@@ -92,6 +94,37 @@ def _apply_updates(allowed_keys):
                 errors.append(f'{label}: invalid value ({e}).')
                 continue
             update_setting(key, value, current_user.id)
+            updated += 1
+            updated_keys.append(key)
+            continue
+        if kind == 'days':
+            # Weekday checkboxes submit one value per checked day plus a
+            # hidden '' fallback. Absent entirely means the field wasn't
+            # rendered — leave the stored value alone. All unchecked
+            # stores '' (closed every day); unknown values are rejected.
+            from .models import WEEKDAYS
+            raws = [(r or '').strip() for r in request.form.getlist(key)]
+            if not raws:
+                continue
+            if key not in allowed_keys:
+                errors.append(f'{label}: not editable here.')
+                continue
+            picked = []
+            bad = []
+            for r in raws:
+                if not r:
+                    continue
+                name = r.capitalize()
+                if name not in WEEKDAYS:
+                    bad.append(r)
+                elif name not in picked:
+                    picked.append(name)
+            if bad:
+                errors.append(
+                    f'{label}: unknown day(s) {", ".join(bad)}.')
+                continue
+            picked.sort(key=WEEKDAYS.index)
+            update_setting(key, ','.join(picked), current_user.id)
             updated += 1
             updated_keys.append(key)
             continue

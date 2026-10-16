@@ -27,7 +27,7 @@ from .models import (
 from app.settings.models import (
     is_library_open, library_hours_label, get_closing_time,
     library_now, library_today, is_closed_day, is_after_reservation_cutoff,
-    get_daily_max_hours,
+    get_daily_max_hours, is_open_day,
 )
 
 VALID_BORROW_TYPES = ('overnight', 'daily_circulation')
@@ -62,10 +62,24 @@ def _is_unique_violation(exc):
 
 
 def _closed_response(fallback_endpoint, **kwargs):
-    """Redirect with a closed-hours message (borrowing only)."""
-    hours = library_hours_label() or 'its posted hours'
-    flash(f'The library is currently closed (open {hours}). '
-          'Borrowing is available during open hours.', 'error')
+    """Redirect with a closed message (borrowing only).
+
+    Names the closed day when the refusal is day-based (e.g. an
+    unchecked Sunday) so borrowers know to come back on an open day;
+    otherwise falls back to the open-hours range.
+    """
+    try:
+        today_open = is_open_day()
+    except Exception:
+        today_open = True
+    if not today_open:
+        day_name = library_today().strftime('%A')
+        flash(f'The library is closed today ({day_name}). '
+              'Borrowing resumes on the next open day.', 'error')
+    else:
+        hours = library_hours_label() or 'its posted hours'
+        flash(f'The library is currently closed (open {hours}). '
+              'Borrowing is available during open hours.', 'error')
     return redirect(url_for(fallback_endpoint, **kwargs))
 
 

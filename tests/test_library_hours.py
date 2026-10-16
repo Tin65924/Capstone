@@ -7,9 +7,13 @@ from unittest.mock import patch
 
 from app.settings.models import (
     parse_hhmm, is_library_open, library_hours_label, get_closing_time,
+    get_open_days, is_open_day,
 )
 
 OPEN = {'LIBRARY_OPENING_TIME': '08:00', 'LIBRARY_CLOSING_TIME': '17:00'}
+# _at() is a Tuesday (2026-10-06).
+OPEN_DAYS = dict(OPEN, LIBRARY_OPEN_DAYS=(
+    'Monday,Tuesday,Wednesday,Thursday,Friday,Saturday'))
 
 
 def _at(hour, minute=0):
@@ -269,3 +273,113 @@ class TestClosingDueTime:
             due = _compute_due_date('daily_circulation', 'Student')
             assert (due.hour, due.minute) == (17, 0)
             assert due.date() == date.today()
+
+
+class TestOpenDays:
+    """Weekday open-day checkboxes: gate, settings UI, and saves."""
+
+    def test_checked_day_allows_borrow_in_hours(self):
+        """Validates checked day allows borrow in hours [TestOpenDays / library hours].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        # _at() is a Tuesday and Tuesday is checked.
+        assert is_library_open(_at(12, 0), OPEN_DAYS) is True
+        assert is_open_day(_at(12, 0).date(), OPEN_DAYS) is True
+
+    def test_unchecked_day_blocks_borrow(self):
+        """Validates unchecked day blocks borrow [TestOpenDays / library hours].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        cfg = dict(OPEN, LIBRARY_OPEN_DAYS='Monday,Wednesday')
+        assert is_library_open(_at(12, 0), cfg) is False
+        assert is_open_day(_at(12, 0).date(), cfg) is False
+
+    def test_unconfigured_days_fail_open(self):
+        """Validates unconfigured days fail open [TestOpenDays / library hours].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        assert get_open_days({}) is None
+        assert get_open_days(OPEN) is None
+        assert is_open_day(_at(12, 0).date(), {}) is True
+        # Hours-only config keeps the historical behavior (gate on time).
+        assert is_library_open(_at(12, 0), OPEN) is True
+
+    def test_empty_means_closed_all_week(self):
+        """Validates empty means closed all week [TestOpenDays / library hours].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        cfg = dict(OPEN, LIBRARY_OPEN_DAYS='')
+        assert get_open_days(cfg) == set()
+        assert is_library_open(_at(12, 0), cfg) is False
+
+    def test_unknown_day_tokens_dropped(self):
+        """Validates unknown day tokens dropped [TestOpenDays / library hours].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        cfg = dict(OPEN, LIBRARY_OPEN_DAYS='Tuesday,Funday')
+        assert get_open_days(cfg) == {'Tuesday'}
+        assert is_library_open(_at(12, 0), cfg) is True
+
+    def test_librarian_page_shows_day_checkboxes(
+            self, librarian_client, mock_db):
+        """Validates librarian page shows day checkboxes `/librarian/settings` as librarian [TestOpenDays / library hours].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        mock_db['fetch_all'].return_value = []
+        body = librarian_client.get('/librarian/settings').data.decode()
+        assert 'LIBRARY_OPEN_DAYS' in body
+        for day in ('Monday', 'Tuesday', 'Wednesday', 'Thursday',
+                    'Friday', 'Saturday', 'Sunday'):
+            assert f'value="{day}"' in body, day
+        assert 'type="checkbox"' in body
+
+    def test_admin_page_hides_open_days(self, admin_client, mock_db):
+        """Validates admin page hides open days `/admin/settings` as admin [TestOpenDays / library hours].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        mock_db['fetch_all'].return_value = []
+        body = admin_client.get('/admin/settings').data.decode()
+        assert 'LIBRARY_OPEN_DAYS' not in body
+
+    def test_valid_days_stored_canonical(
+            self, librarian_client, mock_db):
+        """Validates valid days stored canonical `/librarian/settings/update` as librarian (expects 302) [TestOpenDays / library hours].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        mock_db['fetch_all'].return_value = []
+        mock_db['execute'].return_value = 1
+        resp = librarian_client.post('/librarian/settings/update', data={
+            'LIBRARY_OPEN_DAYS': ['Sunday', 'Monday'],
+        })
+        assert resp.status_code == 302
+        writes = [c[0][1] for c in mock_db['execute'].call_args_list
+                  if 'INSERT INTO library_settings' in c[0][0]]
+        assert any(w[0] == 'LIBRARY_OPEN_DAYS' and w[1] == 'Monday,Sunday'
+                   for w in writes)
+
+    def test_unknown_day_rejected(self, librarian_client, mock_db):
+        """Validates unknown day rejected `/librarian/settings/update` as librarian (expects 302) [TestOpenDays / library hours].
+    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.post('/librarian/settings/update', data={
+            'LIBRARY_OPEN_DAYS': 'Funday',
+        })
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_all_unchecked_stores_empty(self, librarian_client, mock_db):
+        """Validates all unchecked stores empty `/librarian/settings/update` as librarian (expects 302) [TestOpenDays / library hours].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        mock_db['fetch_all'].return_value = []
+        mock_db['execute'].return_value = 1
+        # Only the hidden '' fallback submits: every day unchecked.
+        resp = librarian_client.post('/librarian/settings/update', data={
+            'LIBRARY_OPEN_DAYS': '',
+        })
+        assert resp.status_code == 302
+        writes = [c[0][1] for c in mock_db['execute'].call_args_list
+                  if 'INSERT INTO library_settings' in c[0][0]]
+        assert any(w[0] == 'LIBRARY_OPEN_DAYS' and w[1] == ''
+                   for w in writes)

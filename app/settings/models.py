@@ -62,6 +62,16 @@ def _env_default(name, fallback):
         return str(fallback)
 
 
+# Open-day controls: weekday checkboxes on Library Hours. Checked means
+# the library is open that day; an unchecked day blocks all borrowing.
+# Stored as a comma-joined string (e.g. 'Monday,Tuesday,...') so the
+# settings table needs no schema change. Default is Mon–Sat, matching the
+# historical 'Sunday,holiday' reservation closure.
+WEEKDAYS = ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
+            'Saturday', 'Sunday')
+DEFAULT_OPEN_DAYS = ('Monday,Tuesday,Wednesday,Thursday,Friday,Saturday')
+
+
 # Sidebar categories: (anchor id, title, icon, blurb, setting keys).
 # Every key in SETTING_DEFS must appear in exactly one category.
 SETTING_CATEGORIES = [
@@ -69,8 +79,9 @@ SETTING_CATEGORIES = [
      'How many books each role may hold at once.',
      ['MAX_BORROW_LIMIT_STUDENT', 'MAX_BORROW_LIMIT_FACULTY']),
     ('hours', 'Library Hours', 'schedule',
-     'Daily opening and closing hours. Borrowing is blocked outside open hours.',
-     ['LIBRARY_OPENING_TIME', 'LIBRARY_CLOSING_TIME']),
+     'Daily opening/closing hours and open days. Borrowing is blocked on unchecked days and outside open hours.',
+     ['LIBRARY_OPENING_TIME', 'LIBRARY_CLOSING_TIME',
+      'LIBRARY_OPEN_DAYS']),
     ('due-dates', 'Due Date Settings', 'event',
      'Loan periods for overnight and in-library use.',
      ['OVERNIGHT_DUE_DAYS_STUDENT', 'OVERNIGHT_DUE_DAYS_FACULTY',
@@ -107,7 +118,7 @@ ADMIN_ONLY_KEYS = frozenset({'BACKUP_DAY', 'BACKUP_HOUR', 'BACKUP_KEEP',
 # without touching backup/admin-only settings.
 LIBRARIAN_EDITABLE_KEYS = frozenset({
     'MAX_BORROW_LIMIT_STUDENT', 'MAX_BORROW_LIMIT_FACULTY',
-    'LIBRARY_OPENING_TIME', 'LIBRARY_CLOSING_TIME',
+    'LIBRARY_OPENING_TIME', 'LIBRARY_CLOSING_TIME', 'LIBRARY_OPEN_DAYS',
     'LIBRARY_SATURDAY_OPENING_TIME', 'LIBRARY_SATURDAY_CLOSING_TIME',
     'LIBRARY_SEMBREAK_OPENING_TIME', 'LIBRARY_SEMBREAK_CLOSING_TIME',
     'LIBRARY_CLOSED_DAYS',
@@ -121,12 +132,13 @@ LIBRARIAN_EDITABLE_KEYS = frozenset({
 })
 
 
-# key -> (label, kind, description). Kinds: int, float, bool, time.
+# key -> (label, kind, description). Kinds: int, float, bool, time, days.
 SETTING_DEFS = {
     'MAX_BORROW_LIMIT_STUDENT': ('Max borrows (Student)', 'int', 'Max active loans for students'),
     'MAX_BORROW_LIMIT_FACULTY': ('Max borrows (Faculty)', 'int', 'Max active loans for faculty'),
     'LIBRARY_OPENING_TIME': ('Opening hour', 'time', 'Daily opening hour (24-hour clock)'),
     'LIBRARY_CLOSING_TIME': ('Closing hour', 'time', 'Daily closing hour (must be after opening)'),
+    'LIBRARY_OPEN_DAYS': ('Open days', 'days', 'Checked days are open — borrowing is blocked on unchecked days'),
     'OVERNIGHT_DUE_DAYS_STUDENT': ('Overnight due days (Student)', 'int', 'Overnight loan due days for students'),
     'OVERNIGHT_DUE_DAYS_FACULTY': ('Overnight due days (Faculty)', 'int', 'Overnight loan due days for faculty'),
     'DAILY_CIRCULATION_DUE_DAYS': ('Daily circulation due days', 'int', 'Daily circulation due days (0 = same day)'),
@@ -163,6 +175,7 @@ DEFAULTS = {
     'MAX_BORROW_LIMIT_FACULTY': '5',
     'LIBRARY_OPENING_TIME': '08:00',
     'LIBRARY_CLOSING_TIME': '17:00',
+    'LIBRARY_OPEN_DAYS': DEFAULT_OPEN_DAYS,
     'OVERNIGHT_DUE_DAYS_STUDENT': '1',
     'OVERNIGHT_DUE_DAYS_FACULTY': '7',
     'DAILY_CIRCULATION_DUE_DAYS': '0',
@@ -314,7 +327,8 @@ def sync_settings_to_config(app=None):
 
     Reads the effective settings dict and writes each key into
     ``app.config`` by its declared kind: bools become 0/1, times stay
-    ``HH:MM`` strings (skipped when invalid), floats/ints are coerced
+    ``HH:MM`` strings (skipped when invalid), day lists stay
+    comma-joined strings, floats/ints are coerced
     numerically. Unparseable values are skipped, never raising, so one
     corrupt row cannot break app startup or a settings save. Borrowing,
     fines, and backup code then read plain ``current_app.config``.
@@ -338,6 +352,10 @@ def sync_settings_to_config(app=None):
                 value = str(raw).strip() if parse_hhmm(raw) else None
                 if value is None:
                     continue
+            elif kind == 'days':
+                # Comma-joined weekday names stay a string (may be '' when
+                # every day is unchecked — that means closed all week).
+                value = str(raw or '').strip()
             else:
                 value = float(raw) if kind == 'float' else int(float(raw))
         except (TypeError, ValueError):
@@ -417,11 +435,13 @@ def is_library_open(now=None, config=None):
     """Check whether borrowing is allowed at a given moment.
 
     True when borrowing is allowed right now. Open boundary inclusive,
-    closing exclusive (at exactly 17:00 the library is closed).
-    Philippine wall-clock time, so a UTC-hosted server (e.g. Render)
-    still gates on Manila hours. Unconfigured hours mean open (fail
-    open), and a timestamp without clock fields also fails open rather
-    than blocking circulation on bad input.
+    closing exclusive (at exactly 17:00 the library is closed). The day
+    itself must also be checked in LIBRARY_OPEN_DAYS — an unchecked day
+    blocks borrowing all day. Philippine wall-clock time, so a
+    UTC-hosted server (e.g. Render) still gates on Manila hours.
+    Unconfigured hours/days mean open (fail open), and a timestamp
+    without clock fields also fails open rather than blocking
+    circulation on bad input.
 
     Args:
         now: Datetime to test (defaults to :func:`library_now`).
@@ -439,7 +459,13 @@ def is_library_open(now=None, config=None):
         current = (now.hour, now.minute)
     except (AttributeError, TypeError):
         return True
-    return hours[0] <= current < hours[1]
+    if current < hours[0] or current >= hours[1]:
+        return False
+    try:
+        day = now.date() if isinstance(now, datetime) else now
+    except (AttributeError, TypeError):
+        day = None
+    return is_open_day(day, config)
 
 
 def get_closing_time(config=None):
@@ -503,6 +529,56 @@ def is_closed_day(day=None, config=None):
     except Exception:
         return False
     return weekday in get_closed_days(config)
+
+
+def get_open_days(config=None):
+    """Open weekday names from LIBRARY_OPEN_DAYS, or None if unconfigured.
+
+    Parses the comma-joined setting into canonical title-case names
+    (``Monday``..``Sunday``); unknown tokens are dropped. Returns None
+    when the key is absent (e.g. tests, unsynced config) so callers fail
+    open — an explicitly stored empty string means every day is
+    unchecked, i.e. an empty set (closed all week), not None.
+
+    Args:
+        config: Optional config mapping (defaults to
+            ``current_app.config``).
+
+    Returns:
+        Set of weekday names, or None when unconfigured.
+    """
+    cfg = config if config is not None else current_app.config
+    if 'LIBRARY_OPEN_DAYS' not in cfg:
+        return None
+    raw = str(cfg.get('LIBRARY_OPEN_DAYS') or '')
+    return {p.strip().capitalize() for p in raw.replace(';', ',').split(',')
+            if p.strip()}.intersection(WEEKDAYS)
+
+
+def is_open_day(day=None, config=None):
+    """True when the library is open on a given date.
+
+    Unconfigured open days (key absent) fail open; corrupt day values
+    fail open too. Only an explicitly stored day list gates — a date
+    whose weekday is unchecked counts as closed.
+
+    Args:
+        day: Date to test (defaults to :func:`library_today`).
+        config: Optional config mapping (defaults to
+            ``current_app.config``).
+
+    Returns:
+        True when borrowing is allowed that day, False when closed.
+    """
+    days = get_open_days(config)
+    if days is None:
+        return True
+    day = day or library_today()
+    try:
+        name = day.strftime('%A')
+    except Exception:
+        return True
+    return name in days
 
 
 def get_low_stock_threshold(config=None):
