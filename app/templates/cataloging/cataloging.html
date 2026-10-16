@@ -669,7 +669,10 @@
                         <input type="number" name="year_published" required class="form-input" placeholder="e.g. 2024" min="1000" max="9999" value="{{ _add.get('year_published', '') }}">
                     </div>
                     <div>
-                        <label class="form-label">ISBN *</label>
+                        <div class="flex items-center gap-1">
+                            <label class="form-label">ISBN *</label>
+                            <button type="button" onclick="openModal('isbnInfoModal')" title="What is a valid ISBN?" class="text-gray-400 hover:text-primary leading-none"><span class="material-symbols-outlined text-[16px]">info</span></button>
+                        </div>
                         <input type="text" name="isbn" maxlength="20" class="form-input" placeholder="ISBN number" data-suggest="book_isbn" value="{{ _add.get('isbn', '') }}" data-isbn-input>
                         <p data-isbn-hint class="hidden mt-1 text-[11px] font-medium"></p>
                     </div>
@@ -778,7 +781,10 @@
                         <input type="number" name="year_published" id="edit_year" required class="form-input" min="1000" max="9999">
                     </div>
                     <div>
-                        <label class="form-label">ISBN *</label>
+                        <div class="flex items-center gap-1">
+                            <label class="form-label">ISBN *</label>
+                            <button type="button" onclick="openModal('isbnInfoModal')" title="What is a valid ISBN?" class="text-gray-400 hover:text-primary leading-none"><span class="material-symbols-outlined text-[16px]">info</span></button>
+                        </div>
                         <input type="text" name="isbn" id="edit_isbn" maxlength="20" class="form-input" data-suggest="book_isbn" data-isbn-input>
                         <p data-isbn-hint class="hidden mt-1 text-[11px] font-medium"></p>
                     </div>
@@ -814,6 +820,34 @@
                     <button type="submit" class="btn btn-primary w-full sm:w-auto justify-center">Save Changes</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- ISBN Info Modal -->
+    <div id="isbnInfoModal" class="modal-overlay" onclick="closeModal(event, 'isbnInfoModal')">
+        <div class="modal">
+            <div class="p-4 sm:p-6 border-b border-gray-100 flex justify-between items-center">
+                <h2 class="text-lg sm:text-xl font-bold">Valid ISBN digits</h2>
+                <button onclick="closeModal(null, 'isbnInfoModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <div class="p-4 sm:p-6 space-y-4 text-sm text-gray-700 dark:text-gray-300">
+                <div>
+                    <p class="font-bold text-gray-900 dark:text-white mb-1">ISBN-13 — 13 digits</p>
+                    <p>The last digit is a check digit (digits weighted alternately &times;1 and &times;3 must sum to a multiple of 10). Example: <span class="font-mono font-semibold">9780306406157</span></p>
+                </div>
+                <div>
+                    <p class="font-bold text-gray-900 dark:text-white mb-1">ISBN-10 — 10 characters</p>
+                    <p>The first 9 are digits and the last is a digit or <span class="font-mono font-semibold">X</span> (weighted check must divide evenly by 11). Examples: <span class="font-mono font-semibold">0306406152</span>, <span class="font-mono font-semibold">080442957X</span></p>
+                </div>
+                <div>
+                    <p class="font-bold text-gray-900 dark:text-white mb-1">Formatting</p>
+                    <p>Hyphens and spaces are ignored, so <span class="font-mono font-semibold">978-0-306-40615-7</span> works the same. Periodicals use an 8-character ISSN instead (e.g. <span class="font-mono font-semibold">1234-567X</span>).</p>
+                </div>
+                <p class="text-xs text-gray-400">A valid check digit proves the format is correct, not that the number was officially assigned to a publication.</p>
+                <div class="flex justify-end pt-2">
+                    <button type="button" class="btn btn-primary" onclick="closeModal(null, 'isbnInfoModal')">Got it</button>
+                </div>
+            </div>
         </div>
     </div>
 
