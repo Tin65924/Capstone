@@ -199,8 +199,12 @@ class TestCatalogEditModal:
         mock_db['fetch_all'].return_value = []
         body = librarian_client.get('/librarian/cataloging').data.decode()
         for field in ('book_title', 'book_author', 'book_publisher',
-                      'book_isbn', 'book_subject'):
+                      'book_isbn'):
             assert f'data-suggest="{field}"' in body, field
+        # Category is a strict dropdown + manager search now, not autosuggest.
+        assert 'data-suggest="book_subject"' not in body
+        assert 'data-cat-dropdown=' in body
+        assert 'id="catManagerSearch"' in body
         assert 'js/autosuggest.js' in body
 
 

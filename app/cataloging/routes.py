@@ -966,6 +966,34 @@ def edit_accession(accession_id):
     return redirect(url_for('cataloging.cataloging_page', modal='editAccessionModal', mstatus='success'))
 
 
+@cataloging_bp.route('/librarian/cataloging/categories', methods=['POST'])
+@login_required
+@librarian_required
+def create_category():
+    """Create (or fetch) one vocabulary category, returning JSON.
+
+    Powers the in-modal category manager: POSTs a `name`, resolves it
+    case-insensitively via resolve_category (existing spelling wins),
+    logs cataloging:add_category:<id>, and returns the id/name pair so
+    the dropdown can offer and check it immediately. Thin route: all
+    SQL lives in models.
+    """
+    name = (request.form.get('name', '') or '').strip()
+    if not name:
+        return jsonify({'error': 'Category name is required.'}), 400
+    if len(name) > 100:
+        return jsonify({'error': 'Category name is too long (max 100 characters).'}), 400
+    try:
+        category_id, canonical = resolve_category(name)
+    except Exception:
+        current_app.logger.warning('create_category failed for %r', name, exc_info=True)
+        return jsonify({'error': 'Could not save category.'}), 500
+    if category_id is None:
+        return jsonify({'error': 'Could not save category.'}), 500
+    log_activity(current_user.id, f'cataloging:add_category:{category_id}')
+    return jsonify({'id': category_id, 'name': canonical or name})
+
+
 @cataloging_bp.route('/librarian/cataloging/accession/<int:accession_id>/delete', methods=['POST'])
 @login_required
 @librarian_required

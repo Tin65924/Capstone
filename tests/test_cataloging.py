@@ -1693,9 +1693,35 @@ class TestCategories:
         ]
         body = librarian_client.get('/librarian/cataloging').data.decode()
         assert 'name="subject_classification"' in body
-        assert 'name="extra_categories"' in body
-        assert '<option value="Computer Science">Computer Science</option>' in body
-        assert '<option value="1">Computer Science</option>' in body
+        # One custom dropdown per book modal (JS references the hook once more).
+        assert body.count('<div class="relative flex-1 min-w-0" data-cat-dropdown=') == 2
+        assert body.count('data-cat-manage="') == 2
+        assert 'id="categoryManagerModal"' in body
+        assert 'id="catManagerSearch"' in body
+        assert 'id="catManagerNew"' in body
+        assert 'BOOK_CATS' in body
+        assert 'syncCatDropdown' in body
+
+    def test_add_modal_rechecks_stashed_extras(self, librarian_client, mock_db):
+        """Validates add modal rechecks stashed extras `/librarian/cataloging` as librarian (expects 200) [TestCategories / cataloging].
+    If fails: likely template value bindings changed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['fetch_one'].return_value = None
+        mock_db['fetch_all'].return_value = []
+        librarian_client.post('/librarian/cataloging/add', data={
+            'title': 'Typed Title', 'material_type': 'Thesis',
+            'year_published': '2024', 'subject_classification': 'Fiction',
+            'extra_categories': ['2'],
+        })
+        mock_db['fetch_all'].side_effect = [
+            [],                                          # books
+            [(1, 'Fiction'), (2, 'Arts')],               # categories
+        ]
+        body = librarian_client.get('/librarian/cataloging?modal=addBookModal').data.decode()
+        assert 'name="subject_classification" value="Fiction"' in body
+        # Both the primary match and the stashed extra come back checked.
+        assert 'value="1" data-cat-name="Fiction" class="accent-blue-900 rounded shrink-0" checked' in body
+        assert 'value="2" data-cat-name="Arts" class="accent-blue-900 rounded shrink-0" checked' in body
 
 
 class TestMultiCategory:
@@ -2119,3 +2145,64 @@ class TestFormPersistence:
         assert 'ISBN-10 — 10 characters' in body
         # Accession duplicate note is slim small text like the ISBN hint.
         assert body.count('data-exists-accession-msg class="hidden mt-1 text-[11px] font-medium text-red-700 dark:text-red-400"') == 2
+
+
+class TestCategoryManager:
+    """In-modal vocabulary management (add/search/toggle)."""
+
+    def test_create_category_new(self, librarian_client, mock_db):
+        """Validates create category new `/librarian/cataloging/categories` as librarian (expects 200) [TestCategoryManager / cataloging].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['fetch_one'].return_value = None
+        mock_db['execute'].return_value = [(9, 'Marine Biology')]
+        resp = librarian_client.post('/librarian/cataloging/categories',
+                                     data={'name': 'Marine Biology'})
+        assert resp.status_code == 200
+        assert resp.get_json() == {'id': 9, 'name': 'Marine Biology'}
+
+    def test_create_category_duplicate_returns_existing(self, librarian_client, mock_db):
+        """Validates create category duplicate returns existing `/librarian/cataloging/categories` as librarian (expects 200) [TestCategoryManager / cataloging].
+    If fails: likely resolve logic changed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['fetch_one'].return_value = (3, 'Computer Science')
+        resp = librarian_client.post('/librarian/cataloging/categories',
+                                     data={'name': 'computer science'})
+        assert resp.status_code == 200
+        assert resp.get_json() == {'id': 3, 'name': 'Computer Science'}
+        assert all('INSERT INTO categories' not in c[0][0]
+                   for c in mock_db['execute'].call_args_list)
+
+    def test_create_category_blank_rejected(self, librarian_client, mock_db):
+        """Validates create category blank rejected `/librarian/cataloging/categories` as librarian (expects 400) [TestCategoryManager / cataloging].
+    If fails: likely validation bypassed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        resp = librarian_client.post('/librarian/cataloging/categories', data={'name': '   '})
+        assert resp.status_code == 400
+        assert 'error' in resp.get_json()
+        assert mock_db['execute'].call_count == 0
+
+    def test_create_category_too_long_rejected(self, librarian_client, mock_db):
+        """Validates create category too long rejected `/librarian/cataloging/categories` as librarian (expects 400) [TestCategoryManager / cataloging].
+    If fails: likely validation bypassed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        resp = librarian_client.post('/librarian/cataloging/categories',
+                                     data={'name': 'C' * 101})
+        assert resp.status_code == 400
+        assert mock_db['execute'].call_count == 0
+
+    def test_create_category_student_forbidden(self, student_client, mock_db):
+        """Validates create category student forbidden `/librarian/cataloging/categories` as student (expects 302) [TestCategoryManager / cataloging].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
+        resp = student_client.post('/librarian/cataloging/categories', data={'name': 'X'})
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
+
+    def test_create_category_unauthenticated(self, client, mock_db):
+        """Validates create category unauthenticated `/librarian/cataloging/categories` (expects 302) [TestCategoryManager / cataloging].
+    If fails: likely redirect/flash logic changed or guard misordered.
+    Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
+        resp = client.post('/librarian/cataloging/categories', data={'name': 'X'})
+        assert resp.status_code == 302
+        assert '/login' in resp.location

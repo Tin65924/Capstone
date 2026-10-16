@@ -695,21 +695,25 @@
                     </div>
                     <div class="col-span-2">
                         <label class="form-label">Category *</label>
-                        <select name="subject_classification" required class="form-input" data-suggest="book_subject">
-                            <option value="">— Select —</option>
-                            {% for cat in all_categories|default([]) %}
-                            <option value="{{ cat }}" {% if _add.get('subject_classification', '') == cat %}selected{% endif %}>{{ cat }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-span-2">
-                        <label class="form-label">More Categories (optional)</label>
-                        <select name="extra_categories" multiple size="4" class="form-input">
-                            {% for cid, cname in category_options|default([]) %}
-                            <option value="{{ cid }}" {% if cid|string in _add.get('_extra_categories', []) %}selected{% endif %}>{{ cname }}</option>
-                            {% endfor %}
-                        </select>
-                        <p class="text-[11px] text-gray-400 mt-1">Hold Ctrl (or ⌘) to pick more than one.</p>
+                        <div class="flex items-start gap-2">
+                            <div class="relative flex-1 min-w-0" data-cat-dropdown="add">
+                                <input type="hidden" name="subject_classification" value="{{ _add.get('subject_classification', '') }}">
+                                <button type="button" data-cat-toggle class="form-input w-full flex items-center justify-between text-left">
+                                    <span data-cat-label class="truncate text-gray-500">— Select —</span>
+                                    <span class="material-symbols-outlined text-gray-400 shrink-0">expand_more</span>
+                                </button>
+                                <div data-cat-list class="hidden absolute z-30 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg p-1">
+                                    {% for cid, cname in category_options|default([]) %}
+                                    <label class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-sm">
+                                        <input type="checkbox" name="extra_categories" value="{{ cid }}" data-cat-name="{{ cname|e }}" class="accent-blue-900 rounded shrink-0" {% if cid|string in _add.get('_extra_categories', []) or cname == _add.get('subject_classification', '') %}checked{% endif %}>
+                                        <span class="truncate">{{ cname }}</span>
+                                    </label>
+                                    {% endfor %}
+                                </div>
+                                <p data-cat-picked class="mt-1 text-[11px] text-slate-500"></p>
+                            </div>
+                            <button type="button" data-cat-manage="add" title="Manage categories" class="shrink-0 p-2.5 rounded-lg border border-gray-200 hover:border-primary hover:text-primary text-gray-500 transition-colors"><span class="material-symbols-outlined text-[20px]">add</span></button>
+                        </div>
                     </div>
                     <div class="col-span-2">
                         <label class="form-label">Description</label>
@@ -794,21 +798,25 @@
                     </div>
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Category *</label>
-                        <select name="subject_classification" id="edit_subject" required class="form-input" data-suggest="book_subject">
-                            <option value="">— Select —</option>
-                            {% for cat in all_categories|default([]) %}
-                            <option value="{{ cat }}">{{ cat }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-span-1 sm:col-span-2">
-                        <label class="form-label">More Categories (optional)</label>
-                        <select name="extra_categories" id="edit_extra_categories" multiple size="4" class="form-input">
-                            {% for cid, cname in category_options|default([]) %}
-                            <option value="{{ cid }}">{{ cname }}</option>
-                            {% endfor %}
-                        </select>
-                        <p class="text-[11px] text-gray-400 mt-1">Hold Ctrl (or ⌘) to pick more than one.</p>
+                        <div class="flex items-start gap-2">
+                            <div class="relative flex-1 min-w-0" data-cat-dropdown="edit">
+                                <input type="hidden" name="subject_classification" id="edit_subject" value="">
+                                <button type="button" data-cat-toggle class="form-input w-full flex items-center justify-between text-left">
+                                    <span data-cat-label class="truncate text-gray-500">— Select —</span>
+                                    <span class="material-symbols-outlined text-gray-400 shrink-0">expand_more</span>
+                                </button>
+                                <div data-cat-list class="hidden absolute z-30 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg p-1">
+                                    {% for cid, cname in category_options|default([]) %}
+                                    <label class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-sm">
+                                        <input type="checkbox" name="extra_categories" value="{{ cid }}" data-cat-name="{{ cname|e }}" class="accent-blue-900 rounded shrink-0">
+                                        <span class="truncate">{{ cname }}</span>
+                                    </label>
+                                    {% endfor %}
+                                </div>
+                                <p data-cat-picked class="mt-1 text-[11px] text-slate-500"></p>
+                            </div>
+                            <button type="button" data-cat-manage="edit" title="Manage categories" class="shrink-0 p-2.5 rounded-lg border border-gray-200 hover:border-primary hover:text-primary text-gray-500 transition-colors"><span class="material-symbols-outlined text-[20px]">add</span></button>
+                        </div>
                     </div>
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Description</label>
@@ -847,6 +855,31 @@
                 <div class="flex justify-end pt-2">
                     <button type="button" class="btn btn-primary" onclick="closeModal(null, 'isbnInfoModal')">Got it</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Manager Modal (opens above add/edit modals) -->
+    <div id="categoryManagerModal" class="modal-overlay" style="z-index:1100" onclick="closeModal(event, 'categoryManagerModal')">
+        <div class="modal">
+            <div class="p-4 sm:p-6 border-b border-gray-100 flex justify-between items-center">
+                <h2 class="text-lg sm:text-xl font-bold">Manage Categories</h2>
+                <button onclick="closeModal(null, 'categoryManagerModal')" class="text-gray-400 hover:text-gray-600"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <div class="p-4 sm:p-6 space-y-4">
+                <div>
+                    <label class="form-label" for="catManagerSearch">Search categories</label>
+                    <input type="text" id="catManagerSearch" class="form-input" placeholder="Type to filter..." autocomplete="off">
+                </div>
+                <div>
+                    <label class="form-label" for="catManagerNew">Add a new category</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="catManagerNew" maxlength="100" class="form-input flex-1" placeholder="e.g. Marine Biology" autocomplete="off">
+                        <button type="button" class="btn btn-primary shrink-0" onclick="addManagedCategory()">Add</button>
+                    </div>
+                    <p data-cat-manager-msg class="hidden mt-1 text-[11px] font-medium"></p>
+                </div>
+                <div id="catManagerList" class="max-h-64 overflow-y-auto divide-y divide-gray-100 border border-gray-200 rounded-lg"></div>
             </div>
         </div>
     </div>
@@ -1048,7 +1081,7 @@
             var required = MATERIAL_REQUIRED[mtype] || MATERIAL_REQUIRED['Book'];
             MATERIAL_FIELDS.forEach(function (name) {
                 var input = form.querySelector('[name="' + name + '"]');
-                if (!input) return;
+                if (!input || input.type === 'hidden') return;
                 var need = required.indexOf(name) !== -1;
                 if (need) input.setAttribute('required', '');
                 else input.removeAttribute('required');
@@ -1120,6 +1153,15 @@
         document.addEventListener('DOMContentLoaded', function () {
             applyMaterialType('add');
             applyMaterialType('edit');
+            syncCatDropdown('add');
+            syncCatDropdown('edit');
+            ['addBookForm', 'editBookForm'].forEach(function (fid) {
+                var f = document.getElementById(fid);
+                if (f) f.addEventListener('submit', function () {
+                    syncCatDropdown('add');
+                    syncCatDropdown('edit');
+                });
+            });
             document.querySelectorAll('[data-isbn-input]').forEach(function (input) {
                 input.addEventListener('input', function () { validateIsbnInput(input); });
                 validateIsbnInput(input);
@@ -1157,14 +1199,7 @@
                                 var input = eform.querySelector('[name="' + k + '"]');
                                 if (input) input.value = stashedEdit[k];
                             });
-                            if (stashedEdit._extra_categories) {
-                                var esel = document.getElementById('edit_extra_categories');
-                                if (esel) {
-                                    for (var j = 0; j < esel.options.length; j++) {
-                                        esel.options[j].selected = stashedEdit._extra_categories.indexOf(esel.options[j].value) !== -1;
-                                    }
-                                }
-                            }
+                            setCatDropdown('edit', stashedEdit.subject_classification || '', stashedEdit._extra_categories || []);
                             applyMaterialType('edit');
                         }
                         break;
@@ -1196,21 +1231,211 @@
             document.getElementById('edit_edition').value = b[3] || '';
             document.getElementById('edit_publisher').value = b[4] || '';
             document.getElementById('edit_year').value = b[5] || '';
-            document.getElementById('edit_subject').value = b[6] || '';
+            setCatDropdown('edit', b[6] || '', BOOK_CATS[String(b[0])] || []);
             document.getElementById('edit_call_number').value = b[7] || '';
             document.getElementById('edit_isbn').value = b[8] || '';
             document.getElementById('edit_material_type').value = b[9] || 'Book';
             document.getElementById('edit_description').value = b[10] || '';
-            var extraSel = document.getElementById('edit_extra_categories');
-            if (extraSel) {
-                var picked = BOOK_CATS[String(b[0])] || [];
-                var pickedStr = picked.map(function (v) { return String(v); });
-                for (var i = 0; i < extraSel.options.length; i++) {
-                    extraSel.options[i].selected = pickedStr.indexOf(extraSel.options[i].value) !== -1;
-                }
-            }
             applyMaterialType('edit');
             openModal('editBookModal');
+        }
+
+        // Custom multi-pick category dropdown shared by the add/edit forms.
+        // One dropdown, many categories: checked boxes (canonical A-Z order)
+        // sync the hidden subject_classification to the first pick and the
+        // picked line to "A + B + C". Primary = first pick.
+        function catDropdown(prefix) {
+            var form = document.getElementById(prefix === 'edit' ? 'editBookForm' : 'addBookForm');
+            if (!form) return null;
+            return form.querySelector('[data-cat-dropdown="' + prefix + '"]');
+        }
+        function syncCatDropdown(prefix) {
+            var root = catDropdown(prefix);
+            if (!root) return;
+            var boxes = root.querySelectorAll('input[type="checkbox"][name="extra_categories"]');
+            var names = [];
+            for (var i = 0; i < boxes.length; i++) {
+                if (boxes[i].checked) names.push(boxes[i].getAttribute('data-cat-name') || '');
+            }
+            names = names.filter(function (n) { return !!n; });
+            var hidden = root.querySelector('input[type="hidden"][name="subject_classification"]');
+            if (hidden) hidden.value = names.length ? names[0] : '';
+            var toggle = root.querySelector('[data-cat-label]');
+            if (toggle) {
+                toggle.textContent = names.length ? names.join(' + ') : '— Select —';
+                toggle.classList.toggle('text-gray-500', !names.length);
+            }
+            var picked = root.querySelector('[data-cat-picked]');
+            if (picked) picked.textContent = names.length ? names.join(' + ') : '';
+        }
+        function setCatDropdown(prefix, primaryName, extraIds) {
+            var root = catDropdown(prefix);
+            if (!root) return;
+            var want = {};
+            (extraIds || []).forEach(function (v) { want[String(v)] = true; });
+            var boxes = root.querySelectorAll('input[type="checkbox"][name="extra_categories"]');
+            for (var i = 0; i < boxes.length; i++) {
+                var nm = boxes[i].getAttribute('data-cat-name') || '';
+                boxes[i].checked = !!want[boxes[i].value] || (nm !== '' && nm === primaryName);
+            }
+            syncCatDropdown(prefix);
+            // The stored primary wins over DOM order for pre-existing titles;
+            // later toggles re-derive it from the first pick.
+            if (primaryName) {
+                var hidden = root.querySelector('input[type="hidden"][name="subject_classification"]');
+                if (hidden) hidden.value = primaryName;
+            }
+        }
+        document.addEventListener('click', function (e) {
+            var toggle = e.target.closest('[data-cat-toggle]');
+            document.querySelectorAll('[data-cat-list]').forEach(function (l) {
+                var own = toggle && l.closest('[data-cat-dropdown]') === toggle.closest('[data-cat-dropdown]');
+                if (!own) l.classList.add('hidden');
+            });
+            if (toggle) {
+                var list = toggle.closest('[data-cat-dropdown]').querySelector('[data-cat-list]');
+                if (list) list.classList.toggle('hidden');
+            }
+        });
+        document.addEventListener('change', function (e) {
+            if (e.target.matches && e.target.matches('input[type="checkbox"][name="extra_categories"]')) {
+                var changed = e.target.closest('[data-cat-dropdown]');
+                if (changed) syncCatDropdown(changed.getAttribute('data-cat-dropdown'));
+            }
+        });
+
+        // Category manager: add/search/toggle vocabulary without leaving
+        // the add/edit modal. Rows mirror the invoking form's own
+        // checkboxes, so toggling here and toggling in the dropdown are
+        // the same action. New categories append alphabetically and are
+        // checked immediately.
+        var catManagerOpener = 'add';
+        function openCategoryManager(prefix) {
+            catManagerOpener = prefix || 'add';
+            document.getElementById('catManagerSearch').value = '';
+            document.getElementById('catManagerNew').value = '';
+            hideCatManagerMsg();
+            rebuildCatManagerList('');
+            openModal('categoryManagerModal');
+            setTimeout(function () { document.getElementById('catManagerSearch').focus(); }, 50);
+        }
+        function hideCatManagerMsg() {
+            var msg = document.querySelector('[data-cat-manager-msg]');
+            if (msg) { msg.classList.add('hidden'); msg.textContent = ''; }
+        }
+        function showCatManagerMsg(text, ok) {
+            var msg = document.querySelector('[data-cat-manager-msg]');
+            if (!msg) return;
+            msg.textContent = text;
+            msg.style.color = ok ? '#15803d' : '#b91c1c';
+            msg.classList.remove('hidden');
+        }
+        function rebuildCatManagerList(filter) {
+            var list = document.getElementById('catManagerList');
+            if (!list) return;
+            list.innerHTML = '';
+            var root = catDropdown(catManagerOpener);
+            if (!root) return;
+            var q = (filter || '').toLowerCase();
+            var boxes = root.querySelectorAll('input[type="checkbox"][name="extra_categories"]');
+            var shown = 0;
+            for (var i = 0; i < boxes.length; i++) {
+                var nm = boxes[i].getAttribute('data-cat-name') || '';
+                if (q && nm.toLowerCase().indexOf(q) === -1) continue;
+                shown++;
+                (function (box, name) {
+                    var row = document.createElement('label');
+                    row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.75rem;cursor:pointer;font-size:0.875rem;';
+                    var check = document.createElement('input');
+                    check.type = 'checkbox';
+                    check.checked = box.checked;
+                    check.className = 'accent-blue-900 rounded shrink-0';
+                    check.addEventListener('change', function () {
+                        box.checked = check.checked;
+                        syncCatDropdown(catManagerOpener);
+                    });
+                    var span = document.createElement('span');
+                    span.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+                    span.textContent = name;
+                    row.appendChild(check);
+                    row.appendChild(span);
+                    list.appendChild(row);
+                })(boxes[i], nm);
+            }
+            if (!shown) {
+                var empty = document.createElement('p');
+                empty.style.cssText = 'padding:1rem;text-align:center;font-size:0.8125rem;color:#64748b;';
+                empty.textContent = 'No categories match your search.';
+                list.appendChild(empty);
+            }
+        }
+        document.addEventListener('click', function (e) {
+            var manage = e.target.closest('[data-cat-manage]');
+            if (manage) openCategoryManager(manage.getAttribute('data-cat-manage'));
+        });
+        document.getElementById('catManagerSearch').addEventListener('input', function () {
+            rebuildCatManagerList(this.value);
+        });
+        document.getElementById('catManagerNew').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); addManagedCategory(); }
+        });
+        function addManagedCategory() {
+            var input = document.getElementById('catManagerNew');
+            var name = (input.value || '').trim();
+            if (!name) { showCatManagerMsg('Category name is required.'); return; }
+            var body = new URLSearchParams();
+            body.append('name', name);
+            fetch('/librarian/cataloging/categories', {
+                method: 'POST', body: body, credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            })
+            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+            .then(function (res) {
+                if (!res.ok || !res.d || !res.d.id) {
+                    showCatManagerMsg((res.d && res.d.error) || 'Could not save category.');
+                    return;
+                }
+                appendCatOption(catManagerOpener, res.d.id, res.d.name, true);
+                input.value = '';
+                showCatManagerMsg('Category added.', true);
+                rebuildCatManagerList(document.getElementById('catManagerSearch').value);
+                syncCatDropdown(catManagerOpener);
+            })
+            .catch(function () { showCatManagerMsg('Could not save category.'); });
+        }
+        function appendCatOption(prefix, id, name, checked) {
+            var root = catDropdown(prefix);
+            if (!root) return;
+            var list = root.querySelector('[data-cat-list]');
+            if (!list) return;
+            var label = document.createElement('label');
+            label.style.cssText = '';
+            label.className = 'flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-sm';
+            var box = document.createElement('input');
+            box.type = 'checkbox';
+            box.name = 'extra_categories';
+            box.value = id;
+            box.setAttribute('data-cat-name', name);
+            box.className = 'accent-blue-900 rounded shrink-0';
+            if (checked) box.checked = true;
+            var span = document.createElement('span');
+            span.className = 'truncate';
+            span.textContent = name;
+            label.appendChild(box);
+            label.appendChild(span);
+            // Keep the dropdown alphabetical (case-insensitive).
+            var rows = list.querySelectorAll('label');
+            var placed = false;
+            for (var i = 0; i < rows.length; i++) {
+                var existing = rows[i].querySelector('span');
+                var existingName = existing ? existing.textContent : '';
+                if (existingName.toLowerCase() > name.toLowerCase()) {
+                    list.insertBefore(label, rows[i]);
+                    placed = true;
+                    break;
+                }
+            }
+            if (!placed) list.appendChild(label);
         }
 
         // Add Accession Copy (dedicated action, not part of edit)
