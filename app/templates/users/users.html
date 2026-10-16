@@ -281,50 +281,6 @@
             </div>
         </div>
 
-        <!-- Search & Filter (mirrors cataloging) -->
-        <form method="GET" action="{{ url_for('auth.admin_users') }}" class="flex flex-col gap-3 mb-6 sm:mb-8 animate-in relative z-20" style="animation-delay: 0.05s;">
-            <input type="hidden" name="scope" value="{{ scope }}">
-            <input type="hidden" name="status" value="{{ status_filter }}">
-            <input type="hidden" name="role" value="{{ role_filter }}">
-            <div class="flex flex-col sm:flex-row gap-2 sm:gap-2 w-full relative z-20">
-                <div class="relative w-full sm:w-auto sm:min-w-[160px] z-30" id="user-field-select-wrapper">
-                    <select name="field" id="user-field-select-native" class="sr-only" tabindex="-1" aria-hidden="true">
-                        <option value="" {% if not search_field %}selected{% endif %}>All Fields</option>
-                        <option value="name" {% if search_field == 'name' %}selected{% endif %}>Name</option>
-                        <option value="email" {% if search_field == 'email' %}selected{% endif %}>Email</option>
-                        <option value="id" {% if search_field == 'id' %}selected{% endif %}>ID Number</option>
-                        <option value="department" {% if search_field == 'department' %}selected{% endif %}>Department</option>
-                    </select>
-                    <button type="button" id="user-field-select-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="user-field-select-dropdown"
-                        class="w-full flex items-center justify-between gap-2 bg-white border border-[#e2e8f0] px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg text-sm font-medium text-slate-700 hover:border-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
-                        <span id="user-field-select-label" class="min-w-0 flex-1 truncate text-left">{% if search_field == 'name' %}Name{% elif search_field == 'email' %}Email{% elif search_field == 'id' %}ID Number{% elif search_field == 'department' %}Department{% else %}All Fields{% endif %}</span>
-                        <span class="material-symbols-outlined text-slate-400 text-[20px] shrink-0 transition-transform duration-200" id="user-field-select-arrow">expand_more</span>
-                    </button>
-                    <ul id="user-field-select-dropdown" role="listbox" tabindex="-1"
-                        class="hidden absolute z-50 top-full left-0 mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden py-1.5 text-sm">
-                        <li role="option" data-value="" tabindex="0" aria-selected="{% if not search_field %}true{% else %}false{% endif %}" class="user-field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if not search_field %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>All Fields</span>{% if not search_field %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
-                        <li role="option" data-value="name" tabindex="0" aria-selected="{% if search_field == 'name' %}true{% else %}false{% endif %}" class="user-field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if search_field == 'name' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>Name</span>{% if search_field == 'name' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
-                        <li role="option" data-value="email" tabindex="0" aria-selected="{% if search_field == 'email' %}true{% else %}false{% endif %}" class="user-field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if search_field == 'email' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>Email</span>{% if search_field == 'email' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
-                        <li role="option" data-value="id" tabindex="0" aria-selected="{% if search_field == 'id' %}true{% else %}false{% endif %}" class="user-field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if search_field == 'id' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>ID Number</span>{% if search_field == 'id' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
-                        <li role="option" data-value="department" tabindex="0" aria-selected="{% if search_field == 'department' %}true{% else %}false{% endif %}" class="user-field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if search_field == 'department' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>Department</span>{% if search_field == 'department' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
-                    </ul>
-                </div>
-                <div class="relative flex-1 w-full">
-                    <input type="text" name="q" value="{{ search_query or '' }}" class="search-input w-full text-sm" placeholder="Search users by name, email, ID, department...">
-                </div>
-                <div class="flex gap-2 shrink-0">
-                    <button type="submit" class="btn btn-primary btn-sm flex-1 sm:flex-none justify-center"><span class="material-symbols-outlined text-[18px]">search</span> Search</button>
-                    {% if search_query %}
-                    <a href="{{ url_for('auth.admin_users', scope=scope, status=status_filter, role=role_filter) }}" class="btn btn-outline btn-sm flex-1 sm:flex-none justify-center">Clear</a>
-                    {% endif %}
-                </div>
-            </div>
-            {% if search_query %}
-            <p class="text-xs text-gray-500">Showing results for <span class="font-bold text-gray-700">&ldquo;{{ search_query }}&rdquo;</span>{% if search_field %} in <span class="font-bold text-gray-700">{{ search_field|capitalize }}</span>{% endif %}.</p>
-            {% endif %}
-        </form>
-
-
         <div class="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-2 sm:gap-4 mb-6 sm:mb-8 animate-in" style="animation-delay: 0.1s;">
             <a href="{{ url_for('auth.admin_users', scope=scope, q=search_query, field=search_field) }}"
                class="card p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 hover:border-primary transition-colors {% if not status_filter and not role_filter %}ring-2 ring-primary{% endif %}">
@@ -502,6 +458,49 @@
             </div>
         </div>
         {% endif %}
+
+        <!-- Search & Filter (mirrors cataloging) -->
+        <form method="GET" action="{{ url_for('auth.admin_users') }}" class="flex flex-col gap-3 mb-6 sm:mb-8 animate-in relative z-20" style="animation-delay: 0.15s;">
+            <input type="hidden" name="scope" value="{{ scope }}">
+            <input type="hidden" name="status" value="{{ status_filter }}">
+            <input type="hidden" name="role" value="{{ role_filter }}">
+            <div class="flex flex-col sm:flex-row gap-2 sm:gap-2 w-full relative z-20">
+                <div class="relative w-full sm:w-auto sm:min-w-[160px] z-30" id="user-field-select-wrapper">
+                    <select name="field" id="user-field-select-native" class="sr-only" tabindex="-1" aria-hidden="true">
+                        <option value="" {% if not search_field %}selected{% endif %}>All Fields</option>
+                        <option value="name" {% if search_field == 'name' %}selected{% endif %}>Name</option>
+                        <option value="email" {% if search_field == 'email' %}selected{% endif %}>Email</option>
+                        <option value="id" {% if search_field == 'id' %}selected{% endif %}>ID Number</option>
+                        <option value="department" {% if search_field == 'department' %}selected{% endif %}>Department</option>
+                    </select>
+                    <button type="button" id="user-field-select-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="user-field-select-dropdown"
+                        class="w-full flex items-center justify-between gap-2 bg-white border border-[#e2e8f0] px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg text-sm font-medium text-slate-700 hover:border-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
+                        <span id="user-field-select-label" class="min-w-0 flex-1 truncate text-left">{% if search_field == 'name' %}Name{% elif search_field == 'email' %}Email{% elif search_field == 'id' %}ID Number{% elif search_field == 'department' %}Department{% else %}All Fields{% endif %}</span>
+                        <span class="material-symbols-outlined text-slate-400 text-[20px] shrink-0 transition-transform duration-200" id="user-field-select-arrow">expand_more</span>
+                    </button>
+                    <ul id="user-field-select-dropdown" role="listbox" tabindex="-1"
+                        class="hidden absolute z-50 top-full left-0 mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden py-1.5 text-sm">
+                        <li role="option" data-value="" tabindex="0" aria-selected="{% if not search_field %}true{% else %}false{% endif %}" class="user-field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if not search_field %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>All Fields</span>{% if not search_field %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
+                        <li role="option" data-value="name" tabindex="0" aria-selected="{% if search_field == 'name' %}true{% else %}false{% endif %}" class="user-field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if search_field == 'name' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>Name</span>{% if search_field == 'name' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
+                        <li role="option" data-value="email" tabindex="0" aria-selected="{% if search_field == 'email' %}true{% else %}false{% endif %}" class="user-field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if search_field == 'email' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>Email</span>{% if search_field == 'email' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
+                        <li role="option" data-value="id" tabindex="0" aria-selected="{% if search_field == 'id' %}true{% else %}false{% endif %}" class="user-field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if search_field == 'id' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>ID Number</span>{% if search_field == 'id' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
+                        <li role="option" data-value="department" tabindex="0" aria-selected="{% if search_field == 'department' %}true{% else %}false{% endif %}" class="user-field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if search_field == 'department' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>Department</span>{% if search_field == 'department' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
+                    </ul>
+                </div>
+                <div class="relative flex-1 w-full">
+                    <input type="text" name="q" value="{{ search_query or '' }}" class="search-input w-full text-sm" placeholder="Search users by name, email, ID, department...">
+                </div>
+                <div class="flex gap-2 shrink-0">
+                    <button type="submit" class="btn btn-primary btn-sm flex-1 sm:flex-none justify-center"><span class="material-symbols-outlined text-[18px]">search</span> Search</button>
+                    {% if search_query %}
+                    <a href="{{ url_for('auth.admin_users', scope=scope, status=status_filter, role=role_filter) }}" class="btn btn-outline btn-sm flex-1 sm:flex-none justify-center">Clear</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% if search_query %}
+            <p class="text-xs text-gray-500">Showing results for <span class="font-bold text-gray-700">&ldquo;{{ search_query }}&rdquo;</span>{% if search_field %} in <span class="font-bold text-gray-700">{{ search_field|capitalize }}</span>{% endif %}.</p>
+            {% endif %}
+        </form>
 
         <!-- Users Table -->
         <div class="card animate-in overflow-hidden" style="animation-delay: 0.2s;">
