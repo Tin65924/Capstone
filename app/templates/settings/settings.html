@@ -200,7 +200,7 @@
                                     {% for d in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] %}
                                     <label class="flex flex-col items-center gap-1 cursor-pointer" title="{{ d }}">
                                         <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400">{{ d[:3]|upper }}</span>
-                                        <input type="checkbox" name="{{ key }}" value="{{ d }}" {% if d in _open_days %}checked{% endif %} class="h-6 w-6 accent-blue-900 rounded cursor-pointer">
+                                        <input type="checkbox" name="{{ key }}" value="{{ d }}" {% if d in _open_days %}checked{% endif %} onchange="syncMonthToWeek(this)" class="h-6 w-6 accent-blue-900 rounded cursor-pointer">
                                     </label>
                                     {% endfor %}
                                 </div>
@@ -209,7 +209,7 @@
                             {% elif meta[1] == 'monthdays' %}
                             <div class="w-full shrink-0">
                                 <p class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Open Days In Month ({{ month_label|default('') }})</p>
-                                <div class="flex flex-wrap gap-2 sm:gap-3" role="group" aria-label="Open days in month">
+                                <div id="month-day-grid" class="flex flex-wrap gap-2 sm:gap-3" role="group" aria-label="Open days in month">
                                     {% for d in month_days|default([]) %}
                                     <label class="flex flex-col items-center gap-1 cursor-pointer" title="{{ d.iso }}">
                                         <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400">{{ d.n }}</span>
@@ -250,6 +250,27 @@
     if (backdrop) backdrop.addEventListener('click', close);
     document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && drawer && !drawer.classList.contains('hidden')) close(); });
 })();
+// Open-days week -> month live sync: toggling a weekday box checks or
+// unchecks every date of that weekday in the month grid instantly, so the
+// grid always reflects the weekly pattern without saving first. The full
+// month map still submits on Save, preserving any per-date state shown.
+var _WEEK_INDEX = {Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6};
+function _weekdayOfIso(iso) {
+    var p = (iso || '').split('-');
+    if (p.length !== 3) return -1;
+    // Local noon avoids any timezone midnight-shift for the weekday.
+    var d = new Date(+p[0], +p[1] - 1, +p[2], 12, 0, 0);
+    return isNaN(d.getTime()) ? -1 : d.getDay();
+}
+function syncMonthToWeek(box) {
+    var idx = _WEEK_INDEX[box.value];
+    if (idx === undefined) return;
+    var boxes = document.querySelectorAll('#month-day-grid input[type="checkbox"]');
+    for (var i = 0; i < boxes.length; i++) {
+        if (!boxes[i].value) continue; // hidden '' fallback
+        if (_weekdayOfIso(boxes[i].value) === idx) boxes[i].checked = box.checked;
+    }
+}
 </script>
 </body>
 </html>

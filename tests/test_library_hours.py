@@ -477,6 +477,37 @@ class TestMonthDays:
         assert 'LIBRARY_MONTH_DAYS' not in body
         assert 'Open Days In Month' not in body
 
+    def test_week_toggle_wired_to_month_grid(
+            self, librarian_client, mock_db):
+        """Validates week toggle wired to month grid `/librarian/settings` as librarian [TestMonthDays / library hours].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        mock_db['fetch_all'].return_value = []
+        body = librarian_client.get('/librarian/settings').data.decode()
+        # Weekly boxes drive the month grid live (no save needed).
+        assert 'onchange="syncMonthToWeek(this)"' in body
+        assert 'function syncMonthToWeek' in body
+
+    def test_month_toggle_never_drives_week(
+            self, librarian_client, mock_db):
+        """Validates month toggle never drives week `/librarian/settings` as librarian [TestMonthDays / library hours].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
+        import re
+        mock_db['fetch_all'].return_value = []
+        body = librarian_client.get('/librarian/settings').data.decode()
+        # One sync hook per weekly box (7), none anywhere else.
+        assert body.count('onchange="syncMonthToWeek(this)"') == 7
+        # Rendered month-date inputs carry no change handler of any kind.
+        month_tags = re.findall(
+            r'<input[^>]*value="\d{4}-\d{2}-\d{2}"[^>]*>', body)
+        assert month_tags, 'month grid inputs missing'
+        for tag in month_tags:
+            assert 'onchange' not in tag and 'oninput' not in tag, tag
+        # The sync writer is scoped to the month grid container, so it
+        # can never alter the weekly boxes outside of it.
+        assert "'#month-day-grid input[type=\"checkbox\"]'" in body
+
     def test_valid_month_days_stored(self, librarian_client, mock_db):
         """Validates valid month days stored `/librarian/settings/update` as librarian (expects 302) [TestMonthDays / library hours].
     If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
