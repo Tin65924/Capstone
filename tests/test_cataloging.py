@@ -718,7 +718,7 @@ class TestFilterCombinations:
         page_q, page_args = mock_db['fetch_all'].call_args[0]
         assert 'subject_classification = %s' in page_q
         assert 'material_type = %s' in page_q
-        assert tuple(page_args[:2]) == ('Fiction', 'E-Book')
+        assert tuple(page_args[:3]) == ('Fiction', 'Fiction', 'E-Book')
 
     def test_category_physical_route_renders(self, client, mock_db):
         """Validates category physical route renders `/catalog?category=Fiction&material_type=physical` (expects 200) [TestFilterCombinations / cataloging].
@@ -1573,6 +1573,7 @@ class TestShelfLocation:
         mock_db['fetch_all'].side_effect = [
             [book],                                                    # books page
             [(1, 'ACC-001', 1, 'purchase', '2024-01-15', '2F-A3')],     # accessions
+            [],                                                        # secondaries batch
             [],                                                        # conditions
             [],                                                        # categories
         ]
@@ -1678,8 +1679,8 @@ class TestCategories:
         assert 'Computer Science' in params
         assert 'computer science' not in params
 
-    def test_cataloging_page_offers_datalist(self, librarian_client, mock_db):
-        """Validates cataloging page offers datalist `/librarian/cataloging` as librarian (expects 200) [TestCategories / cataloging].
+    def test_cataloging_page_offers_category_dropdowns(self, librarian_client, mock_db):
+        """Validates cataloging page offers category dropdowns `/librarian/cataloging` as librarian (expects 200) [TestCategories / cataloging].
     If fails: likely template text/context changed or mock fetch_* shape mismatched.
     Failure indicates catalog data or listing/sort is wrong."""
         mock_db['fetch_one'].return_value = (1,)
@@ -1687,11 +1688,165 @@ class TestCategories:
             [SAMPLE_BOOKS[0] + ('ACC-001',)],  # books page
             [],                                # accessions (empty: no conditions query)
             [(1, 'Computer Science')],         # categories
+            [],                                # secondaries batch
         ]
         body = librarian_client.get('/librarian/cataloging').data.decode()
-        assert 'categoryListAdd' in body
-        assert 'categoryListEdit' in body
-        assert '<option value="Computer Science">' in body
+        assert 'name="subject_classification"' in body
+        assert 'name="extra_categories"' in body
+        assert '<option value="Computer Science">Computer Science</option>' in body
+        assert '<option value="1">Computer Science</option>' in body
+
+
+class TestMultiCategory:
+    """Several categories on one title (primary + extras)."""
+
+    def test_set_replaces_links_skipping_junk(self, mock_db):
+        """Validates set replaces links skipping junk [TestMultiCategory / cataloging].
+    If fails: likely model SQL changed (INSERT INTO).
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.models import set_book_categories
+        mock_db['execute'].return_value = 1
+        set_book_categories(7, ['2', 'nope', 2, None, 3])
+        stmts = [c[0][0] for c in mock_db['execute'].call_args_list]
+        assert stmts[0].startswith('DELETE FROM book_categories')
+        assert 'INSERT INTO book_categories' in stmts[1]
+        assert 'WHERE category_id = ANY(%s)' in stmts[1]
+        assert mock_db['execute'].call_args_list[1][0][1] == (7, [2, 3])
+
+    def test_set_empty_clears_links(self, mock_db):
+        """Validates set empty clears links [TestMultiCategory / cataloging].
+    If fails: likely model SQL changed (DELETE FROM).
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.models import set_book_categories
+        mock_db['execute'].return_value = 1
+        set_book_categories(7, [])
+        assert mock_db['execute'].call_count == 1
+        assert mock_db['execute'].call_args[0][0].startswith('DELETE FROM book_categories')
+
+    def test_get_book_categories_shape(self, mock_db):
+        """Validates get book categories shape [TestMultiCategory / cataloging].
+    If fails: likely model SQL changed (SELECT).
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.models import get_book_categories, get_categories_for_books
+        mock_db['fetch_all'].return_value = [(2, 'Arts')]
+        assert get_book_categories(7) == [(2, 'Arts')]
+        assert get_book_categories('bogus') == []
+        mock_db['fetch_all'].return_value = [(7, 2, 'Arts')]
+        assert get_categories_for_books([7]) == {7: [(2, 'Arts')]}
+        assert get_categories_for_books([]) == {}
+
+    def test_add_book_saves_extras(self, librarian_client, mock_db):
+        """Validates add book saves extras `/librarian/cataloging/add` as librarian (expects 302) [TestMultiCategory / cataloging].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
+        resp = librarian_client.post('/librarian/cataloging/add', data={
+            'title': 'New Book', 'author': 'New Author', 'material_type': 'Book',
+            'accession_number': '250001', 'edition': '3rd', 'publisher': 'P',
+            'year_published': '2024', 'isbn': '978-1234567890',
+            'subject_classification': 'Fiction', 'call_number': 'QA1',
+            'extra_categories': ['2', '3'],
+        })
+        assert resp.status_code == 302
+        assert 'mstatus=success' in resp.location
+        link_calls = [c for c in mock_db['execute'].call_args_list
+                      if 'INSERT INTO book_categories' in c[0][0]]
+        assert link_calls, 'expected secondary-category links'
+
+    def test_edit_book_replaces_extras(self, librarian_client, mock_db):
+        """Validates edit book replaces extras `/librarian/cataloging/1/edit` as librarian (expects 302) [TestMultiCategory / cataloging].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['fetch_one'].side_effect = [SAMPLE_BOOKS[0], (2, 'Fiction')]
+        mock_db['execute'].return_value = 1
+        resp = librarian_client.post('/librarian/cataloging/1/edit', data={
+            'title': 'T', 'author': 'A', 'edition': '1st', 'publisher': 'P',
+            'year_published': '2020', 'isbn': '978-1234567890',
+            'subject_classification': 'Fiction', 'call_number': 'C1',
+            'extra_categories': ['5'],
+        })
+        assert resp.status_code == 302
+        assert 'mstatus=success' in resp.location
+        stmts = [c[0][0] for c in mock_db['execute'].call_args_list]
+        assert any('DELETE FROM book_categories' in s for s in stmts)
+        assert any('INSERT INTO book_categories' in s for s in stmts)
+
+    def test_public_filter_matches_secondary(self, client, mock_db):
+        """Validates public filter matches secondary `/catalog?category=Fiction` (expects 200) [TestMultiCategory / cataloging].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].side_effect = [[], [], []]
+        resp = client.get('/catalog?category=Fiction')
+        assert resp.status_code == 200
+        query, params = mock_db['fetch_all'].call_args_list[0][0]
+        assert 'book_categories' in query
+        assert params[:2] == ('Fiction', 'Fiction')
+
+    def test_bookinfo_shows_extras(self, client, mock_db):
+        """Validates bookinfo shows extras `/book/1` (expects 200) [TestMultiCategory / cataloging].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
+        mock_db['fetch_all'].side_effect = [
+            [],                    # accessions
+            [],                    # active loans
+            [],                    # borrower map
+            [(2, 'Arts')],         # extra categories
+        ]
+        body = client.get('/book/1').data.decode()
+        assert resp_ok_extra(body)
+
+    def test_export_has_other_categories(self, librarian_client, mock_db):
+        """Validates export has other categories `/librarian/cataloging/export?format=csv` as librarian (expects 200) [TestMultiCategory / cataloging].
+    If fails: likely export headers/columns changed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        row16 = (1, 'T', 'A', '1st', 'P', 2020, 'Fiction', 'C1',
+                 '978-0', 'Book', 'D', 'active', '2024-01-01', None, None)
+        mock_db['fetch_all'].return_value = [row16 + ('Arts, Media', 'ACC-001')]
+        resp = librarian_client.get('/librarian/cataloging/export?format=csv')
+        assert resp.status_code == 200
+        text = resp.data.decode()
+        assert 'Other Categories' in text.splitlines()[0]
+        assert 'Arts, Media' in text
+
+    def test_bulk_import_splits_secondaries(self, app, mock_db):
+        """Validates bulk import splits secondaries [TestMultiCategory / cataloging].
+    If fails: likely bulk worker changed or mock return drift.
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.routes import _bulk_import_worker, _import_jobs
+        # book dedup miss, accession miss, Fiction lookup miss, Arts lookup miss.
+        mock_db['fetch_one'].side_effect = [None, None, None, None]
+        # Fiction category insert -> 10, book insert -> 1, Arts insert -> 20,
+        # then the secondary-links DELETE + INSERT.
+        mock_db['execute'].side_effect = [[(10,)], [(1,)], [(20,)], 1, 1]
+        _import_jobs['test-multi-cat'] = {
+            'status': 'processing', 'total': 1, 'done': 0,
+            'errors': [], 'message': None,
+        }
+        try:
+            _bulk_import_worker(
+                app, 'test-multi-cat',
+                [{'title': 'Multi Cat', 'author': 'A', 'accession_number': 'ACC-777',
+                  'subject_classification': 'Fiction; Arts'}],
+                {'title': 'title', 'author': 'author',
+                 'accession_number': 'accession_number',
+                 'subject_classification': 'subject_classification'},
+                3,
+            )
+        finally:
+            _import_jobs.pop('test-multi-cat', None)
+        link_calls = [c for c in mock_db['execute'].call_args_list
+                      if 'INSERT INTO book_categories' in c[0][0]]
+        assert link_calls, 'expected secondary-category links from ;-split'
+
+
+def resp_ok_extra(body):
+    """Extra-category rendering assertion for the book detail page."""
+    assert 'Categories' in body
+    assert 'Arts' in body
+    return True
 
 
 class TestMaterialTypes:
@@ -1713,8 +1868,6 @@ class TestMaterialTypes:
                        'subject_classification': 'News'},
         'Thesis': {'title': 'T', 'author': 'A', 'year_published': '2023',
                    'subject_classification': 'Research'},
-        'Multimedia': {'title': 'M', 'year_published': '2022',
-                       'subject_classification': 'Media'},
     }
 
     def _post_minimal(self, client, mtype, **overrides):
@@ -1728,7 +1881,7 @@ class TestMaterialTypes:
         """Validates each type accepts minimal `/librarian/cataloging/add` as librarian (expects 302) [TestMaterialTypes / cataloging].
     If fails: likely validation matrix changed or mock return drift.
     Failure indicates catalog data or listing/sort is wrong."""
-        for mtype in ('Book', 'E-Book', 'Reference', 'Periodical', 'Thesis', 'Multimedia'):
+        for mtype in ('Book', 'E-Book', 'Reference', 'Periodical', 'Thesis'):
             mock_db['execute'].return_value = [(1,)]
             mock_db['fetch_one'].return_value = None
             resp = self._post_minimal(librarian_client, mtype)
@@ -1740,7 +1893,7 @@ class TestMaterialTypes:
     If fails: likely validation matrix changed or mock return drift.
     Failure indicates catalog data or listing/sort is wrong."""
         cases = [('Thesis', 'author'), ('Periodical', 'publisher'),
-                 ('Multimedia', 'title'), ('Reference', 'call_number'),
+                 ('Reference', 'call_number'),
                  ('E-Book', 'author'), ('Book', 'isbn')]
         for mtype, drop in cases:
             mock_db['execute'].return_value = [(1,)]
@@ -1766,6 +1919,11 @@ class TestMaterialTypes:
         assert resp.status_code == 302
         assert 'mstatus=error' in resp.location
         assert mock_db['execute'].call_count == 0
+        # Retired type behaves the same way.
+        resp = self._post_minimal(librarian_client, 'Book', material_type='Multimedia')
+        assert resp.status_code == 302
+        assert 'mstatus=error' in resp.location
+        assert mock_db['execute'].call_count == 0
 
     def test_material_type_stored_from_selection(self, librarian_client, mock_db):
         """Validates material type stored from selection `/librarian/cataloging/add` as librarian (expects 302) [TestMaterialTypes / cataloging].
@@ -1779,6 +1937,109 @@ class TestMaterialTypes:
                       if 'INSERT INTO book_catalog' in c[0][0]]
         assert book_calls and 'Thesis' in book_calls[0][0][1]
 
+    def test_isbn_any_prefix_accepted(self, mock_db):
+        """Validates isbn any prefix accepted [TestMaterialTypes / cataloging].
+    If fails: likely ISBN validation changed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.routes import _validate_isbn_issn
+        assert _validate_isbn_issn('1111111111111', 'Book') is None
+        assert _validate_isbn_issn('978-1-234567-89-0', 'Reference') is None
+        assert _validate_isbn_issn('1234-567X', 'Periodical') is None
+        assert _validate_isbn_issn('', 'Thesis') is None
+        assert _validate_isbn_issn('', 'E-Book') is None
+        assert _validate_isbn_issn('123', 'Book') == 'ISBN must be 13 digits.'
+        assert _validate_isbn_issn('', 'Book') == 'ISBN is required for this material type.'
+        assert _validate_isbn_issn('123', 'Periodical') == 'ISSN must be 8 characters (e.g. 1234-567X).'
+
+
+class TestFormPersistence:
+    """Typed Add/Edit values survive validation-error redirects."""
+
+    def test_add_error_stashes_typed_values(self, librarian_client, mock_db):
+        """Validates add error stashes typed values `/librarian/cataloging/add` as librarian (expects 302) [TestFormPersistence / cataloging].
+    If fails: likely stash helper changed or session unavailable.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['fetch_one'].return_value = None
+        resp = librarian_client.post('/librarian/cataloging/add', data={
+            'title': 'Typed Title', 'material_type': 'Thesis',
+            'year_published': '2024', 'subject_classification': 'Research',
+            'description': 'Typed blurb',
+        })
+        assert resp.status_code == 302
+        assert 'mstatus=error' in resp.location
+        with librarian_client.session_transaction() as sess:
+            stashed = sess.get('book_form_data')
+        assert stashed and stashed['_modal'] == 'addBookModal'
+        assert stashed['title'] == 'Typed Title'
+        assert stashed['material_type'] == 'Thesis'
+
+    def test_add_modal_repopulates_after_error(self, librarian_client, mock_db):
+        """Validates add modal repopulates after error `/librarian/cataloging` as librarian (expects 200) [TestFormPersistence / cataloging].
+    If fails: likely template value bindings changed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['fetch_one'].return_value = None
+        mock_db['fetch_all'].return_value = []
+        librarian_client.post('/librarian/cataloging/add', data={
+            'title': 'Typed Title', 'material_type': 'Thesis',
+            'year_published': '2024', 'subject_classification': 'Research',
+            'description': 'Typed blurb', 'source': 'donation',
+        })
+        body = librarian_client.get('/librarian/cataloging?modal=addBookModal').data.decode()
+        assert 'value="Typed Title"' in body
+        assert '<option value="Thesis" selected>' in body
+        assert '<option value="donation" selected>' in body
+        assert 'Typed blurb' in body
+        assert 'value="2024"' in body
+
+    def test_stash_consumed_once(self, librarian_client, mock_db):
+        """Validates stash consumed once `/librarian/cataloging` as librarian (expects 200) [TestFormPersistence / cataloging].
+    If fails: likely pop logic changed (stale values leak across visits).
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['fetch_one'].return_value = None
+        mock_db['fetch_all'].return_value = []
+        librarian_client.post('/librarian/cataloging/add', data={'title': 'Once Title'})
+        first = librarian_client.get('/librarian/cataloging?modal=addBookModal').data.decode()
+        assert 'value="Once Title"' in first
+        second = librarian_client.get('/librarian/cataloging?modal=addBookModal').data.decode()
+        assert 'value="Once Title"' not in second
+
+    def test_edit_error_stashes_with_book_id(self, librarian_client, mock_db):
+        """Validates edit error stashes with book id `/librarian/cataloging/1/edit` as librarian (expects 302) [TestFormPersistence / cataloging].
+    If fails: likely stash helper changed or session unavailable.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
+        resp = librarian_client.post('/librarian/cataloging/1/edit', data={
+            'title': 'Typed ETitle', 'material_type': 'Book',
+        })
+        assert resp.status_code == 302
+        assert 'mstatus=error' in resp.location
+        with librarian_client.session_transaction() as sess:
+            stashed = sess.get('book_form_data')
+        assert stashed and stashed['_modal'] == 'editBookModal'
+        assert stashed['_book_id'] == '1'
+        assert stashed['title'] == 'Typed ETitle'
+
+    def test_edit_modal_repopulates_stashed(self, librarian_client, mock_db):
+        """Validates edit modal repopulates stashed `/librarian/cataloging` as librarian (expects 200) [TestFormPersistence / cataloging].
+    If fails: likely stashed-override JS or JSON embedding changed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
+        mock_db['fetch_all'].return_value = []
+        librarian_client.post('/librarian/cataloging/1/edit', data={
+            'title': 'Typed ETitle', 'material_type': 'Book',
+        })
+        mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
+        mock_db['fetch_all'].side_effect = [
+            [SAMPLE_BOOKS[0] + ('ACC-001',)],
+            [],
+            [],
+        ]
+        body = librarian_client.get(
+            '/librarian/cataloging?modal=editBookModal&book_id=1').data.decode()
+        assert '"_modal": "editBookModal"' in body
+        assert '"title": "Typed ETitle"' in body
+        assert '"_book_id": "1"' in body
+
     def test_add_modal_material_first_with_all_types(self, librarian_client, mock_db):
         """Validates add modal material first with all types `/librarian/cataloging` as librarian (expects 200) [TestMaterialTypes / cataloging].
     If fails: likely template text/context changed or mock fetch_* shape mismatched.
@@ -1789,8 +2050,9 @@ class TestMaterialTypes:
         assert 'id="add_material_type"' in body
         assert 'onchange="applyMaterialType(' in body
         assert 'MATERIAL_REQUIRED' in body
-        for mtype in ('Book', 'E-Book', 'Reference', 'Periodical', 'Thesis', 'Multimedia'):
+        for mtype in ('Book', 'E-Book', 'Reference', 'Periodical', 'Thesis'):
             assert f'<option value="{mtype}">{mtype}</option>' in body, mtype
+        assert '<option value="Multimedia">' not in body
         # Material select precedes the title input in the add form.
         assert body.index('id="add_material_type"') < body.index('name="title"')
         # Conditionally-required inputs carry no static required attribute.

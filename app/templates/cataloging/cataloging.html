@@ -632,77 +632,84 @@
             </div>
             {% endif %}
             <form method="POST" action="{{ url_for('cataloging.add_book') }}" class="p-4 sm:p-6 space-y-4" data-exists-book data-exists-accession id="addBookForm">
+                {% set _add = stashed_form if stashed_form and stashed_form.get('_modal') == 'addBookModal' else {} %}
                 <p data-exists-msg class="hidden mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm font-medium text-red-700 dark:text-red-300"></p>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div class="col-span-2">
                         <label class="form-label">Material Type</label>
                         <select name="material_type" id="add_material_type" class="form-input" onchange="applyMaterialType('add')">
-                            <option value="Book">Book</option>
-                            <option value="E-Book">E-Book</option>
-                            <option value="Reference">Reference</option>
-                            <option value="Periodical">Periodical</option>
-                            <option value="Thesis">Thesis</option>
-                            <option value="Multimedia">Multimedia</option>
+                            {% for _mt in ['Book', 'E-Book', 'Reference', 'Periodical', 'Thesis'] %}
+                            <option value="{{ _mt }}" {% if _add.get('material_type', 'Book') == _mt %}selected{% endif %}>{{ _mt }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                     <div class="col-span-2">
                         <label class="form-label">Accession Number *</label>
-                        <input type="text" name="accession_number" required class="form-input" placeholder="e.g. 000001" pattern="\d{6}" maxlength="6" title="6-digit accession number (e.g. 000001)">
+                        <input type="text" name="accession_number" required class="form-input" placeholder="e.g. 000001" pattern="\d{6}" maxlength="6" title="6-digit accession number (e.g. 000001)" value="{{ _add.get('accession_number', '') }}">
                         <p data-exists-accession-msg class="hidden mt-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm font-medium text-red-700 dark:text-red-300"></p>
                     </div>
                     <div class="col-span-2">
                         <label class="form-label">Title *</label>
-                        <input type="text" name="title" required maxlength="255" class="form-input" placeholder="Book title" data-suggest="book_title">
+                        <input type="text" name="title" required maxlength="255" class="form-input" placeholder="Book title" data-suggest="book_title" value="{{ _add.get('title', '') }}">
                     </div>
                     <div>
                         <label class="form-label">Author *</label>
-                        <input type="text" name="author" maxlength="150" class="form-input" placeholder="Author name" data-suggest="book_author">
+                        <input type="text" name="author" maxlength="150" class="form-input" placeholder="Author name" data-suggest="book_author" value="{{ _add.get('author', '') }}">
                     </div>
                     <div>
                         <label class="form-label">Edition *</label>
-                        <input type="text" name="edition" maxlength="30" class="form-input" placeholder="e.g. 3rd">
+                        <input type="text" name="edition" maxlength="30" class="form-input" placeholder="e.g. 3rd" value="{{ _add.get('edition', '') }}">
                     </div>
                     <div>
                         <label class="form-label">Publisher *</label>
-                        <input type="text" name="publisher" maxlength="150" class="form-input" placeholder="Publisher name" data-suggest="book_publisher">
+                        <input type="text" name="publisher" maxlength="150" class="form-input" placeholder="Publisher name" data-suggest="book_publisher" value="{{ _add.get('publisher', '') }}">
                     </div>
                     <div>
                         <label class="form-label">Year Published *</label>
-                        <input type="number" name="year_published" required class="form-input" placeholder="e.g. 2024" min="1000" max="9999">
+                        <input type="number" name="year_published" required class="form-input" placeholder="e.g. 2024" min="1000" max="9999" value="{{ _add.get('year_published', '') }}">
                     </div>
                     <div>
                         <label class="form-label">ISBN *</label>
-                        <input type="text" name="isbn" maxlength="20" class="form-input" placeholder="ISBN number" data-suggest="book_isbn">
+                        <input type="text" name="isbn" maxlength="20" class="form-input" placeholder="ISBN number" data-suggest="book_isbn" value="{{ _add.get('isbn', '') }}">
                     </div>
                     <div>
                         <label class="form-label">Call Number / LOC Class. *</label>
-                        <input type="text" name="call_number" maxlength="50" class="form-input" placeholder="e.g. QA76.73">
+                        <input type="text" name="call_number" maxlength="50" class="form-input" placeholder="e.g. QA76.73" value="{{ _add.get('call_number', '') }}">
                     </div>
                     <div>
                         <label class="form-label">Source</label>
                         <select name="source" class="form-input">
                             <option value="">— Select —</option>
-                            <option value="purchase">Purchase</option>
-                            <option value="donation">Donation</option>
-                            <option value="others">Others</option>
+                            {% for _src in ['purchase', 'donation', 'others'] %}
+                            <option value="{{ _src }}" {% if _add.get('source', '') == _src %}selected{% endif %}>{{ _src|title }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                     <div>
                         <label class="form-label">Shelf Location</label>
-                        <input type="text" name="shelf_location" maxlength="50" class="form-input" placeholder="e.g. 2F-A3">
+                        <input type="text" name="shelf_location" maxlength="50" class="form-input" placeholder="e.g. 2F-A3" value="{{ _add.get('shelf_location', '') }}">
                     </div>
                     <div class="col-span-2">
                         <label class="form-label">Category *</label>
-                        <input type="text" name="subject_classification" required maxlength="100" class="form-input" placeholder="e.g. Computer Science" data-suggest="book_subject" list="categoryListAdd">
-                        <datalist id="categoryListAdd">
+                        <select name="subject_classification" required class="form-input" data-suggest="book_subject">
+                            <option value="">— Select —</option>
                             {% for cat in all_categories|default([]) %}
-                            <option value="{{ cat }}"></option>
+                            <option value="{{ cat }}" {% if _add.get('subject_classification', '') == cat %}selected{% endif %}>{{ cat }}</option>
                             {% endfor %}
-                        </datalist>
+                        </select>
+                    </div>
+                    <div class="col-span-2">
+                        <label class="form-label">More Categories (optional)</label>
+                        <select name="extra_categories" multiple size="4" class="form-input">
+                            {% for cid, cname in category_options|default([]) %}
+                            <option value="{{ cid }}" {% if cid|string in _add.get('_extra_categories', []) %}selected{% endif %}>{{ cname }}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-[11px] text-gray-400 mt-1">Hold Ctrl (or ⌘) to pick more than one.</p>
                     </div>
                     <div class="col-span-2">
                         <label class="form-label">Description</label>
-                        <textarea name="description" rows="3" class="form-input" placeholder="Brief description..."></textarea>
+                        <textarea name="description" rows="3" class="form-input" placeholder="Brief description...">{{ _add.get('description', '') }}</textarea>
                     </div>
                 </div>
                 <div class="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-4 border-t border-gray-100">
@@ -755,7 +762,6 @@
                             <option value="Reference">Reference</option>
                             <option value="Periodical">Periodical</option>
                             <option value="Thesis">Thesis</option>
-                            <option value="Multimedia">Multimedia</option>
                         </select>
                     </div>
                     <div>
@@ -780,12 +786,21 @@
                     </div>
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Category *</label>
-                        <input type="text" name="subject_classification" id="edit_subject" required maxlength="100" class="form-input" placeholder="e.g. Computer Science" data-suggest="book_subject" list="categoryListEdit">
-                        <datalist id="categoryListEdit">
+                        <select name="subject_classification" id="edit_subject" required class="form-input" data-suggest="book_subject">
+                            <option value="">— Select —</option>
                             {% for cat in all_categories|default([]) %}
-                            <option value="{{ cat }}"></option>
+                            <option value="{{ cat }}">{{ cat }}</option>
                             {% endfor %}
-                        </datalist>
+                        </select>
+                    </div>
+                    <div class="col-span-1 sm:col-span-2">
+                        <label class="form-label">More Categories (optional)</label>
+                        <select name="extra_categories" id="edit_extra_categories" multiple size="4" class="form-input">
+                            {% for cid, cname in category_options|default([]) %}
+                            <option value="{{ cid }}">{{ cname }}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-[11px] text-gray-400 mt-1">Hold Ctrl (or ⌘) to pick more than one.</p>
                     </div>
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Description</label>
@@ -977,59 +992,6 @@
             }
         }
 
-        // Reopen a modal after a PRG redirect so flash feedback shows inside it
-        (function () {
-            var params = new URLSearchParams(window.location.search);
-            var modalId = params.get('modal');
-            if (!modalId) return;
-            var modal = document.getElementById(modalId);
-            if (!modal) return;
-
-            var action = params.get('action');
-            var form = modal.querySelector('form');
-            if (action && form) form.action = action;
-
-            var bookId = params.get('book_id');
-            if (bookId) {
-                var bid = Number(bookId);
-                var btns = document.querySelectorAll('button[data-book]');
-                for (var i = 0; i < btns.length; i++) {
-                    var b = JSON.parse(btns[i].getAttribute('data-book'));
-                    if (b[0] === bid) { editBook(btns[i]); break; }
-                }
-            } else {
-                openModal(modalId);
-            }
-
-            var flash = document.getElementById('flash-messages');
-            if (flash && modal) {
-                var box = modal.querySelector('.modal') || modal;
-                box.insertBefore(flash, form || box.firstChild);
-            }
-
-            if (params.get('mstatus') === 'success') {
-                setTimeout(function () { closeModal(null, modalId); }, 1500);
-            }
-        })();
-
-        // Edit Book (data stored in data-book attribute via |tojson)
-        function editBook(btn) {
-            var b = JSON.parse(btn.getAttribute('data-book'));
-            document.getElementById('editBookForm').action = '/librarian/cataloging/' + b[0] + '/edit';
-            document.getElementById('edit_title').value = b[1];
-            document.getElementById('edit_author').value = b[2];
-            document.getElementById('edit_edition').value = b[3] || '';
-            document.getElementById('edit_publisher').value = b[4] || '';
-            document.getElementById('edit_year').value = b[5] || '';
-            document.getElementById('edit_subject').value = b[6] || '';
-            document.getElementById('edit_call_number').value = b[7] || '';
-            document.getElementById('edit_isbn').value = b[8] || '';
-            document.getElementById('edit_material_type').value = b[9] || 'Book';
-            document.getElementById('edit_description').value = b[10] || '';
-            applyMaterialType('edit');
-            openModal('editBookModal');
-        }
-
         // Required bibliographic fields per material type (mirrors
         // MATERIAL_REQUIRED_FIELDS in cataloging/routes.py — keep in sync).
         // All fields stay visible; only required markers, the required
@@ -1039,8 +1001,7 @@
             'E-Book': ['title', 'author', 'year_published', 'subject_classification'],
             'Reference': ['title', 'author', 'edition', 'publisher', 'year_published', 'subject_classification', 'call_number'],
             'Periodical': ['title', 'publisher', 'year_published', 'isbn', 'subject_classification'],
-            'Thesis': ['title', 'author', 'year_published', 'subject_classification'],
-            'Multimedia': ['title', 'year_published', 'subject_classification']
+            'Thesis': ['title', 'author', 'year_published', 'subject_classification']
         };
         var MATERIAL_FIELDS = ['title', 'author', 'edition', 'publisher', 'year_published', 'isbn', 'subject_classification', 'call_number'];
         function applyMaterialType(prefix) {
@@ -1075,6 +1036,93 @@
             applyMaterialType('add');
             applyMaterialType('edit');
         });
+
+        // Reopen a modal after a PRG redirect so flash feedback shows inside it
+        (function () {
+            var params = new URLSearchParams(window.location.search);
+            var modalId = params.get('modal');
+            if (!modalId) return;
+            var modal = document.getElementById(modalId);
+            if (!modal) return;
+
+            var action = params.get('action');
+            var form = modal.querySelector('form');
+            if (action && form) form.action = action;
+
+            // Typed values stashed in the session before a validation-error
+            // redirect win over the stored row so nothing the librarian
+            // typed is lost.
+            var stashedEdit = {{ (stashed_form if stashed_form and stashed_form.get('_modal') == 'editBookModal' else none)|tojson }};
+            var bookId = params.get('book_id');
+            if (bookId) {
+                var bid = Number(bookId);
+                var btns = document.querySelectorAll('button[data-book]');
+                for (var i = 0; i < btns.length; i++) {
+                    var b = JSON.parse(btns[i].getAttribute('data-book'));
+                    if (b[0] === bid) {
+                        editBook(btns[i]);
+                        if (stashedEdit && String(stashedEdit._book_id || '') === String(bid)) {
+                            var eform = document.getElementById('editBookForm');
+                            Object.keys(stashedEdit).forEach(function (k) {
+                                if (k.charAt(0) === '_' || k === 'extra_categories') return;
+                                var input = eform.querySelector('[name="' + k + '"]');
+                                if (input) input.value = stashedEdit[k];
+                            });
+                            if (stashedEdit._extra_categories) {
+                                var esel = document.getElementById('edit_extra_categories');
+                                if (esel) {
+                                    for (var j = 0; j < esel.options.length; j++) {
+                                        esel.options[j].selected = stashedEdit._extra_categories.indexOf(esel.options[j].value) !== -1;
+                                    }
+                                }
+                            }
+                            applyMaterialType('edit');
+                        }
+                        break;
+                    }
+                }
+            } else {
+                openModal(modalId);
+            }
+
+            var flash = document.getElementById('flash-messages');
+            if (flash && modal) {
+                var box = modal.querySelector('.modal') || modal;
+                box.insertBefore(flash, form || box.firstChild);
+            }
+
+            if (params.get('mstatus') === 'success') {
+                setTimeout(function () { closeModal(null, modalId); }, 1500);
+            }
+        })();
+
+        // Edit Book (data stored in data-book attribute via |tojson)
+        // Secondary categories per title for the extras multi-select.
+        var BOOK_CATS = {{ cats_by_book_ids|default({})|tojson }};
+        function editBook(btn) {
+            var b = JSON.parse(btn.getAttribute('data-book'));
+            document.getElementById('editBookForm').action = '/librarian/cataloging/' + b[0] + '/edit';
+            document.getElementById('edit_title').value = b[1];
+            document.getElementById('edit_author').value = b[2];
+            document.getElementById('edit_edition').value = b[3] || '';
+            document.getElementById('edit_publisher').value = b[4] || '';
+            document.getElementById('edit_year').value = b[5] || '';
+            document.getElementById('edit_subject').value = b[6] || '';
+            document.getElementById('edit_call_number').value = b[7] || '';
+            document.getElementById('edit_isbn').value = b[8] || '';
+            document.getElementById('edit_material_type').value = b[9] || 'Book';
+            document.getElementById('edit_description').value = b[10] || '';
+            var extraSel = document.getElementById('edit_extra_categories');
+            if (extraSel) {
+                var picked = BOOK_CATS[String(b[0])] || [];
+                var pickedStr = picked.map(function (v) { return String(v); });
+                for (var i = 0; i < extraSel.options.length; i++) {
+                    extraSel.options[i].selected = pickedStr.indexOf(extraSel.options[i].value) !== -1;
+                }
+            }
+            applyMaterialType('edit');
+            openModal('editBookModal');
+        }
 
         // Add Accession Copy (dedicated action, not part of edit)
         function openAccessionModal(btn) {

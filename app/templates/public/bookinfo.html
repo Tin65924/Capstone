@@ -156,6 +156,12 @@
                     <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[9] or 'Book' }}</p>
                 </div>
                 <div>
+                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Categories</h4>
+                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                        {% if book[6] %}<a class="text-primary hover:underline" href="{{ url_for('cataloging.public_catalog', category=book[6]) }}">{{ book[6] }}</a>{% endif %}{% for _cid, _cname in extra_categories|default([]) %}{% if book[6] or not loop.first %}, {% endif %}<a class="text-primary hover:underline" href="{{ url_for('cataloging.public_catalog', category=_cname) }}">{{ _cname }}</a>{% endfor %}{% if not book[6] and not extra_categories %}—{% endif %}
+                    </p>
+                </div>
+                <div>
                     <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">LOC Classification</h4>
                     <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[7] or '—' }}</p>
                 </div>

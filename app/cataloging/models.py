@@ -78,6 +78,14 @@ ACCESSION_SUBQUERY = (
     "FROM accession_log WHERE accession_log.book_id = book_catalog.book_id)"
 )
 
+# Comma-joined secondary category names for export rows. Appended BEFORE
+# accession_numbers so the joined accessions stay last (callers use [-1]).
+EXTRA_CATEGORIES_SUBQUERY = (
+    "(SELECT COALESCE(string_agg(c.name, ', ' ORDER BY c.name), '') "
+    "FROM book_categories bc JOIN categories c ON c.category_id = bc.category_id "
+    "WHERE bc.book_id = book_catalog.book_id)"
+)
+
 def search_books(query, field=None):
     """Search the catalog with an ILIKE match, de-duplicated by title.
 
@@ -251,7 +259,7 @@ def get_all_books():
     materialized per request.
     """
     return db.fetch_all(
-        f"SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog WHERE catalog_status = 'active' ORDER BY {DISTINCT_ORDER}")
+        f"SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {EXTRA_CATEGORIES_SUBQUERY} AS extra_categories, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog WHERE catalog_status = 'active' ORDER BY {DISTINCT_ORDER}")
 
 
 def _count_books(where, args):
@@ -437,13 +445,18 @@ def get_books_by_copy_status_paginated(copy_status, page=1, per_page=20, sort_by
 def get_distinct_categories():
     """List every non-empty subject classification A-Z for filter options.
 
-    Feeds the category dropdown on the staff and public catalog pages.
+    Unions the primary free-text subjects with secondary vocabulary
+    names actually linked to a book, so the sidebar never misses a
+    category that only exists as an extra link.
 
     Returns:
-        List of 1-tuples (subject_classification,) ordered alphabetically.
+        List of 1-tuples (category,) ordered alphabetically.
     """
     return db.fetch_all(
-        'SELECT DISTINCT subject_classification FROM book_catalog WHERE subject_classification IS NOT NULL AND subject_classification != \'\' ORDER BY subject_classification'
+        'SELECT subject_classification FROM book_catalog WHERE subject_classification IS NOT NULL AND subject_classification != \'\' '
+        'UNION SELECT c.name FROM categories c WHERE EXISTS '
+        '(SELECT 1 FROM book_categories bc WHERE bc.category_id = c.category_id) '
+        'ORDER BY 1'
     )
 
 
@@ -506,6 +519,88 @@ def resolve_category(name):
     return None, clean
 
 
+def get_book_categories(book_id):
+    """List a title's secondary categories as [(category_id, name)] A-Z.
+
+    The primary category stays on book_catalog.category_id; this covers
+    only the extra links in book_categories. Returns [] for unknown or
+    link-less titles.
+    """
+    try:
+        book_id = int(book_id)
+    except (TypeError, ValueError):
+        return []
+    return db.fetch_all(
+        '''SELECT c.category_id, c.name FROM categories c
+           JOIN book_categories bc ON bc.category_id = c.category_id
+           WHERE bc.book_id = %s ORDER BY LOWER(c.name), c.name''',
+        (book_id,)
+    ) or []
+
+
+def get_categories_for_books(book_ids):
+    """Batch-fetch secondary categories as {book_id: [(id, name)]}.
+
+    Empty input short-circuits to {} without hitting the DB.
+    """
+    ids = []
+    for bid in book_ids or []:
+        try:
+            ids.append(int(bid))
+        except (TypeError, ValueError):
+            continue
+    if not ids:
+        return {}
+    rows = db.fetch_all(
+        '''SELECT bc.book_id, c.category_id, c.name FROM categories c
+           JOIN book_categories bc ON bc.category_id = c.category_id
+           WHERE bc.book_id = ANY(%s) ORDER BY LOWER(c.name), c.name''',
+        (ids,)
+    ) or []
+    out = {}
+    for row in rows:
+        try:
+            out.setdefault(row[0], []).append((row[1], row[2]))
+        except (IndexError, TypeError):
+            continue
+    return out
+
+
+def set_book_categories(book_id, category_ids):
+    """Replace a title's secondary category links.
+
+    Deletes existing links, then inserts one row per id that names a
+    real category (unknown ids are skipped by the SELECT, never a FK
+    violation). The primary book_catalog.category_id is untouched.
+
+    Args:
+        book_id: Target title's primary key.
+        category_ids: Iterable of candidate category ids (anything
+            int-coercible; junk is ignored).
+    """
+    try:
+        book_id = int(book_id)
+    except (TypeError, ValueError):
+        return
+    ids = []
+    for cid in category_ids or []:
+        try:
+            cid = int(cid)
+        except (TypeError, ValueError):
+            continue
+        if cid not in ids:
+            ids.append(cid)
+    db.execute('DELETE FROM book_categories WHERE book_id = %s', (book_id,))
+    if not ids:
+        return
+    db.execute(
+        '''INSERT INTO book_categories (book_id, category_id)
+           SELECT %s, category_id FROM categories WHERE category_id = ANY(%s)
+           ON CONFLICT DO NOTHING''',
+        (book_id, ids)
+    )
+
+
 def get_distinct_material_types():
     """Book types that have at least one active catalogued item.
 
@@ -564,7 +659,14 @@ def _filtered_where(query, field=None, year_from=None, year_to=None,
         else:
             conditions.append('year_published <= %s')
     if category:
-        conditions.append('subject_classification = %s')
+        # Parens are load-bearing (see material_type above): the
+        # secondary-categories EXISTS is OR-ed with the primary match.
+        conditions.append(
+            '(subject_classification = %s OR EXISTS '
+            '(SELECT 1 FROM book_categories bc JOIN categories c '
+            'ON c.category_id = bc.category_id '
+            'WHERE bc.book_id = book_catalog.book_id AND c.name = %s))')
+        args.append(category)
         args.append(category)
     if material_type:
         if material_type == 'ebook' or material_type == 'E-Book':
@@ -577,8 +679,8 @@ def _filtered_where(query, field=None, year_from=None, year_to=None,
             conditions.append('(material_type IS NULL OR material_type != %s)')
             args.append('E-Book')
         else:
-            # Exact book-type match (Book, Reference, Periodical, Thesis,
-            # Multimedia, ...). Unknown values match zero rows — never 500.
+            # Exact book-type match (Book, Reference, Periodical, Thesis).
+            # Unknown values match zero rows — never 500.
             conditions.append('material_type = %s')
             args.append(material_type)
     DAILY_BLOCKED = (
@@ -960,7 +1062,7 @@ def get_books_by_status(status):
         List of (book_catalog.* + accession_numbers) row tuples.
     """
     return db.fetch_all(
-        f'SELECT *, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog WHERE catalog_status = %s ORDER BY title',
+        f'SELECT *, {EXTRA_CATEGORIES_SUBQUERY} AS extra_categories, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog WHERE catalog_status = %s ORDER BY title',
         (status,)
     )
 

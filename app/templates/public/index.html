@@ -82,7 +82,7 @@
         {% for bt in _book_types %}
         <a href="{{ url_for('cataloging.public_catalog', material_type=bt[0]) }}"
             class="inline-flex items-center gap-2 rounded-full bg-white dark:bg-[#151c2b] border border-[#e7ebf3] dark:border-gray-800 px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-[#0f172a] dark:text-white shadow-sm hover:border-primary/40 hover:text-primary transition-colors">
-            <span class="material-symbols-outlined text-primary text-[18px] sm:text-[20px]">{% if bt[0] == 'E-Book' %}tablet_mac{% elif bt[0] == 'Reference' %}menu_book{% elif bt[0] == 'Periodical' %}newspaper{% elif bt[0] == 'Thesis' %}school{% elif bt[0] == 'Multimedia' %}play_circle{% else %}book{% endif %}</span>
+            <span class="material-symbols-outlined text-primary text-[18px] sm:text-[20px]">{% if bt[0] == 'E-Book' %}tablet_mac{% elif bt[0] == 'Reference' %}menu_book{% elif bt[0] == 'Periodical' %}newspaper{% elif bt[0] == 'Thesis' %}school{% else %}book{% endif %}</span>
             {{ bt[0] }}
             {% if bt|length > 1 %}<span class="text-gray-400 dark:text-gray-500 font-semibold">({{ bt[1] }})</span>{% endif %}
         </a>

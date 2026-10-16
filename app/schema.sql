@@ -291,6 +291,19 @@ WHERE book_catalog.category_id IS NULL
   AND book_catalog.subject_classification IS NOT NULL
   AND LOWER(categories.name) = LOWER(TRIM(book_catalog.subject_classification));
 
+-- Secondary categories per title (the primary stays book_catalog.category_id
+-- so analytics GROUP BYs keep one row per book). Links vanish with the book.
+CREATE TABLE IF NOT EXISTS book_categories (
+    book_id     INT NOT NULL REFERENCES book_catalog(book_id) ON DELETE CASCADE,
+    category_id INT NOT NULL REFERENCES categories(category_id) ON DELETE CASCADE,
+    PRIMARY KEY (book_id, category_id)
+);
+
+-- Retired material types: 'Multimedia' was removed from the catalog
+-- vocabulary; any lingering rows fold into the general 'Book' type so
+-- they stay searchable, editable, and borrowable. Idempotent.
+UPDATE book_catalog SET material_type = 'Book' WHERE material_type = 'Multimedia';
+
 -- Controlled vocabulary for borrower programs (students) and departments
 -- (faculty). Registration, profile, and user-management forms only accept
 -- values from this table; borrowers.department stores the canonical name.

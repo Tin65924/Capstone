@@ -5,7 +5,7 @@ import threading
 import uuid
 import time
 from datetime import datetime, timedelta
-from flask import Response, render_template, request, redirect, url_for, flash, jsonify, current_app
+from flask import Response, render_template, request, redirect, url_for, flash, jsonify, current_app, session
 from flask_login import login_required, current_user
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -19,7 +19,8 @@ from app.cataloging.models import (
     get_accession_by_id, get_accessions_for_books, update_accession,
     delete_accession, accession_referenced,
     get_book_by_title_author_isbn, search_books_paginated,
-    get_categories, resolve_category
+    get_categories, get_categories_for_books, get_book_categories,
+    resolve_category, set_book_categories
 )
 from app.auth.models import log_activity
 from app.bloom_registry import bloom_registry
@@ -116,7 +117,7 @@ BOOK_FIELD_CAPS = (
 )
 
 # Every material type the catalog supports (Add/Edit dropdowns).
-MATERIAL_TYPES = ('Book', 'E-Book', 'Reference', 'Periodical', 'Thesis', 'Multimedia')
+MATERIAL_TYPES = ('Book', 'E-Book', 'Reference', 'Periodical', 'Thesis')
 
 # Bibliographic fields each material type requires. Title, year, and
 # category apply to every type; the rest vary (a thesis needs no ISBN,
@@ -135,8 +136,6 @@ MATERIAL_REQUIRED_FIELDS = {
                               'subject_classification'}),
     'Thesis': frozenset({'title', 'author', 'year_published',
                           'subject_classification'}),
-    'Multimedia': frozenset({'title', 'year_published',
-                              'subject_classification'}),
 }
 
 
@@ -159,11 +158,11 @@ def _to_title_case(value):
 
 
 def _validate_isbn_issn(isbn, material_type):
-    """Panel revision: ISBN 13-digit starting 978/979, ISSN 8-digit.
+    """Panel revision: ISBN must be 13 digits, ISSN 8-digit.
 
-    Book/E-Book/Reference: 13 digits starting 978 or 979 (hyphens stripped).
+    Book/E-Book/Reference: 13 digits (hyphens stripped, any prefix).
     Periodical: 8-digit ISSN (hyphen allowed, X allowed as check).
-    Thesis/Multimedia/Others: ISBN optional but when given must be valid.
+    Thesis: ISBN optional but when given must be valid.
     Returns error string or None.
     """
     import re
@@ -171,7 +170,7 @@ def _validate_isbn_issn(isbn, material_type):
     mtype = (material_type or 'Book').strip().lower()
     if not code:
         # ISBN/ISSN optional for these types (see MATERIAL_REQUIRED_FIELDS).
-        if mtype in ('thesis', 'multimedia', 'e-book'):
+        if mtype in ('thesis', 'e-book'):
             return None
         return 'ISBN is required for this material type.'
     if mtype == 'periodical':
@@ -179,9 +178,7 @@ def _validate_isbn_issn(isbn, material_type):
             return 'ISSN must be 8 characters (e.g. 1234-567X).'
         return None
     if not re.fullmatch(r'\d{13}', code):
-        return 'ISBN must be 13 digits starting with 978 or 979.'
-    if not (code.startswith('978') or code.startswith('979')):
-        return 'ISBN must start with 978 or 979.'
+        return 'ISBN must be 13 digits.'
     return None
 
 
@@ -286,6 +283,35 @@ def _validate_accession_number(accession_number):
     if not re.fullmatch(r'\d{6}', accession_number):
         return 'Accession number must be exactly 6 digits (e.g. 000001).'
     return None
+
+
+def _stash_book_form(modal, extra=None):
+    """stash typed book-form values in the session for redisplay.
+
+    Validation errors redirect (Post/Redirect/Get), which would wipe
+    everything the librarian typed. The next cataloging_page GET pops
+    this stash and the matching modal repopulates its inputs, so typed
+    data survives the error round-trip. Best-effort: never breaks the
+    redirect when sessions are unavailable.
+    """
+    try:
+        data = request.form.to_dict()
+        data['_modal'] = modal
+        data['_extra_categories'] = request.form.getlist('extra_categories')
+        if extra:
+            data.update(extra)
+        session['book_form_data'] = data
+    except Exception:
+        pass
+
+
+def _pop_stashed_book_form():
+    """Pop the stashed book-form dict, or {} when absent/unreadable."""
+    try:
+        data = session.pop('book_form_data', None)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
 
 
 def _clean_shelf_location(form):
@@ -399,9 +425,20 @@ def cataloging_page():
             reasons_by_book[book_id] = ' | '.join(seen) if seen else '—'
 
     try:
-        all_categories = [row[1] for row in get_categories() or [] if row and len(row) > 1 and row[1]]
+        _cat_rows = [row for row in (get_categories() or [])
+                     if row and len(row) > 1 and row[1]]
     except Exception:
-        all_categories = []
+        _cat_rows = []
+    all_categories = [row[1] for row in _cat_rows]
+    category_options = [(row[0], row[1]) for row in _cat_rows]
+    try:
+        _cats_by_book = get_categories_for_books([book[0] for book in books]) if books else {}
+    except Exception:
+        _cats_by_book = {}
+    cats_by_book_ids = {str(bid): [cid for cid, _ in pairs]
+                        for bid, pairs in _cats_by_book.items()}
+
+    stashed_form = _pop_stashed_book_form()
 
     return render_template('cataloging/cataloging.html', books=books,
                            total=total, search_query=query,
@@ -413,21 +450,27 @@ def cataloging_page():
                            copy_conditions=copy_conditions,
                            reasons_by_book=reasons_by_book,
                            show_reason_col=show_reason_col,
-                           all_categories=all_categories)
+                           all_categories=all_categories,
+                           category_options=category_options,
+                           cats_by_book_ids=cats_by_book_ids,
+                           stashed_form=stashed_form)
 
 
 _BOOK_EXPORT_HEADERS = [
     'Book ID', 'Title', 'Author', 'Edition', 'Publisher', 'Year Published',
     'Subject Classification', 'Call Number', 'ISBN', 'Material Type',
-    'Description', 'Status', 'Date Added', 'Accession Numbers',
+    'Description', 'Status', 'Date Added', 'Other Categories', 'Accession Numbers',
 ]
 
 
-# book_catalog.* is 15 cols on current schema (0 book_id … 12 date_added,
-# 13 updated_at, 14 updated_by) with accession_numbers appended last by
-# get_all_books()/get_books_by_status(). Tail positions use negative
-# indices so exports stay correct even if columns are added later.
-# Keep _BOOK_EXPORT_HEADERS width in sync with these positions.
+# book_catalog.* is 16 cols on current schema (0 book_id … 12 date_added,
+# 13 updated_at, 14 updated_by, 15 category_id) with extra_categories then
+# accession_numbers appended last by get_all_books()/get_books_by_status().
+# Tail positions use negative indices so exports stay correct even if
+# columns are added later. The extra-categories cell is only read from
+# full-shaped rows (longer than the legacy 15-col book + accessions mock
+# shape); shorter rows export a blank. Keep _BOOK_EXPORT_HEADERS width in
+# sync with these positions.
 _BOOK_COL = {
     'book_id': 0, 'title': 1, 'author': 2, 'edition': 3, 'publisher': 4,
     'year': 5, 'subject': 6, 'call_number': 7, 'isbn': 8, 'material': 9,
@@ -436,14 +479,14 @@ _BOOK_COL = {
 
 
 def _book_row_to_export(row):
-    """Convert a catalog book tuple into a 14-column export row.
+    """Convert a catalog book tuple into a 15-column export row.
     Maps positional cols (0 book_id through 12 date_added) plus trailing
-    accession_numbers into strings, formatting date_added via isoformat
-    when possible. Tolerates short mock rows without raising.
+    extra_categories/accession_numbers into strings, formatting date_added
+    via isoformat when possible. Tolerates short mock rows without raising.
     Args:
         row: Positional book tuple from the catalog queries.
     Returns:
-        List of 14 export-ready strings matching _BOOK_EXPORT_HEADERS.
+        List of 15 export-ready strings matching _BOOK_EXPORT_HEADERS.
     """
     def _str(v):
         """Coerce one book export cell to string, mapping None to blank.
@@ -458,9 +501,11 @@ def _book_row_to_export(row):
             Empty string for None, else str(v).
         """
         return '' if v is None else str(v)
-    # accession_numbers is appended last by the catalog queries; date_added at 12
+    # accession_numbers is appended last by the catalog queries; date_added at 12.
+    # extra_categories sits second-to-last on full-shaped rows only.
     date_added = row[_BOOK_COL['date_added']] if len(row) > _BOOK_COL['date_added'] else ''
     acc = row[_BOOK_COL['accessions']] if len(row) > 0 else ''
+    extra = row[-2] if len(row) > 16 else ''
     return [
         _str(row[_BOOK_COL['book_id']] if len(row) > _BOOK_COL['book_id'] else ''),
         _str(row[_BOOK_COL['title']] if len(row) > _BOOK_COL['title'] else ''),
@@ -475,6 +520,7 @@ def _book_row_to_export(row):
         _str(row[_BOOK_COL['description']] if len(row) > _BOOK_COL['description'] else ''),
         _str(row[_BOOK_COL['status']] if len(row) > _BOOK_COL['status'] else ''),
         date_added.isoformat() if hasattr(date_added, 'isoformat') else _str(date_added),
+        _str(extra),
         _str(acc),
     ]
 
@@ -521,7 +567,7 @@ def _style_xlsx_sheet(ws, headers):
     ws.freeze_panes = 'A2'
     ws.auto_filter.ref = ws.dimensions
     # widths tuned for content
-    widths = [8, 30, 22, 10, 18, 10, 22, 14, 14, 12, 32, 10, 12, 24]
+    widths = [8, 30, 22, 10, 18, 10, 22, 14, 14, 12, 32, 10, 12, 24, 24]
     for i, w in enumerate(widths, 1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
 
@@ -619,6 +665,7 @@ def add_book():
     error, fields = _validate_book_form(request.form)
     if error:
         flash(error, 'error')
+        _stash_book_form('addBookModal')
         return redirect(url_for('cataloging.cataloging_page', modal='addBookModal', mstatus='error'))
     title, author = fields['title'], fields['author']
 
@@ -632,11 +679,13 @@ def add_book():
     acc_error = _validate_accession_number(accession_number) if accession_number else None
     if acc_error:
         flash(acc_error, 'error')
+        _stash_book_form('addBookModal')
         return redirect(url_for('cataloging.cataloging_page', modal='addBookModal', mstatus='error'))
     if accession_number:
         existing = get_accession_by_number(accession_number)
         if existing:
             flash(f'Accession number {accession_number} already exists.', 'error')
+            _stash_book_form('addBookModal')
             return redirect(url_for('cataloging.cataloging_page', modal='addBookModal', mstatus='error'))
 
     isbn = fields['isbn']
@@ -645,6 +694,7 @@ def add_book():
     shelf_location, shelf_error = _clean_shelf_location(request.form)
     if shelf_error:
         flash(shelf_error, 'error')
+        _stash_book_form('addBookModal')
         return redirect(url_for('cataloging.cataloging_page', modal='addBookModal', mstatus='error'))
     category_id, canonical_subject = resolve_category(fields['subject_classification'])
     fields['subject_classification'] = canonical_subject or fields['subject_classification']
@@ -681,6 +731,10 @@ def add_book():
             source=source,
             shelf_location=shelf_location,
         )
+    try:
+        set_book_categories(book_id, request.form.getlist('extra_categories'))
+    except Exception:
+        current_app.logger.warning('set_book_categories failed for book %s', book_id, exc_info=True)
     log_activity(current_user.id, 'cataloging:add_book')
     flash('Book added to catalog.', 'success')
     return redirect(url_for('cataloging.cataloging_page', modal='addBookModal', mstatus='success'))
@@ -708,6 +762,7 @@ def edit_book(book_id):
     error, fields = _validate_book_form(request.form)
     if error:
         flash(error, 'error')
+        _stash_book_form('editBookModal', {'_book_id': str(book_id)})
         return redirect(url_for('cataloging.cataloging_page', modal='editBookModal',
                                 book_id=book_id, mstatus='error'))
     title, author = fields['title'], fields['author']
@@ -731,6 +786,10 @@ def edit_book(book_id):
         category_id=category_id,
     )
     bloom_registry.mark_dirty()
+    try:
+        set_book_categories(book_id, request.form.getlist('extra_categories'))
+    except Exception:
+        current_app.logger.warning('set_book_categories failed for book %s', book_id, exc_info=True)
     from app.auth.models import audit_text
     old_title = (book[1] or '') if len(book) > 1 else ''
     detail = ''
@@ -1125,15 +1184,20 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                 else:
                     year_str = book_data.get('year_published', '')
                     year = int(year_str) if year_str and year_str.isdigit() else None
-                    raw_subject = book_data.get('subject_classification') or None
-                    subject_id, subject_canonical = resolve_category(raw_subject)
+                    # Semicolon-separated subjects: first is primary, the
+                    # rest become secondary category links on the new book.
+                    raw_subjects = [(s or '').strip()
+                                    for s in (book_data.get('subject_classification') or '').split(';')]
+                    raw_subjects = [s for s in raw_subjects if s]
+                    primary_raw = raw_subjects[0] if raw_subjects else None
+                    subject_id, subject_canonical = resolve_category(primary_raw)
                     book_id = create_book(
                         title=title,
                         author=author,
                         edition=book_data.get('edition') or None,
                         publisher=book_data.get('publisher') or None,
                         year_published=year,
-                        subject_classification=subject_canonical or raw_subject,
+                        subject_classification=subject_canonical or primary_raw,
                         call_number=book_data.get('call_number') or None,
                         isbn=isbn or None,
                         material_type=book_data.get('material_type', 'Book') or 'Book',
@@ -1146,6 +1210,20 @@ def _bulk_import_worker(app, job_id, rows, column_map, user_id):
                             _import_jobs[job_id]['done'] = imported + len(errors)
                             _import_jobs[job_id]['updated_at'] = datetime.now()
                         continue
+                    if len(raw_subjects) > 1:
+                        extra_ids = []
+                        for extra in raw_subjects[1:]:
+                            try:
+                                eid, _ = resolve_category(extra)
+                            except Exception:
+                                continue
+                            if eid and eid != subject_id and eid not in extra_ids:
+                                extra_ids.append(eid)
+                        if extra_ids:
+                            try:
+                                set_book_categories(book_id, extra_ids)
+                            except Exception as e:
+                                errors.append(f'Row {i}: {e}')
 
                 source = book_data.get('source', '') or None
                 if source:
@@ -1366,6 +1444,11 @@ def book_info(book_id):
         accessions_with_status = [(acc, False) for acc, _ in accessions_with_status]
         any_available = False
     user_data = get_user_by_id(current_user.id) if current_user.is_authenticated else None
+    try:
+        extra_categories = get_book_categories(book_id)
+    except Exception:
+        extra_categories = []
     return render_template('public/bookinfo.html', book=book,
                            accessions=accessions_with_status, any_available=any_available,
-                           borrower_map=borrower_map, user_data=user_data)
+                           borrower_map=borrower_map, user_data=user_data,
+                           extra_categories=extra_categories)
