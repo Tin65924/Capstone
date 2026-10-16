@@ -464,7 +464,7 @@
             <input type="hidden" name="scope" value="{{ scope }}">
             <input type="hidden" name="status" value="{{ status_filter }}">
             <input type="hidden" name="role" value="{{ role_filter }}">
-            <div class="flex flex-col sm:flex-row gap-2 sm:gap-2 w-full relative z-20">
+            <div class="flex flex-col sm:flex-row gap-2 sm:gap-2 w-full relative z-20 sm:items-center">
                 <div class="relative w-full sm:w-auto sm:min-w-[160px] z-30" id="user-field-select-wrapper">
                     <select name="field" id="user-field-select-native" class="sr-only" tabindex="-1" aria-hidden="true">
                         <option value="" {% if not search_field %}selected{% endif %}>All Fields</option>
@@ -474,7 +474,7 @@
                         <option value="department" {% if search_field == 'department' %}selected{% endif %}>Department</option>
                     </select>
                     <button type="button" id="user-field-select-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="user-field-select-dropdown"
-                        class="w-full flex items-center justify-between gap-2 bg-white border border-[#e2e8f0] px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg text-sm font-medium text-slate-700 hover:border-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
+                        class="w-full h-[46px] flex items-center justify-between gap-2 bg-white border border-[#e2e8f0] px-3 sm:px-4 rounded-lg text-sm font-medium text-slate-700 hover:border-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
                         <span id="user-field-select-label" class="min-w-0 flex-1 truncate text-left">{% if search_field == 'name' %}Name{% elif search_field == 'email' %}Email{% elif search_field == 'id' %}ID Number{% elif search_field == 'department' %}Department{% else %}All Fields{% endif %}</span>
                         <span class="material-symbols-outlined text-slate-400 text-[20px] shrink-0 transition-transform duration-200" id="user-field-select-arrow">expand_more</span>
                     </button>
@@ -488,12 +488,12 @@
                     </ul>
                 </div>
                 <div class="relative flex-1 w-full">
-                    <input type="text" name="q" value="{{ search_query or '' }}" class="search-input w-full text-sm" placeholder="Search users by name, email, ID, department...">
+                    <input type="text" name="q" value="{{ search_query or '' }}" class="search-input w-full text-sm h-[46px]" placeholder="Search users by name, email, ID, department...">
                 </div>
                 <div class="flex gap-2 shrink-0">
-                    <button type="submit" class="btn btn-primary btn-sm flex-1 sm:flex-none justify-center"><span class="material-symbols-outlined text-[18px]">search</span> Search</button>
+                    <button type="submit" class="btn btn-primary h-[46px] flex-1 sm:flex-none justify-center"><span class="material-symbols-outlined text-[18px]">search</span> Search</button>
                     {% if search_query %}
-                    <a href="{{ url_for('auth.admin_users', scope=scope, status=status_filter, role=role_filter) }}" class="btn btn-outline btn-sm flex-1 sm:flex-none justify-center">Clear</a>
+                    <a href="{{ url_for('auth.admin_users', scope=scope, status=status_filter, role=role_filter) }}" class="btn btn-outline h-[46px] flex-1 sm:flex-none justify-center">Clear</a>
                     {% endif %}
                 </div>
             </div>
