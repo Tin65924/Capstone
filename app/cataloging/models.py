@@ -414,6 +414,21 @@ def get_distinct_categories():
     )
 
 
+def get_distinct_material_types():
+    """Book types that have at least one active catalogued item.
+
+    Returns [(material_type, count), ...] ordered A-Z. Types with zero
+    active books never appear, so the catalog sidebar and landing-page
+    buttons only offer types that actually return results.
+    """
+    return db.fetch_all(
+        "SELECT material_type, COUNT(*) FROM book_catalog "
+        "WHERE catalog_status = 'active' "
+        "AND material_type IS NOT NULL AND material_type != '' "
+        'GROUP BY material_type ORDER BY material_type'
+    )
+
+
 def _filtered_where(query, field=None, year_from=None, year_to=None,
                     category=None, material_type=None, availability=None):
     """Shared WHERE builder for the public-catalog filtered search.
@@ -460,7 +475,7 @@ def _filtered_where(query, field=None, year_from=None, year_to=None,
         conditions.append('subject_classification = %s')
         args.append(category)
     if material_type:
-        if material_type == 'ebook':
+        if material_type == 'ebook' or material_type == 'E-Book':
             conditions.append('material_type = %s')
             args.append('E-Book')
         elif material_type == 'physical':
@@ -469,6 +484,11 @@ def _filtered_where(query, field=None, year_from=None, year_to=None,
             # non-ebook row regardless of category.
             conditions.append('(material_type IS NULL OR material_type != %s)')
             args.append('E-Book')
+        else:
+            # Exact book-type match (Book, Reference, Periodical, Thesis,
+            # Multimedia, ...). Unknown values match zero rows — never 500.
+            conditions.append('material_type = %s')
+            args.append(material_type)
     DAILY_BLOCKED = (
         "(EXISTS (SELECT 1 FROM circulation_records c2 WHERE c2.book_id = book_catalog.book_id "
         "AND c2.borrow_type = 'overnight' AND c2.transaction_status IN ('active', 'overdue')) "

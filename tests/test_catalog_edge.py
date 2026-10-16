@@ -309,7 +309,8 @@ class TestAvailabilityIndices:
     If fails: likely regression in route/model or mock setup drift.
     Failure indicates catalog data or listing/sort is wrong."""
         mock_db['fetch_all'].side_effect = [[_book15() + ('available', 1)],
-                                            [('Autobiography',)]]
+                                            [('Autobiography',)],
+                                            [('Book', 1)]]
         mock_db['fetch_one'].return_value = (0,)
         body = client.get('/catalog?category=Autobiography').data.decode()
         assert '1 copy available' in body
@@ -320,7 +321,8 @@ class TestAvailabilityIndices:
     If fails: likely regression in route/model or mock setup drift.
     Failure indicates catalog data or listing/sort is wrong."""
         mock_db['fetch_all'].side_effect = [[_book15() + ('borrowed', 0)],
-                                            [('Autobiography',)]]
+                                            [('Autobiography',)],
+                                            [('Book', 1)]]
         mock_db['fetch_one'].return_value = (0,)
         body = client.get('/catalog?category=Autobiography').data.decode()
         assert 'No copies available' in body

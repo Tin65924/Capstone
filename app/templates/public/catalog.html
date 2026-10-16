@@ -55,20 +55,25 @@
                     </div>
 
                     <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
-                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Type</h3>
+                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Book Type</h3>
                         <div class="space-y-1.5 text-[13px]">
                             <label class="flex items-center gap-2 cursor-pointer">
                                 <input type="radio" name="material_type" value="" {% if not material_type %}checked{% endif %} onchange="this.form.submit()" class="accent-blue-900">
                                 <span class="text-slate-700 dark:text-slate-300">Any type</span>
                             </label>
+                            {% set _types = material_types|default([]) %}
+                            {% for mt in _types %}
                             <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="material_type" value="ebook" {% if material_type == 'ebook' %}checked{% endif %} onchange="this.form.submit()" class="accent-blue-900">
-                                <span class="text-slate-700 dark:text-slate-300">E-Books</span>
+                                <input type="radio" name="material_type" value="{{ mt }}" {% if material_type == mt or (material_type == 'ebook' and mt == 'E-Book') %}checked{% endif %} onchange="this.form.submit()" class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">{{ mt }}</span>
                             </label>
+                            {% endfor %}
+                            {% if material_type == 'physical' %}
                             <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="material_type" value="physical" {% if material_type == 'physical' %}checked{% endif %} onchange="this.form.submit()" class="accent-blue-900">
+                                <input type="radio" name="material_type" value="physical" checked onchange="this.form.submit()" class="accent-blue-900">
                                 <span class="text-slate-700 dark:text-slate-300">Physical books</span>
                             </label>
+                            {% endif %}
                         </div>
                     </div>
 
@@ -152,20 +157,25 @@
                         </div>
                     </div>
                     <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
-                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Type</h3>
+                        <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Book Type</h3>
                         <div class="space-y-1.5 text-[13px]">
                             <label class="flex items-center gap-2 cursor-pointer py-1">
                                 <input type="radio" name="material_type" value="" {% if not material_type %}checked{% endif %} class="accent-blue-900">
                                 <span class="text-slate-700 dark:text-slate-300">Any type</span>
                             </label>
+                            {% set _types = material_types|default([]) %}
+                            {% for mt in _types %}
                             <label class="flex items-center gap-2 cursor-pointer py-1">
-                                <input type="radio" name="material_type" value="ebook" {% if material_type == 'ebook' %}checked{% endif %} class="accent-blue-900">
-                                <span class="text-slate-700 dark:text-slate-300">E-Books</span>
+                                <input type="radio" name="material_type" value="{{ mt }}" {% if material_type == mt or (material_type == 'ebook' and mt == 'E-Book') %}checked{% endif %} class="accent-blue-900">
+                                <span class="text-slate-700 dark:text-slate-300">{{ mt }}</span>
                             </label>
+                            {% endfor %}
+                            {% if material_type == 'physical' %}
                             <label class="flex items-center gap-2 cursor-pointer py-1">
-                                <input type="radio" name="material_type" value="physical" {% if material_type == 'physical' %}checked{% endif %} class="accent-blue-900">
+                                <input type="radio" name="material_type" value="physical" checked class="accent-blue-900">
                                 <span class="text-slate-700 dark:text-slate-300">Physical books</span>
                             </label>
+                            {% endif %}
                         </div>
                     </div>
                     <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
@@ -264,7 +274,7 @@
                             {% endif %}
                             {% if material_type %}
                             <a href="{{ url_for('cataloging.public_catalog', q=search_query, field=search_field, year_from=year_from, year_to=year_to, sort_by=sort_by, category=category) }}"
-                                class="inline-flex items-center gap-1 text-xs font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full hover:bg-primary/20 transition-colors">Type: {{ 'E-Book' if material_type == 'ebook' else 'Physical Book' if material_type == 'physical' else material_type }} <span class="material-symbols-outlined text-sm">close</span></a>
+                                class="inline-flex items-center gap-1 text-xs font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full hover:bg-primary/20 transition-colors">Book Type: {{ 'E-Book' if material_type in ('ebook', 'E-Book') else 'Physical books' if material_type == 'physical' else material_type }} <span class="material-symbols-outlined text-sm">close</span></a>
                             {% endif %}
                             {% if year_from or year_to %}
                             <a href="{{ url_for('cataloging.public_catalog', q=search_query, field=search_field, sort_by=sort_by, category=category, material_type=material_type) }}"

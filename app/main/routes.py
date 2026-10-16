@@ -122,7 +122,22 @@ def index():
         Rendered public/index.html with new arrivals.
     """
     new_arrivals = get_recent_books(5)
-    return render_template('public/index.html', new_arrivals=new_arrivals)
+    try:
+        from app.cataloging.models import get_distinct_material_types
+        rows = get_distinct_material_types() or []
+    except Exception:
+        rows = []
+    book_types = []
+    for row in rows:
+        try:
+            name = row[0]
+            count = int(row[1]) if len(row) > 1 else 0
+        except (IndexError, TypeError, ValueError):
+            continue
+        if name:
+            book_types.append((name, count))
+    return render_template('public/index.html', new_arrivals=new_arrivals,
+                           book_types=book_types)
 
 
 @main_bp.route('/health')

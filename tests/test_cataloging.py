@@ -692,7 +692,7 @@ class TestFilterCombinations:
     If fails: likely route/template regression or mock data mismatch.
     Failure indicates catalog data or listing/sort is wrong."""
         mock_db['fetch_one'].return_value = (0,)
-        mock_db['fetch_all'].side_effect = [[], []]
+        mock_db['fetch_all'].side_effect = [[], [], []]
         resp = client.get('/catalog?category=Fiction&material_type=physical')
         assert resp.status_code == 200
         page_args = mock_db['fetch_all'].call_args_list[0][0]
@@ -700,16 +700,82 @@ class TestFilterCombinations:
         assert 'E-Book' in page_args[1]
 
 
+class TestBookTypes:
+    """Dynamic book-type facets: sidebar/landing show only types with
+    active items, and each type filters the catalog to its items."""
+
+    def test_exact_type_filters_to_that_type(self, mock_db):
+        """Validates exact book-type filter builds material_type = %s [TestBookTypes / cataloging].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.models import search_books_filtered
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        search_books_filtered('', material_type='Thesis')
+        page_q, page_args = mock_db['fetch_all'].call_args[0]
+        assert 'material_type = %s' in page_q
+        assert 'Thesis' in page_args
+
+    def test_distinct_types_only_active_nonempty(self, mock_db):
+        """Validates distinct book types query scopes to active non-empty [TestBookTypes / cataloging].
+    If fails: likely model SQL changed (SELECT).
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.models import get_distinct_material_types
+        mock_db['fetch_all'].return_value = [('Book', 5)]
+        assert get_distinct_material_types() == [('Book', 5)]
+        q = mock_db['fetch_all'].call_args[0][0]
+        assert "catalog_status = 'active'" in q
+        assert 'GROUP BY material_type' in q
+
+    def test_sidebar_hides_types_without_items(self, client, mock_db):
+        """Validates sidebar hides book types without items `/catalog?q=test` (expects 200) [TestBookTypes / cataloging].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['fetch_all'].side_effect = [
+            SAMPLE_BOOKS,          # search_books_filtered books
+            [],                    # get_distinct_categories
+            [('Book', 2)],         # only Book has items
+        ]
+        body = client.get('/catalog?q=test').data.decode()
+        assert 'Book Type' in body
+        assert '>Book<' in body
+        assert '>Thesis<' not in body
+        assert '>Reference<' not in body
+
+    def test_type_button_goes_to_filtered_catalog(self, client, mock_db):
+        """Validates landing book-type button links to filtered catalog `/` (expects 200) [TestBookTypes / main].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates main is broken for this case (users see wrong page, blocked action, or bad data)."""
+        mock_db['fetch_all'].side_effect = [
+            [SAMPLE_BOOKS[0]],      # get_recent_books
+            [('Book', 2), ('Thesis', 1)],  # get_distinct_material_types
+        ]
+        body = client.get('/').data.decode()
+        assert 'Browse by Book Type' in body
+        assert 'material_type=Thesis' in body
+        assert 'material_type=Reference' not in body
+        # Clicking through shows the catalogued Thesis items.
+        mock_db['fetch_all'].side_effect = [
+            [SAMPLE_BOOKS[0]],      # search_books_filtered books
+            [],                    # get_distinct_categories
+            [('Book', 2), ('Thesis', 1)],
+        ]
+        mock_db['fetch_one'].return_value = (1,)
+        resp = client.get('/catalog?material_type=Thesis')
+        assert resp.status_code == 200
+        assert 'Book Type: Thesis' in resp.data.decode()
+
+
 class TestPublicCatalog:
     def test_public_catalog_all(self, client, mock_db):
-        # Bare /catalog is empty by default: only categories queried, no book search.
+        # Bare /catalog is empty by default: only facet queries run, no book search.
         """Validates public catalog all `/catalog` (expects 200) [TestPublicCatalog / cataloging].
     If fails: likely route/template regression or mock data mismatch.
     Failure indicates catalog data or listing/sort is wrong."""
         mock_db['fetch_all'].return_value = []
         resp = client.get('/catalog')
         assert resp.status_code == 200
-        assert mock_db['fetch_all'].call_count == 1
+        assert mock_db['fetch_all'].call_count == 2
         body = resp.get_data(as_text=True)
         assert 'Search to explore the catalog' in body
 
@@ -736,14 +802,15 @@ class TestPublicCatalog:
         mock_db['fetch_all'].side_effect = [
             SAMPLE_BOOKS,                # search_books_filtered books
             [('Fiction',), ('Reference',)],  # get_distinct_categories
+            [('Book', 2), ('E-Book', 1)],  # get_distinct_material_types
         ]
         resp = client.get('/catalog?q=harry&sort_by=title&category=Fiction&material_type=ebook&availability=available&year_from=2000&year_to=2026')
         assert resp.status_code == 200
         body = resp.get_data(as_text=True)
         assert 'Sort by relevance' in body
         assert 'Fiction' in body
-        assert 'E-Books' in body
-        assert 'Physical books' in body
+        assert 'Book Type' in body
+        assert 'E-Book' in body
         assert 'Active filters' in body
 
     def test_public_catalog_filter_params_passed(self, client, mock_db):
@@ -753,6 +820,7 @@ class TestPublicCatalog:
         mock_db['fetch_all'].side_effect = [
             [],                            # search_books_filtered books
             [],                            # get_distinct_categories
+            [],                            # get_distinct_material_types
         ]
         resp = client.get('/catalog?category=Fiction&material_type=physical&availability=borrowed&sort_by=year_desc&year_from=2010&year_to=2020')
         assert resp.status_code == 200
@@ -765,12 +833,13 @@ class TestPublicCatalog:
         mock_db['fetch_all'].side_effect = [
             SAMPLE_BOOKS,                  # search_books_filtered books
             [],                            # get_distinct_categories
+            [('Book', 2)],                 # get_distinct_material_types
         ]
         resp = client.get('/catalog?q=test')
         assert resp.status_code == 200
-        assert mock_db['fetch_all'].call_count == 2
+        assert mock_db['fetch_all'].call_count == 3
         body = resp.get_data(as_text=True)
-        for label in ['Sort', 'Category', 'Type', 'Year']:
+        for label in ['Sort', 'Category', 'Book Type', 'Year']:
             assert label in body, f'missing sidebar section: {label}'
         assert 'Availability' not in body
 
@@ -788,6 +857,7 @@ class TestPublicCatalog:
         mock_db['fetch_all'].side_effect = [
             many_books[:50],             # search_books_filtered page 1
             [],                          # get_distinct_categories
+            [],                          # get_distinct_material_types
         ]
         # Empty catalog by default — must provide a search/filter to paginate
         resp = client.get('/catalog?q=Book')
@@ -796,7 +866,7 @@ class TestPublicCatalog:
         assert '>1 - 50</span> of <span class="font-medium text-slate-900 dark:text-slate-100">120</span>' in body
         assert 'Next' in body
 
-        mock_db['fetch_all'].side_effect = [many_books[100:], []]
+        mock_db['fetch_all'].side_effect = [many_books[100:], [], []]
         mock_db['fetch_one'].return_value = (120,)
         resp2 = client.get('/catalog?q=Book&page=3')
         assert resp2.status_code == 200
@@ -808,10 +878,10 @@ class TestPublicCatalog:
         """Validates public catalog empty by default `/catalog` (expects 200) [TestPublicCatalog / cataloging].
     If fails: likely route/template regression or mock data mismatch.
     Failure indicates catalog data or listing/sort is wrong."""
-        mock_db['fetch_all'].return_value = []  # get_distinct_categories -> []
+        mock_db['fetch_all'].return_value = []  # facet queries -> []
         resp = client.get('/catalog')
         assert resp.status_code == 200
-        assert mock_db['fetch_all'].call_count == 1
+        assert mock_db['fetch_all'].call_count == 2
         body = resp.get_data(as_text=True)
         assert 'Search to explore the catalog' in body or 'Start searching' in body
         # Should not show pagination or footer counts when empty
@@ -825,10 +895,11 @@ class TestPublicCatalog:
         mock_db['fetch_all'].side_effect = [
             SAMPLE_BOOKS,  # search_books_filtered books
             [],            # get_distinct_categories
+            [],            # get_distinct_material_types
         ]
         resp = client.get('/catalog?sort_by=title')
         assert resp.status_code == 200
-        assert mock_db['fetch_all'].call_count == 2
+        assert mock_db['fetch_all'].call_count == 3
         body = resp.get_data(as_text=True)
         assert SAMPLE_BOOKS[0][1] in body
         assert 'Sort: Title A-Z' in body
@@ -840,6 +911,7 @@ class TestPublicCatalog:
         mock_db['fetch_all'].side_effect = [
             SAMPLE_BOOKS,  # search_books_filtered books
             [],            # get_distinct_categories
+            [],            # get_distinct_material_types
         ]
         resp = client.get('/catalog?availability=available')
         assert resp.status_code == 200
@@ -869,7 +941,7 @@ class TestPublicCatalog:
     Failure indicates catalog data or listing/sort is wrong."""
         from datetime import datetime
         current = datetime.now().year
-        mock_db['fetch_all'].side_effect = [[], []]
+        mock_db['fetch_all'].side_effect = [[], [], []]
         resp = client.get(f'/catalog?year_preset={current}')
         assert resp.status_code == 200
         params = mock_db['fetch_all'].call_args_list[0][0][1]
@@ -881,7 +953,7 @@ class TestPublicCatalog:
     Failure indicates catalog data or listing/sort is wrong."""
         from datetime import datetime
         current = datetime.now().year
-        mock_db['fetch_all'].side_effect = [[], []]
+        mock_db['fetch_all'].side_effect = [[], [], []]
         resp = client.get('/catalog?year_preset=since_last_year')
         assert resp.status_code == 200
         params = mock_db['fetch_all'].call_args_list[0][0][1]
@@ -891,7 +963,7 @@ class TestPublicCatalog:
         """Validates custom year range `/catalog?year_preset=custom&year_from=2000&year_to=2010` (expects 200) [TestPublicCatalog / cataloging].
     If fails: likely route/template regression or mock data mismatch.
     Failure indicates catalog data or listing/sort is wrong."""
-        mock_db['fetch_all'].side_effect = [[], []]
+        mock_db['fetch_all'].side_effect = [[], [], []]
         resp = client.get(
             '/catalog?year_preset=custom&year_from=2000&year_to=2010')
         assert resp.status_code == 200
@@ -967,6 +1039,7 @@ class TestPublicCatalog:
         mock_db['fetch_all'].side_effect = [
             SAMPLE_BOOKS,  # search_books_filtered books
             [],            # get_distinct_categories
+            [],            # get_distinct_material_types
         ]
         resp = client.get('/catalog?q=harry')
         assert resp.status_code == 200

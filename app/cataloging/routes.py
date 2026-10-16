@@ -1173,14 +1173,30 @@ def public_catalog():
         year_from = ''
         year_to = ''
 
-    from app.cataloging.models import search_books_filtered, get_distinct_categories
+    from app.cataloging.models import search_books_filtered, get_distinct_categories, get_distinct_material_types
+
+    def _material_types():
+        try:
+            rows = get_distinct_material_types() or []
+        except Exception:
+            return []
+        types = []
+        for row in rows:
+            try:
+                name = row[0]
+            except (IndexError, TypeError):
+                continue
+            if name and name not in types:
+                types.append(name)
+        return types
 
     # Empty by default: only query DB when user has provided a search term or filter.
     # This keeps /catalog empty on first visit and clears when the search bar is emptied.
     has_search = bool(query or category or material_type or availability or year_from or year_to or sort_by)
 
     if not has_search:
-        categories = [row[0] for row in get_distinct_categories()]
+        categories = [row[0] for row in (get_distinct_categories() or []) if row and row[0]]
+        material_types = _material_types()
         books = []
         per_page = 50
         total = 0
@@ -1196,7 +1212,8 @@ def public_catalog():
             material_type=material_type or None, availability=availability or None,
             page=page, per_page=per_page
         )
-        categories = [row[0] for row in get_distinct_categories()]
+        categories = [row[0] for row in (get_distinct_categories() or []) if row and row[0]]
+        material_types = _material_types()
         total_pages = max(1, (total + per_page - 1) // per_page)
         if page > total_pages:
             # Stale/bookmarked page past the end — clamp and re-fetch once.
@@ -1218,6 +1235,7 @@ def public_catalog():
                            material_type=material_type, availability=availability,
                            current_year=current_year,
                            categories=categories,
+                           material_types=material_types,
                            has_search=has_search, view=view,
                            page=page, total_pages=total_pages, total=total, per_page=per_page)
 

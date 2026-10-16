@@ -69,6 +69,27 @@
         <script src="{{ url_for('static', filename='js/autosuggest.js') }}"></script>
     </div>
 </section>
+{% set _book_types = book_types|default([]) %}
+{% if _book_types %}
+<section class="w-full max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8">
+    <div class="flex items-center justify-between gap-2 pb-3 sm:pb-4">
+        <h3 class="text-xl sm:text-2xl font-bold text-[#0f172a] dark:text-white">Browse by Book Type</h3>
+        <a class="text-primary text-xs sm:text-sm font-bold hover:underline flex items-center gap-1 self-start sm:self-auto" href="{{ url_for('cataloging.public_catalog') }}">
+            View full catalog <span class="material-symbols-outlined text-sm">arrow_forward</span>
+        </a>
+    </div>
+    <div class="flex flex-wrap gap-2 sm:gap-3">
+        {% for bt in _book_types %}
+        <a href="{{ url_for('cataloging.public_catalog', material_type=bt[0]) }}"
+            class="inline-flex items-center gap-2 rounded-full bg-white dark:bg-[#151c2b] border border-[#e7ebf3] dark:border-gray-800 px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-[#0f172a] dark:text-white shadow-sm hover:border-primary/40 hover:text-primary transition-colors">
+            <span class="material-symbols-outlined text-primary text-[18px] sm:text-[20px]">{% if bt[0] == 'E-Book' %}tablet_mac{% elif bt[0] == 'Reference' %}menu_book{% elif bt[0] == 'Periodical' %}newspaper{% elif bt[0] == 'Thesis' %}school{% elif bt[0] == 'Multimedia' %}play_circle{% else %}book{% endif %}</span>
+            {{ bt[0] }}
+            {% if bt|length > 1 %}<span class="text-gray-400 dark:text-gray-500 font-semibold">({{ bt[1] }})</span>{% endif %}
+        </a>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
 <main class="flex-grow layout-container w-full max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
         <div class="lg:col-span-12 flex flex-col gap-4 sm:gap-6">
