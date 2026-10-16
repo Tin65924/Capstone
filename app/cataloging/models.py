@@ -70,6 +70,38 @@ def _warn_schema_mismatch(what):
         pass
 
 
+# Multi-category schema gate: book_categories/categories may not exist
+# when a deploy serving new code hits a not-yet-migrated database
+# (startup migration still pending or failed). Probing every call would
+# waste a round trip, so the outcome is cached briefly — migrant
+# databases converge within the TTL without a restart.
+_MULTI_CAT_TTL = 60
+_multi_cat_state = {'ok': None, 'at': 0.0}
+
+
+def multi_cat_available():
+    """True when the multi-category tables exist (cached 60s).
+
+    A cheap SELECT 1 against book_categories; a missing table/column
+    error means unmigrated (False). Any other outcome — rows, empty,
+    or a non-schema error — fails open to True so real problems still
+    surface from the actual query instead of being masked here.
+    """
+    import time
+    now = time.monotonic()
+    state = _multi_cat_state
+    if state['ok'] is not None and now - state['at'] < _MULTI_CAT_TTL:
+        return state['ok']
+    try:
+        db.fetch_one('SELECT 1 FROM book_categories LIMIT 1')
+        ok = True
+    except Exception as e:
+        ok = not _is_missing_relation(e)
+    state['ok'] = ok
+    state['at'] = now
+    return ok
+
+
 def create_book(title, author, edition, publisher, year_published, subject_classification,
                 call_number, isbn, material_type, description, category_id=None):
     """Insert a new book title into the catalog as active and return its id.
@@ -303,10 +335,12 @@ def get_all_books():
 
     Full list (with per-book accession numbers) for exports. Page views
     must use get_all_books_paginated() instead so 4.5k+ rows are never
-    materialized per request.
+    materialized per request. The extra-categories column is omitted on
+    unmigrated databases.
     """
+    extra = f', {EXTRA_CATEGORIES_SUBQUERY} AS extra_categories' if multi_cat_available() else ''
     return db.fetch_all(
-        f"SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {EXTRA_CATEGORIES_SUBQUERY} AS extra_categories, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog WHERE catalog_status = 'active' ORDER BY {DISTINCT_ORDER}")
+        f"SELECT DISTINCT ON ({DISTINCT_ORDER}) *,{extra} {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog WHERE catalog_status = 'active' ORDER BY {DISTINCT_ORDER}")
 
 
 def _count_books(where, args):
@@ -494,17 +528,27 @@ def get_distinct_categories():
 
     Unions the primary free-text subjects with secondary vocabulary
     names actually linked to a book, so the sidebar never misses a
-    category that only exists as an extra link.
+    category that only exists as an extra link. Falls back to the
+    legacy text-only list when the vocabulary tables are missing
+    (unmigrated database).
 
     Returns:
         List of 1-tuples (category,) ordered alphabetically.
     """
-    return db.fetch_all(
-        'SELECT subject_classification FROM book_catalog WHERE subject_classification IS NOT NULL AND subject_classification != \'\' '
-        'UNION SELECT c.name FROM categories c WHERE EXISTS '
-        '(SELECT 1 FROM book_categories bc WHERE bc.category_id = c.category_id) '
-        'ORDER BY 1'
-    )
+    try:
+        return db.fetch_all(
+            'SELECT subject_classification FROM book_catalog WHERE subject_classification IS NOT NULL AND subject_classification != \'\' '
+            'UNION SELECT c.name FROM categories c WHERE EXISTS '
+            '(SELECT 1 FROM book_categories bc WHERE bc.category_id = c.category_id) '
+            'ORDER BY 1'
+        )
+    except Exception as e:
+        if not _is_missing_relation(e):
+            raise
+        _warn_schema_mismatch('categories')
+        return db.fetch_all(
+            'SELECT DISTINCT subject_classification FROM book_catalog WHERE subject_classification IS NOT NULL AND subject_classification != \'\' ORDER BY subject_classification'
+        )
 
 
 def get_categories():
@@ -707,15 +751,19 @@ def _filtered_where(query, field=None, year_from=None, year_to=None,
         else:
             conditions.append('year_published <= %s')
     if category:
-        # Parens are load-bearing (see material_type above): the
-        # secondary-categories EXISTS is OR-ed with the primary match.
-        conditions.append(
-            '(subject_classification = %s OR EXISTS '
-            '(SELECT 1 FROM book_categories bc JOIN categories c '
-            'ON c.category_id = bc.category_id '
-            'WHERE bc.book_id = book_catalog.book_id AND c.name = %s))')
-        args.append(category)
-        args.append(category)
+        if multi_cat_available():
+            # Parens are load-bearing (see material_type above): the
+            # secondary-categories EXISTS is OR-ed with the primary match.
+            conditions.append(
+                '(subject_classification = %s OR EXISTS '
+                '(SELECT 1 FROM book_categories bc JOIN categories c '
+                'ON c.category_id = bc.category_id '
+                'WHERE bc.book_id = book_catalog.book_id AND c.name = %s))')
+            args.append(category)
+            args.append(category)
+        else:
+            conditions.append('subject_classification = %s')
+            args.append(category)
     if material_type:
         if material_type == 'ebook' or material_type == 'E-Book':
             conditions.append('material_type = %s')
@@ -1108,10 +1156,13 @@ def get_books_by_status(status):
         status: Required catalog_status value ('active'/'archived').
 
     Returns:
-        List of (book_catalog.* + accession_numbers) row tuples.
+        List of (book_catalog.* + extra_categories + accession_numbers)
+        row tuples. The extra-categories column is omitted on unmigrated
+        databases.
     """
+    extra = f', {EXTRA_CATEGORIES_SUBQUERY} AS extra_categories' if multi_cat_available() else ''
     return db.fetch_all(
-        f'SELECT *, {EXTRA_CATEGORIES_SUBQUERY} AS extra_categories, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog WHERE catalog_status = %s ORDER BY title',
+        f'SELECT *,{extra} {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog WHERE catalog_status = %s ORDER BY title',
         (status,)
     )
 

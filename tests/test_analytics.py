@@ -2549,3 +2549,103 @@ class TestCanonicalCategories:
         query = self._query(mock_db)
         assert 'LEFT JOIN categories ct' in query
         assert 'ct.name' in query
+
+
+class TestSchemaGate:
+    """Unmigrated databases degrade to legacy shapes instead of 500ing."""
+
+    @staticmethod
+    def _reset_gate():
+        from app.cataloging import models as _cm
+        _cm._multi_cat_state['ok'] = None
+        _cm._multi_cat_state['at'] = 0.0
+
+    @staticmethod
+    def _missing_table():
+        err = Exception('relation "book_categories" does not exist')
+        err.pgcode = '42P01'
+        return err
+
+    def test_gate_false_on_missing_table(self, mock_db):
+        """Validates gate false on missing table [TestSchemaGate / analytics].
+    If fails: likely gate logic changed.
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        from app.cataloging.models import multi_cat_available
+        self._reset_gate()
+        try:
+            mock_db['fetch_one'].side_effect = self._missing_table()
+            assert multi_cat_available() is False
+            # Cached: no second probe.
+            assert multi_cat_available() is False
+            assert mock_db['fetch_one'].call_count == 1
+        finally:
+            self._reset_gate()
+
+    def test_gate_true_on_other_errors(self, mock_db):
+        """Validates gate true on other errors [TestSchemaGate / analytics].
+    If fails: likely gate logic changed (masks real bugs).
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        from app.cataloging.models import multi_cat_available
+        self._reset_gate()
+        try:
+            mock_db['fetch_one'].side_effect = RuntimeError('boom')
+            assert multi_cat_available() is True
+        finally:
+            self._reset_gate()
+
+    def test_analytics_falls_back_without_tables(self, mock_db):
+        """Validates analytics falls back without tables [TestSchemaGate / analytics].
+    If fails: likely gate wiring changed.
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        from unittest.mock import patch
+        from app.analytics.models import (
+            collection_by_category, top_borrowed_categories,
+            category_borrowings_by_program,
+        )
+        mock_db['fetch_all'].return_value = []
+        with patch('app.cataloging.models.multi_cat_available', return_value=False):
+            collection_by_category()
+            query = mock_db['fetch_all'].call_args[0][0]
+            assert 'categories ct' not in query
+            assert 'subject_classification' in query
+            top_borrowed_categories()
+            query = mock_db['fetch_all'].call_args[0][0]
+            assert 'categories ct' not in query
+            category_borrowings_by_program('Science')
+            query = mock_db['fetch_all'].call_args[0][0]
+            assert 'categories ct' not in query
+
+    def test_catalog_filter_falls_back_without_tables(self, mock_db):
+        """Validates catalog filter falls back without tables [TestSchemaGate / cataloging].
+    If fails: likely gate wiring changed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        from unittest.mock import patch
+        from app.cataloging.models import search_books_filtered
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        with patch('app.cataloging.models.multi_cat_available', return_value=False):
+            search_books_filtered('', category='Fiction')
+            query, params = mock_db['fetch_all'].call_args[0]
+            assert 'book_categories' not in query
+            assert 'subject_classification = %s' in query
+
+    def test_distinct_falls_back_without_tables(self, mock_db):
+        """Validates distinct falls back without tables [TestSchemaGate / cataloging].
+    If fails: likely fallback removed or error misclassified.
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.models import get_distinct_categories
+        mock_db['fetch_all'].side_effect = [
+            self._missing_table(), [('Fiction',)],
+        ]
+        assert get_distinct_categories() == [('Fiction',)]
+
+    def test_export_omits_extra_column_without_tables(self, mock_db):
+        """Validates export omits extra column without tables [TestSchemaGate / cataloging].
+    If fails: likely gate wiring changed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        from unittest.mock import patch
+        from app.cataloging.models import get_all_books
+        mock_db['fetch_all'].return_value = []
+        with patch('app.cataloging.models.multi_cat_available', return_value=False):
+            get_all_books()
+            assert 'extra_categories' not in mock_db['fetch_all'].call_args[0][0]
