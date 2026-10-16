@@ -8,8 +8,6 @@
                 <span class="text-sm">Catalog</span>
             </a>
             <hr class="border-gray-200 dark:border-gray-700 my-1">
-            {% set notif_trigger = 'row' %}
-            {% include 'components/notif_panel.html' %}
             <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'main.librarian_dashboard' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('main.librarian_dashboard') }}">
                 <span class="material-symbols-outlined">overview</span>
                 <span class="text-sm">Overview</span>

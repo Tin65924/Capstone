@@ -15,7 +15,6 @@
                 {% endif %}
             </nav>
             {% if current_user.is_authenticated %}
-            {% set notif_trigger = 'icon' %}
             {% include 'components/notif_panel.html' %}
             {% endif %}
             <button id="mobile-menu-btn" type="button" aria-label="Toggle menu" aria-expanded="false" class="md:hidden inline-flex items-center justify-center p-2 rounded-lg text-[#0f172a] dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
@@ -37,7 +36,7 @@
                 <span class="material-symbols-outlined text-[20px]">person</span> Profile
             </a>
             <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[#0f172a] dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" href="{{ url_for('main.user_notifications') }}">
-                <span class="relative material-symbols-outlined text-[20px]">notifications<span data-unread-count data-notif-badge class="absolute -top-1.5 -right-1.5 min-w-[1rem] h-4 px-0.5 rounded-full bg-red-600 text-white text-[10px] font-bold leading-4 text-center {% if not notif_unread %}hidden{% endif %}">{{ notif_unread or 0 }}</span></span> Notifications
+                <span class="material-symbols-outlined text-[20px]">notifications</span> Notifications
             </a>
             {% else %}
             <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {% if request.endpoint == 'auth.login' %}bg-primary text-white{% else %}text-[#0f172a] dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" href="{{ url_for('auth.login') }}">

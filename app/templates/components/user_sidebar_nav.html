@@ -20,8 +20,10 @@
         <span class="material-symbols-outlined">history</span>
         <span class="text-sm">History</span>
     </a>
-    {% set notif_trigger = 'row' %}
-    {% include 'components/notif_panel.html' %}
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'main.user_notifications' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('main.user_notifications') }}">
+        <span class="material-symbols-outlined">notifications</span>
+        <span class="text-sm">Notifications</span>
+    </a>
     {% if current_user.role == 'Admin' %}
     <hr class="border-gray-200 dark:border-gray-700 my-1">
     <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'main.admin_dashboard' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('main.admin_dashboard') }}">

@@ -321,26 +321,36 @@ class TestNotifPanel:
         assert 'setInterval(check, 15000)' not in body
 
     def test_member_panel_wired(self, student_client, mock_db):
-        """Validates member panel wired `/user/profile` as student (expects 200) [TestNotifPanel / main notifications].
+        """Validates member panel wired `/` as student (expects 200) [TestNotifPanel / main notifications].
     If fails: likely template text/context changed or mock fetch_* shape mismatched.
     Failure indicates notifications are missing or misrouted."""
-        mock_db['fetch_one'].return_value = (1, 'student@mcst.edu.ph', 'Student', 'Test Student')
-        body = student_client.get('/user/profile').data.decode()
+        mock_db['fetch_all'].return_value = []
+        body = student_client.get('/').data.decode()
         assert 'data-notif-root' in body
         assert 'data-feed-url="/api/notifications"' in body
         assert 'data-view-all="/user/notifications"' in body
         assert 'Mark all as read' in body
+        # Exactly one badge element lives on the home bell (panel JS
+        # references the attribute twice more in code).
+        assert body.count('data-notif-badge class=') == 1
 
-    def test_staff_panel_wired(self, librarian_client, mock_db):
-        """Validates staff panel wired `/librarian` as librarian (expects 200) [TestNotifPanel / main notifications].
+    def test_profile_sidebar_is_plain_link(self, student_client, mock_db):
+        """Validates profile sidebar is plain link `/user/profile` as student (expects 200) [TestNotifPanel / main notifications].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates notifications are missing or misrouted."""
+        mock_db['fetch_one'].return_value = (1, 'student@mcst.edu.ph', 'Student', 'Test Student')
+        body = student_client.get('/user/profile').data.decode()
+        assert 'data-notif-root' not in body
+        assert 'href="/user/notifications"' in body
+
+    def test_staff_dashboards_have_no_bell(self, librarian_client, admin_client, mock_db):
+        """Validates staff dashboards have no bell `/librarian` as librarian (expects 200) [TestNotifPanel / main notifications].
     If fails: likely template text/context changed or mock fetch_* shape mismatched.
     Failure indicates notifications are missing or misrouted."""
         mock_db['fetch_one'].return_value = (0,)
         mock_db['fetch_all'].return_value = []
-        body = librarian_client.get('/librarian').data.decode()
-        assert 'data-notif-root' in body
-        assert 'data-feed-url="/api/notifications"' in body
-        assert 'data-view-all="/librarian"' in body
+        assert 'data-notif-root' not in librarian_client.get('/librarian').data.decode()
+        assert 'data-notif-root' not in admin_client.get('/admin').data.decode()
 
     def test_feed_member_payload(self, student_client, mock_db):
         """Validates feed member payload `/api/notifications` as student (expects 200) [TestNotifPanel / main notifications].
@@ -364,6 +374,30 @@ class TestNotifPanel:
         assert item['type'] == 'request_update'
         assert item['date'] == '2026-08-10 05:00 PM (PHT)'
         assert item['read'] is False
+        assert item['url'] == '/user/request-book'
+
+    def test_feed_member_urls_per_type(self, student_client, mock_db):
+        """Validates feed member urls per type `/api/notifications` as student (expects 200) [TestNotifPanel / main notifications].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates notifications are missing or misrouted."""
+        mock_db['fetch_one'].side_effect = [
+            (7, 1, 'S1', 'BSIS', '0917', 'active', None, None),
+            (0,),
+        ]
+        mock_db['fetch_all'].return_value = [
+            (1, 'm1', 'borrow', '1', '2026-08-10 09:00:00', False),
+            (2, 'm2', 'fine', '2', '2026-08-10 09:00:00', False),
+            (3, 'm3', 'overdue_reminder', '3', '2026-08-10 09:00:00', False),
+            (4, 'm4', 'hold_ready', '4', '2026-08-10 09:00:00', False),
+            (5, 'm5', 'status_update', '5', '2026-08-10 09:00:00', False),
+        ]
+        data = student_client.get('/api/notifications').get_json()
+        urls = {n['type']: n['url'] for n in data['notifications']}
+        assert urls['borrow'] == '/user/history?tab=borrowing'
+        assert urls['fine'] == '/user/history?tab=fines'
+        assert urls['overdue_reminder'] == '/user/profile'
+        assert urls['hold_ready'] == '/user/history?tab=reservations'
+        assert urls['status_update'] == '/user/notifications'
 
     def test_feed_member_limit_clamped(self, student_client, mock_db):
         """Validates feed member limit clamped `/api/notifications` as student (expects 200) [TestNotifPanel / main notifications].
@@ -397,6 +431,10 @@ class TestNotifPanel:
         ids = [n['id'] for n in data['notifications']]
         assert 'req-5' in ids and 'res-5' in ids and 'circ-5' in ids
         assert all(n.get('dismissible') is True for n in data['notifications'])
+        urls = {n['id']: n['url'] for n in data['notifications']}
+        assert urls['req-5'] == '/librarian/requests'
+        assert urls['res-5'] == '/librarian/reservations'
+        assert urls['circ-5'] == '/librarian/circulation'
 
     def test_feed_anonymous_401(self, client):
         """Validates feed anonymous 401 `/api/notifications` (expects 401) [TestNotifPanel / main notifications].

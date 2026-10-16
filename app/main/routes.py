@@ -723,6 +723,12 @@ def notifications_feed():
         items = _staff_feed_items()[:limit]
         for item in items:
             item['dismissible'] = True
+            if item['id'].startswith('req-'):
+                item['url'] = url_for('requests.list_requests')
+            elif item['id'].startswith('res-'):
+                item['url'] = url_for('circulation.reservations_page')
+            else:
+                item['url'] = url_for('circulation.circulation_page')
         return jsonify({'unread_count': len(items), 'notifications': items})
     from app.circulation.models import (
         get_borrower_by_user, get_notifications_by_borrower,
@@ -745,10 +751,32 @@ def notifications_feed():
             {'id': n[0], 'message': n[1],
              'type': n[2] if len(n) > 2 else '',
              'date': _notif_date_pht(n[4]) if len(n) > 4 else '',
-             'read': bool(n[5]) if len(n) > 5 else False}
+             'read': bool(n[5]) if len(n) > 5 else False,
+             'url': _member_notif_url(n[2] if len(n) > 2 else '')}
             for n in all_notes if n and len(n) > 1
         ],
     })
+
+
+def _member_notif_url(notif_type):
+    """Deep link for one member notification type.
+
+    Clicking a bell-panel card lands on the page holding that item:
+    requests on the request page, loans/fines/reservations on their
+    history tabs, due items on the profile loan list.
+    """
+    kind = (notif_type or '')
+    if kind == 'request_update':
+        return url_for('requests.user_request_book')
+    if kind in ('reservation', 'hold_ready'):
+        return url_for('main.user_history', tab='reservations')
+    if kind in ('borrow', 'return'):
+        return url_for('main.user_history', tab='borrowing')
+    if kind == 'fine':
+        return url_for('main.user_history', tab='fines')
+    if kind in ('overdue_reminder', 'due_soon'):
+        return url_for('main.user_profile')
+    return url_for('main.user_notifications')
 
 
 @main_bp.route('/api/notifications/live')
