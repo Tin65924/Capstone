@@ -1998,6 +1998,9 @@ class TestFormPersistence:
         assert body.count('data-isbn-input') == 3
         assert body.count('data-isbn-hint') == 3
         assert 'validateIsbnInput' in body
+        # E-Book Link box hides unless E-Book is selected.
+        assert body.count('name="ebook_url"') == 3
+        assert "lcell.style.display = linkNeed ? '' : 'none'" in body
         # ISBN info buttons + explainer modal (one per book modal).
         assert body.count("openModal('isbnInfoModal')") == 2
         assert 'id="isbnInfoModal"' in body

@@ -1112,6 +1112,11 @@
                     }
                     llabel.textContent = linkNeed ? lbase + ' *' : lbase;
                 }
+                // The link box is noise for non-ebooks: hide the whole
+                // field cell unless E-Book is selected. Values are kept,
+                // so switching back restores them.
+                var lcell = linkInput.parentElement;
+                if (lcell) lcell.style.display = linkNeed ? '' : 'none';
             }
         }
         function isbn10Ok(code) {
