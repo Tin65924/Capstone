@@ -2112,3 +2112,5 @@ class TestFormPersistence:
         assert body.count('data-isbn-input') == 3
         assert body.count('data-isbn-hint') == 3
         assert 'validateIsbnInput' in body
+        # Accession duplicate note is slim small text like the ISBN hint.
+        assert body.count('data-exists-accession-msg class="hidden mt-1 text-[11px] font-medium text-red-700 dark:text-red-400"') == 2
