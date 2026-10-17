@@ -160,6 +160,15 @@
                     {{ book[10] or 'No description available.' }}
                 </p>
             </div>
+            {# Detail fields adapt to the material type: a periodical shows
+               ISSN, an e-book/thesis/periodical hides edition, etc. #}
+            {% set mtype = book[9] or 'Book' %}
+            {% set is_ebook = mtype == 'E-Book' %}
+            {% set is_periodical = mtype == 'Periodical' %}
+            {% set show_edition = mtype in ('Book', 'Reference') %}
+            {% set show_publisher = mtype in ('Book', 'Reference', 'Periodical') %}
+            {% set show_identifier = mtype in ('Book', 'Reference', 'Periodical') %}
+            {% set show_loc = mtype in ('Book', 'Reference') %}
             <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6">
                 {% if book[5] %}
                 <div>
@@ -167,18 +176,24 @@
                     <p class="text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[5] }}</p>
                 </div>
                 {% endif %}
+                {% if show_edition %}
                 <div>
                     <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Edition</h4>
                     <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[3] or '—' }}</p>
                 </div>
+                {% endif %}
+                {% if show_publisher %}
                 <div>
                     <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Publisher</h4>
                     <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[4] or '—' }}</p>
                 </div>
+                {% endif %}
+                {% if show_identifier %}
                 <div>
-                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">ISBN</h4>
+                    <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{{ 'ISSN' if is_periodical else 'ISBN' }}</h4>
                     <p class="text-sm font-semibold text-slate-900 dark:text-slate-100 break-all">{{ book[8] or '—' }}</p>
                 </div>
+                {% endif %}
                 <div>
                     <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Material Type</h4>
                     <p class="text-sm font-semibold text-slate-900 dark:text-slate-100 break-words">{{ book[9] or 'Book' }}</p>
@@ -189,10 +204,12 @@
                         {% if book[6] %}<a class="text-primary hover:underline" href="{{ url_for('cataloging.public_catalog', category=book[6]) }}">{{ book[6] }}</a>{% endif %}{% for _cid, _cname in extra_categories|default([]) %}{% if book[6] or not loop.first %}, {% endif %}<a class="text-primary hover:underline" href="{{ url_for('cataloging.public_catalog', category=_cname) }}">{{ _cname }}</a>{% endfor %}{% if not book[6] and not extra_categories %}—{% endif %}
                     </p>
                 </div>
+                {% if show_loc %}
                 <div>
                     <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">LOC Classification</h4>
                     <p class="text-sm font-semibold text-slate-900 dark:text-slate-100 break-all">{{ book[7] or '—' }}</p>
                 </div>
+                {% endif %}
             </div>
             {% if ebook_url %}
             <div class="mt-8">
@@ -207,6 +224,11 @@
                 <a href="{{ ebook_url }}" target="_blank" rel="noopener"
                     class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-colors">Read Online <span class="material-symbols-outlined text-[18px]">open_in_new</span></a>
                 {% endif %}
+            </div>
+            {% elif is_ebook %}
+            <div class="mt-8">
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Online Access</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">No online access link has been provided for this e-book yet.</p>
             </div>
             {% endif %}
         </div>

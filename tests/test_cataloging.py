@@ -2265,3 +2265,60 @@ class TestBookSelectShape:
         assert get_book_by_id(1) == (1,)
         fallback = mock_db['fetch_one'].call_args_list[1][0][0]
         assert fallback == 'SELECT * FROM book_catalog WHERE book_id = %s'
+
+
+class TestMaterialTypeFields:
+    """Book detail fields adapt to the material type."""
+
+    @staticmethod
+    def _book(mtype, identifier=None, ebook_url=None):
+        return (1, 'Title', 'Author', '1st', 'Pub', 2024, 'Cat', 'QA1',
+                identifier, mtype, 'D', 'active', '2024-01-01', None, None,
+                None, ebook_url)
+
+    def test_periodical_shows_issn_not_isbn(self, client, mock_db):
+        """Validates periodical detail labels the identifier ISSN [TestMaterialTypeFields / cataloging].
+    If fails: likely per-type field logic removed.
+    Failure indicates /book shows the wrong label for a periodical."""
+        mock_db['fetch_one'].return_value = self._book('Periodical', '1234-567X')
+        mock_db['fetch_all'].return_value = []
+        body = client.get('/book/1').data.decode()
+        assert 'ISSN</h4>' in body
+        assert 'ISBN</h4>' not in body
+        assert 'Edition</h4>' not in body
+        assert 'LOC Classification</h4>' not in body
+        assert 'Publisher</h4>' in body
+
+    def test_thesis_hides_inapplicable_fields(self, client, mock_db):
+        """Validates thesis detail hides edition/publisher/identifier/LOC [TestMaterialTypeFields / cataloging].
+    If fails: likely per-type field logic removed.
+    Failure indicates /book shows inapplicable fields for a thesis."""
+        mock_db['fetch_one'].return_value = self._book('Thesis')
+        mock_db['fetch_all'].return_value = []
+        body = client.get('/book/1').data.decode()
+        assert 'Edition</h4>' not in body
+        assert 'Publisher</h4>' not in body
+        assert 'ISBN</h4>' not in body
+        assert 'LOC Classification</h4>' not in body
+
+    def test_ebook_without_link_shows_note(self, client, mock_db):
+        """Validates e-book detail always shows an Online Access note [TestMaterialTypeFields / cataloging].
+    If fails: likely e-book Online Access branch removed.
+    Failure indicates /book hides online access for a link-less e-book."""
+        mock_db['fetch_one'].return_value = self._book('E-Book')
+        mock_db['fetch_all'].return_value = []
+        body = client.get('/book/1').data.decode()
+        assert 'Online Access' in body
+        assert 'No online access link' in body
+        assert 'Edition</h4>' not in body
+
+    def test_book_shows_full_field_set(self, client, mock_db):
+        """Validates a plain book still shows every detail field [TestMaterialTypeFields / cataloging].
+    If fails: likely per-type logic over-hid book fields.
+    Failure indicates /book hides fields for a normal book."""
+        mock_db['fetch_one'].return_value = self._book('Book', '9780306406157')
+        mock_db['fetch_all'].return_value = []
+        body = client.get('/book/1').data.decode()
+        for label in ('Edition</h4>', 'Publisher</h4>', 'ISBN</h4>',
+                      'LOC Classification</h4>'):
+            assert label in body
