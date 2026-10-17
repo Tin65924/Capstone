@@ -273,7 +273,7 @@
                         <option value="accession" {% if search_field == 'accession' %}selected{% endif %}>Accession No.</option>
                     </select>
                     <button type="button" id="field-select-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="field-select-dropdown"
-                        class="w-full flex items-center justify-between gap-2 bg-white border border-[#e2e8f0] px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg text-sm font-medium text-slate-700 hover:border-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
+                        class="w-full flex items-center justify-between gap-2 bg-white border border-[#e2e8f0] h-12 px-3 sm:px-4 rounded-lg text-sm font-medium text-slate-700 hover:border-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all">
                         <span id="field-select-label" class="min-w-0 flex-1 truncate text-left">{% if search_field == 'title' %}Title{% elif search_field == 'author' %}Author{% elif search_field == 'isbn' %}ISBN{% elif search_field == 'accession' %}Accession No.{% else %}All Fields{% endif %}</span>
                         <span class="material-symbols-outlined text-slate-400 text-[20px] shrink-0 transition-transform duration-200" id="field-select-arrow">expand_more</span>
                     </button>
@@ -286,13 +286,23 @@
                         <li role="option" data-value="accession" tabindex="0" aria-selected="{% if search_field == 'accession' %}true{% else %}false{% endif %}" class="field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if search_field == 'accession' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>Accession No.</span>{% if search_field == 'accession' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
                     </ul>
                 </div>
+                <div class="relative w-full sm:w-auto sm:min-w-[150px]">
+                    <select name="material_type" onchange="this.form.submit()" aria-label="Filter by material type"
+                        class="w-full h-12 appearance-none bg-white border border-[#e2e8f0] pl-3 sm:pl-4 pr-9 rounded-lg text-sm font-medium text-slate-700 hover:border-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer">
+                        <option value="" {% if not material_type %}selected{% endif %}>All Types</option>
+                        {% for _mt in ['Book', 'E-Book', 'Reference', 'Periodical', 'Thesis'] %}
+                        <option value="{{ _mt }}" {% if material_type == _mt %}selected{% endif %}>{{ _mt }}</option>
+                        {% endfor %}
+                    </select>
+                    <span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px] pointer-events-none">expand_more</span>
+                </div>
                 <div class="relative flex-1 w-full">
-                    <input type="text" name="q" value="{{ search_query }}" class="search-input w-full text-sm" placeholder="Search catalog..." data-suggest="book_search">
+                    <input type="text" name="q" value="{{ search_query }}" class="search-input w-full h-12 text-sm" placeholder="Search catalog..." data-suggest="book_search">
                 </div>
                 <div class="flex gap-2 shrink-0">
-                    <button type="submit" class="btn btn-primary btn-sm flex-1 sm:flex-none justify-center"><span class="material-symbols-outlined text-[18px]">search</span> Search</button>
+                    <button type="submit" class="btn btn-primary btn-sm h-12 flex-1 sm:flex-none justify-center"><span class="material-symbols-outlined text-[18px]">search</span> Search</button>
                     {% if search_query %}
-                    <a href="{{ url_for('cataloging.cataloging_page') }}" class="btn btn-outline btn-sm flex-1 sm:flex-none justify-center">Clear</a>
+                    <a href="{{ url_for('cataloging.cataloging_page') }}" class="btn btn-outline btn-sm h-12 flex-1 sm:flex-none justify-center">Clear</a>
                     {% endif %}
                 </div>
             </div>
@@ -301,27 +311,27 @@
         <!-- Table Card -->
         <div class="card animate-in overflow-hidden" style="animation-delay: 0.2s;">
             <div class="p-3 sm:p-4 border-b border-gray-100 flex items-center gap-1.5 sm:gap-2 bg-gray-50/50 overflow-x-auto scrollbar-thin">
-                <a href="{{ url_for('cataloging.cataloging_page', q=search_query, field=search_field, sort_by=sort_by) }}"
+                <a href="{{ url_for('cataloging.cataloging_page', q=search_query, field=search_field, sort_by=sort_by, material_type=material_type) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if not status_filter and not copy_status %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     All ({{ total }})
                 </a>
-                <a href="{{ url_for('cataloging.cataloging_page', status='active', q=search_query, field=search_field, sort_by=sort_by) }}"
+                <a href="{{ url_for('cataloging.cataloging_page', status='active', q=search_query, field=search_field, sort_by=sort_by, material_type=material_type) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if status_filter == 'active' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Active
                 </a>
-                <a href="{{ url_for('cataloging.cataloging_page', status='archived', q=search_query, field=search_field, sort_by=sort_by) }}"
+                <a href="{{ url_for('cataloging.cataloging_page', status='archived', q=search_query, field=search_field, sort_by=sort_by, material_type=material_type) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if status_filter == 'archived' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Archived
                 </a>
-                <a href="{{ url_for('cataloging.cataloging_page', copy_status='overdue', sort_by=sort_by) }}"
+                <a href="{{ url_for('cataloging.cataloging_page', copy_status='overdue', sort_by=sort_by, material_type=material_type) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if copy_status == 'overdue' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Overdue
                 </a>
-                <a href="{{ url_for('cataloging.cataloging_page', copy_status='lost', sort_by=sort_by) }}"
+                <a href="{{ url_for('cataloging.cataloging_page', copy_status='lost', sort_by=sort_by, material_type=material_type) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if copy_status == 'lost' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Lost
                 </a>
-                <a href="{{ url_for('cataloging.cataloging_page', copy_status='damaged', sort_by=sort_by) }}"
+                <a href="{{ url_for('cataloging.cataloging_page', copy_status='damaged', sort_by=sort_by, material_type=material_type) }}"
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if copy_status == 'damaged' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Damaged
                 </a>
@@ -330,6 +340,7 @@
                     <input type="hidden" name="field" value="{{ search_field }}">
                     <input type="hidden" name="status" value="{{ status_filter }}">
                     <input type="hidden" name="copy_status" value="{{ copy_status }}">
+                    <input type="hidden" name="material_type" value="{{ material_type }}">
                     <select name="sort_by" onchange="this.form.submit()" aria-label="Sort books"
                         class="text-xs sm:text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-md px-2 py-1 sm:py-1.5 outline-none focus:border-primary cursor-pointer">
                         <option value="" {% if not sort_by %}selected{% endif %}>Title A–Z</option>
@@ -587,14 +598,14 @@
                 </div>
                 <div class="flex gap-2">
                     {% if page > 1 %}
-                    <a href="{{ url_for('cataloging.cataloging_page', q=search_query, field=search_field, status=status_filter, copy_status=copy_status, sort_by=sort_by, page=page-1) }}" class="page-btn">
+                    <a href="{{ url_for('cataloging.cataloging_page', q=search_query, field=search_field, status=status_filter, copy_status=copy_status, sort_by=sort_by, material_type=material_type, page=page-1) }}" class="page-btn">
                         <span class="material-symbols-outlined text-sm">chevron_left</span> Previous
                     </a>
                     {% else %}
                     <button class="page-btn" disabled><span class="material-symbols-outlined text-sm">chevron_left</span> Previous</button>
                     {% endif %}
                     {% if page * per_page < total %}
-                    <a href="{{ url_for('cataloging.cataloging_page', q=search_query, field=search_field, status=status_filter, copy_status=copy_status, sort_by=sort_by, page=page+1) }}" class="page-btn">
+                    <a href="{{ url_for('cataloging.cataloging_page', q=search_query, field=search_field, status=status_filter, copy_status=copy_status, sort_by=sort_by, material_type=material_type, page=page+1) }}" class="page-btn">
                         Next <span class="material-symbols-outlined text-sm">chevron_right</span>
                     </a>
                     {% else %}

@@ -772,6 +772,108 @@ class TestBookTypes:
         assert 'Book Type: Thesis' in resp.data.decode()
 
 
+class TestStaffMaterialTypeFilter:
+    """The staff cataloging list can be narrowed by material type, and the
+    filter composes with search/status/copy-status while paging in SQL."""
+
+    def test_model_appends_material_type_filter(self, mock_db):
+        """Validates material type filter appended to listing SQL [TestStaffMaterialTypeFilter / cataloging].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.models import get_all_books_paginated
+        mock_db['fetch_one'].return_value = (2,)
+        mock_db['fetch_all'].return_value = []
+        get_all_books_paginated(1, 20, None, 'Book')
+        page_q, page_args = mock_db['fetch_all'].call_args[0]
+        assert 'material_type = %s' in page_q
+        assert 'Book' in page_args
+        count_q, count_args = mock_db['fetch_one'].call_args[0]
+        assert 'material_type = %s' in count_q
+        assert 'Book' in count_args
+
+    def test_model_no_material_type_by_default(self, mock_db):
+        """Validates listing SQL omits material type when unset [TestStaffMaterialTypeFilter / cataloging].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.models import get_all_books_paginated
+        mock_db['fetch_one'].return_value = (2,)
+        mock_db['fetch_all'].return_value = []
+        get_all_books_paginated(1, 20)
+        assert 'material_type = %s' not in mock_db['fetch_all'].call_args[0][0]
+
+    def test_status_model_appends_material_type(self, mock_db):
+        """Validates material type filter composes with status tab [TestStaffMaterialTypeFilter / cataloging].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.models import get_books_by_status_paginated
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        get_books_by_status_paginated('archived', 1, 20, None, 'Thesis')
+        page_q, page_args = mock_db['fetch_all'].call_args[0]
+        assert 'material_type = %s' in page_q
+        assert 'Thesis' in page_args
+
+    def test_copy_status_model_appends_material_type(self, mock_db):
+        """Validates material type filter composes with copy-status tab [TestStaffMaterialTypeFilter / cataloging].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.models import get_books_by_copy_status_paginated
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        get_books_by_copy_status_paginated('lost', 1, 20, None, 'Reference')
+        page_q, page_args = mock_db['fetch_all'].call_args[0]
+        assert 'material_type = %s' in page_q
+        assert 'Reference' in page_args
+
+    def test_search_model_parenthesizes_and_binds_material_type(self, mock_db):
+        """Validates search AND-chain is parenthesized before material type [TestStaffMaterialTypeFilter / cataloging].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates catalog data or listing/sort is wrong."""
+        from app.cataloging.models import search_books_paginated
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        search_books_paginated('harry', '', 1, 20, None, 'E-Book')
+        page_q, page_args = mock_db['fetch_all'].call_args[0]
+        assert '(title ILIKE %s' in page_q
+        assert 'material_type = %s' in page_q
+        assert page_args[-3] == 'E-Book'
+
+    def test_route_passes_material_type(self, librarian_client, mock_db):
+        """Validates route forwards material_type `/librarian/cataloging?material_type=Book` as librarian (expects 200) [TestStaffMaterialTypeFilter / cataloging].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['fetch_one'].return_value = (1,)
+        mock_db['fetch_all'].return_value = SAMPLE_BOOKS
+        resp = librarian_client.get('/librarian/cataloging?material_type=Book')
+        assert resp.status_code == 200
+        page_q, page_args = mock_db['fetch_all'].call_args_list[0][0]
+        assert 'material_type = %s' in page_q
+        assert 'Book' in page_args
+
+    def test_route_ignores_unknown_material_type(self, librarian_client, mock_db):
+        """Validates unknown material_type is dropped `/librarian/cataloging?material_type=Banana` as librarian (expects 200) [TestStaffMaterialTypeFilter / cataloging].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['fetch_one'].return_value = (1,)
+        mock_db['fetch_all'].return_value = SAMPLE_BOOKS
+        resp = librarian_client.get('/librarian/cataloging?material_type=Banana')
+        assert resp.status_code == 200
+        assert 'material_type = %s' not in mock_db['fetch_all'].call_args_list[0][0][0]
+
+    def test_template_offers_material_type_filter(self, librarian_client, mock_db):
+        """Validates filter control and persistence render [TestStaffMaterialTypeFilter / cataloging].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['fetch_one'].return_value = (1,)
+        mock_db['fetch_all'].return_value = SAMPLE_BOOKS
+        body = librarian_client.get(
+            '/librarian/cataloging?material_type=Book').data.decode()
+        assert 'name="material_type"' in body
+        assert 'Filter by material type' in body
+        assert 'All Types' in body
+        assert 'material_type=Book' in body
+
+
 class TestPublicCatalog:
     def test_public_catalog_all(self, client, mock_db):
         # Bare /catalog is empty by default: only facet queries run, no book search.

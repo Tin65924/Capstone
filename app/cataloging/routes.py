@@ -342,6 +342,9 @@ def cataloging_page():
     field = request.args.get('field', '')
     status_filter = request.args.get('status', '')
     copy_status = request.args.get('copy_status', '')
+    material_type = request.args.get('material_type', '').strip()
+    if material_type not in MATERIAL_TYPES:
+        material_type = ''
     page = request.args.get('page', 1, type=int)
     page = max(1, page or 1)
     per_page = 20
@@ -354,15 +357,19 @@ def cataloging_page():
         sort_by = ''
     if copy_status:
         from app.cataloging.models import get_books_by_copy_status_paginated
-        books, total = get_books_by_copy_status_paginated(copy_status, page, per_page, sort_by)
+        books, total = get_books_by_copy_status_paginated(
+            copy_status, page, per_page, sort_by, material_type)
     elif status_filter:
         from app.cataloging.models import get_books_by_status_paginated
-        books, total = get_books_by_status_paginated(status_filter, page, per_page, sort_by)
+        books, total = get_books_by_status_paginated(
+            status_filter, page, per_page, sort_by, material_type)
     elif query:
-        books, total = search_books_paginated(query, field, page, per_page, sort_by)
+        books, total = search_books_paginated(
+            query, field, page, per_page, sort_by, material_type)
     else:
         from app.cataloging.models import get_all_books_paginated
-        books, total = get_all_books_paginated(page, per_page, sort_by)
+        books, total = get_all_books_paginated(
+            page, per_page, sort_by, material_type)
 
     total_pages = max(1, (total + per_page - 1) // per_page)
     if page > total_pages:
@@ -371,15 +378,19 @@ def cataloging_page():
         page = total_pages
         if copy_status:
             from app.cataloging.models import get_books_by_copy_status_paginated
-            books, total = get_books_by_copy_status_paginated(copy_status, page, per_page, sort_by)
+            books, total = get_books_by_copy_status_paginated(
+                copy_status, page, per_page, sort_by, material_type)
         elif status_filter:
             from app.cataloging.models import get_books_by_status_paginated
-            books, total = get_books_by_status_paginated(status_filter, page, per_page, sort_by)
+            books, total = get_books_by_status_paginated(
+                status_filter, page, per_page, sort_by, material_type)
         elif query:
-            books, total = search_books_paginated(query, field, page, per_page, sort_by)
+            books, total = search_books_paginated(
+                query, field, page, per_page, sort_by, material_type)
         else:
             from app.cataloging.models import get_all_books_paginated
-            books, total = get_all_books_paginated(page, per_page, sort_by)
+            books, total = get_all_books_paginated(
+                page, per_page, sort_by, material_type)
 
     accessions_by_book = {}
     if books:
@@ -439,6 +450,7 @@ def cataloging_page():
                            total=total, search_query=query,
                            search_field=field, status_filter=status_filter,
                            copy_status=copy_status, sort_by=sort_by,
+                           material_type=material_type,
                            page=page, per_page=per_page,
                            accessions_by_book=accessions_by_book,
                            conditions_by_accession=conditions_by_accession,
