@@ -417,22 +417,20 @@
                             <tbody id="recent-circ-body"></tbody>
                         </table></div>
                     </div>
-                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">8. Top Requested Titles</h3>
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">8. Top Requested Titles</h3>
                         <div class="chart-legend mb-2" aria-label="Top requested titles legend"><span title="Requests per title"><span class="lg-dot" style="background:#2563eb"></span>Requests</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details</span></div>
                         <div id="req-top-titles" class="space-y-1.5"></div></div>
-                        <div class="bg-white rounded-xl border border-slate-200 p-4 xl:col-span-1"><h3 class="text-sm font-extrabold mb-2">9. Student vs Faculty Request Demand</h3>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">9. Student vs Faculty Request Demand</h3>
                         <div class="chart-legend mb-2" aria-label="Request demand legend"><span><span class="lg-dot" style="background:#1d4ed8"></span>Student</span><span><span class="lg-dot" style="background:#0ea5e9"></span>Faculty</span><span><span class="lg-dot" style="background:#94a3b8"></span>Other staff</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details · click for the program breakdown</span></div>
                         <div id="req-role-split" class="space-y-3"></div></div>
-                    </div>
-                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">10. Requests Over Time</h3>
                         <div id="req-trend-line" class="w-full overflow-hidden"></div><p class="text-[10px] text-slate-400 mt-1">X: Date · Y: Requests. Solid = actual requests · dashed = 30-day moving-average forecast.</p></div>
+                    </div>
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">11. Requests by Program</h3>
                         <div class="chart-legend mb-2" aria-label="Requests by program legend"><span title="Requests per program"><span class="lg-dot" style="background:#8b5cf6"></span>Requests</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details</span></div>
                         <div id="req-by-program" class="space-y-1.5"></div></div>
-                    </div>
-                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-1">12. Borrowings Trend by Program</h3>
                         <p class="text-[10px] text-slate-400 mb-2">Each line is one program/department — which program each borrowing point belongs to.</p>
                         <div id="trend-program-legend" class="chart-legend mb-2"></div>
@@ -442,7 +440,7 @@
                         <div id="overdue-program-legend" class="chart-legend mb-2"></div>
                         <div id="overdue-program-lines" class="w-full overflow-hidden"></div></div>
                     </div>
-                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">14. Top Books by Program</h3>
                         <p class="text-[10px] text-slate-400 mb-2">Top-title borrows labeled with their program — which program borrowed each title.</p>
                         <div id="top-books-program-list" class="space-y-1.5"></div></div>
