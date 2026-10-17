@@ -95,6 +95,7 @@
 
     {% set user_has_book = current_user.is_authenticated and (current_user.id|int in borrower_map.values()) %}
     {% set is_archived = book|length > 11 and book[11] != 'active' %}
+    {% set is_ebook = book|length > 9 and book[9] == 'E-Book' %}
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 sm:p-6 lg:p-8 mb-6 sm:mb-8">
         <div class="flex flex-col lg:flex-row justify-between items-start gap-4 sm:gap-6">
             <div class="flex-grow min-w-0">
@@ -122,6 +123,7 @@
                     Not Available
                 </span>
                 {% endif %}
+                {% if not is_ebook %}
                 {% if is_archived %}
                 <button type="button" disabled title="This book is archived and cannot be borrowed or reserved."
                     class="px-5 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 text-sm font-bold cursor-not-allowed opacity-60 text-center">Borrow/Reserve</button>
@@ -147,6 +149,7 @@
                     <a href="{{ url_for('auth.login', next=request.path) }}"
                         class="px-5 py-2.5 rounded-lg border border-primary text-primary text-sm font-bold hover:bg-primary/5 transition-colors text-center">Reserve</a>
                     {% endif %}
+                {% endif %}
                 {% endif %}
             </div>
         </div>

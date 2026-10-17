@@ -2311,6 +2311,8 @@ class TestMaterialTypeFields:
         assert 'Online Access' in body
         assert 'No online access link' in body
         assert 'Edition</h4>' not in body
+        assert "openBorrowModal('')" not in body
+        assert '>Reserve<' not in body
 
     def test_book_shows_full_field_set(self, client, mock_db):
         """Validates a plain book still shows every detail field [TestMaterialTypeFields / cataloging].
@@ -2322,3 +2324,18 @@ class TestMaterialTypeFields:
         for label in ('Edition</h4>', 'Publisher</h4>', 'ISBN</h4>',
                       'LOC Classification</h4>'):
             assert label in body
+        assert '>Reserve<' in body
+
+    def test_catalog_hides_borrow_for_ebook_without_link(self, client, mock_db):
+        """Validates catalog omits borrow/reserve for a link-less e-book [TestMaterialTypeFields / cataloging].
+    If fails: likely e-book borrow suppression removed in catalog.html.
+    Failure indicates catalog cards offer Borrow on an e-book."""
+        book = (1, 'E Title', 'A', None, None, 2021, 'Tech', None, None,
+                'E-Book', 'D', 'active', '2024-01-01', None, None, None,
+                '', 'available', 1)
+        mock_db['fetch_one'].return_value = (1,)
+        mock_db['fetch_all'].side_effect = [[book], [], []]
+        body = client.get('/catalog?q=E').data.decode()
+        assert 'Read Online' not in body
+        assert '>Borrow<' not in body
+        assert '/user/reserve' not in body
