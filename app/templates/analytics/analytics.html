@@ -610,6 +610,10 @@
                         {% endif %}
                     </div>
 
+                    {% if traffic.book.material_type != 'E-Book' %}
+                    <!-- Physical-circulation cards: e-books are not shelved
+                         or loaned, so the Resource tab shows only the
+                         e-book card for them. -->
                     <div class="bg-white rounded-xl border border-slate-200 p-4">
                         <h3 class="text-sm font-extrabold mb-1">Status Trends — Borrowed, Returned &amp; Reservation Queue</h3>
                         <p class="text-[10px] text-slate-400 mb-2">X: Date • Y: Items per day. Each line is one status; reservation lines are dated by request date.</p>
@@ -661,6 +665,7 @@
                             </tbody>
                         </table></div>
                     </div>
+                    {% endif %}
 
                     {% if traffic.book.material_type == 'E-Book' %}
                     <!-- E-book engagement for this title: reads fire when a

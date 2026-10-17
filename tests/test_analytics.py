@@ -2815,3 +2815,30 @@ class TestEbookAnalytics:
         body = librarian_client.get('/librarian/analytics?q=e&book_id=1').data.decode()
         assert 'E-Book Activity' in body
         assert 'book-ebook-recent' in body
+
+    def test_book_tab_hides_circulation_for_ebook(self, librarian_client, mock_db):
+        """Validates book tab hides circulation for ebook `/librarian/analytics?q=e&book_id=1` as librarian (expects 200) [TestEbookAnalytics / analytics].
+    If fails: likely template regression or the e-book guard changed.
+    Failure indicates e-books show meaningless physical-loan charts."""
+        row = (1, 'E Title', 'A', 'SE', 2020, 1, 'P', None, None, None,
+               'E-Book', 'D')
+        mock_db['fetch_one'].return_value = row
+        mock_db['fetch_all'].return_value = []
+        body = librarian_client.get('/librarian/analytics?q=e&book_id=1').data.decode()
+        for frag in ('id="book-status-lines"', 'id="book-trend"',
+                     'id="book-program"', 'id="book-usertype"',
+                     'id="book-recent-body"'):
+            assert frag not in body, frag
+
+    def test_book_tab_keeps_circulation_for_print(self, librarian_client, mock_db):
+        """Validates book tab keeps circulation for print `/librarian/analytics?q=c&book_id=1` as librarian (expects 200) [TestEbookAnalytics / analytics].
+    If fails: likely template regression or the e-book guard inverted.
+    Failure indicates print titles lose their traffic charts."""
+        row = (1, 'Clean Code', 'A', 'SE', 2008, 3, 'P', None, None, None,
+               'Book', 'D')
+        mock_db['fetch_one'].return_value = row
+        mock_db['fetch_all'].return_value = []
+        body = librarian_client.get('/librarian/analytics?q=c&book_id=1').data.decode()
+        assert 'id="book-status-lines"' in body
+        assert 'id="book-trend"' in body
+        assert 'id="book-ebook-recent"' not in body
