@@ -487,37 +487,45 @@ _TAB_FILTERS = {
     'system': "a.user_id IS NULL",
 }
 
-AUDIT_TABS = ('all', 'staff', 'members', 'system')
+AUDIT_TABS = ('all', 'staff', 'members', 'library', 'system')
 
-# Day-to-day operational noise stays out of the admin audit views —
-# borrowing/returning (circulation:) and book requests (requests:) already
-# have dedicated pages (user history, circulation, requests). The audit
-# trail keeps governance and technical events only.
+# Day-to-day operational rows (borrowing/returning via circulation: and
+# book requests via requests:) stay out of the governance audit views —
+# they already have dedicated pages (user history, circulation,
+# requests). The Library tab is the exception: it re-hides everything
+# else instead and shows exactly this operational trail.
 OPERATIONAL_PREFIXES = ('circulation:', 'requests:')
 
 
 def get_audit_logs(limit=50, search=None, tab='all'):
     """Fetch newest-first audit rows for the admin Audit Logs page.
 
-    Excludes day-to-day operational noise (circulation: and requests:
-    prefixes, which have dedicated pages) via NOT LIKE filters, applies
-    one allowlisted tab fragment (staff/members/system) with all values
-    still bound as %s parameters (a literal % inside the SQL string
-    breaks psycopg2 parsing), and optionally ILIKE-matches the search
-    text against the activity code.
+    Excludes day-to-day operational rows (circulation: and requests:
+    prefixes, which the Library tab owns) via NOT LIKE filters, applies
+    one allowlisted tab fragment (staff/members/library/system) with all
+    values still bound as %s parameters (a literal % inside the SQL
+    string breaks psycopg2 parsing), and optionally ILIKE-matches the
+    search text against the activity code. The library tab inverts the
+    exclusion and shows ONLY the operational trail — borrows, returns,
+    holds (allocate/claim/expire/cancel), fines, and book requests —
+    from every actor.
 
     Args:
         limit: Maximum rows to return.
         search: Optional substring to match inside activity codes.
-        tab: One of 'all', 'staff', 'members', 'system' selecting the
-            actor filter fragment.
+        tab: One of 'all', 'staff', 'members', 'library', 'system'
+            selecting the filter fragment.
 
     Returns:
         List of (log_id, full_name, email, role_name, activity,
         log_timestamp) tuples newest-first.
     """
-    clauses = ['(a.activity NOT LIKE %s AND a.activity NOT LIKE %s)']
-    params = ['circulation:%', 'requests:%']
+    ops = [f'{p}%' for p in OPERATIONAL_PREFIXES]
+    if tab == 'library':
+        clauses = ['(a.activity LIKE %s OR a.activity LIKE %s)']
+    else:
+        clauses = ['(a.activity NOT LIKE %s AND a.activity NOT LIKE %s)']
+    params = list(ops)
     if tab in _TAB_FILTERS:
         clauses.append(_TAB_FILTERS[tab])
     if search:
@@ -691,7 +699,9 @@ def describe_activity(actor, activity):
                  'expire_reservation': 'expired reservation',
                  'user_borrow_request': 'requested book',
                  'user_borrow': 'borrowed book', 'user_reserve': 'reserved book',
-                 'user_return': 'returned loan', 'fine_paid': 'paid fine',
+                 'user_return': 'returned loan',
+                 'user_cancel_reservation': 'cancelled reservation',
+                 'fine_paid': 'paid fine',
                  'mark_lost': 'marked copy', 'mark_damaged': 'marked copy'}
         verb = verbs.get(m.group(1), m.group(1).replace('_', ' '))
         suffix = {'mark_lost': ' as lost',
@@ -699,6 +709,11 @@ def describe_activity(actor, activity):
         return f'{who} {verb} #{m.group(2)}{suffix}'
     m = re.match(r'^requests:([^:]+):(\d+)$', code)
     if m:
+        verbs = {'user_cancel': 'cancelled book request',
+                 'create': 'submitted book request'}
+        verb = verbs.get(m.group(1))
+        if verb:
+            return f'{who} {verb} #{m.group(2)}'
         return f'{who} {m.group(1).replace("_", " ")} request #{m.group(2)}'
 
     m = re.match(r'^system:login_failed:(.+)$', code)

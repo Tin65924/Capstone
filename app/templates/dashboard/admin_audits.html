@@ -183,7 +183,7 @@
         <script id="audit-stats" type="application/json">{{ stats|tojson }}</script>
         {% endif %}
         <div class="flex gap-2 mb-4 overflow-x-auto">
-            {% for t, label in (('all', 'All'), ('staff', 'Staff'), ('members', 'Members'), ('system', 'System')) %}
+            {% for t, label in (('all', 'All'), ('staff', 'Staff'), ('members', 'Members'), ('library', 'Library'), ('system', 'System')) %}
             <a href="{{ url_for('main.admin_audits', tab=t, q=search, limit=limit) }}" class="px-3 py-1.5 text-xs font-bold rounded-lg border whitespace-nowrap transition-colors {% if tab == t %}bg-primary text-white border-primary{% else %}bg-white text-gray-600 border-gray-200 hover:border-primary{% endif %}">{{ label }}</a>
             {% endfor %}
         </div>

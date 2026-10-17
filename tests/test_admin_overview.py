@@ -296,6 +296,43 @@ class TestAuditTabs:
         assert 'a.activity ILIKE %s' in query
         assert params == ('circulation:%', 'requests:%', '%backup%', 10)
 
+    def test_library_tab_shows_operational_only(self, mock_db):
+        """Validates library tab shows operational only [TestAuditTabs / admin overview].
+    If fails: likely the exclusion inversion (NOT LIKE vs LIKE) regressed.
+    Failure indicates the Library tab shows governance rows or drops borrows/returns/requests."""
+        from app.auth.models import get_audit_logs
+        mock_db['fetch_all'].return_value = []
+        get_audit_logs(limit=25, tab='library')
+        calls = mock_db['fetch_all'].call_args_list
+        query, params = [c[0] for c in calls if 'a.log_id' in c[0][0]][-1]
+        assert 'a.activity LIKE %s OR a.activity LIKE %s' in query
+        assert 'NOT LIKE' not in query
+        assert 'role_name IN' not in query
+        assert 'IS NULL' not in query
+        assert params == ('circulation:%', 'requests:%', 25)
+
+    def test_library_tab_combines_with_search(self, mock_db):
+        """Validates library tab combines with search [TestAuditTabs / admin overview].
+    If fails: likely library/search param ordering drift.
+    Failure indicates searching the Library tab fights the tab filter."""
+        from app.auth.models import get_audit_logs
+        mock_db['fetch_all'].return_value = []
+        get_audit_logs(limit=50, search='borrow', tab='library')
+        calls = mock_db['fetch_all'].call_args_list
+        query, params = [c[0] for c in calls if 'a.log_id' in c[0][0]][-1]
+        assert 'a.activity LIKE %s OR a.activity LIKE %s' in query
+        assert 'a.activity ILIKE %s' in query
+        assert params == ('circulation:%', 'requests:%', '%borrow%', 50)
+
+    def test_library_tab_route(self, admin_client, mock_db):
+        """Validates library tab route `/admin/audits?tab=library` as admin (expects 200) [TestAuditTabs / admin overview].
+    If fails: likely template tab chip or route allowlist change.
+    Failure indicates the Library tab cannot be opened from the page."""
+        mock_db['fetch_all'].return_value = []
+        resp = admin_client.get('/admin/audits?tab=library')
+        assert resp.status_code == 200
+        assert b'admin/audits?tab=library' in resp.data
+
     def test_route_staff_tab(self, admin_client, mock_db):
         """Validates route staff tab `/admin/audits?tab=staff` as admin (expects 200) [TestAuditTabs / admin overview].
     If fails: likely template text/context changed or mock fetch_* shape mismatched.
@@ -449,6 +486,23 @@ class TestDescribeActivity:
                             ('A', 'X' * 3000)):
             out = describe_activity(actor, code)
             assert isinstance(out, str)
+
+    def test_library_operational_sentences(self):
+        """Validates library operational sentences [TestDescribeActivity / admin overview].
+    If fails: likely describe_activity verb maps changed.
+    Failure indicates Library tab rows render raw codes instead of sentences."""
+        from app.auth.models import describe_activity
+        assert describe_activity('Ann', 'circulation:borrow:5') == 'Ann borrowed copy #5'
+        assert describe_activity('Ann', 'circulation:return:6') == 'Ann returned loan #6'
+        assert describe_activity('Ann', 'circulation:allocate_reservation:7') == 'Ann allocated reservation #7'
+        assert describe_activity('Ann', 'circulation:claim_reservation:8') == 'Ann claimed reservation #8'
+        assert describe_activity('Ann', 'circulation:expire_reservation:9') == 'Ann expired reservation #9'
+        assert describe_activity('Ann', 'circulation:user_cancel_reservation:10') == 'Ann cancelled reservation #10'
+        assert describe_activity('Ann', 'circulation:fine_paid:11') == 'Ann paid fine #11'
+        assert describe_activity('Ann', 'circulation:mark_lost:12') == 'Ann marked copy #12 as lost'
+        assert describe_activity('Ann', 'circulation:mark_damaged:13') == 'Ann marked copy #13 as damaged'
+        assert describe_activity('Ann', 'requests:create:14') == 'Ann submitted book request #14'
+        assert describe_activity('Ann', 'requests:user_cancel:15') == 'Ann cancelled book request #15'
 
     def test_evil_audit_renders_escaped(self, admin_client, mock_db):
         """Validates evil audit renders escaped `/admin/audits` as admin [TestDescribeActivity / admin overview].
