@@ -323,6 +323,14 @@
                                             style="">{{ br[2]|replace('_', ' ')|title }}</span>
                                     </div>
                                     <p class="text-xs text-gray-500" style="">{{ br[6] if br[6] else 'No author' }} · Queue #{{ br[1] }}</p>
+                                    <button type="button"
+                                        class="mt-2 text-[10px] font-bold uppercase tracking-wider text-red-600 dark:text-red-400 hover:underline"
+                                        data-confirm-title="Cancel Reservation"
+                                        data-confirm-message="Cancel your reservation for &#34;{{ br[5] }}&#34;? The next person in the queue will be served instead."
+                                        data-confirm-action="{{ url_for('circulation.user_cancel_reservation', reservation_id=br[0]) }}"
+                                        data-confirm-button="Cancel Reservation" data-confirm-class="bg-red-600 hover:bg-red-700"
+                                        data-confirm-icon="cancel" onclick="confirmFromData(this)">Cancel
+                                        reservation</button>
                                 </div>
                                 {% else %}
                                 <p class="text-xs text-gray-400">No borrowing requests yet.</p>
@@ -354,6 +362,16 @@
                                             style="">{{ req[3]|replace('_', ' ')|title }}</span>
                                     </div>
                                     <p class="text-xs text-gray-500" style="">{% if req[2] %}{{ req[2] }}{% else %}{{ req[4] }}{% endif %}</p>
+                                    {% if req[3] == 'pending_review' or req[3] == 'approved' %}
+                                    <button type="button"
+                                        class="mt-2 text-[10px] font-bold uppercase tracking-wider text-red-600 dark:text-red-400 hover:underline"
+                                        data-confirm-title="Cancel Book Request"
+                                        data-confirm-message="Cancel your request for &#34;{{ req[1] }}&#34;? You can submit a new request later."
+                                        data-confirm-action="{{ url_for('requests.user_cancel_request', request_id=req[0]) }}"
+                                        data-confirm-button="Cancel Request" data-confirm-class="bg-red-600 hover:bg-red-700"
+                                        data-confirm-icon="cancel" onclick="confirmFromData(this)">Cancel
+                                        request</button>
+                                    {% endif %}
                                 </div>
                                 {% else %}
                                 <p class="text-xs text-gray-400">No book requests yet.</p>
@@ -441,6 +459,8 @@
             </div>
         </div>
     </div>
+
+    {% include 'components/confirm_modal.html' %}
 
     <!-- Edit Profile Modal -->
     <div id="profileModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4">

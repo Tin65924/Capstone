@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS request_records (
     request_status VARCHAR(30) NOT NULL DEFAULT 'pending_review'
                    CHECK (request_status IN (
                        'pending_review', 'existing_in_collection',
-                       'approved', 'rejected', 'procured'
+                       'approved', 'rejected', 'procured', 'cancelled'
                    )),
     request_date   TIMESTAMP NOT NULL DEFAULT NOW(),
     reviewed_by    INT REFERENCES user_accounts(user_id),
@@ -89,6 +89,18 @@ CREATE TABLE IF NOT EXISTS request_records (
 );
 
 ALTER TABLE request_records ADD COLUMN IF NOT EXISTS remarks VARCHAR(255);
+
+-- 'cancelled' lets members withdraw their own requests from /user/profile
+-- before (or while) procurement orders them. The inline CHECK in the
+-- CREATE TABLE above only exists on fresh databases, so re-declare the
+-- constraint by name here for existing ones; the DROP+ADD pair converges
+-- every boot and a failing ADD never blocks the rest (see run_schema).
+ALTER TABLE request_records DROP CONSTRAINT IF EXISTS request_records_request_status_check;
+ALTER TABLE request_records ADD CONSTRAINT request_records_request_status_check
+    CHECK (request_status IN (
+        'pending_review', 'existing_in_collection',
+        'approved', 'rejected', 'procured', 'cancelled'
+    ));
 
 CREATE TABLE IF NOT EXISTS procurement_log (
     procurement_id SERIAL PRIMARY KEY,

@@ -1,4 +1,4 @@
-from app.procurement.models import create_procurement
+from app.procurement.models import create_procurement, get_procurement_by_request, update_procurement_status
 from app.auth.models import log_activity
 from flask import render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
@@ -456,3 +456,55 @@ def user_request_book():
     borrower_id = get_borrower_by_user(current_user.id)
     my_requests = get_requests_by_borrower(borrower_id) if borrower_id else []
     return render_template('requests/user_request_book.html', my_requests=my_requests)
+
+
+@requests_bp.route('/user/requests/<int:request_id>/cancel', methods=['POST'])
+@login_required
+def user_cancel_request(request_id):
+    """Cancel one of your own book requests (POST, member self-service).
+
+    Guarded by login only; ownership and lifecycle are checked against
+    the fetched row. Only pending_review or approved requests can be
+    cancelled (before triage, or while the order is still waiting to be
+    placed). Cancelling an approved request that has not been ordered
+    also cancels its procurement row; already ordered/delivered/procured
+    orders go to the desk instead. The user_cancel route never touches
+    staff-reviewed rows: rejected, procured, and existing_in_collection
+    requests flash an error.
+
+    Args:
+        request_id: Request to cancel.
+
+    Returns:
+        Redirect back to the member's profile with a flash message.
+    """
+    existing = get_request_by_id(request_id)
+    if not existing:
+        flash('Request not found.', 'error')
+        return redirect(url_for('main.user_profile'))
+
+    borrower_id = get_borrower_by_user(current_user.id)
+    if not borrower_id or existing[1] != borrower_id:
+        flash('You can only cancel your own requests.', 'error')
+        return redirect(url_for('main.user_profile'))
+
+    if existing[5] not in ('pending_review', 'approved'):
+        flash('Only pending or approved requests can be cancelled.', 'error')
+        return redirect(url_for('main.user_profile'))
+
+    if existing[5] == 'approved':
+        procurement = get_procurement_by_request(request_id)
+        if procurement and procurement[2] in ('ordered', 'delivered', 'procured'):
+            flash('This book has already been ordered. Please ask the librarian about your request.', 'error')
+            return redirect(url_for('main.user_profile'))
+        if procurement and procurement[2] in ('for_ordering', 'out_of_stock'):
+            update_procurement_status(
+                procurement[0], 'cancelled',
+                remarks='Cancelled by user', updated_by=current_user.id,
+            )
+
+    update_request_status(request_id, 'cancelled', remarks='Cancelled by user')
+
+    log_activity(current_user.id, f'requests:user_cancel:{request_id}')
+    flash('Request cancelled.', 'success')
+    return redirect(url_for('main.user_profile'))

@@ -1070,6 +1070,49 @@ def user_reserve():
     return redirect(url_for('cataloging.book_info', book_id=book_id))
 
 
+@circulation_bp.route('/user/reservations/<int:reservation_id>/cancel', methods=['POST'])
+@login_required
+def user_cancel_reservation(reservation_id):
+    """Cancel one of your own reservations (POST, member self-service).
+
+    Guarded by login only; ownership and lifecycle are checked against
+    the fetched row. Only waiting or allocated slots can be cancelled —
+    the same states the staff cancel (expire) action accepts, and the
+    freed copy goes to the next borrower in queue. Finished rows
+    (claimed/expired) flash an error instead of expiring again.
+
+    Args:
+        reservation_id: Reservation to cancel.
+
+    Returns:
+        Redirect back to the member's profile with a flash message.
+    """
+    reservation = get_reservation_by_id(reservation_id)
+    if not reservation or len(reservation) < 6:
+        flash('Reservation not found.', 'error')
+        return redirect(url_for('main.user_profile'))
+
+    borrower_row = get_borrower_by_user(current_user.id)
+    if not borrower_row or reservation[2] != borrower_row[0]:
+        flash('You can only cancel your own reservations.', 'error')
+        return redirect(url_for('main.user_profile'))
+
+    if reservation[5] not in ('waiting', 'allocated'):
+        flash('Only active reservations can be cancelled.', 'error')
+        return redirect(url_for('main.user_profile'))
+
+    expire_reservation(reservation_id, updated_by=current_user.id)
+    _safe_notify(
+        borrower_row[0],
+        f'Reservation #{reservation_id} cancelled at your request.',
+        'reservation',
+        str(reservation_id),
+    )
+    log_activity(current_user.id, f'circulation:user_cancel_reservation:{reservation_id}')
+    flash('Reservation cancelled.', 'success')
+    return redirect(url_for('main.user_profile'))
+
+
 @circulation_bp.route('/user/return', methods=['POST'])
 @login_required
 def user_return():

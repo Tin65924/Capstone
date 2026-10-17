@@ -385,7 +385,7 @@ class TestBulkReview:
 
     def test_bulk_student_forbidden(self, student_client, mock_db):
         """Validates bulk student forbidden `/librarian/requests/bulk/approve` as student (expects 302) [TestBulkReview / requests].
-    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    If fails: likely unexpected DB write (validation/pre-check bypassed).
     Failure indicates request/procurement workflow is broken."""
         resp = student_client.post('/librarian/requests/bulk/approve',
                                    data={'request_ids': '7'})
@@ -395,3 +395,112 @@ class TestBulkReview:
         updates = [c for c in mock_db['execute'].call_args_list
                    if 'UPDATE request_records' in c[0][0]]
         assert updates == []
+
+
+class TestUserCancelRequest:
+    def test_user_cancels_pending_request(self, student_client, mock_db):
+        """Validates user cancels pending request `/user/requests/7/cancel` as student (expects 302) [TestUserCancelRequest / requests].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates member self-service cancellation is broken."""
+        mock_db['fetch_one'].side_effect = [
+            (7, 5, 'Some Book', None, None, 'pending_review', None, None, None, None),  # get_request_by_id
+            (5,),   # get_borrower_by_user -> borrower_id
+        ]
+
+        resp = student_client.post('/user/requests/7/cancel')
+
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
+        writes = [c for c in mock_db['execute'].call_args_list
+                  if 'UPDATE request_records' in c[0][0]]
+        assert len(writes) == 1
+        assert 'cancelled' in writes[0][0][1]
+        # Pending requests carry no procurement row to touch.
+        assert not any('UPDATE procurement_log' in c[0][0]
+                       for c in mock_db['execute'].call_args_list)
+
+    def test_user_cancels_approved_request_cancels_order(self, student_client, mock_db):
+        """Validates user cancels approved request with pending order `/user/requests/7/cancel` as student (expects 302) [TestUserCancelRequest / requests].
+    If fails: likely procurement cancellation missing or wrong order status written.
+    Failure indicates withdrawn requests leave orphaned procurement orders."""
+        mock_db['fetch_one'].side_effect = [
+            (7, 5, 'Some Book', None, None, 'approved', None, None, None, None),
+            (5,),
+        ]
+        mock_db['fetch_all'].return_value = [
+            (901, 7, 'for_ordering', None, None, None, None, None, None, 'Some Book', None)
+        ]
+
+        resp = student_client.post('/user/requests/7/cancel')
+
+        assert resp.status_code == 302
+        by_sql = {c[0][0]: c for c in mock_db['execute'].call_args_list}
+        proc_calls = [s for s in by_sql if 'UPDATE procurement_log' in s]
+        assert proc_calls, 'approved request without order must still cancel the procurement row'
+        assert 'cancelled' in by_sql[proc_calls[0]][0][1]
+        req_calls = [s for s in by_sql if 'UPDATE request_records' in s]
+        assert req_calls and 'cancelled' in by_sql[req_calls[0]][0][1]
+
+    def test_cannot_cancel_once_ordered(self, student_client, mock_db):
+        """Validates cannot cancel once ordered `/user/requests/7/cancel` as student (expects 302) [TestUserCancelRequest / requests].
+    If fails: likely the ordered guard is missing/loose (unexpected UPDATE below).
+    Failure indicates orders in flight can be killed by members."""
+        mock_db['fetch_one'].side_effect = [
+            (7, 5, 'Some Book', None, None, 'approved', None, None, None, None),
+            (5,),
+        ]
+        mock_db['fetch_all'].return_value = [
+            (901, 7, 'ordered', None, None, None, None, None, None, 'Some Book', None)
+        ]
+
+        resp = student_client.post('/user/requests/7/cancel')
+
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_cannot_cancel_others_request(self, student_client, mock_db):
+        """Validates cannot cancel others request `/user/requests/7/cancel` as student (expects 302) [TestUserCancelRequest / requests].
+    If fails: likely ownership check bypassed (unexpected UPDATE below).
+    Failure indicates members can cancel borrowed book requests"""
+        mock_db['fetch_one'].side_effect = [
+            (7, 9, 'Some Book', None, None, 'pending_review', None, None, None, None),
+            (5,),
+        ]
+
+        resp = student_client.post('/user/requests/7/cancel')
+
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_cannot_cancel_reviewed_request(self, student_client, mock_db):
+        """Validates cannot cancel reviewed request `/user/requests/7/cancel` as student (expects 302) [TestUserCancelRequest / requests].
+    If fails: likely lifecycle guard missing (unexpected UPDATE below).
+    Failure indicates finished requests can be rewritten by members."""
+        mock_db['fetch_one'].side_effect = [
+            (7, 5, 'Some Book', None, None, 'rejected', None, None, None, None),
+            (5,),
+        ]
+
+        resp = student_client.post('/user/requests/7/cancel')
+
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_cannot_cancel_missing_request(self, student_client, mock_db):
+        """Validates cannot cancel missing request `/user/requests/7/cancel` as student (expects 302) [TestUserCancelRequest / requests].
+    If fails: likely existence pre-check bypassed.
+    Failure indicates ghost ids flash success instead of an error."""
+        mock_db['fetch_one'].side_effect = [None]
+
+        resp = student_client.post('/user/requests/7/cancel')
+
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_unauthenticated_cancel_redirects_to_login(self, client):
+        """Validates unauthenticated cancel redirects to login `/user/requests/7/cancel` (expects 302) [TestUserCancelRequest / requests].
+    If fails: likely login_required guard removed.
+    Failure indicates cancellation is open to anonymous visitors."""
+        resp = client.post('/user/requests/7/cancel')
+        assert resp.status_code == 302
+        assert '/login' in resp.location

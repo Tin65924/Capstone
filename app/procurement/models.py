@@ -72,6 +72,32 @@ def get_procurement_by_id(procurement_id):
     return rows[0] if rows else None
 
 
+def get_procurement_by_request(request_id):
+    """Fetch the procurement row tied to one request, if any.
+
+    Joins ``procurement_log`` to ``request_records`` and reads by the
+    request FK (create_procurement guards one row per request, so at
+    most one exists). Lets the user-cancel flow check whether the
+    member's approved request has already been ordered.
+
+    Args:
+        request_id: FK into request_records.
+
+    Returns:
+        11-tuple (procurement_id, request_id, order_status, order_date,
+        date_received, book_id, remarks, updated_at, updated_by,
+        book_title, author), or None when no order exists.
+    """
+    rows = db.fetch_all(
+        f'''SELECT {_PROC_COLS}
+           FROM procurement_log p
+           JOIN request_records rr ON p.request_id = rr.request_id
+           WHERE p.request_id = %s''',
+        (request_id,)
+    )
+    return rows[0] if rows else None
+
+
 def create_procurement(request_id):
     """Create the procurement row for an approved book request, once only.
 

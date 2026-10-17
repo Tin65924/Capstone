@@ -1214,6 +1214,79 @@ class TestUserReserve:
         assert mock_db['execute'].call_count == 0
 
 
+class TestUserCancelReservation:
+    def test_student_cancels_waiting_reservation(self, student_client, mock_db):
+        """Validates student cancels waiting reservation `/user/reservations/9/cancel` as student (expects 302) [TestUserCancelReservation / circulation].
+    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (UPDATE).
+    Failure indicates member self-service hold cancellation is broken."""
+        mock_db['fetch_one'].side_effect = [
+            (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),  # get_reservation_by_id
+            (2, 1, '2024-0001', 'CS', 'active'),                    # get_borrower_by_user
+        ]
+        resp = student_client.post('/user/reservations/9/cancel')
+        assert resp.status_code == 302
+        assert '/user/profile' in resp.location
+        updates = [c for c in mock_db['execute'].call_args_list
+                   if 'UPDATE reservation_queue' in c[0][0]]
+        assert len(updates) == 1
+        assert "reservation_status = 'expired'" in updates[0][0][0]
+
+    def test_student_cancels_allocated_reservation(self, student_client, mock_db):
+        """Validates student cancels allocated reservation `/user/reservations/9/cancel` as student (expects 302) [TestUserCancelReservation / circulation].
+    If fails: likely lifecycle guard too narrow or expire SQL changed.
+    Failure indicates ready-pickup slots cannot be given back (copy stuck reserved)."""
+        mock_db['fetch_one'].side_effect = [
+            (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', None),
+            (2, 1, '2024-0001', 'CS', 'active'),
+        ]
+        resp = student_client.post('/user/reservations/9/cancel')
+        assert resp.status_code == 302
+        updates = [c for c in mock_db['execute'].call_args_list
+                   if 'UPDATE reservation_queue' in c[0][0]]
+        assert len(updates) == 1
+
+    def test_cannot_cancel_others_reservation(self, student_client, mock_db):
+        """Validates cannot cancel others reservation `/user/reservations/9/cancel` as student (expects 302) [TestUserCancelReservation / circulation].
+    If fails: likely ownership check bypassed (unexpected UPDATE below).
+    Failure indicates members can cancel borrowed book requests"""
+        mock_db['fetch_one'].side_effect = [
+            (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),
+            (7, 1, '2024-0099', 'IT', 'active'),  # a different borrower row
+        ]
+        resp = student_client.post('/user/reservations/9/cancel')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_cannot_cancel_finished_reservation(self, student_client, mock_db):
+        """Validates cannot cancel finished reservation `/user/reservations/9/cancel` as student (expects 302) [TestUserCancelReservation / circulation].
+    If fails: likely lifecycle guard missing (unexpected UPDATE below).
+    Failure indicates claimed/expired rows can be rewritten by members."""
+        mock_db['fetch_one'].side_effect = [
+            (9, 5, 2, 1, '2026-08-01 10:00:00', 'claimed', None),
+            (2, 1, '2024-0001', 'CS', 'active'),
+        ]
+        resp = student_client.post('/user/reservations/9/cancel')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_cannot_cancel_missing_reservation(self, student_client, mock_db):
+        """Validates cannot cancel missing reservation `/user/reservations/9/cancel` as student (expects 302) [TestUserCancelReservation / circulation].
+    If fails: likely existence pre-check bypassed.
+    Failure indicates ghost ids flash success instead of an error."""
+        mock_db['fetch_one'].side_effect = [None]
+        resp = student_client.post('/user/reservations/9/cancel')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
+    def test_unauthenticated_cancel_redirects_to_login(self, client):
+        """Validates unauthenticated cancel redirects to login `/user/reservations/9/cancel` (expects 302) [TestUserCancelReservation / circulation].
+    If fails: likely login_required guard removed.
+    Failure indicates cancellation is open to anonymous visitors."""
+        resp = client.post('/user/reservations/9/cancel')
+        assert resp.status_code == 302
+        assert '/login' in resp.location
+
+
 class TestUserReturn:
     def test_return_requires_login(self, client, mock_db):
         """Validates return requires login `/user/return` (expects 302) [TestUserReturn / circulation].
