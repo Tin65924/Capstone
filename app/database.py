@@ -258,6 +258,21 @@ def run_schema(app):
         app.logger.warning('schema.sql not found — skipping schema initialization')
         return
     conn = db._pool.getconn()
+    # A pooled connection can be closed while idle by the provider
+    # (Render/Neon). run_schema does not otherwise validate it, so a dead
+    # checkout would fail every statement and be reported only as skipped
+    # ones. Validate here and replace the slot once so the migration
+    # actually runs.
+    try:
+        with conn.cursor() as cur:
+            cur.execute('SELECT 1')
+        conn.rollback()
+    except Exception:
+        try:
+            db._pool.putconn(conn, close=True)
+        except Exception:
+            pass
+        conn = db._pool.getconn()
     try:
         def _exec_each(statements):
             """Execute one batch of raw DDL statements, counting results.
@@ -374,6 +389,80 @@ def run_schema(app):
         db._pool.putconn(conn)
 
 
+# book_catalog columns added by later migrations. schema.sql introduces
+# them, but a database whose startup sync was skipped or whose ALTERs were
+# silently skipped ends up without them, and the book write paths then
+# degrade (drop the missing column) so e-book links and category links are
+# never stored. Re-applied here as a last line of defense, each statement
+# isolated so one failure never masks the rest.
+_REQUIRED_BOOK_COLUMNS = (
+    'ALTER TABLE book_catalog '
+    'ADD COLUMN IF NOT EXISTS category_id INT REFERENCES categories(category_id)',
+    'ALTER TABLE book_catalog ADD COLUMN IF NOT EXISTS ebook_url VARCHAR(500)',
+    'ALTER TABLE book_catalog ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP',
+    'ALTER TABLE book_catalog '
+    'ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id)',
+)
+
+
+def ensure_book_catalog_columns(app):
+    """Guarantee book_catalog's later migration columns exist.
+
+    Runs the idempotent ALTERs for the columns the book read/write paths
+    assume (category_id, ebook_url and the audit stamps) on a validated
+    connection, logging a warning naming any that still fail. Complements
+    :func:`run_schema`, which already applies them, so a database that
+    missed or skipped that sync is healed at the next start instead of
+    silently dropping e-book links on every save. Never raises.
+
+    Args:
+        app: Flask application providing config and ``logger``.
+    """
+    if app.config.get('TESTING'):
+        return
+    try:
+        conn = db._pool.getconn()
+    except Exception as e:
+        app.logger.warning('book_catalog column check skipped: %s', e)
+        return
+    try:
+        # Validate the checkout: an idle-closed connection would fail
+        # every ALTER below and leave the column missing.
+        try:
+            with conn.cursor() as cur:
+                cur.execute('SELECT 1')
+            conn.rollback()
+        except Exception:
+            try:
+                db._pool.putconn(conn, close=True)
+            except Exception:
+                pass
+            conn = db._pool.getconn()
+        ok, failed = 0, 0
+        for stmt in _REQUIRED_BOOK_COLUMNS:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(stmt)
+                conn.commit()
+                ok += 1
+            except Exception as e:
+                conn.rollback()
+                failed += 1
+                app.logger.warning(
+                    'book_catalog column ensure skipped: %s | %.120s', e, stmt)
+        if failed:
+            app.logger.warning(
+                'book_catalog schema not fully ensured: %d of %d statements '
+                'skipped', failed, ok + failed)
+    except Exception as e:
+        app.logger.warning('book_catalog column ensure failed: %s', e)
+    finally:
+        try:
+            db._pool.putconn(conn)
+        except Exception:
+            pass
+
+
 def init_db(app):
     """Initialize the connection pool and sync the schema for the app.
 
@@ -388,5 +477,8 @@ def init_db(app):
     db.init_app(app)
     if app.config.get('SKIP_SCHEMA_SYNC'):
         app.logger.info('SKIP_SCHEMA_SYNC is set — skipping schema initialization.')
-        return
-    run_schema(app)
+    else:
+        run_schema(app)
+    # Always ensure the critical book_catalog columns: even with the batch
+    # sync skipped, a missing ebook_url silently breaks e-book saving.
+    ensure_book_catalog_columns(app)

@@ -122,3 +122,72 @@ class TestInitDbSchemaGate:
     If fails: likely regression in route/model or mock setup drift.
     Failure indicates database is broken for this case (users see wrong page, blocked action, or bad data)."""
         assert app.config.get('SKIP_SCHEMA_SYNC') is False
+
+
+    def test_critical_columns_ensured_even_when_sync_skipped(self, app):
+        """Validates book_catalog columns are healed even with SKIP_SCHEMA_SYNC [TestInitDbSchemaGate / database].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates database is broken for this case (a database missing ebook_url is never healed)."""
+        from unittest.mock import patch
+        from app import database
+        patcher = self._pause_init_db_patch()
+        try:
+            app.config['SKIP_SCHEMA_SYNC'] = True
+            with patch.object(database, 'run_schema') as mock_run, \
+                    patch.object(database, 'ensure_book_catalog_columns') as mock_ensure:
+                database.init_db(app)
+                mock_run.assert_not_called()
+                mock_ensure.assert_called_once_with(app)
+        finally:
+            app.config['SKIP_SCHEMA_SYNC'] = False
+            patcher.start()
+
+
+class TestEnsureBookCatalogColumns:
+    """ensure_book_catalog_columns re-runs the critical ALTERs as a heal."""
+
+    def test_runs_each_alter_and_commits(self, app):
+        """Validates ensure runs the critical ALTERs and commits [TestEnsureBookCatalogColumns / database].
+    If fails: likely ensure_book_catalog_columns changed.
+    Failure indicates a database missing ebook_url is not healed on startup."""
+        from unittest.mock import MagicMock
+        from app import database
+        fake_db, pool = _db_with_fake_pool()
+        conn = MagicMock()
+        pool.getconn.return_value = conn
+        original = database.db
+        app.config['TESTING'] = False
+        database.db = fake_db
+        try:
+            database.ensure_book_catalog_columns(app)
+        finally:
+            database.db = original
+            app.config['TESTING'] = True
+        executed = ' | '.join(
+            call.args[0] for call in conn.cursor.return_value
+            .__enter__.return_value.execute.call_args_list)
+        assert 'ebook_url' in executed
+        assert 'category_id' in executed
+        assert conn.commit.call_count == len(database._REQUIRED_BOOK_COLUMNS)
+        pool.putconn.assert_called_once_with(conn)
+
+    def test_swallows_statement_failure(self, app):
+        """Validates a failing ALTER is logged, not raised [TestEnsureBookCatalogColumns / database].
+    If fails: likely error handling removed.
+    Failure indicates startup crashes when one column cannot be ensured."""
+        from unittest.mock import MagicMock
+        from app import database
+        fake_db, pool = _db_with_fake_pool()
+        conn = MagicMock()
+        pool.getconn.return_value = conn
+        cur = conn.cursor.return_value.__enter__.return_value
+        cur.execute.side_effect = RuntimeError('no permission')
+        original = database.db
+        app.config['TESTING'] = False
+        database.db = fake_db
+        try:
+            database.ensure_book_catalog_columns(app)
+        finally:
+            database.db = original
+            app.config['TESTING'] = True
+        conn.commit.assert_not_called()
