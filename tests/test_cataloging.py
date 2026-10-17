@@ -2072,8 +2072,8 @@ class TestFormPersistence:
         })
         body = librarian_client.get('/librarian/cataloging?modal=addBookModal').data.decode()
         assert 'value="Typed Title"' in body
-        assert '<option value="Thesis" selected>' in body
-        assert '<option value="donation" selected>' in body
+        assert 'name="material_type" id="add_material_type" value="Thesis"' in body
+        assert 'name="source" value="donation"' in body
         assert 'Typed blurb' in body
         assert 'value="2024"' in body
 
@@ -2134,11 +2134,14 @@ class TestFormPersistence:
         mock_db['fetch_all'].return_value = []
         body = librarian_client.get('/librarian/cataloging').data.decode()
         assert 'id="add_material_type"' in body
-        assert 'onchange="applyMaterialType(' in body
+        # Material type renders as an in-modal custom dropdown (no native
+        # <select>, whose OS popup overlaps the fields below it).
+        assert 'data-dd-after="applyMaterialType"' in body
+        assert 'data-dd-prefix="add"' in body
         assert 'MATERIAL_REQUIRED' in body
         for mtype in ('Book', 'E-Book', 'Reference', 'Periodical', 'Thesis'):
-            assert f'<option value="{mtype}">{mtype}</option>' in body, mtype
-        assert '<option value="Multimedia">' not in body
+            assert f'data-dd-value="{mtype}"' in body, mtype
+        assert 'data-dd-value="Multimedia"' not in body
         # Material select precedes the title input in the add form.
         assert body.index('id="add_material_type"') < body.index('name="title"')
         # Conditionally-required inputs carry no static required attribute.

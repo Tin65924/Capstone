@@ -643,11 +643,18 @@
                 <div class="form-grid">
                     <div class="col-span-2">
                         <label class="form-label">Material Type</label>
-                        <select name="material_type" id="add_material_type" class="form-input" onchange="applyMaterialType('add')">
-                            {% for _mt in ['Book', 'E-Book', 'Reference', 'Periodical', 'Thesis'] %}
-                            <option value="{{ _mt }}" {% if _add.get('material_type', 'Book') == _mt %}selected{% endif %}>{{ _mt }}</option>
-                            {% endfor %}
-                        </select>
+                        <div class="relative" data-dd data-dd-after="applyMaterialType" data-dd-prefix="add">
+                            <input type="hidden" name="material_type" id="add_material_type" value="{{ _add.get('material_type', 'Book') }}">
+                            <button type="button" data-dd-toggle class="form-input w-full flex items-center justify-between text-left gap-2">
+                                <span data-dd-label class="truncate text-gray-500"></span>
+                                <span class="material-symbols-outlined text-gray-400 shrink-0">expand_more</span>
+                            </button>
+                            <div data-dd-list class="hidden absolute z-30 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg p-1">
+                                {% for _mt in ['Book', 'E-Book', 'Reference', 'Periodical', 'Thesis'] %}
+                                <button type="button" data-dd-value="{{ _mt }}" data-dd-text="{{ _mt }}" class="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-slate-50 text-sm text-slate-700">{{ _mt }}<span data-dd-mark class="material-symbols-outlined text-[18px] text-primary hidden">check</span></button>
+                                {% endfor %}
+                            </div>
+                        </div>
                     </div>
                     <div class="col-span-2">
                         <label class="form-label">Accession Number *</label>
@@ -693,12 +700,19 @@
                     </div>
                     <div>
                         <label class="form-label">Source</label>
-                        <select name="source" class="form-input">
-                            <option value="">— Select —</option>
-                            {% for _src in ['purchase', 'donation', 'others'] %}
-                            <option value="{{ _src }}" {% if _add.get('source', '') == _src %}selected{% endif %}>{{ _src|title }}</option>
-                            {% endfor %}
-                        </select>
+                        <div class="relative" data-dd>
+                            <input type="hidden" name="source" value="{{ _add.get('source', '') }}">
+                            <button type="button" data-dd-toggle class="form-input w-full flex items-center justify-between text-left gap-2">
+                                <span data-dd-label class="truncate text-gray-500"></span>
+                                <span class="material-symbols-outlined text-gray-400 shrink-0">expand_more</span>
+                            </button>
+                            <div data-dd-list class="hidden absolute z-30 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg p-1">
+                                <button type="button" data-dd-value="" data-dd-text="— Select —" class="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-slate-50 text-sm text-slate-700">— Select —<span data-dd-mark class="material-symbols-outlined text-[18px] text-primary hidden">check</span></button>
+                                {% for _src in ['purchase', 'donation', 'others'] %}
+                                <button type="button" data-dd-value="{{ _src }}" data-dd-text="{{ _src|title }}" class="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-slate-50 text-sm text-slate-700">{{ _src|title }}<span data-dd-mark class="material-symbols-outlined text-[18px] text-primary hidden">check</span></button>
+                                {% endfor %}
+                            </div>
+                        </div>
                     </div>
                     <div class="col-span-2">
                         <label class="form-label">Category *</label>
@@ -771,13 +785,18 @@
                     </div>
                     <div>
                         <label class="form-label">Material Type</label>
-                        <select name="material_type" id="edit_material_type" class="form-input" onchange="applyMaterialType('edit')">
-                            <option value="Book">Book</option>
-                            <option value="E-Book">E-Book</option>
-                            <option value="Reference">Reference</option>
-                            <option value="Periodical">Periodical</option>
-                            <option value="Thesis">Thesis</option>
-                        </select>
+                        <div class="relative" data-dd data-dd-after="applyMaterialType" data-dd-prefix="edit">
+                            <input type="hidden" name="material_type" id="edit_material_type" value="Book">
+                            <button type="button" data-dd-toggle class="form-input w-full flex items-center justify-between text-left gap-2">
+                                <span data-dd-label class="truncate text-gray-500"></span>
+                                <span class="material-symbols-outlined text-gray-400 shrink-0">expand_more</span>
+                            </button>
+                            <div data-dd-list class="hidden absolute z-30 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg p-1">
+                                {% for _mt in ['Book', 'E-Book', 'Reference', 'Periodical', 'Thesis'] %}
+                                <button type="button" data-dd-value="{{ _mt }}" data-dd-text="{{ _mt }}" class="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-slate-50 text-sm text-slate-700">{{ _mt }}<span data-dd-mark class="material-symbols-outlined text-[18px] text-primary hidden">check</span></button>
+                                {% endfor %}
+                            </div>
+                        </div>
                     </div>
                     <div>
                         <label class="form-label">Edition *</label>
@@ -929,12 +948,19 @@
                     </div>
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Source</label>
-                        <select name="source" class="form-input">
-                            <option value="">— Select —</option>
-                            <option value="purchase">Purchase</option>
-                            <option value="donation">Donation</option>
-                            <option value="others">Others</option>
-                        </select>
+                        <div class="relative" data-dd>
+                            <input type="hidden" name="source" value="">
+                            <button type="button" data-dd-toggle class="form-input w-full flex items-center justify-between text-left gap-2">
+                                <span data-dd-label class="truncate text-gray-500"></span>
+                                <span class="material-symbols-outlined text-gray-400 shrink-0">expand_more</span>
+                            </button>
+                            <div data-dd-list class="hidden absolute z-30 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg p-1">
+                                <button type="button" data-dd-value="" data-dd-text="— Select —" class="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-slate-50 text-sm text-slate-700">— Select —<span data-dd-mark class="material-symbols-outlined text-[18px] text-primary hidden">check</span></button>
+                                {% for _src in ['purchase', 'donation', 'others'] %}
+                                <button type="button" data-dd-value="{{ _src }}" data-dd-text="{{ _src|title }}" class="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-slate-50 text-sm text-slate-700">{{ _src|title }}<span data-dd-mark class="material-symbols-outlined text-[18px] text-primary hidden">check</span></button>
+                                {% endfor %}
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-4 border-t border-gray-100">
@@ -977,12 +1003,19 @@
                     </div>
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Source</label>
-                        <select name="source" id="edit_acc_source" class="form-input">
-                            <option value="">— Select —</option>
-                            <option value="purchase">Purchase</option>
-                            <option value="donation">Donation</option>
-                            <option value="others">Others</option>
-                        </select>
+                        <div class="relative" data-dd>
+                            <input type="hidden" name="source" id="edit_acc_source" value="">
+                            <button type="button" data-dd-toggle class="form-input w-full flex items-center justify-between text-left gap-2">
+                                <span data-dd-label class="truncate text-gray-500"></span>
+                                <span class="material-symbols-outlined text-gray-400 shrink-0">expand_more</span>
+                            </button>
+                            <div data-dd-list class="hidden absolute z-30 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg p-1">
+                                <button type="button" data-dd-value="" data-dd-text="— Select —" class="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-slate-50 text-sm text-slate-700">— Select —<span data-dd-mark class="material-symbols-outlined text-[18px] text-primary hidden">check</span></button>
+                                {% for _src in ['purchase', 'donation', 'others'] %}
+                                <button type="button" data-dd-value="{{ _src }}" data-dd-text="{{ _src|title }}" class="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-slate-50 text-sm text-slate-700">{{ _src|title }}<span data-dd-mark class="material-symbols-outlined text-[18px] text-primary hidden">check</span></button>
+                                {% endfor %}
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-4 border-t border-gray-100">
@@ -1320,7 +1353,7 @@
             setCatDropdown('edit', b[6] || '', BOOK_CATS[String(b[0])] || []);
             document.getElementById('edit_call_number').value = b[7] || '';
             document.getElementById('edit_isbn').value = b[8] || '';
-            document.getElementById('edit_material_type').value = b[9] || 'Book';
+            setDropdown(document.getElementById('edit_material_type'), b[9] || 'Book');
             document.getElementById('edit_description').value = b[10] || '';
             document.getElementById('edit_ebook_url').value = (b.length > 17 ? b[16] : '') || '';
             applyMaterialType('edit');
@@ -1529,6 +1562,7 @@
         function openAccessionModal(btn) {
             document.getElementById('addAccessionForm').action = btn.getAttribute('data-acc-action');
             document.getElementById('addAccessionForm').reset();
+            setDropdown(document.querySelector('#addAccessionForm input[name="source"]'), '');
             openModal('addAccessionModal');
         }
 
@@ -1546,13 +1580,79 @@
             var c = JSON.parse(btn.getAttribute('data-acc-copy'));
             document.getElementById('editAccessionForm').action = '/librarian/cataloging/accession/' + c[0] + '/edit';
             document.getElementById('edit_acc_number').value = c[1];
-            document.getElementById('edit_acc_source').value = c[3] || '';
+            setDropdown(document.getElementById('edit_acc_source'), c[3] || '');
             openModal('editAccessionModal');
         }
+
+        // In-modal custom dropdowns (replaces the native <select> popups,
+        // which overlay the fields below and spill outside the modal).
+        // Plain CSS: options render inside the modal scroll, so they can
+        // never overlap anything behind it. The POST field keeps its name
+        // via a synced hidden input, so routes and validation are unchanged.
+        (function () {
+            function syncDd(dd) {
+                var hidden = dd.querySelector('input[type="hidden"]');
+                var label = dd.querySelector('[data-dd-label]');
+                if (!hidden || !label) return;
+                var val = hidden.value || '';
+                var match = null;
+                dd.querySelectorAll('[data-dd-value]').forEach(function (opt) {
+                    var on = opt.getAttribute('data-dd-value') === val;
+                    opt.classList.toggle('font-semibold', on);
+                    var mark = opt.querySelector('[data-dd-mark]');
+                    if (mark) mark.classList.toggle('hidden', !on);
+                    if (on) match = opt;
+                });
+                label.textContent = (match && match.getAttribute('data-dd-text')) || '— Select —';
+                label.classList.toggle('text-gray-500', !val);
+            }
+            function closeAll(except) {
+                document.querySelectorAll('[data-dd-list]').forEach(function (l) {
+                    if (l !== except) l.classList.add('hidden');
+                });
+            }
+            document.querySelectorAll('[data-dd]').forEach(function (dd) {
+                var toggle = dd.querySelector('[data-dd-toggle]');
+                var list = dd.querySelector('[data-dd-list]');
+                if (!toggle || !list) return;
+                toggle.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var opening = list.classList.contains('hidden');
+                    closeAll(opening ? list : null);
+                    if (opening) list.classList.remove('hidden');
+                });
+                dd.querySelectorAll('[data-dd-value]').forEach(function (opt) {
+                    opt.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        var hidden = dd.querySelector('input[type="hidden"]');
+                        if (hidden) hidden.value = opt.getAttribute('data-dd-value');
+                        syncDd(dd);
+                        list.classList.add('hidden');
+                        var after = dd.getAttribute('data-dd-after');
+                        if (after && typeof window[after] === 'function') {
+                            window[after](dd.getAttribute('data-dd-prefix') || '');
+                        }
+                    });
+                });
+                syncDd(dd);
+            });
+            document.addEventListener('click', function () { closeAll(null); });
+            // Programmatic set/close hooks for the modal-opening flows
+            // (edit prefill, accession form reset) — mirrors form.reset().
+            window.setDropdown = function (hiddenEl, value) {
+                if (!hiddenEl) return;
+                var dd = hiddenEl.closest('[data-dd]');
+                if (!dd) { hiddenEl.value = value; return; }
+                hiddenEl.value = value;
+                syncDd(dd);
+            };
+            window.closeDropdowns = closeAll;
+        })();
 
         // Close modals on Escape key
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
+                if (window.closeDropdowns) window.closeDropdowns(null);
                 document.querySelectorAll('.modal-show').forEach(function(el) {
                     el.classList.remove('modal-show');
                 });
