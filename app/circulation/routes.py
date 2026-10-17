@@ -749,6 +749,14 @@ def reservation_action(reservation_id, action):
         if count_allocated_reservations(reservation[1]) >= count_available_accessions(reservation[1]):
             flash('Cannot allocate — no unallocated copy is available.', 'error')
             return redirect(url_for('circulation.reservations_page', **status_args))
+        # FIFO guard: the first waiting user gets the first freed copy.
+        # A copy can go out of order only after the front slot is
+        # cancelled (expired) — then this reservation becomes the front.
+        front = next_in_queue(reservation[1])
+        if front and len(front) > 2 and front[0] != reservation_id:
+            flash('Cannot allocate — another borrower is ahead in the queue. '
+                  'Allocate position 1 first, or cancel their reservation.', 'error')
+            return redirect(url_for('circulation.reservations_page', **status_args))
         deadline, window_label = _claim_window()
         try:
             allocate_reservation(reservation_id, deadline, updated_by=current_user.id)

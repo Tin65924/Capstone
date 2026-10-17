@@ -93,7 +93,7 @@ class TestActions:
     Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         mock_db['fetch_one'].side_effect = [
             (7, 1, 5, 1, None, 'waiting', None, None), ACC, None, DETAIL,
-            None, (0,), (0,), (2,)]
+            None, (0,), (0,), (2,), (7, 1, 5, 1, None, 'waiting', None, None)]
         mock_db['fetch_all'].return_value = []
         resp = librarian_client.post('/librarian/reservations/7/allocate')
         assert resp.status_code == 302

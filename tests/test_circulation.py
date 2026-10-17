@@ -437,6 +437,7 @@ class TestReservationLifecycle:
             (0,),                                                  # count active loans
             (0,),                                                  # count allocated reservations
             (2,),                                                  # count available accessions
+            (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),   # this reservation is front of queue
         ]
         resp = librarian_client.post('/librarian/reservations/9/allocate')
         assert resp.status_code == 302
@@ -572,6 +573,94 @@ class TestReservationLifecycle:
         resp = librarian_client.post('/librarian/reservations/9/allocate')
         assert resp.status_code == 302
         assert mock_db['execute'].call_count == 1  # expiry sweep only
+
+
+class TestReservationQueueFifo:
+    """Manual allocation must follow the queue: the first waiting user
+    gets the first freed copy; later queue members are blocked until the
+    front slot is served or cancelled."""
+
+    def test_next_in_queue_orders_fifo(self, mock_db):
+        """Validates next in queue orders FIFO [TestReservationQueueFifo / circulation].
+    If fails: likely queue model SQL changed (ORDER BY).
+    Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
+        from app.circulation.models import next_in_queue
+        mock_db['fetch_one'].return_value = (21, 5, 2, 1, '2026-08-01 09:00:00', 'waiting', None)
+        row = next_in_queue(5)
+        assert row[0] == 21
+        q, args = mock_db['fetch_one'].call_args[0]
+        assert "reservation_status = 'waiting'" in q
+        assert 'ORDER BY queue_position ASC' in q
+        assert args == (5,)
+
+    def test_allocate_2nd_in_queue_blocked(self, librarian_client, mock_db):
+        """Validates second in queue cannot jump the queue `/librarian/reservations/22/allocate` as librarian (expects 302) [TestReservationQueueFifo / circulation].
+    If fails: likely FIFO guard or queue model changed.
+    Failure indicates reservation out-of-order allocation is possible (queue not FIFO)."""
+        mock_db['fetch_one'].side_effect = [
+            (22, 5, 3, 2, '2026-08-01 10:00:00', 'waiting', None),  # reservation (position 2)
+            (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),     # available copy
+            None,                                                   # book lookup (active)
+            (3, '2024-0003', 'IT', 'active', 'Second User', 1, 'Student'),  # borrower details
+            None,                                                   # no active loan for this book
+            (0,),                                                   # count active loans
+            (0,),                                                   # count allocated reservations
+            (2,),                                                   # count available accessions
+            (21, 5, 2, 1, '2026-08-01 09:00:00', 'waiting', None),   # first user still waiting
+        ]
+        resp = librarian_client.post('/librarian/reservations/22/allocate')
+        assert resp.status_code == 302
+        with librarian_client.session_transaction() as sess:
+            flashes = [msg for _, msg in sess.get('_flashes', [])]
+        assert any('ahead in the queue' in m for m in flashes)
+        # Only the expiry sweep runs — no allocate/notify writes.
+        assert mock_db['execute'].call_count == 1
+        assert 'claim_deadline' in mock_db['execute'].call_args_list[0][0][0]
+
+    def test_allocate_after_front_cancelled_allowed(self, librarian_client, mock_db):
+        """Validates allocation once front cancelled `/librarian/reservations/22/allocate` as librarian (expects 302) [TestReservationQueueFifo / circulation].
+    If fails: likely FIFO guard or queue model changed.
+    Failure indicates queue is stuck (later users can never be served)."""
+        mock_db['fetch_one'].side_effect = [
+            (22, 5, 3, 2, '2026-08-01 10:00:00', 'waiting', None),   # reservation (position 2)
+            (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),      # available copy
+            None,                                                    # book lookup (active)
+            (3, '2024-0003', 'IT', 'active', 'Second User', 1, 'Student'),  # borrower details
+            None,                                                    # no active loan for this book
+            (0,),                                                    # count active loans
+            (0,),                                                    # count allocated reservations
+            (2,),                                                    # count available accessions
+            (22, 5, 3, 2, '2026-08-01 10:00:00', 'waiting', None),   # front slot was cancelled — we are now front
+        ]
+        resp = librarian_client.post('/librarian/reservations/22/allocate')
+        assert resp.status_code == 302
+        # [0] expiry sweep, [1] allocate UPDATE, [2] + [3] notifications.
+        allocate_calls = [c for c in mock_db['execute'].call_args_list
+                          if "reservation_status = 'allocated'" in c[0][0]]
+        assert allocate_calls
+
+    def test_claim_bypasses_queue_check(self, librarian_client, mock_db):
+        """Validates claim needs no queue check `/librarian/reservations/9/claim` as librarian (expects 302) [TestReservationQueueFifo / circulation].
+    If fails: likely FIFO guard added to the wrong action.
+    Failure indicates reservation out-of-order allocation is possible (queue not FIFO)."""
+        mock_db['fetch_one'].side_effect = [
+            (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', '2026-08-03 10:00:00'),  # reservation
+            (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),                        # available copy
+            None,                                                                      # book lookup (active)
+            (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),            # borrower details
+            None,                                                                      # no active loan for this book
+            (0,),                                                                      # count active loans
+        ]
+        resp = librarian_client.post('/librarian/reservations/9/claim')
+        assert resp.status_code == 302
+        # No extra queue query: only the four fetches above happen before
+        # the claim UPDATE executes.
+        allocate_calls = [c for c in mock_db['execute'].call_args_list
+                          if "reservation_status = 'claimed'" in c[0][0]]
+        assert allocate_calls
+
+
+class TestReservationLifecycle:
 
     def test_expire_success(self, librarian_client, mock_db):
         """Validates expire success `/librarian/reservations/9/expire` as librarian (expects 302) [TestReservationLifecycle / circulation].
