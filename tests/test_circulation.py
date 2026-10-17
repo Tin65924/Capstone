@@ -1297,7 +1297,6 @@ class TestBookInfoLabels:
         resp = student_client.get('/book/1')
         assert resp.status_code == 200
         # Current user already holds this book -> Borrowed state, no borrow/reserve actions.
-        assert b'You have this book borrowed' in resp.data
         assert b'Borrowed</button>' in resp.data
         assert b'/user/reserve' not in resp.data
 
@@ -1315,7 +1314,6 @@ class TestBookInfoLabels:
         ]
         resp = student_client.get('/book/1')
         assert resp.status_code == 200
-        assert b'You have this book borrowed' in resp.data
         assert b'Borrowed</button>' in resp.data
         assert b'onclick="openBorrowModal' not in resp.data
 

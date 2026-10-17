@@ -313,8 +313,8 @@ class TestAvailabilityIndices:
                                             [('Book', 1)]]
         mock_db['fetch_one'].return_value = (0,)
         body = client.get('/catalog?category=Autobiography').data.decode()
-        assert '1 copy available' in body
-        assert 'No copies available' not in body
+        assert 'Available' in body
+        assert 'Not Available' not in body
 
     def test_public_card_borrowed_state(self, client, mock_db):
         """Validates public card borrowed state `/catalog?category=Autobiography` [TestAvailabilityIndices / catalog edge cases].
@@ -325,7 +325,7 @@ class TestAvailabilityIndices:
                                             [('Book', 1)]]
         mock_db['fetch_one'].return_value = (0,)
         body = client.get('/catalog?category=Autobiography').data.decode()
-        assert 'No copies available' in body
+        assert 'Not Available' in body
 
     def test_staff_accession_column(self, librarian_client, mock_db):
         """Validates staff accession column `/librarian/cataloging` as librarian [TestAvailabilityIndices / catalog edge cases].

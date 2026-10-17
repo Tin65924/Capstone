@@ -703,7 +703,7 @@
                                 <span id="role-select-label-{{ u[0] }}" class="min-w-0 flex-1 truncate text-left">{{ u[3] }}</span>
                                 <span class="material-symbols-outlined text-gray-400 text-[18px] shrink-0" id="role-select-arrow-{{ u[0] }}">expand_more</span>
                             </button>
-                            <ul id="role-select-dropdown-{{ u[0] }}" role="listbox" class="hidden absolute z-50 top-full left-0 mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden py-1.5 text-xs max-h-60 overflow-y-auto">
+                            <ul id="role-select-dropdown-{{ u[0] }}" role="listbox" class="hidden absolute z-50 top-full left-0 min-w-0 w-full bg-white border border-gray-200 rounded-xl shadow-xl py-1.5 text-xs overflow-hidden transition-all">
                                 {% for r in roles %}
                                 {% set is_sel = r[1] == u[3] %}
                                 <li role="option" data-value="{{ r[0] }}" tabindex="0" aria-selected="{{ 'true' if is_sel else 'false' }}" class="role-option px-3 py-2.5 cursor-pointer flex items-center justify-between gap-2 hover:bg-gray-50 transition-colors {% if is_sel %}bg-primary/10 text-primary font-semibold{% else %}text-gray-700{% endif %}"><span class="min-w-0 flex-1 truncate text-left">{{ r[1] }}</span>{% if is_sel %}<span class="material-symbols-outlined text-[16px] text-primary shrink-0">check</span>{% endif %}</li>
@@ -970,12 +970,31 @@ if (_editModal) { _editModal.addEventListener('click', function(e) {
                 paintRoleOptions(prevValue, prevOpt ? prevOpt.textContent.trim() : '');
             });
         }
+        function positionDropdown() {
+            var rect = btn.getBoundingClientRect();
+            var dropdownRect = dropdown.getBoundingClientRect();
+            var viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+            var spaceBelow = viewportHeight - rect.bottom;
+            var spaceAbove = rect.top;
+            if (spaceBelow < dropdownRect.height) {
+                // Not enough space below — flip above
+                dropdown.classList.remove('top-full', 'bottom-0');
+                dropdown.classList.add('bottom-0', 'top-auto');
+                if (arrow) arrow.style.transform = 'rotate(0deg)';
+            } else {
+                // Enough space below — normal position
+                dropdown.classList.add('top-full', 'top-auto');
+                dropdown.classList.remove('bottom-0', 'top-auto');
+                if (arrow) arrow.style.transform = 'rotate(180deg)';
+            }
+        }
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
             document.querySelectorAll('[id^="role-select-dropdown-"]').forEach(function(d){ if(d!==dropdown) d.classList.add('hidden'); });
             document.querySelectorAll('[id^="role-select-arrow-"]').forEach(function(a){ if(a!==arrow) a.style.transform=''; });
             document.querySelectorAll('[id^="role-select-btn-"]').forEach(function(b){ if(b!==btn) b.setAttribute('aria-expanded','false'); });
             setExpanded(!isOpen());
+            positionDropdown();
         });
         dropdown.querySelectorAll('[role="option"]').forEach(function(opt) {
             opt.addEventListener('click', function() { selectValue(opt.getAttribute('data-value'), opt.querySelector('span').textContent.trim()); });

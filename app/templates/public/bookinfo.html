@@ -93,6 +93,8 @@
         </ol>
     </nav>
 
+    {% set user_has_book = current_user.is_authenticated and (current_user.id|int in borrower_map.values()) %}
+    {% set is_archived = book|length > 11 and book[11] != 'active' %}
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 sm:p-6 lg:p-8 mb-6 sm:mb-8">
         <div class="flex flex-col lg:flex-row justify-between items-start gap-4 sm:gap-6">
             <div class="flex-grow min-w-0">
@@ -119,6 +121,32 @@
                     <span class="w-2 h-2 rounded-full bg-slate-400"></span>
                     Not Available
                 </span>
+                {% endif %}
+                {% if is_archived %}
+                <button type="button" disabled title="This book is archived and cannot be borrowed or reserved."
+                    class="px-5 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 text-sm font-bold cursor-not-allowed opacity-60 text-center">Borrow/Reserve</button>
+                {% elif user_has_book %}
+                <button type="button" disabled title="You already have a copy of this book borrowed."
+                    class="px-5 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 text-sm font-bold cursor-not-allowed opacity-60 text-center">Borrowed</button>
+                {% elif any_available %}
+                    {% if current_user.is_authenticated %}
+                    <button type="button" onclick="openBorrowModal('')"
+                        class="px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors text-center">Borrow</button>
+                    {% else %}
+                    <a href="{{ url_for('auth.login', next=request.path) }}"
+                        class="px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors text-center">Borrow</a>
+                    {% endif %}
+                {% else %}
+                    {% if current_user.is_authenticated %}
+                    <form method="post" action="{{ url_for('circulation.user_reserve') }}" class="w-full">
+                        <input type="hidden" name="book_id" value="{{ book[0] }}">
+                        <button type="submit"
+                            class="w-full px-5 py-2.5 rounded-lg border border-primary text-primary text-sm font-bold hover:bg-primary/5 transition-colors text-center">Reserve</button>
+                    </form>
+                    {% else %}
+                    <a href="{{ url_for('auth.login', next=request.path) }}"
+                        class="px-5 py-2.5 rounded-lg border border-primary text-primary text-sm font-bold hover:bg-primary/5 transition-colors text-center">Reserve</a>
+                    {% endif %}
                 {% endif %}
             </div>
         </div>
@@ -184,76 +212,6 @@
         </div>
     </div>
 
-    <div class="mt-8 sm:mt-12">
-        <h3 class="text-base sm:text-lg font-bold text-slate-800 dark:text-white mb-4 sm:mb-6 flex items-center gap-2">
-            <span class="material-icons text-slate-400">layers</span>
-            Availability
-        </h3>
-        {% set user_has_book = current_user.is_authenticated and (current_user.id|int in borrower_map.values()) %}
-        {% set is_archived = book|length > 11 and book[11] != 'active' %}
-        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div class="min-w-0">
-                {% if is_archived %}
-                <p class="text-sm font-bold text-slate-900 dark:text-slate-100">This book is archived</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Archived titles are kept for records and cannot be borrowed or reserved.</p>
-                {% elif user_has_book %}
-                <p class="text-sm font-bold text-slate-900 dark:text-slate-100">You have this book borrowed</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Return your copy before borrowing it again.</p>
-                {% elif any_available %}
-                <p class="text-sm font-bold text-slate-900 dark:text-slate-100">Available</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">A copy is ready — you can borrow it now.</p>
-                {% else %}
-                <p class="text-sm font-bold text-slate-900 dark:text-slate-100">Not Available</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">All copies are currently borrowed — reserve below and we'll notify you.</p>
-                {% endif %}
-            </div>
-            <div class="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-end shrink-0">
-                {% if is_archived %}
-                    <button type="button" disabled title="This book is archived and cannot be borrowed."
-                        class="px-5 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 text-sm font-bold cursor-not-allowed opacity-60">Borrow</button>
-                    <button type="button" disabled title="This book is archived and cannot be reserved."
-                        class="px-5 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 text-sm font-bold cursor-not-allowed opacity-60 flex items-center justify-center gap-1">Reserve <span class="material-symbols-outlined text-[18px]">bookmark_add</span></button>
-                {% elif current_user.is_authenticated %}
-                    {% if user_has_book %}
-                    <button type="button" disabled title="You already have a copy of this book borrowed."
-                        class="px-5 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 text-sm font-bold cursor-not-allowed opacity-60">Borrowed</button>
-                    <button type="button" disabled title="You already have a copy of this book borrowed."
-                        class="px-5 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 text-sm font-bold cursor-not-allowed opacity-60 flex items-center justify-center gap-1">Reserve <span class="material-symbols-outlined text-[18px]">bookmark_add</span></button>
-                    {% else %}
-                        {% if any_available %}
-                        <button type="button" onclick="openBorrowModal('')"
-                            class="px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors flex items-center justify-center gap-1">Borrow <span class="material-symbols-outlined text-[18px]">arrow_forward</span></button>
-                        {% else %}
-                        <button type="button" disabled
-                            class="px-5 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 text-sm font-bold cursor-not-allowed opacity-60">Borrow</button>
-                        {% endif %}
-                        {% if any_available %}
-                        <button type="button" disabled title="A copy is available — reserve is only enabled when all copies are borrowed."
-                            class="px-5 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 text-sm font-bold cursor-not-allowed opacity-60 flex items-center justify-center gap-1">Reserve <span class="material-symbols-outlined text-[18px]">bookmark_add</span></button>
-                        {% else %}
-                        <form method="post" action="{{ url_for('circulation.user_reserve') }}" class="inline">
-                            <input type="hidden" name="book_id" value="{{ book[0] }}">
-                            <button type="submit"
-                                class="px-5 py-2.5 rounded-lg border border-primary text-primary text-sm font-bold hover:bg-primary/5 transition-colors flex items-center justify-center gap-1">Reserve <span class="material-symbols-outlined text-[18px]">bookmark_add</span></button>
-                        </form>
-                        {% endif %}
-                    {% endif %}
-                {% else %}
-                    {% if any_available %}
-                    <a href="{{ url_for('auth.login', next=request.path) }}"
-                        class="px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors flex items-center justify-center gap-1">Borrow <span class="material-symbols-outlined text-[18px]">login</span></a>
-                    <button type="button" disabled title="Log in to reserve."
-                        class="px-5 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 text-sm font-bold cursor-not-allowed opacity-60">Reserve</button>
-                    {% else %}
-                    <button type="button" disabled
-                        class="px-5 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 text-sm font-bold cursor-not-allowed opacity-60">Borrow</button>
-                    <a href="{{ url_for('auth.login', next=request.path) }}"
-                        class="px-5 py-2.5 rounded-lg border border-primary text-primary text-sm font-bold hover:bg-primary/5 transition-colors flex items-center justify-center gap-1">Reserve <span class="material-symbols-outlined text-[18px]">login</span></a>
-                    {% endif %}
-                {% endif %}
-            </div>
-        </div>
-    </div>
 </main>
 
 <!-- Borrow Modal -->

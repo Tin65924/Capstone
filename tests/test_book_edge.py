@@ -55,8 +55,7 @@ class TestDetailRendering:
     Failure indicates catalog data or listing/sort is wrong."""
         _detail_mocks(mock_db, accessions=())
         body = client.get('/book/1').data.decode()
-        assert 'No copies available' in body
-        assert 'No copies have been cataloged yet' in body
+        assert 'Not Available' in body
 
     def test_none_accessions(self, client, mock_db):
         """Validates none accessions `/book/1` (expects 200) [TestDetailRendering / book edge cases].
@@ -95,7 +94,7 @@ class TestDetailRendering:
     Failure indicates catalog data or listing/sort is wrong."""
         _detail_mocks(mock_db, loan_rows=[(10, 1)])
         body = student_client.get('/book/1').data.decode()
-        assert 'You have this book borrowed' in body
+        assert 'Borrowed</button>' in body
 
     def test_all_borrowed_state(self, student_client, mock_db):
         """Validates all borrowed state `/book/1` as student [TestDetailRendering / book edge cases].
@@ -103,7 +102,7 @@ class TestDetailRendering:
     Failure indicates catalog data or listing/sort is wrong."""
         _detail_mocks(mock_db, loans=[(10,)])
         body = student_client.get('/book/1').data.decode()
-        assert 'No copies available' in body
+        assert 'Not Available' in body
 
 
 class TestDetailXss:
