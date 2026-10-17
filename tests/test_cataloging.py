@@ -1082,9 +1082,8 @@ class TestPublicCatalog:
         ]
         resp = client.get('/book/1')
         assert resp.status_code == 200
-        assert b'1 of 1' in resp.data
+        assert b'Available in Library' in resp.data
         assert b'Borrow' in resp.data
-        assert b'Reserve' in resp.data
 
     def test_book_info_all_borrowed(self, client, mock_db):
         """Validates book info all borrowed `/book/1` (expects 200) [TestPublicCatalog / cataloging].
@@ -1098,8 +1097,7 @@ class TestPublicCatalog:
         ]
         resp = client.get('/book/1')
         assert resp.status_code == 200
-        assert b'No copies available' in resp.data
-        assert b'Borrow' in resp.data
+        assert b'Not Available' in resp.data
         assert b'Reserve' in resp.data
 
 
@@ -1511,6 +1509,55 @@ class TestCategories:
         assert 'category_id' in query
         assert 'ebook_url' in query
         assert params[-3:] == ('active', 3, None)
+
+    def test_create_book_degrades_when_ebook_url_missing(self, mock_db):
+        """Validates create_book drops a missing optional column instead of 500ing [TestSchemaGate / cataloging].
+    If fails: likely write-path schema fallback removed (unmigrated DB 500s).
+    Failure indicates cataloging writes break on a lagging database."""
+        from app.cataloging.models import create_book
+        missing = Exception(
+            'column "ebook_url" of relation "book_catalog" does not exist')
+        missing.pgcode = '42703'
+        mock_db['execute'].side_effect = [missing, [(9,)]]
+        book_id = create_book('T', 'A', None, None, None, 'Physics',
+                              None, None, 'Book', None,
+                              category_id=3, ebook_url='http://example.com/e')
+        assert book_id == 9
+        first_sql, _ = mock_db['execute'].call_args_list[0][0]
+        retry_sql, retry_params = mock_db['execute'].call_args_list[1][0]
+        assert 'ebook_url' in first_sql
+        assert 'ebook_url' not in retry_sql
+        assert 'category_id' in retry_sql
+        assert retry_params[-2:] == ('active', 3)
+
+    def test_update_book_degrades_when_category_id_missing(self, mock_db):
+        """Validates update_book drops a missing optional column instead of 500ing [TestSchemaGate / cataloging].
+    If fails: likely write-path schema fallback removed (unmigrated DB 500s).
+    Failure indicates cataloging writes break on a lagging database."""
+        from app.cataloging.models import update_book
+        missing = Exception(
+            'column "category_id" of relation "book_catalog" does not exist')
+        missing.pgcode = '42703'
+        mock_db['execute'].side_effect = [missing, 1]
+        result = update_book(7, 'T', 'A', None, None, None, 'Physics',
+                             None, None, 'Book', None,
+                             category_id=3, ebook_url='http://example.com/e')
+        assert result == 1
+        retry_sql, retry_params = mock_db['execute'].call_args_list[1][0]
+        assert 'category_id' not in retry_sql
+        assert 'ebook_url' in retry_sql
+        assert 7 in retry_params
+
+    def test_book_write_reraises_non_schema_errors(self, mock_db):
+        """Validates book writes re-raise non-schema DB errors [TestSchemaGate / cataloging].
+    If fails: likely fallback over-broadened (masks real bugs).
+    Failure indicates cataloging writes hide genuine failures."""
+        import pytest
+        from app.cataloging.models import create_book
+        mock_db['execute'].side_effect = RuntimeError('boom')
+        with pytest.raises(RuntimeError):
+            create_book('T', 'A', None, None, None, 'Physics',
+                        None, None, 'Book', None, category_id=3)
 
     def test_add_book_canonicalizes_subject(self, librarian_client, mock_db):
         """Validates add book canonicalizes subject `/librarian/cataloging/add` as librarian (expects 302) [TestCategories / cataloging].

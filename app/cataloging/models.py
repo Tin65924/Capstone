@@ -136,6 +136,62 @@ def _warn_schema_mismatch(what):
         pass
 
 
+# book_catalog columns introduced by later migrations (categories FK,
+# e-book link, audit stamps). Write paths include them when the database
+# has them and drop any the database reports missing, so a deploy serving
+# new code against a not-yet-migrated database degrades instead of
+# 500ing on the INSERT/UPDATE (the write-path twin of the read gate
+# below, which keeps those same columns out of SELECTs).
+_OPTIONAL_BOOK_COLUMNS = ('category_id', 'ebook_url', 'updated_at', 'updated_by')
+
+
+def _missing_column_name(exc):
+    """Column named by an UndefinedColumn error, or None.
+
+    Postgres phrases it ``column "ebook_url" of relation ...``; pulling
+    the name out lets a write retry without exactly the column the
+    schema lacks instead of dropping every optional column at once.
+    """
+    import re
+    match = re.search(r'column "([^"]+)"', str(exc))
+    return match.group(1) if match else None
+
+
+def _execute_book_write(build, optional_columns=_OPTIONAL_BOOK_COLUMNS):
+    """Run a book_catalog write, retrying without any missing optional column.
+
+    ``build(available)`` returns ``(sql, params)`` built for the current
+    set of usable optional columns. When the statement raises an
+    UndefinedColumn naming one of them, that column is dropped and
+    ``build`` is retried; an unmigrated database therefore loses only the
+    columns it lacks instead of failing the request. ``db.execute`` rolls
+    the failed statement back, so retrying is safe. Any other error
+    propagates unchanged.
+
+    Args:
+        build: Callable taking the set of currently usable optional
+            column names and returning ``(sql, params)``.
+        optional_columns: Names safe to drop when the database lacks them.
+
+    Returns:
+        Whatever ``db.execute`` returns for the successful statement.
+    """
+    available = set(optional_columns)
+    while True:
+        sql, params = build(available)
+        try:
+            return db.execute(sql, params)
+        except Exception as e:
+            if not _is_missing_relation(e):
+                raise
+            missing = _missing_column_name(e)
+            if missing in available:
+                _warn_schema_mismatch('book_catalog.%s' % missing)
+                available.discard(missing)
+                continue
+            raise
+
+
 # Multi-category schema gate: book_categories/categories may not exist
 # when a deploy serving new code hits a not-yet-migrated database
 # (startup migration still pending or failed). Probing every call would
@@ -200,14 +256,27 @@ def create_book(title, author, edition, publisher, year_published, subject_class
         category_id, _ = resolve_category(subject_classification)
     isbn = normalize_isbn(isbn) or None
     ebook_url = clean_ebook_url(ebook_url)
-    rows = db.execute(
-        '''INSERT INTO book_catalog (title, author, edition, publisher, year_published,
-           subject_classification, call_number, isbn, material_type, description, catalog_status, category_id, ebook_url)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-           RETURNING book_id''',
-        (title, author, edition, publisher, year_published, subject_classification,
-         call_number, isbn, material_type, description, 'active', category_id, ebook_url)
-    )
+
+    def build(available):
+        columns = [
+            ('title', title), ('author', author), ('edition', edition),
+            ('publisher', publisher), ('year_published', year_published),
+            ('subject_classification', subject_classification),
+            ('call_number', call_number), ('isbn', isbn),
+            ('material_type', material_type), ('description', description),
+            ('catalog_status', 'active'),
+        ]
+        if 'category_id' in available:
+            columns.append(('category_id', category_id))
+        if 'ebook_url' in available:
+            columns.append(('ebook_url', ebook_url))
+        names = ', '.join(name for name, _ in columns)
+        placeholders = ', '.join(['%s'] * len(columns))
+        return ('INSERT INTO book_catalog (' + names + ') VALUES ('
+                + placeholders + ') RETURNING book_id',
+                tuple(value for _, value in columns))
+
+    rows = _execute_book_write(build)
     return rows[0][0] if rows else None
 
 
@@ -1185,16 +1254,32 @@ def update_book(book_id, title, author, edition, publisher, year_published,
         category_id, _ = resolve_category(subject_classification)
     isbn = normalize_isbn(isbn) or None
     ebook_url = clean_ebook_url(ebook_url)
-    return db.execute(
-        '''UPDATE book_catalog SET title=%s, author=%s, edition=%s, publisher=%s,
-           year_published=%s, subject_classification=%s, call_number=%s,
-           isbn=%s, material_type=%s, description=%s, category_id=%s, ebook_url=%s,
-           updated_at=NOW(), updated_by=%s
-           WHERE book_id=%s''',
-        (title, author, edition, publisher, year_published,
-         subject_classification, call_number, isbn, material_type, description,
-         category_id, ebook_url, updated_by, book_id)
-    )
+
+    def build(available):
+        assigns = [
+            'title=%s', 'author=%s', 'edition=%s', 'publisher=%s',
+            'year_published=%s', 'subject_classification=%s', 'call_number=%s',
+            'isbn=%s', 'material_type=%s', 'description=%s',
+        ]
+        params = [title, author, edition, publisher, year_published,
+                  subject_classification, call_number, isbn, material_type,
+                  description]
+        if 'category_id' in available:
+            assigns.append('category_id=%s')
+            params.append(category_id)
+        if 'ebook_url' in available:
+            assigns.append('ebook_url=%s')
+            params.append(ebook_url)
+        if 'updated_at' in available:
+            assigns.append('updated_at=NOW()')
+        if 'updated_by' in available:
+            assigns.append('updated_by=%s')
+            params.append(updated_by)
+        params.append(book_id)
+        return ('UPDATE book_catalog SET ' + ', '.join(assigns)
+                + ' WHERE book_id=%s', tuple(params))
+
+    return _execute_book_write(build)
 
 
 def get_books_by_status(status):
