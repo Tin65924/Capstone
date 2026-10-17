@@ -1,3 +1,5 @@
+import re
+
 from app.database import db
 
 
@@ -83,7 +85,6 @@ def ebook_link_info(url):
         return None, None
     try:
         from urllib.parse import urlparse, parse_qs
-        import re
         parsed = urlparse(url)
         host = (parsed.hostname or '').lower()
         if 'drive.google.com' in host:
@@ -109,6 +110,73 @@ def drive_preview_url(file_id):
     return 'https://drive.google.com/file/d/%s/preview' % file_id
 
 
+MAX_EBOOK_DOWNLOAD_BYTES = 100 * 1024 * 1024  # 100 MB hard cap
+_EBOOK_DOWNLOAD_TIMEOUT = (10, 60)  # connect, read seconds
+
+
+def docs_export_url(url):
+    """PDF export endpoint for a Google Docs document link."""
+    match = re.search(r'/document/d/([-\w]+)', url or '')
+    if not match:
+        return ''
+    return 'https://docs.google.com/document/d/%s/export?format=pdf' % match.group(1)
+
+
+def download_source_url(kind, file_id, url):
+    """Google endpoint that serves the file bytes for download.
+
+    Drive uses the usercontent endpoint with confirm=t, which skips
+    the >25 MB virus-scan interstitial for publicly shared files.
+    Docs always exports a PDF. Empty string when not downloadable.
+    """
+    if kind == 'docs':
+        return docs_export_url(url)
+    if kind == 'drive' and file_id:
+        return 'https://drive.usercontent.google.com/download?id=%s&export=download&confirm=t' % file_id
+    return ''
+
+
+def open_ebook_stream(source_url):
+    """Open a streaming response from a Google download endpoint.
+
+    Returns (resp, None) where resp is an HTTP response the caller
+    iterates in chunks (never loads the whole file into memory), or
+    (None, friendly_error) when Google refuses: a text/html body
+    means the file is not link-shared or its owner disabled viewer
+    downloads; RequestException covers connectivity problems.
+    """
+    import requests
+    session = requests.Session()
+    session.headers['User-Agent'] = (
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36')
+    try:
+        resp = session.get(source_url, stream=True,
+                           timeout=_EBOOK_DOWNLOAD_TIMEOUT, allow_redirects=True)
+    except requests.RequestException:
+        return None, 'The e-book service is temporarily unreachable.'
+    ctype = (resp.headers.get('Content-Type') or '').lower()
+    if resp.status_code != 200 or ctype.startswith('text/html'):
+        resp.close()
+        return None, ('The source file is not publicly downloadable — check it '
+                      'is shared as "Anyone with the link can view".')
+    return resp, None
+
+
+def parse_size_bytes(resp):
+    """Declared Content-Length as an int (0 when absent/non-numeric)."""
+    try:
+        return int(resp.headers.get('Content-Length') or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def ebook_download_filename(title):
+    """Safe, branded download filename derived from the book title."""
+    slug = re.sub(r'[^\w\s-]', '', title or '').strip()
+    slug = re.sub(r'[\s]+', '-', slug)[:80] or 'ebook'
+    return slug.lower() + '.pdf'
+
+
 def docs_preview_url(url):
     """Embeddable /preview URL for a Google Docs document link.
 
@@ -117,7 +185,6 @@ def docs_preview_url(url):
     /preview form, so staff never need to hand-craft the embed URL.
     Empty string when the URL is not a recognized document link.
     """
-    import re
     match = re.search(r'/document/d/([-\w]+)', url or '')
     if not match:
         return ''

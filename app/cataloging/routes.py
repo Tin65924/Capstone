@@ -5,7 +5,7 @@ import threading
 import uuid
 import time
 from datetime import datetime, timedelta
-from flask import Response, render_template, request, redirect, url_for, flash, jsonify, current_app, session
+from flask import Response, abort, render_template, request, redirect, url_for, flash, jsonify, current_app, session
 from flask_login import login_required, current_user
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -1493,3 +1493,55 @@ def book_info(book_id):
                            ebook_url=_ebook_url or '',
                            ebook_kind=_ebook_kind or '',
                            ebook_preview=_ebook_preview)
+
+
+@cataloging_bp.route('/book/<int:book_id>/download')
+def ebook_download(book_id):
+    """Stream a title's e-book through this server as an attachment.
+
+    Public route (pairs with /book/<id>): no auth guard. The stored
+    link is never exposed — users download from the library itself
+    while the bytes are served from Google. Body text/html means the
+    file is not link-shared (or its owner disabled downloads), so fail
+    with clear feedback instead of confusing browser output.
+    """
+    from app.cataloging.models import (
+        ebook_link_info, download_source_url, open_ebook_stream,
+        parse_size_bytes, MAX_EBOOK_DOWNLOAD_BYTES, ebook_download_filename,
+    )
+    book = get_book_by_id(book_id)
+    if not book or (len(book) > 11 and (book[11] or 'active') != 'active'):
+        return abort(404)
+    _ebook_url = book[16] if len(book) > 16 else None
+    kind, file_id = ebook_link_info(_ebook_url)
+    source_url = download_source_url(kind, file_id, _ebook_url)
+    if not source_url:
+        flash('This e-book has no downloadable link yet.', 'error')
+        return redirect(url_for('cataloging.book_info', book_id=book_id))
+    google_resp, err = open_ebook_stream(source_url)
+    if err:
+        flash(err, 'error')
+        return redirect(url_for('cataloging.book_info', book_id=book_id))
+    # Honor a declared size immediately; stream the rest under the cap.
+    declared = parse_size_bytes(google_resp)
+    if declared and declared > MAX_EBOOK_DOWNLOAD_BYTES:
+        google_resp.close()
+        flash('That file is too large to download through the library site.', 'error')
+        return redirect(url_for('cataloging.book_info', book_id=book_id))
+
+    def _stream():
+        sent = 0
+        try:
+            for chunk in google_resp.iter_content(chunk_size=64 * 1024):
+                sent += len(chunk)
+                if sent > MAX_EBOOK_DOWNLOAD_BYTES:
+                    break
+                if chunk:
+                    yield chunk
+        finally:
+            google_resp.close()
+
+    response = Response(_stream(), content_type=google_resp.headers.get('Content-Type') or 'application/octet-stream')
+    response.headers['Content-Disposition'] = f'attachment; filename="{ebook_download_filename(book[1])}"'
+    response.headers['Cache-Control'] = 'no-store'
+    return response

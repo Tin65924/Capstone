@@ -2375,11 +2375,16 @@ class TestEbookUrl:
         mock_db['fetch_all'].return_value = []
         body = client.get('/book/1').data.decode()
         assert 'https://drive.google.com/file/d/ABC123/preview' in body
-        # Preview opens inside the modal, not inline.
+        # Preview opens inside the modal, not inline, and loads on demand:
+        # no live src on page render (a live src fetched the Google preview
+        # on every /book view even while the modal was hidden — slow).
         assert '<iframe' not in body.split('ebookPreviewModal')[0]
+        assert 'data-src="https://drive.google.com/file/d/ABC123/preview"' in body
+        assert "frame.src = frame.getAttribute('data-src')" in body
         assert 'openEbookPreview()' in body
         assert 'Embedded preview — Google Drive' in body
-        assert 'Open in new tab' in body
+        assert 'Open in new tab' not in body
+        assert 'Download' in body
 
     def test_bookinfo_embeds_docs_preview(self, client, mock_db):
         """Validates bookinfo embeds docs preview `/book/1` (expects 200) [TestEbookUrl / cataloging].
@@ -2392,7 +2397,7 @@ class TestEbookUrl:
         mock_db['fetch_all'].return_value = []
         body = client.get('/book/1').data.decode()
         # The edit variant is normalized to the embeddable /preview form.
-        assert 'https://docs.google.com/document/d/DOC123/preview' in body
+        assert 'data-src="https://docs.google.com/document/d/DOC123/preview"' in body
         assert 'openEbookPreview()' in body
         assert 'Embedded preview — Google Docs' in body
 
@@ -2408,6 +2413,134 @@ class TestEbookUrl:
         body = client.get('/book/1').data.decode()
         assert 'Read Online' in body
         assert 'drive.google.com/file/d' not in body
+
+    def test_download_helpers(self, mock_db):
+        """Validates download source urls and filenames [TestEbookUrl / cataloging].
+    If fails: likely Google download endpoint or filename helper changed.
+    Failure indicates downloads break or leak a bad filename."""
+        from app.cataloging.models import (
+            download_source_url, ebook_download_filename, MAX_EBOOK_DOWNLOAD_BYTES,
+        )
+        assert download_source_url('drive', 'ABC123', None) == (
+            'https://drive.usercontent.google.com/download?id=ABC123&export=download&confirm=t')
+        shared = ('https://docs.google.com/document/d/1ekPEknmkae6q2KBCACQaPeeoJhF5aE57'
+                  '/edit?usp=sharing&ouid=108913924297114452491&rtpof=true&sd=true')
+        assert download_source_url('docs', None, shared) == (
+            'https://docs.google.com/document/d/1ekPEknmkae6q2KBCACQaPeeoJhF5aE57/export?format=pdf')
+        assert download_source_url('external', None, 'https://x.com/f') == ''
+        assert download_source_url(None, None, None) == ''
+        assert ebook_download_filename('Algebra Made Easy! (2nd ed)') == 'algebra-made-easy-2nd-ed.pdf'
+        assert ebook_download_filename('') == 'ebook.pdf'
+        assert len(ebook_download_filename('x' * 200)) <= 84
+        assert MAX_EBOOK_DOWNLOAD_BYTES == 100 * 1024 * 1024
+
+    def test_download_streams_drive_file(self, client, mock_db):
+        """Validates download streams drive file `/book/1/download` (expects 200) [TestEbookUrl / cataloging].
+    If fails: likely proxy route or streaming generator changed.
+    Failure indicates downloads fail or leak the raw Google URL."""
+        from unittest.mock import patch
+        class FakeResp:
+            headers = {'Content-Type': 'application/pdf', 'Content-Length': '5'}
+            def iter_content(self, chunk_size):
+                yield b'12345'
+            def close(self):
+                pass
+        book = (1, 'E Title', 'A', None, None, 2021, 'Tech', None, None,
+                'E-Book', 'D', 'active', '2024-01-01', None, None, None,
+                'https://drive.google.com/file/d/ABC123/view')
+        mock_db['fetch_one'].return_value = book
+        with patch('app.cataloging.models.open_ebook_stream', return_value=(FakeResp(), None)) as opener:
+            resp = client.get('/book/1/download')
+        assert resp.status_code == 200
+        assert resp.data == b'12345'
+        assert resp.headers['Content-Disposition'] == 'attachment; filename="e-title.pdf"'
+        args, _ = opener.call_args
+        assert 'drive.usercontent.google.com/download' in args[0]
+        assert 'id=ABC123' in args[0]
+        assert 'https://drive.google.com/file/d/ABC123' not in resp.headers['Content-Disposition']
+
+    def test_download_streams_docs_pdf(self, client, mock_db):
+        """Validates download streams docs pdf `/book/1/download` (expects 200) [TestEbookUrl / cataloging].
+    If fails: likely the Docs export endpoint changed.
+    Failure indicates Docs downloads fail."""
+        from unittest.mock import patch
+        class FakeResp:
+            headers = {'Content-Type': 'application/pdf'}
+            def iter_content(self, chunk_size):
+                yield b'PAA'
+            def close(self):
+                pass
+        book = (1, 'E Title', 'A', None, None, 2021, 'Tech', None, None,
+                'E-Book', 'D', 'active', '2024-01-01', None, None, None,
+                'https://docs.google.com/document/d/DOC123/edit')
+        mock_db['fetch_one'].return_value = book
+        with patch('app.cataloging.models.open_ebook_stream', return_value=(FakeResp(), None)) as opener:
+            resp = client.get('/book/1/download')
+        assert resp.status_code == 200
+        assert resp.data == b'PAA'
+        args, _ = opener.call_args
+        assert args[0] == 'https://docs.google.com/document/d/DOC123/export?format=pdf'
+
+    def test_download_rejects_unshared_file(self, client, mock_db):
+        """Validates download rejects unshared file `/book/1/download` (expects 302) [TestEbookUrl / cataloging].
+    If fails: likely refusal handling changed.
+    Failure indicates confusing output when the file is not link-shared."""
+        from unittest.mock import patch
+        book = (1, 'E Title', 'A', None, None, 2021, 'Tech', None, None,
+                'E-Book', 'D', 'active', '2024-01-01', None, None, None,
+                'https://drive.google.com/file/d/ABC123/view')
+        mock_db['fetch_one'].return_value = book
+        warn = ('The source file is not publicly downloadable — check it '
+                'is shared as "Anyone with the link can view".')
+        with patch('app.cataloging.models.open_ebook_stream', return_value=(None, warn)):
+            resp = client.get('/book/1/download')
+        assert resp.status_code == 302
+        assert '/book/1' in resp.location
+
+    def test_download_rejects_oversize_file(self, client, mock_db):
+        """Validates download rejects oversize file `/book/1/download` (expects 302) [TestEbookUrl / cataloging].
+    If fails: likely the size cap changed.
+    Failure indicates unbounded downloads reach the server."""
+        from unittest.mock import patch
+        from app.cataloging.models import MAX_EBOOK_DOWNLOAD_BYTES
+        book = (1, 'E Title', 'A', None, None, 2021, 'Tech', None, None,
+                'E-Book', 'D', 'active', '2024-01-01', None, None, None,
+                'https://drive.google.com/file/d/ABC123/view')
+        mock_db['fetch_one'].return_value = book
+        class FakeResp:
+            headers = {'Content-Type': 'application/pdf',
+                       'Content-Length': str(MAX_EBOOK_DOWNLOAD_BYTES + 1)}
+            def close(self):
+                pass
+        with patch('app.cataloging.models.open_ebook_stream', return_value=(FakeResp(), None)):
+            with patch('app.cataloging.models.parse_size_bytes',
+                       return_value=MAX_EBOOK_DOWNLOAD_BYTES + 1):
+                resp = client.get('/book/1/download')
+        assert resp.status_code == 302
+        assert '/book/1' in resp.location
+
+    def test_download_rejects_non_ebook(self, client, mock_db):
+        """Validates download rejects non ebook `/book/1/download` (expects 302) [TestEbookUrl / cataloging].
+    If fails: likely the no-link guard changed.
+    Failure indicates downloads hit Google without a link."""
+        from unittest.mock import patch
+        book = (1, 'Plain Book', 'A', None, None, 2021, 'Tech', None, None,
+                'Book', 'D', 'active', '2024-01-01', None, None, None,
+                None)
+        mock_db['fetch_one'].return_value = book
+        with patch('app.cataloging.models.open_ebook_stream') as opener:
+            resp = client.get('/book/1/download')
+        assert resp.status_code == 302
+        assert '/book/1' in resp.location
+        assert opener.call_count == 0
+
+    def test_download_missing_book_404(self, client, mock_db):
+        """Validates download missing book 404 `/book/1/download` (expects 404) [TestEbookUrl / cataloging].
+    If fails: likely the book lookup guard changed.
+    Failure indicates downloads serve nonexistent titles."""
+        mock_db['fetch_one'].return_value = None
+        resp = client.get('/book/1/download')
+        assert resp.status_code == 404
 
     def test_catalog_card_read_online(self, client, mock_db):
         """Validates catalog card read online `/catalog?q=E` (expects 200) [TestEbookUrl / cataloging].

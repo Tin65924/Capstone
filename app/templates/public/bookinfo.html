@@ -220,8 +220,8 @@
                 {% if ebook_kind == 'drive' or ebook_kind == 'docs' %}
                 <button type="button" onclick="openEbookPreview()"
                     class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-colors">Read Online <span class="material-symbols-outlined text-[18px]">auto_stories</span></button>
-                <a href="{{ ebook_url }}" target="_blank" rel="noopener"
-                    class="ml-3 text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-primary transition-colors">Open in new tab <span class="material-symbols-outlined text-[15px] align-[-2px]">open_in_new</span></a>
+                <a href="{{ url_for('cataloging.ebook_download', book_id=book[0]) }}"
+                    class="inline-flex items-center gap-2 ml-3 px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold hover:border-primary hover:text-primary transition-colors">Download <span class="material-symbols-outlined text-[18px]">download</span></a>
                 {% else %}
                 <a href="{{ ebook_url }}" target="_blank" rel="noopener"
                     class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-colors">Read Online <span class="material-symbols-outlined text-[18px]">open_in_new</span></a>
@@ -284,14 +284,16 @@
                 <p class="text-xs text-slate-400">Embedded preview — {{ 'Google Drive' if ebook_kind == 'drive' else 'Google Docs' }}</p>
             </div>
             <div class="flex items-center gap-3 shrink-0">
-                <a href="{{ ebook_url }}" target="_blank" rel="noopener"
-                    class="text-xs font-bold text-primary hover:underline whitespace-nowrap">Open in new tab <span class="material-symbols-outlined text-[13px] align-[-2px]">open_in_new</span></a>
+                <a href="{{ url_for('cataloging.ebook_download', book_id=book[0]) }}"
+                    class="inline-flex items-center gap-1 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-primary transition-colors">Download <span class="material-symbols-outlined text-[16px] align-[-2px]">download</span></a>
                 <button onclick="closeEbookPreview()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors" aria-label="Close preview">
                     <span class="material-symbols-outlined text-[22px]">close</span>
                 </button>
             </div>
         </div>
-        <iframe src="{{ ebook_preview }}" class="flex-1 w-full bg-white" title="E-book preview"></iframe>
+        {# Deferred: the preview must NOT load on page render — the src is
+           only assigned when the modal opens (see openEbookPreview). #}
+        <iframe id="ebookPreviewFrame" data-src="{{ ebook_preview }}" class="flex-1 w-full bg-white" title="E-book preview"></iframe>
     </div>
 </div>
 {% endif %}
@@ -323,10 +325,18 @@
         document.getElementById('borrowModal').classList.add('hidden');
     }
 
-    // E-Book preview modal: open/close plus Escape.
+    // E-Book preview modal: open/close plus Escape. The preview iframe
+    // stays src-less until first open — assigning src on demand keeps
+    // /book fast (Google previews can take seconds; a live src would
+    // fetch them on every page render even while the modal is hidden).
     function openEbookPreview() {
         var modal = document.getElementById('ebookPreviewModal');
-        if (modal) { modal.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
+        if (modal) {
+            var frame = document.getElementById('ebookPreviewFrame');
+            if (frame && !frame.src) frame.src = frame.getAttribute('data-src');
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
     }
     function closeEbookPreview() {
         var modal = document.getElementById('ebookPreviewModal');
