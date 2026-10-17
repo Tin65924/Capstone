@@ -167,6 +167,7 @@
     grid-template-columns: 1fr;
     gap: 1rem;
 }
+        .form-grid > * { min-width: 0; }
         .form-grid > .col-span-2 { grid-column: 1 / -1; }
 @media (min-width: 640px) {
     .form-grid { grid-template-columns: 1fr 1fr; }
@@ -639,7 +640,7 @@
             <form method="POST" action="{{ url_for('cataloging.add_book') }}" class="p-4 sm:p-6 space-y-4" data-exists-book data-exists-accession id="addBookForm">
                 {% set _add = stashed_form if stashed_form and stashed_form.get('_modal') == 'addBookModal' else {} %}
                 <p data-exists-msg class="hidden mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm font-medium text-red-700 dark:text-red-300"></p>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div class="form-grid">
                     <div class="col-span-2">
                         <label class="form-label">Material Type</label>
                         <select name="material_type" id="add_material_type" class="form-input" onchange="applyMaterialType('add')">
@@ -759,7 +760,7 @@
             </div>
             {% endif %}
             <form method="POST" id="editBookForm" class="p-4 sm:p-6 space-y-4">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div class="form-grid">
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Title *</label>
                         <input type="text" name="title" id="edit_title" required maxlength="255" class="form-input" data-suggest="book_title">
@@ -920,7 +921,7 @@
             </div>
             {% endif %}
             <form method="POST" id="addAccessionForm" class="p-4 sm:p-6 space-y-4" data-exists-accession>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div class="form-grid">
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Accession Number *</label>
                         <input type="text" name="accession_number" required class="form-input" placeholder="e.g. 000001" pattern="\d{6}" maxlength="6" title="6-digit accession number (e.g. 000001)">
@@ -969,7 +970,7 @@
             </div>
             {% endif %}
             <form method="POST" id="editAccessionForm" class="p-4 sm:p-6 space-y-4">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div class="form-grid">
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Accession Number *</label>
                         <input type="text" name="accession_number" id="edit_acc_number" required class="form-input" placeholder="e.g. 000001" pattern="\d{6}" maxlength="6" title="6-digit accession number (e.g. 000001)">
