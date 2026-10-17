@@ -192,6 +192,45 @@ def _execute_book_write(build, optional_columns=_OPTIONAL_BOOK_COLUMNS):
             raise
 
 
+# Explicit book_catalog projection in the positional contract order every
+# caller indexes by (book[6] subject, book[9] material, book[11] status,
+# book[15] category_id, book[16] ebook_url). Selecting columns by name
+# instead of SELECT * keeps those indices correct on every database:
+# ALTER TABLE migrations append new columns in deployment-dependent order,
+# so ebook_url is not reliably the 17th physical column.
+BOOK_COLUMNS = (
+    'book_id, title, author, edition, publisher, year_published, '
+    'subject_classification, call_number, isbn, material_type, description, '
+    'catalog_status, date_added, updated_at, updated_by, category_id, ebook_url'
+)
+
+
+def _book_select(fetch, build):
+    """Run a book_catalog read with the explicit canonical column list.
+
+    ``build(cols)`` returns ``(sql, params)`` using ``cols`` as the
+    projection. If that statement hits a missing column/table (a database
+    that has not run the migration adding category_id/ebook_url/audit
+    columns), the same query is retried with ``SELECT *`` so reads still
+    degrade instead of 500ing.
+
+    Args:
+        fetch: ``db.fetch_one`` or ``db.fetch_all``.
+        build: Callable taking the projection string and returning
+            ``(sql, params)``.
+
+    Returns:
+        Whatever ``fetch`` returns.
+    """
+    try:
+        return fetch(*build(BOOK_COLUMNS))
+    except Exception as e:
+        if not _is_missing_relation(e):
+            raise
+        _warn_schema_mismatch('book_catalog columns')
+        return fetch(*build('*'))
+
+
 # Multi-category schema gate: book_categories/categories may not exist
 # when a deploy serving new code hits a not-yet-migrated database
 # (startup migration still pending or failed). Probing every call would
@@ -320,32 +359,27 @@ def search_books(query, field=None):
     # query so hyphenated searches still match.
     isbn_pattern = f'%{_isbn_search_text(query)}%'
     if field == 'title':
-        return db.fetch_all(
-            f'SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog WHERE title ILIKE %s ORDER BY {DISTINCT_ORDER}',
-            (pattern,)
-        )
+        return _book_select(db.fetch_all, lambda cols: (
+            f'SELECT DISTINCT ON ({DISTINCT_ORDER}) {cols} FROM book_catalog '
+            f'WHERE title ILIKE %s ORDER BY {DISTINCT_ORDER}', (pattern,)))
     elif field == 'author':
-        return db.fetch_all(
-            f'SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog WHERE author ILIKE %s ORDER BY {DISTINCT_ORDER}',
-            (pattern,)
-        )
+        return _book_select(db.fetch_all, lambda cols: (
+            f'SELECT DISTINCT ON ({DISTINCT_ORDER}) {cols} FROM book_catalog '
+            f'WHERE author ILIKE %s ORDER BY {DISTINCT_ORDER}', (pattern,)))
     elif field == 'isbn':
-        return db.fetch_all(
-            f'SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog WHERE isbn ILIKE %s ORDER BY {DISTINCT_ORDER}',
-            (isbn_pattern,)
-        )
+        return _book_select(db.fetch_all, lambda cols: (
+            f'SELECT DISTINCT ON ({DISTINCT_ORDER}) {cols} FROM book_catalog '
+            f'WHERE isbn ILIKE %s ORDER BY {DISTINCT_ORDER}', (isbn_pattern,)))
     elif field == 'category':
-        return db.fetch_all(
-            f'SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog WHERE subject_classification ILIKE %s ORDER BY {DISTINCT_ORDER}',
-            (pattern,)
-        )
-    return db.fetch_all(
-        f'''SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog
-           WHERE title ILIKE %s OR author ILIKE %s OR isbn ILIKE %s
-              OR subject_classification ILIKE %s
-           ORDER BY {DISTINCT_ORDER}''',
-        (pattern, pattern, isbn_pattern, pattern)
-    )
+        return _book_select(db.fetch_all, lambda cols: (
+            f'SELECT DISTINCT ON ({DISTINCT_ORDER}) {cols} FROM book_catalog '
+            f'WHERE subject_classification ILIKE %s ORDER BY {DISTINCT_ORDER}',
+            (pattern,)))
+    return _book_select(db.fetch_all, lambda cols: (
+        f'SELECT DISTINCT ON ({DISTINCT_ORDER}) {cols} FROM book_catalog '
+        f'WHERE title ILIKE %s OR author ILIKE %s OR isbn ILIKE %s '
+        f'OR subject_classification ILIKE %s ORDER BY {DISTINCT_ORDER}',
+        (pattern, pattern, isbn_pattern, pattern)))
 
 
 def get_book_by_id(book_id):
@@ -360,7 +394,8 @@ def get_book_by_id(book_id):
     Returns:
         Full book_catalog row tuple, or None if not found.
     """
-    return db.fetch_one('SELECT * FROM book_catalog WHERE book_id = %s', (book_id,))
+    return _book_select(db.fetch_one, lambda cols: (
+        f'SELECT {cols} FROM book_catalog WHERE book_id = %s', (book_id,)))
 
 
 def get_book_by_title_author_isbn(title, author, isbn):
@@ -477,8 +512,10 @@ def get_all_books():
     unmigrated databases.
     """
     extra = f', {EXTRA_CATEGORIES_SUBQUERY} AS extra_categories' if multi_cat_available() else ''
-    return db.fetch_all(
-        f"SELECT DISTINCT ON ({DISTINCT_ORDER}) *{extra}, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog WHERE catalog_status = 'active' ORDER BY {DISTINCT_ORDER}")
+    return _book_select(db.fetch_all, lambda cols: (
+        f"SELECT DISTINCT ON ({DISTINCT_ORDER}) {cols}{extra}, {ACCESSION_SUBQUERY} AS accession_numbers "
+        f"FROM book_catalog WHERE catalog_status = 'active' ORDER BY {DISTINCT_ORDER}",
+        ()))
 
 
 def _count_books(where, args):
@@ -553,21 +590,19 @@ def get_all_books_paginated(page=1, per_page=20, sort_by=None):
     total = _count_books(where, ())
     order = _catalog_sort_clause(sort_by)
     if order is None:
-        rows = db.fetch_all(
-            f'SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers '
+        rows = _book_select(db.fetch_all, lambda cols: (
+            f'SELECT DISTINCT ON ({DISTINCT_ORDER}) {cols}, {ACCESSION_SUBQUERY} AS accession_numbers '
             f'FROM book_catalog {where} ORDER BY {DISTINCT_ORDER} LIMIT %s OFFSET %s',
-            (per_page, (page - 1) * per_page)
-        )
+            (per_page, (page - 1) * per_page)))
     else:
         # DISTINCT ON requires the inner ORDER BY to start with the
         # distinct columns, so non-default sorts wrap the deduped page
         # query and re-sort outside (same pattern as the public catalog).
-        rows = db.fetch_all(
-            f'SELECT * FROM (SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers '
+        rows = _book_select(db.fetch_all, lambda cols: (
+            f'SELECT * FROM (SELECT DISTINCT ON ({DISTINCT_ORDER}) {cols}, {ACCESSION_SUBQUERY} AS accession_numbers '
             f'FROM book_catalog {where} ORDER BY {DISTINCT_ORDER}) AS sorted_books '
             f'ORDER BY {order} LIMIT %s OFFSET %s',
-            (per_page, (page - 1) * per_page)
-        )
+            (per_page, (page - 1) * per_page)))
     return rows, total
 
 
@@ -579,11 +614,10 @@ def get_books_by_status_paginated(status, page=1, per_page=20, sort_by=None):
     where = 'WHERE catalog_status = %s'
     total = _count_books(where, (status,))
     order = _catalog_sort_clause(sort_by) or 'title'
-    rows = db.fetch_all(
-        f'SELECT *, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog '
+    rows = _book_select(db.fetch_all, lambda cols: (
+        f'SELECT {cols}, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog '
         f'{where} ORDER BY {order} LIMIT %s OFFSET %s',
-        (status, per_page, (page - 1) * per_page)
-    )
+        (status, per_page, (page - 1) * per_page)))
     return rows, total
 
 
@@ -762,7 +796,10 @@ def get_book_categories(book_id):
     return db.fetch_all(
         '''SELECT c.category_id, c.name FROM categories c
            JOIN book_categories bc ON bc.category_id = c.category_id
-           WHERE bc.book_id = %s ORDER BY LOWER(c.name), c.name''',
+           JOIN book_catalog b ON b.book_id = bc.book_id
+           WHERE bc.book_id = %s
+             AND bc.category_id IS DISTINCT FROM b.category_id
+           ORDER BY LOWER(c.name), c.name''',
         (book_id,)
     ) or []
 
@@ -783,7 +820,10 @@ def get_categories_for_books(book_ids):
     rows = db.fetch_all(
         '''SELECT bc.book_id, c.category_id, c.name FROM categories c
            JOIN book_categories bc ON bc.category_id = c.category_id
-           WHERE bc.book_id = ANY(%s) ORDER BY LOWER(c.name), c.name''',
+           JOIN book_catalog b ON b.book_id = bc.book_id
+           WHERE bc.book_id = ANY(%s)
+             AND bc.category_id IS DISTINCT FROM b.category_id
+           ORDER BY LOWER(c.name), c.name''',
         (ids,)
     ) or []
     out = {}
@@ -824,9 +864,12 @@ def set_book_categories(book_id, category_ids):
         return
     db.execute(
         '''INSERT INTO book_categories (book_id, category_id)
-           SELECT %s, category_id FROM categories WHERE category_id = ANY(%s)
+           SELECT %s, category_id FROM categories
+           WHERE category_id = ANY(%s)
+             AND category_id IS DISTINCT FROM
+                 (SELECT category_id FROM book_catalog WHERE book_id = %s)
            ON CONFLICT DO NOTHING''',
-        (book_id, ids)
+        (book_id, ids, book_id)
     )
 
 
@@ -975,23 +1018,21 @@ def search_books_filtered(query, field=None, year_from=None, year_to=None, sort_
     else:
         order = f'ORDER BY {DISTINCT_ORDER}'
 
-    base = f'SELECT DISTINCT ON ({DISTINCT_ORDER}) book_catalog.*, {availability_col}, {available_count_col} FROM book_catalog {where} ORDER BY {DISTINCT_ORDER}'
     offset = (page - 1) * per_page
-    if sort_by in ('title', 'year_desc'):
-        return db.fetch_all(
-            f'SELECT * FROM ({base}) AS deduped {order} LIMIT %s OFFSET %s',
-            args + (per_page, offset)
-        ), total
     relevance_order, relevance_params = _relevance_order(query)
-    if relevance_order is not None:
-        return db.fetch_all(
-            f'SELECT * FROM ({base}) AS deduped {relevance_order} LIMIT %s OFFSET %s',
-            args + relevance_params + (per_page, offset)
-        ), total
-    return db.fetch_all(
-        f'{base} LIMIT %s OFFSET %s',
-        args + (per_page, offset)
-    ), total
+
+    def build(cols):
+        base = (f'SELECT DISTINCT ON ({DISTINCT_ORDER}) {cols}, {availability_col}, {available_count_col} '
+                f'FROM book_catalog {where} ORDER BY {DISTINCT_ORDER}')
+        if sort_by in ('title', 'year_desc'):
+            return (f'SELECT * FROM ({base}) AS deduped {order} LIMIT %s OFFSET %s',
+                    args + (per_page, offset))
+        if relevance_order is not None:
+            return (f'SELECT * FROM ({base}) AS deduped {relevance_order} LIMIT %s OFFSET %s',
+                    args + relevance_params + (per_page, offset))
+        return (f'{base} LIMIT %s OFFSET %s', args + (per_page, offset))
+
+    return _book_select(db.fetch_all, build), total
 
 
 def get_recent_books(limit=5):
@@ -1007,10 +1048,10 @@ def get_recent_books(limit=5):
     Returns:
         List of book_catalog row tuples, newest first.
     """
-    return db.fetch_all(
-        f'SELECT DISTINCT ON ({DISTINCT_ORDER}) * FROM book_catalog ORDER BY {DISTINCT_ORDER}, date_added DESC LIMIT %s',
-        (limit,)
-    )
+    return _book_select(db.fetch_all, lambda cols: (
+        f'SELECT DISTINCT ON ({DISTINCT_ORDER}) {cols} FROM book_catalog '
+        f'ORDER BY {DISTINCT_ORDER}, date_added DESC LIMIT %s',
+        (limit,)))
 
 
 def create_accession(accession_number, book_id, librarian_id, source=None):
@@ -1299,10 +1340,10 @@ def get_books_by_status(status):
         databases.
     """
     extra = f', {EXTRA_CATEGORIES_SUBQUERY} AS extra_categories' if multi_cat_available() else ''
-    return db.fetch_all(
-        f'SELECT *{extra}, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog WHERE catalog_status = %s ORDER BY title',
-        (status,)
-    )
+    return _book_select(db.fetch_all, lambda cols: (
+        f'SELECT {cols}{extra}, {ACCESSION_SUBQUERY} AS accession_numbers '
+        f'FROM book_catalog WHERE catalog_status = %s ORDER BY title',
+        (status,)))
 
 
 def delete_book(book_id):
@@ -1402,13 +1443,14 @@ def search_books_paginated(query, field, page, per_page, sort_by=None):
 
     order = _catalog_sort_clause(sort_by)
     if order is None:
-        rows = db.fetch_all(
-            f'''SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog {where} ORDER BY {DISTINCT_ORDER}, date_added DESC LIMIT %s OFFSET %s''',
-            args + (per_page, offset)
-        )
+        rows = _book_select(db.fetch_all, lambda cols: (
+            f'SELECT DISTINCT ON ({DISTINCT_ORDER}) {cols}, {ACCESSION_SUBQUERY} AS accession_numbers '
+            f'FROM book_catalog {where} ORDER BY {DISTINCT_ORDER}, date_added DESC LIMIT %s OFFSET %s',
+            args + (per_page, offset)))
     else:
-        rows = db.fetch_all(
-            f'''SELECT * FROM (SELECT DISTINCT ON ({DISTINCT_ORDER}) *, {ACCESSION_SUBQUERY} AS accession_numbers FROM book_catalog {where} ORDER BY {DISTINCT_ORDER}, date_added DESC) AS sorted_books ORDER BY {order} LIMIT %s OFFSET %s''',
-            args + (per_page, offset)
-        )
+        rows = _book_select(db.fetch_all, lambda cols: (
+            f'SELECT * FROM (SELECT DISTINCT ON ({DISTINCT_ORDER}) {cols}, {ACCESSION_SUBQUERY} AS accession_numbers '
+            f'FROM book_catalog {where} ORDER BY {DISTINCT_ORDER}, date_added DESC) AS sorted_books '
+            f'ORDER BY {order} LIMIT %s OFFSET %s',
+            args + (per_page, offset)))
     return rows, total

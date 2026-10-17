@@ -299,6 +299,14 @@ CREATE TABLE IF NOT EXISTS book_categories (
     PRIMARY KEY (book_id, category_id)
 );
 
+-- A title's primary category (book_catalog.category_id) must never also
+-- be linked in book_categories, or the detail page lists it twice. Clean
+-- up links already stored by earlier builds that echoed the primary back
+-- as an extra. Idempotent.
+DELETE FROM book_categories bc
+USING book_catalog b
+WHERE bc.book_id = b.book_id AND bc.category_id = b.category_id;
+
 -- Retired material types: 'Multimedia' was removed from the catalog
 -- vocabulary; any lingering rows fold into the general 'Book' type so
 -- they stay searchable, editable, and borrowable. Idempotent.

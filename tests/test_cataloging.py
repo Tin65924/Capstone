@@ -1644,7 +1644,8 @@ class TestMultiCategory:
         assert stmts[0].startswith('DELETE FROM book_categories')
         assert 'INSERT INTO book_categories' in stmts[1]
         assert 'WHERE category_id = ANY(%s)' in stmts[1]
-        assert mock_db['execute'].call_args_list[1][0][1] == (7, [2, 3])
+        assert 'IS DISTINCT FROM' in stmts[1]
+        assert mock_db['execute'].call_args_list[1][0][1] == (7, [2, 3], 7)
 
     def test_set_empty_clears_links(self, mock_db):
         """Validates set empty clears links [TestMultiCategory / cataloging].
@@ -2235,3 +2236,32 @@ class TestEbookUrl:
         body = client.get('/catalog?q=E').data.decode()
         assert 'Read Online' in body
         assert 'https://publisher.com/e.pdf' in body
+
+
+class TestBookSelectShape:
+    """book_catalog reads name their columns so positional indices hold."""
+
+    def test_get_book_by_id_selects_columns_by_name(self, mock_db):
+        """Validates get_book_by_id selects columns explicitly [TestBookSelectShape / cataloging].
+    If fails: likely projection reverted to SELECT * (ebook_url index drifts).
+    Failure indicates the /book e-book link breaks on migrated databases."""
+        from app.cataloging.models import get_book_by_id
+        mock_db['fetch_one'].return_value = (1,)
+        get_book_by_id(1)
+        query = mock_db['fetch_one'].call_args[0][0]
+        assert query.startswith('SELECT book_id')
+        assert 'category_id' in query and 'ebook_url' in query
+        assert 'SELECT *' not in query
+
+    def test_get_book_by_id_falls_back_on_missing_columns(self, mock_db):
+        """Validates get_book_by_id falls back to SELECT * when columns are missing [TestBookSelectShape / cataloging].
+    If fails: likely unmigrated-DB fallback removed (reads 500).
+    Failure indicates reads break on a database without the new columns."""
+        from app.cataloging.models import get_book_by_id
+        missing = Exception(
+            'column "ebook_url" of relation "book_catalog" does not exist')
+        missing.pgcode = '42703'
+        mock_db['fetch_one'].side_effect = [missing, (1,)]
+        assert get_book_by_id(1) == (1,)
+        fallback = mock_db['fetch_one'].call_args_list[1][0][0]
+        assert fallback == 'SELECT * FROM book_catalog WHERE book_id = %s'
