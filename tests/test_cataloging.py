@@ -2151,6 +2151,12 @@ class TestFormPersistence:
         # E-Book Link box hides unless E-Book is selected.
         assert body.count('name="ebook_url"') == 3
         assert "lcell.style.display = linkNeed ? '' : 'none'" in body
+        # Live E-Book link feedback: inputs + hint spots, Google-only whitelist JS.
+        assert body.count('data-ebook-input') == 3
+        assert body.count('data-ebook-hint') == 4
+        assert 'validateEbookInput' in body
+        assert 'classifyEbookUrl' in body
+        assert 'Only Google Drive or Google Docs links are accepted.' in body
         # ISBN info buttons + explainer modal (one per book modal).
         assert body.count("openModal('isbnInfoModal')") == 2
         assert 'id="isbnInfoModal"' in body
@@ -2234,24 +2240,82 @@ class TestEbookUrl:
         assert validate_ebook_url('not a url', 'Book') == (None, 'E-Book link must be a valid http(s) URL.')
         assert validate_ebook_url('ftp://x.com/f', 'Book') == (None, 'E-Book link must be a valid http(s) URL.')
         assert validate_ebook_url('https://example.com/ebook.pdf', 'Reference') == (
-            'https://example.com/ebook.pdf', None)
-        assert validate_ebook_url('  https://example.com/e  ', 'Book') == (
-            'https://example.com/e', None)
+            None, 'E-Book link must be a Google Drive or Google Docs link.')
+        assert validate_ebook_url('https://drive.google.com/drive/folders/ABC123', 'Book') == (
+            None, 'E-Book link must be a Google Drive or Google Docs link.')
+        assert validate_ebook_url('https://docs.google.com', 'Book') == (
+            None, 'E-Book link must be a Google Drive or Google Docs link.')
+        assert validate_ebook_url('  https://drive.google.com/file/d/ABC123/view  ', 'Book') == (
+            'https://drive.google.com/file/d/ABC123/view', None)
+        assert validate_ebook_url('https://docs.google.com/document/d/DOC123/edit', 'E-Book') == (
+            'https://docs.google.com/document/d/DOC123/edit', None)
         too_long = 'https://example.com/' + 'a' * 500
         assert validate_ebook_url(too_long, 'Book')[1] == 'E-Book link is too long (max 500 characters).'
 
     def test_ebook_link_info(self, mock_db):
         """Validates ebook link info [TestEbookUrl / cataloging].
-    If fails: likely Drive detection changed.
+    If fails: likely Drive/Docs detection changed.
     Failure indicates catalog data or listing/sort is wrong."""
-        from app.cataloging.models import ebook_link_info, drive_preview_url
+        from app.cataloging.models import ebook_link_info, drive_preview_url, docs_preview_url, validate_ebook_url
         assert ebook_link_info('https://drive.google.com/file/d/ABC123/view') == ('drive', 'ABC123')
         assert ebook_link_info('https://drive.google.com/open?id=XYZ789') == ('drive', 'XYZ789')
         assert ebook_link_info('https://drive.google.com/uc?id=QWE123') == ('drive', 'QWE123')
         assert ebook_link_info('https://drive.google.com/drive/folders/ABC123') == ('external', None)
+        assert ebook_link_info('https://docs.google.com/document/d/DOC123/edit') == ('docs', 'DOC123')
+        assert ebook_link_info(
+            'https://docs.google.com/document/d/DOC123/preview') == ('docs', 'DOC123')
+        # Real-world share shape: /edit plus sharing query params.
+        shared = ('https://docs.google.com/document/d/1ekPEknmkae6q2KBCACQaPeeoJhF5aE57'
+                  '/edit?usp=sharing&ouid=108913924297114452491&rtpof=true&sd=true')
+        assert ebook_link_info(shared) == ('docs', '1ekPEknmkae6q2KBCACQaPeeoJhF5aE57')
+        assert validate_ebook_url(shared, 'E-Book') == (shared, None)
+        assert ebook_link_info('https://docs.google.com') == ('external', None)
         assert ebook_link_info('https://publisher.com/book.pdf') == ('external', None)
         assert ebook_link_info('') == (None, None)
         assert drive_preview_url('ABC123') == 'https://drive.google.com/file/d/ABC123/preview'
+        assert docs_preview_url('https://docs.google.com/document/d/DOC123/edit') == (
+            'https://docs.google.com/document/d/DOC123/preview')
+        assert docs_preview_url('https://docs.google.com/document/d/DOC123/preview') == (
+            'https://docs.google.com/document/d/DOC123/preview')
+        assert docs_preview_url(
+            'https://docs.google.com/document/d/1ekPEknmkae6q2KBCACQaPeeoJhF5aE57'
+            '/edit?usp=sharing&ouid=108913924297114452491&rtpof=true&sd=true') == (
+            'https://docs.google.com/document/d/1ekPEknmkae6q2KBCACQaPeeoJhF5aE57/preview')
+        assert docs_preview_url('https://drive.google.com/file/d/ABC123/view') == ''
+        assert docs_preview_url('') == ''
+
+    def test_add_publisher_link_rejected(self, librarian_client, mock_db):
+        """Validates add publisher link rejected `/librarian/cataloging/add` as librarian (expects 302) [TestEbookUrl / cataloging].
+    If fails: likely the Google-only whitelist changed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['fetch_one'].return_value = None
+        resp = librarian_client.post('/librarian/cataloging/add', data={
+            'title': 'E', 'author': 'A', 'year_published': '2021',
+            'subject_classification': 'Tech', 'material_type': 'Reference',
+            'accession_number': '250001',
+            'ebook_url': 'https://publisher.com/e.pdf',
+        })
+        assert resp.status_code == 302
+        assert 'mstatus=error' in resp.location
+        assert mock_db['execute'].call_count == 0
+
+    def test_add_docs_link_stored(self, librarian_client, mock_db):
+        """Validates add docs link stored `/librarian/cataloging/add` as librarian (expects 302) [TestEbookUrl / cataloging].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates catalog data or listing/sort is wrong."""
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
+        resp = librarian_client.post('/librarian/cataloging/add', data={
+            'title': 'E', 'author': 'A', 'year_published': '2021',
+            'subject_classification': 'Tech', 'material_type': 'E-Book',
+            'accession_number': '250001',
+            'ebook_url': 'https://docs.google.com/document/d/DOC123/edit',
+        })
+        assert 'mstatus=success' in resp.location
+        book_calls = [c for c in mock_db['execute'].call_args_list
+                      if 'INSERT INTO book_catalog' in c[0][0]]
+        assert book_calls
+        assert 'https://docs.google.com/document/d/DOC123/edit' in book_calls[0][0][1]
 
     def test_add_ebook_without_link_rejected(self, librarian_client, mock_db):
         """Validates add ebook without link rejected `/librarian/cataloging/add` as librarian (expects 302) [TestEbookUrl / cataloging].
@@ -2311,7 +2375,26 @@ class TestEbookUrl:
         mock_db['fetch_all'].return_value = []
         body = client.get('/book/1').data.decode()
         assert 'https://drive.google.com/file/d/ABC123/preview' in body
-        assert 'Open in Google Drive' in body
+        # Preview opens inside the modal, not inline.
+        assert '<iframe' not in body.split('ebookPreviewModal')[0]
+        assert 'openEbookPreview()' in body
+        assert 'Embedded preview — Google Drive' in body
+        assert 'Open in new tab' in body
+
+    def test_bookinfo_embeds_docs_preview(self, client, mock_db):
+        """Validates bookinfo embeds docs preview `/book/1` (expects 200) [TestEbookUrl / cataloging].
+    If fails: likely Docs detection or preview normalization changed.
+    Failure indicates catalog data or listing/sort is wrong."""
+        book = (1, 'E Title', 'A', None, None, 2021, 'Tech', None, None,
+                'E-Book', 'D', 'active', '2024-01-01', None, None, None,
+                'https://docs.google.com/document/d/DOC123/edit')
+        mock_db['fetch_one'].return_value = book
+        mock_db['fetch_all'].return_value = []
+        body = client.get('/book/1').data.decode()
+        # The edit variant is normalized to the embeddable /preview form.
+        assert 'https://docs.google.com/document/d/DOC123/preview' in body
+        assert 'openEbookPreview()' in body
+        assert 'Embedded preview — Google Docs' in body
 
     def test_bookinfo_external_link_button(self, client, mock_db):
         """Validates bookinfo external link button `/book/1` (expects 200) [TestEbookUrl / cataloging].
@@ -2332,12 +2415,16 @@ class TestEbookUrl:
     Failure indicates catalog data or listing/sort is wrong."""
         book = (1, 'E Title', 'A', None, None, 2021, 'Tech', None, None,
                 'E-Book', 'D', 'active', '2024-01-01', None, None, None,
-                'https://publisher.com/e.pdf', 'available', 1)
+                'https://drive.google.com/file/d/ABC123/view', 'available', 1)
         mock_db['fetch_one'].return_value = (1,)
         mock_db['fetch_all'].side_effect = [[book], [], []]
         body = client.get('/catalog?q=E').data.decode()
+        # E-Book cards route readers to the book page (modal preview lives
+        # there); the raw link is never emitted on the list page.
         assert 'Read Online' in body
-        assert 'https://publisher.com/e.pdf' in body
+        assert '/book/1' in body
+        assert 'target="_blank" rel="noopener"' not in body
+        assert 'https://drive.google.com/file/d/ABC123/view' not in body
 
 
 class TestBookSelectShape:

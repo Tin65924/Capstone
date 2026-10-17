@@ -217,12 +217,11 @@
             {% if ebook_url %}
             <div class="mt-8">
                 <h3 class="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Online Access</h3>
-                {% if ebook_kind == 'drive' and ebook_preview %}
-                <div class="rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm">
-                    <iframe src="{{ ebook_preview }}" class="w-full" height="600" loading="lazy" title="E-book preview"></iframe>
-                </div>
+                {% if ebook_kind == 'drive' or ebook_kind == 'docs' %}
+                <button type="button" onclick="openEbookPreview()"
+                    class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-colors">Read Online <span class="material-symbols-outlined text-[18px]">auto_stories</span></button>
                 <a href="{{ ebook_url }}" target="_blank" rel="noopener"
-                    class="mt-3 inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-primary text-primary text-sm font-bold hover:bg-primary/5 transition-colors">Open in Google Drive <span class="material-symbols-outlined text-[18px]">open_in_new</span></a>
+                    class="ml-3 text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-primary transition-colors">Open in new tab <span class="material-symbols-outlined text-[15px] align-[-2px]">open_in_new</span></a>
                 {% else %}
                 <a href="{{ ebook_url }}" target="_blank" rel="noopener"
                     class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-colors">Read Online <span class="material-symbols-outlined text-[18px]">open_in_new</span></a>
@@ -274,6 +273,29 @@
     </div>
 </div>
 
+<!-- E-Book Preview Modal -->
+{% if ebook_url and (ebook_kind == 'drive' or ebook_kind == 'docs') and ebook_preview %}
+<div id="ebookPreviewModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-6">
+    <div class="absolute inset-0 bg-slate-900/70" onclick="closeEbookPreview()"></div>
+    <div class="relative bg-white dark:bg-slate-900 rounded-lg shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-5xl h-[92vh] flex flex-col overflow-hidden">
+        <div class="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
+            <div class="min-w-0">
+                <p class="text-sm font-bold text-slate-900 dark:text-white truncate">{{ book[1] }}</p>
+                <p class="text-xs text-slate-400">Embedded preview — {{ 'Google Drive' if ebook_kind == 'drive' else 'Google Docs' }}</p>
+            </div>
+            <div class="flex items-center gap-3 shrink-0">
+                <a href="{{ ebook_url }}" target="_blank" rel="noopener"
+                    class="text-xs font-bold text-primary hover:underline whitespace-nowrap">Open in new tab <span class="material-symbols-outlined text-[13px] align-[-2px]">open_in_new</span></a>
+                <button onclick="closeEbookPreview()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors" aria-label="Close preview">
+                    <span class="material-symbols-outlined text-[22px]">close</span>
+                </button>
+            </div>
+        </div>
+        <iframe src="{{ ebook_preview }}" class="flex-1 w-full bg-white" title="E-book preview"></iframe>
+    </div>
+</div>
+{% endif %}
+
 <footer class="mt-auto py-8 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex flex-col md:flex-row items-center justify-between gap-4">
@@ -300,6 +322,19 @@
     function closeBorrowModal() {
         document.getElementById('borrowModal').classList.add('hidden');
     }
+
+    // E-Book preview modal: open/close plus Escape.
+    function openEbookPreview() {
+        var modal = document.getElementById('ebookPreviewModal');
+        if (modal) { modal.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
+    }
+    function closeEbookPreview() {
+        var modal = document.getElementById('ebookPreviewModal');
+        if (modal) { modal.classList.add('hidden'); document.body.style.overflow = ''; }
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeEbookPreview();
+    });
 
     // Mobile menu for book details header
     (function() {

@@ -691,8 +691,8 @@
                     </div>
                     <div>
                         <label class="form-label">E-Book Link</label>
-                        <input type="text" name="ebook_url" maxlength="500" class="form-input" placeholder="https://drive.google.com/... or publisher link" value="{{ _add.get('ebook_url', '') }}">
-                        <p class="text-[11px] text-gray-400 mt-1">Required for E-Book. Drive links embed a preview; other links open in a new tab.</p>
+                        <input type="text" name="ebook_url" maxlength="500" class="form-input" placeholder="https://drive.google.com/... or https://docs.google.com/..." value="{{ _add.get('ebook_url', '') }}" data-ebook-input>
+                        <p data-ebook-hint class="hidden mt-1 text-[11px] font-medium"></p>
                     </div>
                     <div>
                         <label class="form-label">Source</label>
@@ -808,8 +808,8 @@
                     </div>
                     <div>
                         <label class="form-label">E-Book Link</label>
-                        <input type="text" name="ebook_url" id="edit_ebook_url" maxlength="500" class="form-input" placeholder="https://drive.google.com/... or publisher link">
-                        <p class="text-[11px] text-gray-400 mt-1">Required for E-Book. Drive links embed a preview; other links open in a new tab.</p>
+                        <input type="text" name="ebook_url" id="edit_ebook_url" maxlength="500" class="form-input" placeholder="https://drive.google.com/... or https://docs.google.com/..." data-ebook-input>
+                        <p data-ebook-hint class="hidden mt-1 text-[11px] font-medium"></p>
                     </div>
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Category *</label>
@@ -1128,6 +1128,11 @@
                 // so switching back restores them.
                 var lcell = linkInput.parentElement;
                 if (lcell) lcell.style.display = linkNeed ? '' : 'none';
+                if (linkNeed) validateEbookInput(linkInput);
+                else {
+                    var lcellHint = lcell ? lcell.querySelector('[data-ebook-hint]') : null;
+                    if (lcellHint) lcellHint.classList.add('hidden');
+                }
             }
         }
         function isbn10Ok(code) {
@@ -1178,6 +1183,58 @@
             hint.style.color = ok ? '#15803d' : '#b91c1c';
             hint.classList.remove('hidden');
         }
+        // E-Book link classifier mirroring ebook_link_info in
+        // cataloging/models.py: 'drive' for Drive files with an id,
+        // 'docs' for Google Docs documents, anything else 'external'.
+        function classifyEbookUrl(url) {
+            var m = /^https?:\/\/([^\/?#]+)(\/[^?#]*)?(\?[^#]*)?/i.exec(url || '');
+            if (!m) return 'external';
+            var host = (m[1] || '').toLowerCase();
+            var path = m[2] || '';
+            var query = m[3] || '';
+            if (host === 'drive.google.com') {
+                if (/\/file\/d\/([-\w]+)/.test(path)) return 'drive';
+                var qid = new URLSearchParams(query).get('id');
+                if (qid && path.indexOf('/folders/') === -1) return 'drive';
+                return 'external';
+            }
+            if (host === 'docs.google.com') {
+                if (/\/document\/d\/([-\w]+)/.test(url)) return 'docs';
+                return 'external';
+            }
+            return 'external';
+        }
+        // Immediate E-Book link feedback under the add/edit boxes (mirrors
+        // validate_ebook_url's Google-only whitelist — the backend remains
+        // authoritative). The /preview form is generated automatically at
+        // render time; staff can paste edit/view/preview variants alike.
+        function validateEbookInput(input) {
+            if (!input) return;
+            var wrap = input.closest('div');
+            var hint = wrap ? wrap.querySelector('[data-ebook-hint]') : null;
+            if (!hint) return;
+            var url = (input.value || '').trim();
+            if (!url) {
+                hint.classList.add('hidden');
+                return;
+            }
+            var kind = classifyEbookUrl(url);
+            var msg = '', ok = false;
+            if (kind === 'drive') {
+                ok = true;
+                msg = 'Google Drive link — embedded preview enabled.';
+            } else if (kind === 'docs') {
+                ok = true;
+                msg = 'Google Docs link — embedded preview enabled.';
+            } else if (/^https?:\/\//i.test(url)) {
+                msg = 'Only Google Drive or Google Docs links are accepted.';
+            } else {
+                msg = 'Enter a valid http(s) URL.';
+            }
+            hint.textContent = msg;
+            hint.style.color = ok ? '#15803d' : '#b91c1c';
+            hint.classList.remove('hidden');
+        }
         document.addEventListener('DOMContentLoaded', function () {
             applyMaterialType('add');
             applyMaterialType('edit');
@@ -1193,6 +1250,10 @@
             document.querySelectorAll('[data-isbn-input]').forEach(function (input) {
                 input.addEventListener('input', function () { validateIsbnInput(input); });
                 validateIsbnInput(input);
+            });
+            document.querySelectorAll('[data-ebook-input]').forEach(function (input) {
+                input.addEventListener('input', function () { validateEbookInput(input); });
+                validateEbookInput(input);
             });
         });
 

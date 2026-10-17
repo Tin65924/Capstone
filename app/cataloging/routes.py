@@ -1475,13 +1475,21 @@ def book_info(book_id):
         extra_categories = get_book_categories(book_id)
     except Exception:
         extra_categories = []
-    from app.cataloging.models import ebook_link_info, drive_preview_url
+    from app.cataloging.models import ebook_link_info, drive_preview_url, docs_preview_url, clean_ebook_url
     _ebook_url = book[16] if len(book) > 16 else None
-    _ebook_kind, _ebook_file = ebook_link_info(_ebook_url)
+    _ebook_kind, _ebook_id = ebook_link_info(_ebook_url)
+    if _ebook_kind == 'drive' and _ebook_id:
+        _ebook_preview = drive_preview_url(_ebook_id)
+    elif _ebook_kind == 'docs':
+        # The stored URL may be an edit/view variant; generate the
+        # embeddable /preview form automatically either way.
+        _ebook_preview = docs_preview_url(clean_ebook_url(_ebook_url))
+    else:
+        _ebook_preview = ''
     return render_template('public/bookinfo.html', book=book,
                            accessions=accessions_with_status, any_available=any_available,
                            borrower_map=borrower_map, user_data=user_data,
                            extra_categories=extra_categories,
                            ebook_url=_ebook_url or '',
                            ebook_kind=_ebook_kind or '',
-                           ebook_preview=drive_preview_url(_ebook_file) if _ebook_file else '')
+                           ebook_preview=_ebook_preview)

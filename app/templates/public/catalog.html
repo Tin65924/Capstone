@@ -334,8 +334,7 @@
                     {% else %}
                         {% set has_available = avail_status != 'borrowed' %}
                     {% endif %}
-                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 hover:shadow-md hover:border-primary/30 transition-all">
-                        <div class="flex-1 min-w-0">
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 hover:shadow-md hover:border-primary/30 transition-all">                        <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2 flex-wrap">
                                 {% if is_ebook %}
                                 <span class="inline-flex bg-primary/10 text-primary px-2 py-0.5 rounded text-[10px] font-bold uppercase">E-Book</span>
@@ -353,10 +352,8 @@
                         </div>
                         <div class="flex items-center gap-2 shrink-0">
                             <a href="{{ url_for('cataloging.book_info', book_id=book[0]) }}" class="text-primary text-xs font-bold hover:underline whitespace-nowrap">View Details</a>
-                            {% if is_ebook %}
-                            {% if eurl %}
-                            <a href="{{ eurl }}" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-primary text-white hover:bg-primary/90 whitespace-nowrap">Read Online</a>
-                            {% endif %}
+                            {% if is_ebook and eurl %}
+                            <a href="{{ url_for('cataloging.book_info', book_id=book[0]) }}" class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-primary text-white hover:bg-primary/90 whitespace-nowrap">Read Online</a>
                             {% elif has_available %}
                             <a href="{{ url_for('cataloging.book_info', book_id=book[0]) }}" class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-primary text-white hover:bg-primary/90 whitespace-nowrap">Borrow</a>
                             {% else %}
@@ -426,19 +423,17 @@
                                         {% if is_ebook %}Available online{% elif has_available %}Available{% else %}Not Available{% endif %}
                                     </span>
                                     <div class="flex items-center gap-2 shrink-0">
-                                        {% if is_ebook %}
-                                            {% if eurl %}
-                                        <a href="{{ eurl }}" target="_blank" rel="noopener"
+                                        {% if is_ebook and eurl %}
+                                        <a href="{{ url_for('cataloging.book_info', book_id=book[0]) }}"
                                             class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-primary text-white hover:bg-primary/90 transition-colors">Read Online</a>
-                                            {% endif %}
-                                        {% else %}
-                                            {% if has_available %}
+                                        {% elif not is_ebook and has_available %}
                                         <a href="{{ url_for('cataloging.book_info', book_id=book[0]) }}"
                                             class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-primary text-white hover:bg-primary/90 transition-colors">Borrow</a>
-                                            {% else %}
+                                        {% elif not is_ebook %}
                                         <button type="button" disabled
                                             class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed opacity-60">Borrow</button>
-                                            {% endif %}
+                                        {% endif %}
+                                        {% if not is_ebook %}
                                             {% if has_available %}
                                         <button type="button" disabled title="A copy is available — reserve is only enabled when all copies are borrowed."
                                             class="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-60">Reserve</button>

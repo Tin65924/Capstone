@@ -40,8 +40,11 @@ def validate_ebook_url(value, material_type):
     """Validate an e-book link, returning (cleaned, error).
 
     Blank is allowed except for E-Book titles, which need their access
-    link. Non-blank values must be http(s) URLs within the column
-    width. Used by the book form and bulk import alike.
+    link. Non-blank values must be embeddable Google links — a Drive
+    file (/file/d/<id>, open?id=, uc?id=) or a Google Docs document
+    (/document/d/<id>) — within the column width. Everything else,
+    publisher URLs included, is rejected as invalid. Used by the book
+    form and bulk import alike.
     """
     cleaned = clean_ebook_url(value)
     if not cleaned:
@@ -57,34 +60,44 @@ def validate_ebook_url(value, material_type):
         return None, 'E-Book link must be a valid http(s) URL.'
     if parsed.scheme not in ('http', 'https') or not parsed.hostname:
         return None, 'E-Book link must be a valid http(s) URL.'
+    kind, _ = ebook_link_info(cleaned)
+    if kind not in ('drive', 'docs'):
+        return None, 'E-Book link must be a Google Drive or Google Docs link.'
     return cleaned, None
 
 
 def ebook_link_info(url):
     """Classify an e-book link for access buttons.
 
-    Returns (kind, file_id): kind 'drive' with the Drive file id when
+    Returns (kind, doc_id): kind 'drive' with the Drive file id when
     the URL points at a previewable Drive file (/file/d/<id>, open?id=,
-    uc?id=); kind 'external' for anything else linkable (including
-    Drive folders, which cannot file-preview); (None, None) when blank.
-    Only Google Drive file links support embedded preview — publisher
-    and other links open in a new tab instead.
+    uc?id=); kind 'docs' with the document id for Google Docs
+    /document/d/<id> links; kind 'external' for anything else
+    (including Drive folders and Docs URLs without a document id,
+    which cannot embed a preview); (None, None) when blank. Validation
+    rejects the 'external' kind — only Drive and Docs links are
+    accepted.
     """
     url = (url or '').strip()
     if not url:
         return None, None
     try:
         from urllib.parse import urlparse, parse_qs
+        import re
         parsed = urlparse(url)
         host = (parsed.hostname or '').lower()
         if 'drive.google.com' in host:
-            import re
             match = re.search(r'/file/d/([-\w]+)', parsed.path)
             if match:
                 return 'drive', match.group(1)
             query_id = parse_qs(parsed.query).get('id', [None])[0]
             if query_id and '/folders/' not in parsed.path:
                 return 'drive', query_id
+            return 'external', None
+        if 'docs.google.com' in host:
+            match = re.search(r'/document/d/([-\w]+)', url)
+            if match:
+                return 'docs', match.group(1)
             return 'external', None
         return 'external', None
     except Exception:
@@ -94,6 +107,21 @@ def ebook_link_info(url):
 def drive_preview_url(file_id):
     """Embeddable preview URL for a Drive file id."""
     return 'https://drive.google.com/file/d/%s/preview' % file_id
+
+
+def docs_preview_url(url):
+    """Embeddable /preview URL for a Google Docs document link.
+
+    Accepts any variant of a /document/d/<id> URL (edit, view,
+    export, mobilebasic, or an explicit /preview) and returns the
+    /preview form, so staff never need to hand-craft the embed URL.
+    Empty string when the URL is not a recognized document link.
+    """
+    import re
+    match = re.search(r'/document/d/([-\w]+)', url or '')
+    if not match:
+        return ''
+    return 'https://docs.google.com/document/d/%s/preview' % match.group(1)
 
 
 def _isbn_search_text(value):
