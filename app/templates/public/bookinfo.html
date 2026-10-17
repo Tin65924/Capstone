@@ -336,6 +336,11 @@
             if (frame && !frame.src) frame.src = frame.getAttribute('data-src');
             modal.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
+            // Fire-and-forget analytics postback: each Read Online open
+            // counts as one read. Failure is silent for the reader.
+            try {
+                fetch('{{ url_for("cataloging.ebook_read", book_id=book[0]) }}', { method: 'POST' });
+            } catch (e) { /* analytics logging stays best-effort */ }
         }
     }
     function closeEbookPreview() {

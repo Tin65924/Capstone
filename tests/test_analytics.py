@@ -2667,3 +2667,151 @@ class TestSchemaGate:
                 query = mock_db['fetch_all'].call_args[0][0]
                 assert ',,' not in query.replace(' ', '')
                 assert ('extra_categories' in query) == gated
+
+
+class TestEbookAnalytics:
+    def test_ebook_access_trend_passes_rows(self, mock_db):
+        """Validates ebook access trend passes rows [TestEbookAnalytics / analytics].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        from datetime import date
+        from app.analytics.models import ebook_access_trend
+        rows = [(date(2026, 1, 5), 'Reads', 3), (date(2026, 1, 5), 'Downloads', 1)]
+        mock_db['fetch_all'].return_value = rows
+        assert ebook_access_trend() == rows
+        query = mock_db['fetch_all'].call_args[0][0]
+        assert 'ebook_access_log' in query
+        assert "WHEN 'read' THEN 'Reads'" in query
+        assert 'GROUP BY day' in query
+
+    def test_ebook_access_trend_range_params(self, mock_db):
+        """Validates ebook access trend range params [TestEbookAnalytics / analytics].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        from app.analytics.models import ebook_access_trend
+        mock_db['fetch_all'].return_value = []
+        ebook_access_trend('2026-01-01', '2026-12-31')
+        params = mock_db['fetch_all'].call_args[0][1]
+        assert params == ('2026-01-01', '2026-12-31')
+
+    def test_top_ebooks_passes_rows(self, mock_db):
+        """Validates top ebooks passes rows [TestEbookAnalytics / analytics].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        from app.analytics.models import top_ebooks
+        rows = [('T', 'A', 5, 2, 7)]
+        mock_db['fetch_all'].return_value = rows
+        assert top_ebooks(limit=8) == rows
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'ebook_access_log' in query
+        assert params == (8,)
+
+    def test_top_ebooks_bad_limit_falls_back(self, mock_db):
+        """Validates top ebooks bad limit falls back [TestEbookAnalytics / analytics].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        from app.analytics.models import top_ebooks
+        mock_db['fetch_all'].return_value = []
+        top_ebooks(limit='nope')
+        assert mock_db['fetch_all'].call_args[0][1] == (8,)
+
+    def test_book_ebook_accesses_sums_kinds(self, mock_db):
+        """Validates book ebook accesses sums kinds [TestEbookAnalytics / analytics].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        from app.analytics.models import book_ebook_accesses
+        mock_db['fetch_one'].return_value = (5, 2, 7)
+        assert book_ebook_accesses(1) == (5, 2, 7)
+        query, params = mock_db['fetch_one'].call_args[0]
+        assert 'ebook_access_log' in query
+        assert params == (1,)
+
+    def test_book_ebook_accesses_bad_id_no_query(self, mock_db):
+        """Validates book ebook accesses bad id no query [TestEbookAnalytics / analytics].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        from app.analytics.models import book_ebook_accesses
+        assert book_ebook_accesses('nope') == (0, 0, 0)
+        assert mock_db['fetch_one'].called is False
+
+    def test_book_ebook_recent_lists_reader(self, mock_db):
+        """Validates book ebook recent lists reader [TestEbookAnalytics / analytics].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        from datetime import datetime
+        from app.analytics.models import book_ebook_recent
+        rows = [(datetime(2026, 1, 5, 9, 30), 'read', 'Juan'),
+                (datetime(2026, 1, 4, 10, 0), 'download', 'Anonymous')]
+        mock_db['fetch_all'].return_value = rows
+        assert book_ebook_recent(2) == rows
+        query = mock_db['fetch_all'].call_args[0][0]
+        assert "COALESCE(u.full_name, 'Anonymous')" in query
+        assert 'LEFT JOIN user_accounts' in query
+        assert mock_db['fetch_all'].call_args[0][1] == (2, 10)
+
+    def test_book_ebook_recent_bad_id_no_query(self, mock_db):
+        """Validates book ebook recent bad id no query [TestEbookAnalytics / analytics].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        from app.analytics.models import book_ebook_recent
+        assert book_ebook_recent('zz') == []
+        assert mock_db['fetch_all'].called is False
+
+    def test_chart_serves_new_names(self, librarian_client, mock_db):
+        """Validates chart serves new names `/librarian/analytics/chart` as librarian (expects 200) [TestEbookAnalytics / analytics].
+    If fails: likely route/model wiring changed.
+    Failure indicates e-book cards cannot refresh their data."""
+        mock_db['fetch_all'].return_value = []
+        for name in ('ebook_trend', 'top_ebooks'):
+            resp = librarian_client.get(f'/librarian/analytics/chart?name={name}')
+            assert resp.status_code == 200, name
+            assert resp.get_json()['chart'] == name
+
+    def test_export_serves_new_kpis(self, librarian_client, mock_db):
+        """Validates export serves new kpis `/librarian/analytics/export` as librarian (expects 200) [TestEbookAnalytics / analytics].
+    If fails: likely export table mapping changed.
+    Failure indicates e-book sections cannot be exported as PDF."""
+        mock_db['fetch_one'].return_value = []
+        mock_db['fetch_all'].return_value = []
+        for kpi in ('ebook_trend', 'top_ebooks'):
+            resp = librarian_client.post('/librarian/analytics/export',
+                                         data={'kpi_type': kpi})
+            assert resp.status_code == 200, kpi
+            assert resp.data[:4] == b'%PDF'
+
+    def test_dashboard_json_includes_ebook(self, librarian_client, mock_db):
+        """Validates dashboard json includes ebook `/librarian/analytics/dashboard` as librarian (expects 200) [TestEbookAnalytics / analytics].
+    If fails: likely _compute_dashboard payload changed.
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        resp = librarian_client.get('/librarian/analytics/dashboard')
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert 'ebook' in body
+        for key in ('trend', 'top_titles'):
+            assert key in body['ebook'], key
+
+    def test_page_renders_ebook_cards(self, librarian_client, mock_db):
+        """Validates page renders ebook cards `/librarian/analytics` as librarian (expects 200) [TestEbookAnalytics / analytics].
+    If fails: likely template regression or section wiring changed.
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        body = librarian_client.get('/librarian/analytics').data.decode()
+        assert 'Resource Analytics' in body
+        for frag in ('ebook-trend-lines', 'ebook-top-body',
+                     '16. E-Book Reads', '17. Top E-Books'):
+            assert frag in body, frag
+
+    def test_book_tab_shows_ebook_card(self, librarian_client, mock_db):
+        """Validates book tab shows ebook card `/librarian/analytics?q=e&book_id=1` as librarian (expects 200) [TestEbookAnalytics / analytics].
+    If fails: likely template regression or traffic payload changed.
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        row = (1, 'E Title', 'A', 'SE', 2020, 1, 'P', None, None, None,
+               'E-Book', 'D')
+        mock_db['fetch_one'].return_value = row
+        mock_db['fetch_all'].return_value = []
+        body = librarian_client.get('/librarian/analytics?q=e&book_id=1').data.decode()
+        assert 'E-Book Activity' in body
+        assert 'book-ebook-recent' in body

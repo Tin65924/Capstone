@@ -2545,6 +2545,116 @@ class TestEbookUrl:
         resp = client.get('/book/1/download')
         assert resp.status_code == 404
 
+    def test_download_logs_access(self, client, mock_db):
+        """Validates download logs access `/book/1/download` (expects 200) [TestEbookUrl / cataloging].
+    If fails: likely the analytics logging hook moved or changed.
+    Failure indicates downloads are invisible to Resource Analytics."""
+        from unittest.mock import patch
+        class FakeResp:
+            headers = {'Content-Type': 'application/pdf'}
+            def iter_content(self, chunk_size):
+                yield b'12345'
+            def close(self):
+                pass
+        book = (1, 'E Title', 'A', None, None, 2021, 'Tech', None, None,
+                'E-Book', 'D', 'active', '2024-01-01', None, None, None,
+                'https://drive.google.com/file/d/ABC123/view')
+        mock_db['fetch_one'].return_value = book
+        with patch('app.cataloging.models.open_ebook_stream',
+                   return_value=(FakeResp(), None)):
+            with patch('app.cataloging.models.create_ebook_access') as log:
+                resp = client.get('/book/1/download')
+        assert resp.status_code == 200
+        assert log.call_count == 1
+        assert log.call_args[0] == (1, 'download', None)
+
+    def test_download_log_failure_still_serves(self, client, mock_db):
+        """Validates download log failure still serves `/book/1/download` (expects 200) [TestEbookUrl / cataloging].
+    If fails: likely the best-effort try/except was removed.
+    Failure indicates readers lose downloads when analytics logging errors."""
+        from unittest.mock import patch
+        class FakeResp:
+            headers = {'Content-Type': 'application/pdf'}
+            def iter_content(self, chunk_size):
+                yield b'ok'
+            def close(self):
+                pass
+        book = (1, 'E Title', 'A', None, None, 2021, 'Tech', None, None,
+                'E-Book', 'D', 'active', '2024-01-01', None, None, None,
+                'https://drive.google.com/file/d/ABC123/view')
+        mock_db['fetch_one'].return_value = book
+        with patch('app.cataloging.models.open_ebook_stream',
+                   return_value=(FakeResp(), None)):
+            with patch('app.cataloging.models.create_ebook_access',
+                       side_effect=RuntimeError('boom')):
+                resp = client.get('/book/1/download')
+        assert resp.status_code == 200
+        assert resp.data == b'ok'
+
+    def test_read_logs_access(self, client, mock_db):
+        """Validates read logs access `POST /book/1/read` (expects 204) [TestEbookUrl / cataloging].
+    If fails: likely the read postback route changed.
+    Failure indicates Read Online opens are invisible to Resource Analytics."""
+        from unittest.mock import patch
+        book = (1, 'E Title', 'A', None, None, 2021, 'Tech', None, None,
+                'E-Book', 'D', 'active', '2024-01-01', None, None, None,
+                'https://drive.google.com/file/d/ABC123/view')
+        mock_db['fetch_one'].return_value = book
+        with patch('app.cataloging.models.create_ebook_access') as log:
+            resp = client.post('/book/1/read')
+        assert resp.status_code == 204
+        assert resp.data == b''
+        assert log.call_count == 1
+        assert log.call_args[0] == (1, 'read', None)
+
+    def test_read_rejects_non_ebook(self, client, mock_db):
+        """Validates read rejects non ebook `POST /book/1/read` (expects 404) [TestEbookUrl / cataloging].
+    If fails: likely the e-book link guard changed.
+    Failure indicates physical titles are logged as e-book reads."""
+        from unittest.mock import patch
+        book = (1, 'Plain Book', 'A', None, None, 2021, 'Tech', None, None,
+                'Book', 'D', 'active', '2024-01-01', None, None, None, None)
+        mock_db['fetch_one'].return_value = book
+        with patch('app.cataloging.models.create_ebook_access') as log:
+            resp = client.post('/book/1/read')
+        assert resp.status_code == 404
+        assert log.call_count == 0
+
+    def test_read_missing_book_404(self, client, mock_db):
+        """Validates read missing book 404 `POST /book/999/read` (expects 404) [TestEbookUrl / cataloging].
+    If fails: likely the book lookup guard changed.
+    Failure indicates phantom titles are logged as e-book reads."""
+        mock_db['fetch_one'].return_value = None
+        resp = client.post('/book/999/read')
+        assert resp.status_code == 404
+
+    def test_read_archived_book_404(self, client, mock_db):
+        """Validates read archived book 404 `POST /book/1/read` (expects 404) [TestEbookUrl / cataloging].
+    If fails: likely the catalog_status guard changed.
+    Failure indicates archived titles are logged as e-book reads."""
+        book = (1, 'Old Title', 'A', None, None, 2019, 'Tech', None, None,
+                'E-Book', 'D', 'archived', '2024-01-01', None, None, None,
+                'https://drive.google.com/file/d/ABC123/view')
+        mock_db['fetch_one'].return_value = book
+        resp = client.post('/book/1/read')
+        assert resp.status_code == 404
+
+    def test_read_logs_user_when_signed_in(self, librarian_client, mock_db):
+        """Validates read logs user when signed in `POST /book/1/read` as librarian (expects 204) [TestEbookUrl / cataloging].
+    If fails: likely the signed-in user attribution changed.
+    Failure indicates reads cannot be attributed to members."""
+        from unittest.mock import patch
+        book = (1, 'E Title', 'A', None, None, 2021, 'Tech', None, None,
+                'E-Book', 'D', 'active', '2024-01-01', None, None, None,
+                'https://drive.google.com/file/d/ABC123/view')
+        mock_db['fetch_one'].return_value = book
+        with patch('app.cataloging.models.create_ebook_access') as log:
+            resp = librarian_client.post('/book/1/read')
+        assert resp.status_code == 204
+        assert log.call_args[0][0] == 1
+        assert log.call_args[0][1] == 'read'
+        assert log.call_args[0][2] is not None
+
     def test_catalog_card_read_online(self, client, mock_db):
         """Validates catalog card read online `/catalog?q=E` (expects 200) [TestEbookUrl / cataloging].
     If fails: likely template text/context changed or mock fetch_* shape mismatched.

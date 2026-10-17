@@ -15,14 +15,16 @@ EXPECTED_KEYS = [
     'overdue-line', 'insights-list', 'recent-circ-body',
     'req-top-titles', 'req-role-split', 'req-trend-line',
     'req-by-program', 'trend-program-lines', 'overdue-program-lines',
-    'top-books-program-list', 'fines-body',
+    'top-books-program-list', 'fines-body', 'ebook-trend-lines',
+    'ebook-top-body',
     # Department tab.
     'dept-bars', 'borrowers-dept-bars', 'overdue-dept-bars',
     'dept-leaderboard-body', 'top-books-list', 'donut-usertype',
     'usage-trend-program-lines', 'usage-overdue-program-lines',
     # Book tab.
     'book-status-lines', 'book-trend', 'book-program', 'book-usertype',
-    'book-recent-body', 'book-top-util-body', 'book-top-under-body',
+    'book-recent-body', 'book-ebook-recent', 'book-top-util-body',
+    'book-top-under-body',
 ]
 
 

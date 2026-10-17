@@ -1508,6 +1508,7 @@ def ebook_download(book_id):
     from app.cataloging.models import (
         ebook_link_info, download_source_url, open_ebook_stream,
         parse_size_bytes, MAX_EBOOK_DOWNLOAD_BYTES, ebook_download_filename,
+        create_ebook_access,
     )
     book = get_book_by_id(book_id)
     if not book or (len(book) > 11 and (book[11] or 'active') != 'active'):
@@ -1522,6 +1523,15 @@ def ebook_download(book_id):
     if err:
         flash(err, 'error')
         return redirect(url_for('cataloging.book_info', book_id=book_id))
+    # Studio-level record for Analytics: a download is counted the moment
+    # the proxy starts streaming bytes. Anonymous visitors log with no user.
+    try:
+        reader = current_user.id if getattr(current_user, 'is_authenticated', False) else None
+        create_ebook_access(book_id, 'download', reader)
+        if reader is not None:
+            log_activity(current_user.id, f'cataloging:ebook_download:{book_id}')
+    except Exception:
+        pass  # Analytics logging is best-effort; the download still serves.
     # Honor a declared size immediately; stream the rest under the cap.
     declared = parse_size_bytes(google_resp)
     if declared and declared > MAX_EBOOK_DOWNLOAD_BYTES:
@@ -1545,3 +1555,31 @@ def ebook_download(book_id):
     response.headers['Content-Disposition'] = f'attachment; filename="{ebook_download_filename(book[1])}"'
     response.headers['Cache-Control'] = 'no-store'
     return response
+
+
+@cataloging_bp.route('/book/<int:book_id>/read', methods=['POST'])
+def ebook_read(book_id):
+    """Record one Read Online open (public fire-and-forget postback).
+
+    The book page is public, so no auth guard; anonymous readers log
+    with no user. Validates that the title exists, is active, and
+    carries an e-book link, stores a 'read' event for Analytics and the
+    audit trail (when logged in), then answers 204. A logging failure
+    never breaks reading — the fetch failure is invisible in the
+    preview modal.
+    """
+    from app.cataloging.models import ebook_link_info, create_ebook_access
+    book = get_book_by_id(book_id)
+    if not book or (len(book) > 11 and (book[11] or 'active') != 'active'):
+        return abort(404)
+    kind, _file_id = ebook_link_info(book[16] if len(book) > 16 else None)
+    if not kind:
+        return abort(404)
+    reader = current_user.id if getattr(current_user, 'is_authenticated', False) else None
+    try:
+        create_ebook_access(book_id, 'read', reader)
+    except Exception:
+        current_app.logger.warning('ebook read log failed', exc_info=True)
+    if reader is not None:
+        log_activity(current_user.id, f'cataloging:ebook_read:{book_id}')
+    return '', 204

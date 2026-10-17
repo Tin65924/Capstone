@@ -1363,6 +1363,31 @@ def remove_favorite(user_id, book_id):
     )
 
 
+def create_ebook_access(book_id, access_kind, user_id=None):
+    """Record one e-book engagement event for analytics.
+
+    Inserts into ebook_access_log with access_kind 'read' (Read Online
+    preview opened) or 'download' (proxy download started). user_id is
+    the acting member when logged in, or None for anonymous visitors —
+    e-book pages are public. Returns the new access_id so callers can
+    log it in the audit trail when available.
+
+    Args:
+        book_id: Catalog title that was accessed.
+        access_kind: 'read' or 'download'.
+        user_id: Logged-in user's id, or None.
+
+    Returns:
+        Rows returned by the INSERT (the new access_id), or None.
+    """
+    return db.fetch_one(
+        '''INSERT INTO ebook_access_log (book_id, access_kind, user_id)
+           VALUES (%s, %s, %s)
+           RETURNING access_id''',
+        (book_id, access_kind, user_id)
+    )
+
+
 def get_user_favorites(user_id):
     """List a user's starred books newest-first.
 

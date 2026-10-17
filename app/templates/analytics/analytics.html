@@ -320,7 +320,7 @@
                     <button data-rtab="collection" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-primary text-white">Circulation Tracking</button>
                     <button data-rtab="library" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Library Analytics</button>
                     <button data-rtab="usage" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Department Analytics</button>
-                    <button data-rtab="book" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Book Analytics</button>
+                    <button data-rtab="book" class="rtab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Resource Analytics</button>
                 </div>
 
                 <!-- ============ TAB: Circulation Tracking ============ -->
@@ -448,6 +448,15 @@
                         <p class="text-[10px] text-slate-400 mb-2">Ranked by total fines incurred (SUM of fine_amount).</p>
                         <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[480px]"><thead><tr class="text-left text-slate-500 border-b"><th class="py-2">#</th><th class="py-2">Title</th><th class="py-2">Author</th><th class="py-2 text-right">Total Fines (₱)</th><th class="py-2 text-right">Records</th></tr></thead><tbody id="fines-body"></tbody></table></div></div>
                     </div>
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                        <div class="xl:col-span-2 bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-1">16. E-Book Reads &amp; Downloads Trend</h3>
+                        <p class="text-[10px] text-slate-400 mb-2">Daily e-book activity in the selected period — one line for Read Online opens, one for downloads.</p>
+                        <div id="ebook-trend-legend" class="chart-legend mb-2"></div>
+                        <div id="ebook-trend-lines" class="w-full overflow-hidden"></div></div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">17. Top E-Books by Reads &amp; Downloads</h3>
+                        <p class="text-[10px] text-slate-400 mb-2">Ranked by combined reads (Read Online opens) and downloads.</p>
+                        <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[380px]"><thead><tr class="text-left text-slate-500 border-b"><th class="py-2">#</th><th class="py-2">Title</th><th class="py-2">Reads</th><th class="py-2">Downloads</th><th class="py-2 text-right">Total</th></tr></thead><tbody id="ebook-top-body"></tbody></table></div></div>
+                    </div>
                 </section>
 
                 <!-- ============ TAB: Department Analytics ============ -->
@@ -517,13 +526,13 @@
                     </div>
                 </section>
 
-                <!-- ============ TAB: Book Analytics ============ -->
+                <!-- ============ TAB: Resource Analytics ============ -->
                 <section data-rtab-panel="book" class="space-y-4 hidden">
                     <div class="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 flex flex-wrap items-center gap-3">
                         <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-white">menu_book</span></div>
                         <div class="min-w-0 flex-1">
-                            <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Book Analytics</h2>
-                            <p class="text-xs text-slate-500">Pick one book to see its traffic — borrows, trend, borrowers, copies, and recent activity.</p>
+                            <h2 class="text-lg sm:text-xl font-extrabold text-slate-900">Resource Analytics</h2>
+                            <p class="text-xs text-slate-500">Pick one book to see its traffic — borrows, trend, borrowers, copies, e-book activity, and recent activity.</p>
                         </div>
                         <span class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 text-slate-600">{{ period_label }}</span>
                     </div>
@@ -652,6 +661,31 @@
                             </tbody>
                         </table></div>
                     </div>
+
+                    {% if traffic.book.material_type == 'E-Book' %}
+                    <!-- E-book engagement for this title: reads fire when a
+                         reader opens Read Online, downloads when the proxy
+                         stream starts. Hidden for non e-book materials. -->
+                    <div class="bg-white rounded-xl border border-slate-200 p-4">
+                        <h3 class="text-sm font-extrabold mb-1">E-Book Activity</h3>
+                        <p class="text-[10px] text-slate-400 mb-2">Read Online opens vs file downloads for this title in the selected period.</p>
+                        <div id="book-ebook-bars" class="mt-2"></div>
+                        <div class="overflow-x-auto mt-3"><table class="w-full text-[11px] min-w-[380px]">
+                            <thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-2">Date</th><th class="py-2 pr-2">Event</th><th class="py-2">Reader</th></tr></thead>
+                            <tbody id="book-ebook-recent">
+                                {% for e in traffic.ebook.recent %}
+                                <tr class="border-b last:border-0">
+                                    <td class="py-2 pr-2">{{ e[0] }}</td>
+                                    <td class="py-2 pr-2 font-semibold">{% if e[1] == 'read' %}Read Online{% elif e[1] == 'download' %}Download{% else %}{{ e[1] }}{% endif %}</td>
+                                    <td class="py-2">{{ e[2] }}</td>
+                                </tr>
+                                {% else %}
+                                <tr><td colspan="3" class="py-3 text-center text-slate-400">No e-book activity for this title in the selected period.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table></div>
+                    </div>
+                    {% endif %}
 
                     {% elif book_id %}
                     <div class="bg-white rounded-xl border border-slate-200 p-8 text-center">
@@ -858,7 +892,7 @@
         // Per-tab Export Report lists: each tab's upper-card button exports
         // only that tab's analytics. Keep these in sync with the cards above.
         const COLLECTION_SECTIONS = ['collection_by_category', 'copies_by_status', 'recent_collection'];
-        const LIBRARY_SECTIONS = ['circulation_summary', 'trend_borrowings', 'trend_borrowings_by_program', 'top_categories', 'top_categories_by_program', 'peak_periods', 'trend_overdue', 'trend_overdue_by_program', 'top_books_by_program', 'fines_by_book', 'high_demand', 'recent_circulation', 'top_requested_titles', 'requests_by_role', 'requests_trend', 'requests_by_program'];
+        const LIBRARY_SECTIONS = ['circulation_summary', 'trend_borrowings', 'trend_borrowings_by_program', 'top_categories', 'top_categories_by_program', 'peak_periods', 'trend_overdue', 'trend_overdue_by_program', 'top_books_by_program', 'fines_by_book', 'high_demand', 'recent_circulation', 'top_requested_titles', 'requests_by_role', 'requests_trend', 'requests_by_program', 'ebook_trend', 'top_ebooks'];
         const DEPARTMENT_SECTIONS = ['circulation_summary', 'books_borrowed_per_program', 'trend_borrowings_by_program', 'trend_overdue_by_program', 'top_books_by_program', 'borrowers_by_department', 'overdue_by_department', 'by_user_type', 'top_books', 'department_leaderboard'];
         // Export All covers every graph/chart/table on all tabs.
         const ALL_DASHBOARD_SECTIONS = [].concat(COLLECTION_SECTIONS, LIBRARY_SECTIONS, DEPARTMENT_SECTIONS).filter(function (s, i, a) { return a.indexOf(s) === i; });
@@ -1565,6 +1599,8 @@ function syncGlobalFilterCustomDates() {
             else if (name === 'requests_by_role') paintReqRoleSplitInto(document.getElementById('req-role-split'), rows);
             else if (name === 'requests_trend') lineChart(document.getElementById('req-trend-line'), rows, '#1d4ed8', { xLabel: 'Date', yLabel: 'Requests', unit: 'requests', drilldown: 'requests' });
             else if (name === 'requests_by_program') hbars(document.getElementById('req-by-program'), rows, 'bg-violet-600');
+            else if (name === 'ebook_trend') paintProgramLines('ebook-trend-lines', 'ebook-trend-legend', pivotEbookRows(rows));
+            else if (name === 'top_ebooks') paintEbookTop(rows);
         }
 
         /* Collection condition bars + recent tables, reusable with a row
@@ -1673,6 +1709,7 @@ function syncGlobalFilterCustomDates() {
 
             paintUsage(U);
             paintRequests((DASHBOARD && DASHBOARD.requests) || {});
+            paintEbook((DASHBOARD && DASHBOARD.ebook) || {});
         }
 
         function usageScopeLabel() {
@@ -1739,6 +1776,48 @@ function syncGlobalFilterCustomDates() {
             paintReqRoleSplitInto(document.getElementById('req-role-split'), R.by_role || []);
             lineChart(document.getElementById('req-trend-line'), R.trend || [], '#1d4ed8', { xLabel: 'Date', yLabel: 'Requests', unit: 'requests', drilldown: 'requests' });
             hbars(document.getElementById('req-by-program'), R.by_program || [], 'bg-violet-600');
+        }
+
+        function paintEbook(E) {
+            E = E || {};
+            // Card 16: daily e-book activity, one line per event kind.
+            // The pivot reuses the program-lines painter with '<kind>'
+            // labels (Reads / Downloads) in place of programs.
+            paintProgramLines('ebook-trend-lines', 'ebook-trend-legend', E.trend || {});
+            // Card 17: top e-books table reads/downloads/total.
+            paintEbookTop(E.top_titles || []);
+        }
+
+        function paintEbookTop(rows, target) {
+            var tb = target || document.getElementById('ebook-top-body');
+            if (!tb) return;
+            tb.innerHTML = (rows || []).slice(0, 10).map(function (r, i) {
+                return '<tr class="border-b last:border-0"><td class="py-2">' + (i + 1) + '</td>'
+                    + '<td class="py-2 font-semibold">' + escapeHtml(r[0]) + '</td>'
+                    + '<td class="py-2">' + rNum(r[2]) + '</td>'
+                    + '<td class="py-2">' + rNum(r[3]) + '</td>'
+                    + '<td class="py-2 text-right font-bold">' + rNum(r[4]) + '</td></tr>';
+            }).join('') || '<tr><td colspan="5" class="py-6 text-center text-slate-400">No e-book activity in the selected period.</td></tr>';
+        }
+
+        function pivotEbookRows(rows) {
+            // Client-side pivot of (day, 'Reads'|'Downloads', count) rows
+            // into the series shape paintProgramLines expects.
+            var dates = [], byDate = {}, unread = 'Downloads';
+            (rows || []).forEach(function (r) {
+                var d = String(r[0]), k = String(r[1]), c = Number(r[2]) || 0;
+                if (dates.indexOf(d) === -1) dates.push(d);
+                byDate[d] = byDate[d] || { reads: 0, downloads: 0 };
+                if (k === unread) byDate[d].downloads += c;
+                else byDate[d].reads += c;
+            });
+            dates.sort();
+            var reads = dates.map(function (d) { return byDate[d].reads; });
+            var downloads = dates.map(function (d) { return byDate[d].downloads; });
+            return { dates: dates, series: [
+                { program: 'Reads', total: reads.reduce(function (a, b) { return a + b; }, 0), values: reads },
+                { program: 'Downloads', total: downloads.reduce(function (a, b) { return a + b; }, 0), values: downloads }
+            ] };
         }
 
         function updateUsageDeptLabel() {
@@ -1912,6 +1991,23 @@ function syncGlobalFilterCustomDates() {
             paintBookBars('book-program', t.by_program || []);
             paintBookBars('book-usertype', t.by_user_type || []);
             renderBookStatusLines(t.status_trends || null);
+            paintBookEbook(t.ebook || {});
+        }
+
+        function paintBookEbook(eb) {
+            eb = eb || {};
+            paintBookBars('book-ebook-bars', [['Read online', eb.reads || 0], ['Download', eb.downloads || 0]]);
+            // Recent e-book events re-render on range change: replace rows
+            // without a reload (tbody is server-rendered on first paint).
+            var tb = document.getElementById('book-ebook-recent');
+            if (!tb) return;
+            tb.innerHTML = (eb.recent || []).map(function (r) {
+                var kind = r[1] === 'read' ? 'Read Online' : r[1] === 'download' ? 'Download' : String(r[1] || '-');
+                return '<tr class="border-b last:border-0">'
+                    + '<td class="py-2 pr-2">' + escapeHtml(String(r[0] || '')) + '</td>'
+                    + '<td class="py-2 pr-2 font-semibold">' + escapeHtml(kind) + '</td>'
+                    + '<td class="py-2">' + escapeHtml(String(r[2] || '')) + '</td></tr>';
+            }).join('') || '<tr><td colspan="3" class="py-3 text-center text-slate-400">No e-book activity for this title in the selected period.</td></tr>';
         }
 
         /* Status Trends line filter: toggle which statuses draw. Null =
@@ -2272,6 +2368,20 @@ function syncGlobalFilterCustomDates() {
                 calc: 'Pending-only counts; program is the borrower department, falling back to staff role, else No program.',
                 ex: 'BSCS with 12 of 30 pending requests drives 40% of request demand.',
                 range: 'Pending requests within the selected period.' },
+            'ebook-trend-lines': { t: 'E-Book Reads & Downloads Trend',
+                def: 'Daily e-book activity split into reads and downloads.',
+                interp: 'Reads show how often readers open Read Online; downloads show file pull-through. Reads without downloads suggest preview-first behavior.',
+                calc: 'Each Read Online open and each proxy download start is logged with the book, event kind, and user (anonymous when not signed in), then grouped by day and kind.',
+                ex: '5 reads and 1 download on one day means most visitors previewed instead of saving a copy.',
+                range: 'Covers the dashboard selected period.',
+                caveat: 'Counts engagements, not unique readers — one reader can log many events.' },
+            'ebook-top-body': { t: 'Top E-Books by Reads & Downloads',
+                def: 'E-book titles ranked by combined reads and downloads (top 10).',
+                interp: 'High-read / low-download titles are popular for reference; download-heavy titles are used offline for coursework.',
+                calc: 'Sum of read and download events per title in the selected period, ranked by combined total.',
+                ex: 'A title with 20 reads and 8 downloads leads a list where second place has 6 total.',
+                range: 'Covers the dashboard selected period.',
+                caveat: 'Titles with zero logged activity are not listed.' },
             'trend-program-lines': { t: 'Borrowings Trend by Program',
                 def: 'Daily borrows split by program for the busiest programs.',
                 interp: 'Compare program rhythms side by side; a flat zero line means that program borrowed nothing that day.',
@@ -2378,6 +2488,13 @@ function syncGlobalFilterCustomDates() {
                 ex: 'Three active rows with the same due week means the copies return together.',
                 src: 'circulation_records for this book.',
                 caveat: 'Latest 10 only — full history lives on the circulation pages.' },
+            'book-ebook-recent': { t: 'E-Book Activity',
+                def: 'E-book engagements for the selected title: Read Online opens and downloads.',
+                interp: 'A busy bar with few recent rows means steady previewing; download rows around exam periods hint at offline study.',
+                calc: 'Read events log when a reader opens the preview; downloads log when the proxy stream starts. Anonymous readers are listed as Anonymous.',
+                ex: 'Read Online 12 · Download 3 in a month shows ten visits per two saved copies.',
+                src: 'ebook_access_log for this book.',
+                caveat: 'E-books only — the card is hidden for physical materials.' },
             'book-top-util-body': { t: 'Top 10 Utilized Books',
                 def: 'The most-borrowed active titles in the selected period.',
                 interp: 'The working core of the collection — protect these with enough copies.',
@@ -2529,6 +2646,7 @@ function syncGlobalFilterCustomDates() {
             var L = (DASHBOARD && DASHBOARD.circulation) || {};
             var U = (DASHBOARD && DASHBOARD.usage) || {};
             var R = (DASHBOARD && DASHBOARD.requests) || {};
+            var EB = (DASHBOARD && DASHBOARD.ebook) || {};
             function cap(rows) { return (rows || []).slice(0, EXPAND_FULL_CAP); }
             if (cid === 'dept-bars') hbars(box, cap(U.by_department), 'bg-blue-600', EXPAND_FULL_CAP);
             else if (cid === 'overdue-dept-bars') hbars(box, cap(U.overdue_by_department), 'bg-red-500', EXPAND_FULL_CAP);
@@ -2544,6 +2662,7 @@ function syncGlobalFilterCustomDates() {
             else if (cid === 'req-by-program') hbars(box, cap(R.by_program), 'bg-violet-600', EXPAND_FULL_CAP);
             else if (cid === 'req-role-split') paintReqRoleSplitInto(box, cap(R.by_role));
             else if (cid === 'req-trend-line') lineChart(box, cap(R.trend), '#1d4ed8', { xLabel: 'Date', yLabel: 'Requests', unit: 'requests', drilldown: 'requests' });
+            else if (cid === 'ebook-top-body') paintEbookTop(cap(EB.top_titles), box);
             else if (cid === 'condition-bars') renderConditionBarsInto(box, cap(C.condition), C.cond_total || 0, EXPAND_FULL_CAP);
             else if (cid === 'recent-collection-body') box.innerHTML = recentCollectionHTML(cap(C.recent));
             else if (cid === 'recent-circ-body') box.innerHTML = recentCircHTML(cap(L.recent));
@@ -2720,8 +2839,10 @@ function syncGlobalFilterCustomDates() {
                 'overdue-dept-bars', 'dept-leaderboard-body', 'top-books-list',
                 'top-books-program-bars', 'usage-trend-program-lines', 'usage-overdue-program-lines',
                 'req-top-titles', 'req-role-split', 'req-trend-line', 'req-by-program',
+                'ebook-trend-lines', 'ebook-top-body',
                 'book-status-lines', 'book-trend', 'book-program', 'book-usertype',
                 'book-recent-body',
+                'book-ebook-recent',
                 'book-top-under-body'];
             ids.forEach(function (cid) {
                 var container = document.getElementById(cid);

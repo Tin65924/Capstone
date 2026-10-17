@@ -613,6 +613,11 @@ def describe_activity(actor, activity):
                  'delete_accession': 'deleted copy'}
         target = f' #{m.group(2)}' if m.group(2) else ''
         return f'{who} {verbs[m.group(1)]}{target}'
+    m = re.match(r'^cataloging:ebook_(read|download):(\d+)$', code)
+    if m:
+        verb = 'read an e-book online' if m.group(1) == 'read' \
+            else 'downloaded an e-book'
+        return f'{who} {verb} #{m.group(2)}'
     m = re.match(r'^cataloging:toggle_status:(\d+):(.+)$', code)
     if m:
         verb = 'archived' if m.group(2) == 'archived' else 'activated'

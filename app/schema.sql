@@ -206,6 +206,17 @@ CREATE TABLE IF NOT EXISTS user_favorites (
     UNIQUE (user_id, book_id)
 );
 
+CREATE TABLE IF NOT EXISTS ebook_access_log (
+    access_id     SERIAL PRIMARY KEY,
+    book_id       INT NOT NULL REFERENCES book_catalog(book_id),
+    access_kind   VARCHAR(20) NOT NULL
+                  CHECK (access_kind IN ('read', 'download')),
+    user_id       INT REFERENCES user_accounts(user_id),
+    accessed_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMP,
+    updated_by    INT REFERENCES user_accounts(user_id)
+);
+
 CREATE TABLE IF NOT EXISTS analytics_cache (
     cache_id       SERIAL PRIMARY KEY,
     report_type    VARCHAR(40) NOT NULL
@@ -224,13 +235,37 @@ CREATE TABLE IF NOT EXISTS analytics_cache (
                        'borrowers_by_department', 'overdue_by_department',
                        'department_leaderboard',
                        'top_requested_titles', 'requests_by_role',
-                       'requests_trend', 'requests_by_program'
-                   )),
+                       'requests_trend', 'requests_by_program',
+                       'ebook_trend', 'top_ebooks'
+                    )),
     filter_params  JSONB,
     kpi_data       JSONB NOT NULL,
     generated_by   INT REFERENCES user_accounts(user_id),
     generated_date TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+-- Prod deployments predate the e-book report types; re-apply the widened
+-- report_type check (mirrors the request_records status-check pattern).
+ALTER TABLE analytics_cache DROP CONSTRAINT IF EXISTS analytics_cache_report_type_check;
+ALTER TABLE analytics_cache ADD CONSTRAINT analytics_cache_report_type_check
+    CHECK (report_type IN (
+        'books_borrowed_per_program', 'utilization_rate',
+        'most_borrowed_titles', 'underutilized_titles',
+        'online_resource_usage',
+        'trend_borrowings', 'trend_overdue',
+        'trend_borrowings_by_program', 'trend_overdue_by_program',
+        'top_categories', 'top_categories_by_program',
+        'peak_periods', 'top_books', 'top_books_by_program',
+        'fines_by_book', 'high_demand', 'by_user_type',
+        'collection_by_category', 'copies_by_status',
+        'recent_circulation', 'recent_collection',
+        'circulation_summary',
+        'borrowers_by_department', 'overdue_by_department',
+        'department_leaderboard',
+        'top_requested_titles', 'requests_by_role',
+        'requests_trend', 'requests_by_program',
+        'ebook_trend', 'top_ebooks'
+    ));
 
 INSERT INTO roles (role_name) VALUES
     ('Student'),
@@ -406,6 +441,8 @@ CREATE INDEX IF NOT EXISTS idx_reservation_status ON reservation_queue (reservat
 CREATE INDEX IF NOT EXISTS idx_inventory_accession ON inventory_status (accession_id);
 CREATE INDEX IF NOT EXISTS idx_requests_status ON request_records (request_status);
 CREATE INDEX IF NOT EXISTS idx_requests_requester ON request_records (requester_id);
+CREATE INDEX IF NOT EXISTS idx_ebook_access_book ON ebook_access_log (book_id);
+CREATE INDEX IF NOT EXISTS idx_ebook_access_time ON ebook_access_log (accessed_at);
 CREATE INDEX IF NOT EXISTS idx_notif_recipient ON notification_log (recipient_id);
 CREATE INDEX IF NOT EXISTS idx_user_accounts_status ON user_accounts (account_status);
 CREATE INDEX IF NOT EXISTS idx_user_accounts_role ON user_accounts (role_id);

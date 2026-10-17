@@ -315,6 +315,7 @@ ANALYTICS_REPORT_TYPES = (
     'department_leaderboard',
     'top_requested_titles', 'requests_by_role',
     'requests_trend', 'requests_by_program',
+    'ebook_trend', 'top_ebooks',
 )
 
 
@@ -1697,4 +1698,103 @@ def requests_by_status(start_date=None, end_date=None):
         '''SELECT rr.request_status, COUNT(*)
            FROM request_records rr {} GROUP BY rr.request_status'''.format(where),
         tuple(params) if params else None
+    )
+
+
+def ebook_access_trend(start_date=None, end_date=None):
+    """Return [(day, 'Reads'|'Downloads', count)] daily e-book activity.
+
+    Grouped by accessed day and event kind so the Library tab draws one
+    line per kind (reads = Read Online opens, downloads = proxy file
+    downloads).
+    """
+    parts, params = _range_clause('e.accessed_at', start_date, end_date)
+    where = 'WHERE ' + ' AND '.join(parts) if parts else ''
+    return db.fetch_all(
+        '''SELECT e.accessed_at::date AS day,
+                  CASE e.access_kind
+                      WHEN 'read' THEN 'Reads' ELSE 'Downloads' END AS series_label,
+                  COUNT(*) AS total
+           FROM ebook_access_log e {} GROUP BY day, series_label ORDER BY day'''.format(where),
+        tuple(params) if params else None
+    )
+
+
+def top_ebooks(start_date=None, end_date=None, limit=8):
+    """Return [(title, author, reads, downloads, total)] top e-books first.
+
+    One row per e-book title with the read and download split, ordered
+    by combined activity within the selected period.
+    """
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 8
+    parts, params = _range_clause('e.accessed_at', start_date, end_date)
+    where = 'WHERE ' + ' AND '.join(parts) if parts else ''
+    return db.fetch_all(
+        '''SELECT b.title, b.author,
+                  COUNT(*) FILTER (WHERE e.access_kind = 'read') AS reads,
+                  COUNT(*) FILTER (WHERE e.access_kind = 'download') AS downloads,
+                  COUNT(*) AS total
+           FROM ebook_access_log e
+           JOIN book_catalog b ON e.book_id = b.book_id
+           {} GROUP BY b.book_id, b.title, b.author
+           ORDER BY total DESC, b.title ASC
+           LIMIT %s'''.format(where),
+        tuple(params + [limit])
+    )
+
+
+def book_ebook_accesses(book_id, start_date=None, end_date=None):
+    """Return (reads, downloads, total) for one book within the period.
+
+    Summing both event kinds for the Resource Analytics per-book view;
+    a missing book_id yields the zero row instead of raising.
+    """
+    try:
+        book_id = int(book_id)
+    except (TypeError, ValueError):
+        return (0, 0, 0)
+    parts, params = _range_clause('accessed_at', start_date, end_date)
+    parts.insert(0, 'book_id = %s')
+    params = [book_id] + params
+    where = 'WHERE ' + ' AND '.join(parts)
+    row = db.fetch_one(
+        '''SELECT COUNT(*) FILTER (WHERE access_kind = 'read') AS reads,
+                  COUNT(*) FILTER (WHERE access_kind = 'download') AS downloads,
+                  COUNT(*) AS total
+           FROM ebook_access_log {}'''.format(where),
+        tuple(params), 
+    )
+    if not row:
+        return (0, 0, 0)
+    try:
+        return (int(row[0] or 0), int(row[1] or 0), int(row[2] or 0))
+    except (IndexError, TypeError, ValueError):
+        return (0, 0, 0)
+
+
+def book_ebook_recent(book_id, limit=10, start_date=None, end_date=None):
+    """Return [(time, kind, user_name)] newest e-book events for one book.
+
+    Powers the Resource Analytics recent table; anonymous events join
+    to no user and render as 'Anonymous'. Bad ids produce an empty list
+    without querying.
+    """
+    try:
+        book_id = int(book_id)
+        limit = int(limit)
+    except (TypeError, ValueError):
+        return []
+    parts, params = _range_clause('e.accessed_at', start_date, end_date)
+    where = 'WHERE e.book_id = %s' + (' AND ' + ' AND '.join(parts) if parts else '')
+    params = [book_id] + params
+    return db.fetch_all(
+        '''SELECT e.accessed_at, e.access_kind,
+                  COALESCE(u.full_name, 'Anonymous') AS reader
+           FROM ebook_access_log e
+           LEFT JOIN user_accounts u ON e.user_id = u.user_id
+           {} ORDER BY e.accessed_at DESC LIMIT %s'''.format(where),
+        tuple(params + [limit])
     )

@@ -77,6 +77,8 @@ DASHBOARD_LABELS = {
     'requests_by_role': 'Book Requests by Role (Student vs Faculty)',
     'requests_trend': 'Book Requests Trend',
     'requests_by_program': 'Book Requests by Program',
+    'ebook_trend': 'E-Book Reads & Downloads Trend',
+    'top_ebooks': 'Top E-Books by Reads & Downloads',
 }
 
 DASHBOARD_DESCRIPTIONS = {
@@ -104,6 +106,8 @@ DASHBOARD_DESCRIPTIONS = {
     'requests_by_role': 'Top pending requested titles split into Student / Faculty / Other staff (pending requests only).',
     'requests_trend': 'Daily pending + rejected book-request counts in the selected period.',
     'requests_by_program': 'Pending book requests grouped by borrower program/department (pending requests only).',
+    'ebook_trend': 'Daily e-book activity in the selected period split into reads (Read Online opens) and downloads.',
+    'top_ebooks': 'E-book titles ranked by combined reads and downloads in the selected period.',
 }
 
 EXPORTABLE_KPIS = set(VALID_KPIS) | set(DASHBOARD_LABELS)
@@ -571,6 +575,26 @@ def _compute_dashboard(start_date, end_date, departments=None):
         condition[0][1] = available
         condition[1][1] = borrowed
 
+    # E-book activity (Library tab): reads = Read Online opens,
+    # downloads = proxy downloads from the public book page. Split by
+    # event kind so the trend renders one line per kind. This block is
+    # computed last on purpose — appended queries must not disturb
+    # order-sensitive mocked fetch sequences in tests.
+    ebook_trend = _pivot_trend_by_program(
+        _safe(models.ebook_access_trend, start_date, end_date) or [])
+    ebook_top_titles = []
+    for t in (_safe(models.top_ebooks, start_date, end_date, 8) or []):
+        try:
+            ebook_top_titles.append([
+                t[0] if len(t) > 0 else '',
+                t[1] if len(t) > 1 else '',
+                int(t[2] or 0) if len(t) > 2 else 0,
+                int(t[3] or 0) if len(t) > 3 else 0,
+                int(t[4] or 0) if len(t) > 4 else 0,
+            ])
+        except (IndexError, TypeError, ValueError):
+            continue
+
     return {
         'collection': {
             'total_titles': total_titles,
@@ -641,6 +665,10 @@ def _compute_dashboard(start_date, end_date, departments=None):
             'recent': recent_u,
             'departments': dept_list or [],
             'department': ', '.join(dept_list) if dept_list else '',
+        },
+        'ebook': {
+            'trend': ebook_trend,
+            'top_titles': ebook_top_titles,
         },
     }
 
@@ -846,6 +874,27 @@ def compute_book_traffic(book_id, start_date, end_date):
             'key': key, 'label': label, 'color': color,
             'values': [day_values.get((day, key), 0) for day in status_dates],
         })
+    # E-book activity for this title (reads + downloads), kept last so
+    # appended queries do not disturb order-sensitive mocked fetch
+    # sequences in tests. Non-e-book titles simply report zeros, so the
+    # tab can hide the card while the payload stays uniform.
+    ebook_acc = _safe(models.book_ebook_accesses, book_id, start_date, end_date) or (0, 0, 0)
+    try:
+        ebook_reads = int(ebook_acc[0] or 0)
+        ebook_downloads = int(ebook_acc[1] or 0)
+        ebook_total = int(ebook_acc[2] or 0)
+    except (IndexError, TypeError, ValueError):
+        ebook_reads = ebook_downloads = ebook_total = 0
+    ebook_recent = []
+    for c in (_safe(models.book_ebook_recent, book_id, 10, start_date, end_date) or []):
+        try:
+            ebook_recent.append([
+                str(c[0]) if len(c) > 0 and c[0] else '',
+                c[1] if len(c) > 1 else '',
+                c[2] if len(c) > 2 else '',
+            ])
+        except (IndexError, TypeError):
+            continue
     # get_book_for_analytics returns
     # (book_id, title, author, category, year_published, copies,
     #  publisher, edition, isbn, call_number, material_type, description);
@@ -897,6 +946,12 @@ def compute_book_traffic(book_id, start_date, end_date):
         'status_trends': {'dates': status_dates, 'series': status_series},
         'copies': copies,
         'recent': recent,
+        'ebook': {
+            'reads': ebook_reads,
+            'downloads': ebook_downloads,
+            'total': ebook_total,
+            'recent': ebook_recent,
+        },
     }
 
 
@@ -1183,6 +1238,8 @@ CHART_NAMES = frozenset({
     'requests_by_role',
     'requests_trend',
     'requests_by_program',
+    'ebook_trend',
+    'top_ebooks',
 })
 
 
@@ -1292,6 +1349,10 @@ def _run_chart(name, start_date, end_date, args):
     if name == 'requests_by_program':
         return models.requests_by_program(
             start_date, end_date, _clean_list(args.getlist('department')))
+    if name == 'ebook_trend':
+        return models.ebook_access_trend(start_date, end_date)
+    if name == 'top_ebooks':
+        return models.top_ebooks(start_date, end_date, 8)
     raise ValueError('Unknown chart: %s' % name)
 
 
@@ -1587,6 +1648,11 @@ def _as_2d_rows(kpi_type, kpi_data):
         return [('Date', 'Requests')] + [(r[0], r[1]) for r in (kpi_data or [])]
     if kpi_type == 'requests_by_program':
         return [('Program', 'Requests')] + [(r[0], r[1]) for r in (kpi_data or [])]
+    if kpi_type == 'ebook_trend':
+        return [('Date', 'Kind', 'Accesses')] + [(r[0], r[1], r[2]) for r in (kpi_data or [])]
+    if kpi_type == 'top_ebooks':
+        return [('Title', 'Author', 'Reads', 'Downloads', 'Total')] + \
+            [(r[0], r[1], r[2], r[3], r[4]) for r in (kpi_data or [])]
     raise ValueError('Unknown KPI type: %s' % kpi_type)
 
 
@@ -1672,6 +1738,10 @@ def _run_kpi(kpi_type, start_date, end_date, departments=None):
         return models.requests_trend(start_date, end_date)
     if kpi_type == 'requests_by_program':
         return models.requests_by_program(start_date, end_date, scoped)
+    if kpi_type == 'ebook_trend':
+        return models.ebook_access_trend(start_date, end_date)
+    if kpi_type == 'top_ebooks':
+        return models.top_ebooks(start_date, end_date, 20)
     if kpi_type == 'department_leaderboard':
         return models.department_summary(start_date, end_date, scoped)
     raise ValueError('Unknown KPI type: %s' % kpi_type)
