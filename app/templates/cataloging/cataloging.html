@@ -286,16 +286,6 @@
                         <li role="option" data-value="accession" tabindex="0" aria-selected="{% if search_field == 'accession' %}true{% else %}false{% endif %}" class="field-option px-4 py-2.5 cursor-pointer flex items-center justify-between hover:bg-slate-50 transition-colors {% if search_field == 'accession' %}bg-primary/10 text-primary font-semibold{% else %}text-slate-700{% endif %}"><span>Accession No.</span>{% if search_field == 'accession' %}<span class="material-symbols-outlined text-[18px] text-primary">check</span>{% endif %}</li>
                     </ul>
                 </div>
-                <div class="relative w-full sm:w-auto sm:min-w-[150px]">
-                    <select name="material_type" onchange="this.form.submit()" aria-label="Filter by material type"
-                        class="w-full h-12 appearance-none bg-white border border-[#e2e8f0] pl-3 sm:pl-4 pr-9 rounded-lg text-sm font-medium text-slate-700 hover:border-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer">
-                        <option value="" {% if not material_type %}selected{% endif %}>All Types</option>
-                        {% for _mt in ['Book', 'E-Book', 'Reference', 'Periodical', 'Thesis'] %}
-                        <option value="{{ _mt }}" {% if material_type == _mt %}selected{% endif %}>{{ _mt }}</option>
-                        {% endfor %}
-                    </select>
-                    <span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px] pointer-events-none">expand_more</span>
-                </div>
                 <div class="relative flex-1 w-full">
                     <input type="text" name="q" value="{{ search_query }}" class="search-input w-full h-12 text-sm" placeholder="Search catalog..." data-suggest="book_search">
                 </div>
@@ -335,12 +325,18 @@
                    class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-md transition-colors whitespace-nowrap {% if copy_status == 'damaged' %}bg-primary text-white{% else %}text-gray-500 hover:bg-gray-200{% endif %}">
                     Damaged
                 </a>
-                <form method="GET" action="{{ url_for('cataloging.cataloging_page') }}" class="ml-auto shrink-0 pl-2">
+                <form method="GET" action="{{ url_for('cataloging.cataloging_page') }}" class="ml-auto shrink-0 pl-2 flex items-center gap-1.5 sm:gap-2">
                     <input type="hidden" name="q" value="{{ search_query }}">
                     <input type="hidden" name="field" value="{{ search_field }}">
                     <input type="hidden" name="status" value="{{ status_filter }}">
                     <input type="hidden" name="copy_status" value="{{ copy_status }}">
-                    <input type="hidden" name="material_type" value="{{ material_type }}">
+                    <select name="material_type" onchange="this.form.submit()" aria-label="Filter by material type"
+                        class="text-xs sm:text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-md px-2 py-1 sm:py-1.5 outline-none focus:border-primary cursor-pointer">
+                        <option value="" {% if not material_type %}selected{% endif %}>All Types</option>
+                        {% for _mt in ['Book', 'E-Book', 'Reference', 'Periodical', 'Thesis'] %}
+                        <option value="{{ _mt }}" {% if material_type == _mt %}selected{% endif %}>{{ _mt }}</option>
+                        {% endfor %}
+                    </select>
                     <select name="sort_by" onchange="this.form.submit()" aria-label="Sort books"
                         class="text-xs sm:text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-md px-2 py-1 sm:py-1.5 outline-none focus:border-primary cursor-pointer">
                         <option value="" {% if not sort_by %}selected{% endif %}>Title A–Z</option>
