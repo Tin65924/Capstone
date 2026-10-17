@@ -252,10 +252,8 @@ INSERT INTO library_settings (setting_key, setting_value, description) VALUES
     ('MAX_BORROW_LIMIT_FACULTY', '5', 'Max active loans for faculty'),
     ('OVERNIGHT_DUE_DAYS_STUDENT', '1', 'Overnight loan due days for students'),
     ('OVERNIGHT_DUE_DAYS_FACULTY', '7', 'Overnight loan due days for faculty'),
-    ('DAILY_CIRCULATION_DUE_DAYS', '0', 'Daily circulation due days (0 = same day)'),
     ('OVERDUE_FINE_PER_DAY', '5.0', 'Overdue fine in pesos per day'),
     ('OVERDUE_GRACE_DAYS', '0', 'Grace days before fines accrue'),
-    ('RESERVATION_CLAIM_DAYS', '2', 'Days to claim an allocated reservation (legacy fallback)'),
     ('RESERVATION_CLAIM_HOURS', '2', 'Hours to claim an allocated reservation (2-hour pickup window)'),
     ('DUE_SOON_NOTIFY_DAYS', '2', 'Days before due date to send due-soon reminders'),
     ('LIBRARY_OPENING_TIME', '08:00', 'Daily opening hour (HH:MM, 24-hour)'),
@@ -263,6 +261,15 @@ INSERT INTO library_settings (setting_key, setting_value, description) VALUES
     ('LIBRARY_OPEN_DAYS', 'Monday,Tuesday,Wednesday,Thursday,Friday,Saturday', 'Days the library is open (borrowing blocked on other days)'),
     ('LIBRARY_MONTH_DAYS', '', 'Per-date open map YYYY-MM:bits for the current month (empty = weekly pattern applies)')
 ON CONFLICT (setting_key) DO NOTHING;
+
+-- Removed settings: the reservation cutoff is derived from closing time
+-- minus claim hours; the legacy days fallback, the daily-circulation due
+-- setting, the weeding lifespan, and the daily-max-hours cap are retired
+-- (daily loans now run until closing time).
+DELETE FROM library_settings
+WHERE setting_key IN ('RESERVATION_CUTOFF_TIME', 'RESERVATION_CLAIM_DAYS',
+                      'DAILY_CIRCULATION_DUE_DAYS', 'BOOK_LIFESPAN_YEARS',
+                      'DAILY_MAX_HOURS');
 
 -- Controlled vocabulary for book categories. Cataloging stores the
 -- canonical name in book_catalog.subject_classification and the FK in

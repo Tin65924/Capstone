@@ -221,8 +221,8 @@ def _apply_updates(allowed_keys):
                 if key in ('MAX_BORROW_LIMIT_STUDENT', 'MAX_BORROW_LIMIT_FACULTY') and value > 20:
                     raise ValueError('must be at most 20')
                 if key in ('OVERNIGHT_DUE_DAYS_STUDENT', 'OVERNIGHT_DUE_DAYS_FACULTY',
-                           'DAILY_CIRCULATION_DUE_DAYS', 'OVERDUE_GRACE_DAYS',
-                           'RESERVATION_CLAIM_DAYS', 'DUE_SOON_NOTIFY_DAYS') and value > 60:
+                           'OVERDUE_GRACE_DAYS',
+                           'DUE_SOON_NOTIFY_DAYS') and value > 60:
                     raise ValueError('must be at most 60')
         except ValueError as e:
             errors.append(f'{label}: invalid value "{raw}" ({e}).')

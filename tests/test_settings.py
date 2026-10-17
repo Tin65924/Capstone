@@ -139,8 +139,8 @@ The base navbar block override must not leak to other pages."""
             assert resp.data.count(b'name="' + key + b'"') == 1
         for key in (b'MAX_BORROW_LIMIT_STUDENT', b'MAX_BORROW_LIMIT_FACULTY',
                     b'OVERNIGHT_DUE_DAYS_STUDENT', b'OVERNIGHT_DUE_DAYS_FACULTY',
-                    b'DAILY_CIRCULATION_DUE_DAYS', b'OVERDUE_FINE_PER_DAY',
-                    b'OVERDUE_GRACE_DAYS', b'RESERVATION_CLAIM_DAYS',
+                    b'OVERDUE_FINE_PER_DAY',
+                    b'OVERDUE_GRACE_DAYS',
                     b'DUE_SOON_NOTIFY_DAYS'):
             assert b'name="' + key + b'"' not in resp.data
 

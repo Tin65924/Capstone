@@ -216,9 +216,9 @@ class TestBorrowGuards:
         assert not any('INSERT INTO circulation_records' in c[0][0]
                        for c in mock_db['execute'].call_args_list)
 
-    def test_overnight_request_allowed_when_closed(
+    def test_overnight_request_blocked_when_closed(
             self, student_client, mock_db):
-        """Validates overnight request allowed when closed `/user/borrow` as student (expects 302) [TestBorrowGuards / library hours].
+        """Validates overnight request blocked when closed `/user/borrow` as student (expects 302) [TestBorrowGuards / library hours].
     If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
     Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
         mock_db['fetch_one'].side_effect = [
@@ -229,8 +229,8 @@ class TestBorrowGuards:
             resp = student_client.post('/user/borrow', data={
                 'book_id': 5, 'borrow_type': 'overnight'})
         assert resp.status_code == 302
-        assert any('INSERT INTO reservation_queue' in c[0][0]
-                   for c in mock_db['execute'].call_args_list)
+        assert not any('INSERT INTO reservation_queue' in c[0][0]
+                       for c in mock_db['execute'].call_args_list)
 
     def test_claim_blocked_when_closed(self, librarian_client, mock_db):
         """Validates claim blocked when closed `/librarian/reservations/9/claim` as librarian (expects 302) [TestBorrowGuards / library hours].
@@ -254,13 +254,12 @@ class TestClosingDueTime:
     If fails: likely model query/tuple-contract change or mock return drift.
     Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.circulation.routes import _compute_due_date
-        from datetime import date, datetime
-        from app.settings.models import PHT
+        from datetime import date
         with app.test_request_context():
             app.config['LIBRARY_CLOSING_TIME'] = '15:30'
-            # 14:00 + 2h = 16:00 past 15:30 closing → capped at closing.
-            fake_now = datetime(2026, 10, 6, 14, 0, tzinfo=PHT)
-            with patch('app.circulation.routes.library_now', return_value=fake_now):
+            # Daily loans run until the configured closing time.
+            with patch('app.circulation.routes.library_today',
+                       return_value=date(2026, 10, 6)):
                 due = _compute_due_date('daily_circulation', 'Student')
             assert (due.hour, due.minute) == (15, 30)
             assert due.date() == date(2026, 10, 6)
@@ -270,22 +269,16 @@ class TestClosingDueTime:
     If fails: likely model query/tuple-contract change or mock return drift.
     Failure indicates library hours is broken for this case (users see wrong page, blocked action, or bad data)."""
         from app.circulation.routes import _compute_due_date
-        from datetime import date, datetime
-        from app.settings.models import PHT
+        from datetime import date
         with app.test_request_context():
             app.config.pop('LIBRARY_CLOSING_TIME', None)
             app.config.pop('LIBRARY_OPENING_TIME', None)
-            # Morning loan: 09:00 + 2h = 11:00, within default 17:00 close.
-            fake_now = datetime(2026, 10, 6, 9, 0, tzinfo=PHT)
-            with patch('app.circulation.routes.library_now', return_value=fake_now):
+            # Unconfigured closing falls back to the 17:00 default.
+            with patch('app.circulation.routes.library_today',
+                       return_value=date(2026, 10, 6)):
                 due = _compute_due_date('daily_circulation', 'Student')
-            assert (due.hour, due.minute) == (11, 0)
+            assert (due.hour, due.minute) == (17, 0)
             assert due.date() == date(2026, 10, 6)
-            # Late loan: 16:00 + 2h = 18:00 past default close → capped at 17:00.
-            late_now = datetime(2026, 10, 6, 16, 0, tzinfo=PHT)
-            with patch('app.circulation.routes.library_now', return_value=late_now):
-                late_due = _compute_due_date('daily_circulation', 'Student')
-            assert (late_due.hour, late_due.minute) == (17, 0)
 
 
 class TestOpenDays:

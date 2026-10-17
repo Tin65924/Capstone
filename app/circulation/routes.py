@@ -27,8 +27,7 @@ from .models import (
 from app.settings.models import (
     is_library_open, library_hours_label, get_closing_time,
     library_now, library_today, is_closed_day, is_after_reservation_cutoff,
-    get_daily_max_hours, is_open_day,
-)
+    is_open_day,)
 
 VALID_BORROW_TYPES = ('overnight', 'daily_circulation')
 
@@ -163,9 +162,9 @@ def _book_is_archived(book):
 
 
 def _claim_window():
-    """(deadline datetime, label) for reservation pickup. Hours-based
-    so a 2-hour window is possible; falls back to legacy DAYS setting.
-    After the 3PM cutoff the pickup rolls to the next open day."""
+    """(deadline datetime, label) for reservation pickup, from the claim
+    hours setting. After the reservation cutoff (closing time minus the
+    claim hours) the pickup rolls to the next open day."""
     try:
         from datetime import timedelta as _td
         base = library_now().replace(tzinfo=None)
@@ -183,13 +182,6 @@ def _claim_window():
     except Exception:
         base = library_now().replace(tzinfo=None)
         hours = None
-    if hours is None:
-        days = current_app.config.get('RESERVATION_CLAIM_DAYS', 2)
-        try:
-            days = int(days)
-        except (TypeError, ValueError):
-            days = 2
-        return base + timedelta(days=days), f'{days} day(s)'
     try:
         hours = float(hours)
     except (TypeError, ValueError):
@@ -203,20 +195,11 @@ def _claim_window():
 def _compute_due_date(borrow_type, role_name):
     """Due date for a borrow. Only Students get the student overnight
     period; Faculty, Admin, and Librarian all inherit the faculty period.
-    Daily loans are capped at DAILY_MAX_HOURS (default 2hrs) within the
-    5PM closing per panel revision."""
+    Daily loans run until the day's closing time per the Library
+    Operations Schedule."""
     if borrow_type == 'daily_circulation':
-        try:
-            max_hours = get_daily_max_hours()
-        except Exception:
-            max_hours = 2
-        now = library_now().replace(tzinfo=None)
         close_hour, close_min = get_closing_time()
-        closing = now.replace(hour=close_hour, minute=close_min, second=0, microsecond=0)
-        due = now + timedelta(hours=max_hours)
-        if due > closing:
-            due = closing
-        return due
+        return end_of_day(library_today(), close_hour, close_min)
     elif role_name == 'Student':
         days = current_app.config.get('OVERNIGHT_DUE_DAYS_STUDENT', 1)
         fallback = 1
@@ -902,6 +885,9 @@ def user_borrow():
         flash('Your borrower account is not active.', 'error')
         return redirect(url_for('cataloging.book_info', book_id=book_id))
 
+    if _library_closed():
+        return _closed_response('cataloging.book_info', book_id=book_id)
+
     if _book_is_archived(book):
         flash('This book is archived and cannot be borrowed.', 'error')
         return redirect(url_for('cataloging.book_info', book_id=book_id))
@@ -938,9 +924,6 @@ def user_borrow():
         log_activity(current_user.id, f'circulation:user_borrow_request:{book_id}')
         flash('Overnight borrow request submitted. A librarian must approve it before the book leaves the library.', 'success')
         return redirect(url_for('cataloging.book_info', book_id=book_id))
-
-    if _library_closed():
-        return _closed_response('cataloging.book_info', book_id=book_id)
 
     accession_id = request.form.get('accession_id', type=int)
     if accession_id:

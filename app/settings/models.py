@@ -84,21 +84,19 @@ SETTING_CATEGORIES = [
      ['LIBRARY_OPENING_TIME', 'LIBRARY_CLOSING_TIME']),
     ('due-dates', 'Due Date Settings', 'event',
      'Loan periods for overnight and in-library use.',
-     ['OVERNIGHT_DUE_DAYS_STUDENT', 'OVERNIGHT_DUE_DAYS_FACULTY',
-      'DAILY_CIRCULATION_DUE_DAYS']),
+     ['OVERNIGHT_DUE_DAYS_STUDENT', 'OVERNIGHT_DUE_DAYS_FACULTY']),
     ('fines', 'Fine Settings', 'payments',
      'Overdue fines and grace periods.',
      ['OVERDUE_FINE_PER_DAY', 'OVERDUE_GRACE_DAYS']),
     ('reservations', 'Reservation Settings', 'bookmark',
-     'Pickup windows and due-date reminders. Reservations close at 3PM; after cutoff pickup is next day.',
-     ['RESERVATION_CLAIM_HOURS', 'RESERVATION_CLAIM_DAYS', 'DUE_SOON_NOTIFY_DAYS',
-      'RESERVATION_CUTOFF_TIME']),
+     'Pickup windows and due-date reminders. Reservations close claim hours before closing time; after cutoff pickup is next open day.',
+     ['RESERVATION_CLAIM_HOURS', 'DUE_SOON_NOTIFY_DAYS']),
     ('operations', 'Library Operations Schedule', 'calendar_month',
      'Days the library is open. Unchecked days allow no borrowing and no reservations.',
      ['LIBRARY_OPEN_DAYS', 'LIBRARY_MONTH_DAYS']),
     ('collection', 'Collection Thresholds', 'inventory_2',
-     'Low-stock alert and weeding lifespan for reports.',
-     ['LOW_STOCK_THRESHOLD', 'BOOK_LIFESPAN_YEARS', 'DAILY_MAX_HOURS']),
+     'Low-stock alert threshold for reports.',
+     ['LOW_STOCK_THRESHOLD']),
     ('backup-schedule', 'Backup Schedule', 'settings_backup_restore',
      'Automatic monthly backups and retention. Admin only.',
      ['BACKUP_DAY', 'BACKUP_HOUR', 'BACKUP_KEEP', 'BACKUP_RESTORE_ENABLED']),
@@ -119,12 +117,9 @@ LIBRARIAN_EDITABLE_KEYS = frozenset({
     'LIBRARY_OPENING_TIME', 'LIBRARY_CLOSING_TIME',
     'LIBRARY_OPEN_DAYS', 'LIBRARY_MONTH_DAYS',
     'OVERNIGHT_DUE_DAYS_STUDENT', 'OVERNIGHT_DUE_DAYS_FACULTY',
-    'DAILY_CIRCULATION_DUE_DAYS', 'DAILY_MAX_HOURS',
     'OVERDUE_FINE_PER_DAY', 'OVERDUE_GRACE_DAYS',
-    'RESERVATION_CLAIM_HOURS', 'RESERVATION_CLAIM_DAYS',
-    'RESERVATION_CUTOFF_TIME',
     'DUE_SOON_NOTIFY_DAYS',
-    'LOW_STOCK_THRESHOLD', 'BOOK_LIFESPAN_YEARS',
+    'LOW_STOCK_THRESHOLD',
 })
 
 
@@ -138,15 +133,10 @@ SETTING_DEFS = {
     'LIBRARY_MONTH_DAYS': ('Open days in month', 'monthdays', 'Per-date overrides for the current month — a checked date is open even when its weekday is not'),
     'OVERNIGHT_DUE_DAYS_STUDENT': ('Overnight due days (Student)', 'int', 'Overnight loan due days for students'),
     'OVERNIGHT_DUE_DAYS_FACULTY': ('Overnight due days (Faculty)', 'int', 'Overnight loan due days for faculty'),
-    'DAILY_CIRCULATION_DUE_DAYS': ('Daily circulation due days', 'int', 'Daily circulation due days (0 = same day)'),
     'OVERDUE_FINE_PER_DAY': ('Overdue fine per day (₱)', 'float', 'Overdue fine in pesos per day'),
     'OVERDUE_GRACE_DAYS': ('Overdue grace days', 'int', 'Grace days before fines accrue'),
-    'RESERVATION_CLAIM_DAYS': ('Reservation claim days (legacy)', 'int', 'Days to claim an allocated reservation (used only when claim hours is empty)'),
     'RESERVATION_CLAIM_HOURS': ('Reservation claim hours', 'float', 'Hours to claim an allocated reservation (2 = 2-hour pickup window)'),
-    'RESERVATION_CUTOFF_TIME': ('Reservation cutoff (daily)', 'time', 'Reservations close at 15:00; bookings after cutoff are for next open day'),
     'LOW_STOCK_THRESHOLD': ('Low-stock threshold', 'int', 'Alert when available copies are at or below this (default 2)'),
-    'BOOK_LIFESPAN_YEARS': ('Book lifespan (years)', 'int', 'Flag titles older than this for weeding review (default 10)'),
-    'DAILY_MAX_HOURS': ('Daily use max hours', 'int', 'In-library daily loans capped at this many hours (default 2, within 5PM closing)'),
     'DUE_SOON_NOTIFY_DAYS': ('Due-soon reminder days', 'int', 'Days before due date to send due-soon reminders'),
     'BACKUP_DAY': ('Auto-backup day of month', 'int', 'Day of month for the automatic backup (1-28)'),
     'BACKUP_HOUR': ('Auto-backup hour (0-23)', 'int', 'Hour of day for the automatic backup'),
@@ -171,15 +161,10 @@ DEFAULTS = {
     'LIBRARY_MONTH_DAYS': '',
     'OVERNIGHT_DUE_DAYS_STUDENT': '1',
     'OVERNIGHT_DUE_DAYS_FACULTY': '7',
-    'DAILY_CIRCULATION_DUE_DAYS': '0',
     'OVERDUE_FINE_PER_DAY': '5.0',
     'OVERDUE_GRACE_DAYS': '0',
-    'RESERVATION_CLAIM_DAYS': '2',
     'RESERVATION_CLAIM_HOURS': '2',
-    'RESERVATION_CUTOFF_TIME': '15:00',
     'LOW_STOCK_THRESHOLD': '2',
-    'BOOK_LIFESPAN_YEARS': '10',
-    'DAILY_MAX_HOURS': '2',
     'DUE_SOON_NOTIFY_DAYS': '2',
     'BACKUP_DAY': _env_default('BACKUP_DAY', 1),
     'BACKUP_HOUR': _env_default('BACKUP_HOUR', 2),
@@ -483,17 +468,25 @@ def get_closing_time(config=None):
 
 
 def get_reservation_cutoff(config=None):
-    """Daily reservation cutoff as (hour, minute); default 15:00.
+    """Daily reservation cutoff as (hour, minute), derived from hours.
 
-    Bookings at/after cutoff are served the next open day per panel
-    revision (reservations close 3PM).
+    Closing time minus reservation claim hours: a 17:00 close with a
+    2-hour claim window closes reservations at 15:00. Bookings at/after
+    cutoff are served the next open day.
     """
     cfg = config if config is not None else current_app.config
-    return parse_hhmm(cfg.get('RESERVATION_CUTOFF_TIME') or '') or (15, 0)
+    close = parse_hhmm(cfg.get('LIBRARY_CLOSING_TIME') or '') or (17, 0)
+    try:
+        claim_hours = float(cfg.get('RESERVATION_CLAIM_HOURS') or 2)
+    except (TypeError, ValueError):
+        claim_hours = 2.0
+    total = close[0] * 60 + close[1] - max(0.0, claim_hours) * 60
+    return max(0, int(total)) // 60, max(0, int(total)) % 60
 
 
 def is_after_reservation_cutoff(now=None, config=None):
-    """True when now is at/after the 3PM reservation cutoff."""
+    """True when now is at/after the daily reservation cutoff (closing
+    time minus the claim hours)."""
     now = now or library_now()
     cutoff = get_reservation_cutoff(config)
     try:
@@ -659,23 +652,5 @@ def get_low_stock_threshold(config=None):
     cfg = config if config is not None else current_app.config
     try:
         return max(0, int(float(cfg.get('LOW_STOCK_THRESHOLD', 2))))
-    except (TypeError, ValueError):
-        return 2
-
-
-def get_book_lifespan_years(config=None):
-    """Years after which a title is flagged for weeding review (default 10)."""
-    cfg = config if config is not None else current_app.config
-    try:
-        return max(1, int(float(cfg.get('BOOK_LIFESPAN_YEARS', 10))))
-    except (TypeError, ValueError):
-        return 10
-
-
-def get_daily_max_hours(config=None):
-    """Max in-library daily loan hours (default 2, always within 5PM close)."""
-    cfg = config if config is not None else current_app.config
-    try:
-        return max(1, min(8, int(float(cfg.get('DAILY_MAX_HOURS', 2)))))
     except (TypeError, ValueError):
         return 2

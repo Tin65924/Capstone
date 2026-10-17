@@ -128,12 +128,11 @@ class TestDueDate:
     If fails: likely model query/tuple-contract change or mock return drift.
     Failure indicates borrow/reserve/return flow is broken (over-booking or stuck queue)."""
         from app.circulation.routes import _compute_due_date
-        from app.settings.models import get_closing_time, get_daily_max_hours, library_now
+        from app.settings.models import get_closing_time, library_now
         from datetime import date, datetime, timedelta
         with app.test_request_context():
             app.config['OVERNIGHT_DUE_DAYS_STUDENT'] = 'junk'
             app.config['OVERNIGHT_DUE_DAYS_FACULTY'] = None
-            app.config['DAILY_CIRCULATION_DUE_DAYS'] = 'x'
             # Dues carry hours (library closing, 5:00 PM): same calendar day.
             assert _compute_due_date('overnight', 'Student') == datetime(
                 *(date.today() + timedelta(days=1)).timetuple()[:3],
@@ -141,22 +140,16 @@ class TestDueDate:
             assert _compute_due_date('overnight', 'Faculty') == datetime(
                 *(date.today() + timedelta(days=7)).timetuple()[:3],
                 17, 0)
-            # Daily loans are capped at DAILY_MAX_HOURS (default 2hrs) within
-            # closing per panel revision — same day, never past closing.
-            now = library_now().replace(tzinfo=None)
+            # Daily loans run until the day's closing time per the Library
+            # Operations Schedule — same calendar day, never past closing.
             close_h, close_m = get_closing_time()
-            closing = now.replace(hour=close_h, minute=close_m, second=0, microsecond=0)
-            try:
-                max_hours = get_daily_max_hours()
-            except Exception:
-                max_hours = 2
-            expected = now + timedelta(hours=max_hours)
-            if expected > closing:
-                expected = closing
+            closing = library_now().replace(
+                tzinfo=None, hour=close_h, minute=close_m,
+                second=0, microsecond=0)
             daily_due = _compute_due_date('daily_circulation', 'X')
             assert daily_due.date() == date.today()
             assert daily_due <= closing
-            assert abs((daily_due - expected).total_seconds()) < 120
+            assert abs((daily_due - closing).total_seconds()) < 120
 
     def test_due_helpers(self):
         """Validates due helpers [TestDueDate / borrow return edge cases].
