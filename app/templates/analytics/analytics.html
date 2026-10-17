@@ -296,7 +296,7 @@
                 <button onclick="openGlobalFilterModal()"
                     class="flex items-center gap-1 sm:gap-2 text-[11px] sm:text-xs font-bold px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all whitespace-nowrap {% if preset != 'all' or from_date or to_date %}ring-1 ring-primary border-primary text-primary{% endif %}">
                     <span class="material-symbols-outlined text-base sm:text-lg">tune</span>
-                    <span class="hidden xs:inline">Filters</span>
+                    <span class="hidden sm:inline">Filters</span>
                     <span class="sm:hidden">Filter</span>
                     {% if preset != 'all' or from_date or to_date %}
                     <span class="w-2 h-2 rounded-full bg-primary"></span>
@@ -339,19 +339,19 @@
                         <div class="bg-white rounded-xl border border-slate-200 p-4">
                             <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-extrabold">Collection by Category</h3><span class="text-[11px] text-slate-400 border rounded px-2 py-0.5">By Titles</span></div>
                             
-                            <div class="flex items-center gap-4"><div id="donut-category" class="shrink-0"></div><div id="legend-category" class="flex-1 space-y-1 text-xs min-w-0"></div></div>
+                            <div class="flex flex-col sm:flex-row sm:items-center gap-4"><div id="donut-category" class="shrink-0 mx-auto sm:mx-0"></div><div id="legend-category" class="flex-1 space-y-1 text-xs min-w-0 w-full"></div></div>
                         </div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4">
                             <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-extrabold">Copies by Status</h3><span class="text-[11px] text-slate-400 border rounded px-2 py-0.5">By Copies</span></div>
                             
-                            <div class="flex items-center gap-4"><div id="donut-status" class="shrink-0"></div><div id="legend-status" class="flex-1 space-y-1 text-xs min-w-0"></div></div>
+                            <div class="flex flex-col sm:flex-row sm:items-center gap-4"><div id="donut-status" class="shrink-0 mx-auto sm:mx-0"></div><div id="legend-status" class="flex-1 space-y-1 text-xs min-w-0 w-full"></div></div>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
                         <div class="xl:col-span-2 bg-white rounded-xl border border-slate-200 p-4 overflow-hidden">
                             <div class="flex items-center gap-2 mb-3 flex-wrap">
                                 <h3 class="text-sm font-extrabold mr-auto">Recent Collection Status</h3>
-                                <input id="collection-search" oninput="filterCollectionTable()" placeholder="Search by title, author, or ID…" class="text-[11px] border rounded-lg px-3 py-1.5 text-slate-600 outline-none focus:border-primary w-52">
+                                <input id="collection-search" oninput="filterCollectionTable()" placeholder="Search by title, author, or ID…" class="text-[11px] border rounded-lg px-3 py-1.5 text-slate-600 outline-none focus:border-primary w-full sm:w-52">
                                 <select id="collection-status-filter" onchange="filterCollectionTable()" class="text-[11px] font-bold border rounded-lg px-2 py-1.5 outline-none focus:border-primary bg-white">
                                     <option value="">All statuses</option>
                                     <option value="available">Available</option>
@@ -395,7 +395,7 @@
                         <div id="trend-line" class="w-full overflow-hidden"></div><p class="text-[10px] text-slate-400 mt-1">X: Date • Y: Borrowings. Solid = actual borrowings • dashed = 30-day moving-average forecast.</p></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">2. Top Borrowed Categories</h3>
                             
-                        <div class="flex items-center gap-4"><div id="donut-topcats" class="shrink-0"></div><div id="legend-topcats" class="flex-1 space-y-1 text-xs min-w-0"></div></div></div>
+                        <div class="flex flex-col sm:flex-row sm:items-center gap-4"><div id="donut-topcats" class="shrink-0 mx-auto sm:mx-0"></div><div id="legend-topcats" class="flex-1 space-y-1 text-xs min-w-0 w-full"></div></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">3. Peak Borrowing Periods</h3>
                             
                         <div class="chart-legend mb-2" aria-label="Peak periods chart legend"><span title="Borrowings on each day"><span class="lg-dot" style="background:#2563eb"></span>Borrowings</span><span class="ml-auto font-medium text-slate-400">Hover a bar for details · click for the program breakdown</span></div>
@@ -505,7 +505,7 @@
                         <div id="top-books-program-bars" class="space-y-1.5"></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">6. Borrowings by User Type</h3>
                             
-                        <div class="flex items-center gap-4"><div id="donut-usertype" class="shrink-0"></div><div id="legend-usertype" class="flex-1 space-y-1 text-xs min-w-0"></div></div></div>
+                        <div class="flex flex-col sm:flex-row sm:items-center gap-4"><div id="donut-usertype" class="shrink-0 mx-auto sm:mx-0"></div><div id="legend-usertype" class="flex-1 space-y-1 text-xs min-w-0 w-full"></div></div></div>
                     </div>
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-1">7. Borrowings Trend by Program</h3>

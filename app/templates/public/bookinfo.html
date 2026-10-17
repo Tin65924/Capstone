@@ -81,15 +81,15 @@
 
 <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
     {% include 'components/flash_messages.html' %}
-    <nav aria-label="Breadcrumb" class="flex mb-6 text-xs font-medium text-slate-500 uppercase tracking-wider">
-        <ol class="flex items-center space-x-2">
-            <li><a class="hover:text-primary" href="{{ url_for('cataloging.public_catalog') }}">Catalog</a></li>
-            <li><span class="material-icons text-xs">chevron_right</span></li>
+    <nav aria-label="Breadcrumb" class="flex mb-6 text-xs font-medium text-slate-500 uppercase tracking-wider overflow-x-auto">
+        <ol class="flex items-center gap-2 whitespace-nowrap min-w-0">
+            <li class="shrink-0"><a class="hover:text-primary" href="{{ url_for('cataloging.public_catalog') }}">Catalog</a></li>
+            <li class="shrink-0"><span class="material-icons text-xs">chevron_right</span></li>
             {% if book[6] %}
-            <li><a class="hover:text-primary" href="{{ url_for('cataloging.public_catalog', q=book[6], field='category') }}">{{ book[6] }}</a></li>
-            <li><span class="material-icons text-xs">chevron_right</span></li>
+            <li class="min-w-0 max-w-[40vw] truncate"><a class="hover:text-primary" href="{{ url_for('cataloging.public_catalog', q=book[6], field='category') }}">{{ book[6] }}</a></li>
+            <li class="shrink-0"><span class="material-icons text-xs">chevron_right</span></li>
             {% endif %}
-            <li class="text-slate-900 dark:text-slate-100">Book Details</li>
+            <li class="text-slate-900 dark:text-slate-100 shrink-0">Book Details</li>
         </ol>
     </nav>
 
@@ -149,21 +149,21 @@
                 </div>
                 <div>
                     <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">ISBN</h4>
-                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[8] or '—' }}</p>
+                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100 break-all">{{ book[8] or '—' }}</p>
                 </div>
                 <div>
                     <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Material Type</h4>
-                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[9] or 'Book' }}</p>
+                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100 break-words">{{ book[9] or 'Book' }}</p>
                 </div>
                 <div>
                     <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Categories</h4>
-                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100 break-words">
                         {% if book[6] %}<a class="text-primary hover:underline" href="{{ url_for('cataloging.public_catalog', category=book[6]) }}">{{ book[6] }}</a>{% endif %}{% for _cid, _cname in extra_categories|default([]) %}{% if book[6] or not loop.first %}, {% endif %}<a class="text-primary hover:underline" href="{{ url_for('cataloging.public_catalog', category=_cname) }}">{{ _cname }}</a>{% endfor %}{% if not book[6] and not extra_categories %}—{% endif %}
                     </p>
                 </div>
                 <div>
                     <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">LOC Classification</h4>
-                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ book[7] or '—' }}</p>
+                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100 break-all">{{ book[7] or '—' }}</p>
                 </div>
             </div>
             {% if ebook_url %}

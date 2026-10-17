@@ -58,11 +58,41 @@
         </div>
     </div>
 
+    <!-- Mobile sidebar drawer -->
+    <div id="mobile-sidebar" class="fixed inset-0 z-50 hidden lg:hidden">
+        <div id="mobile-sidebar-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+        <div class="absolute top-0 left-0 h-full w-[80%] max-w-[280px] bg-white shadow-2xl flex flex-col overflow-hidden">
+            <div class="p-4 flex items-center justify-between border-b border-[#cfd7e7] shrink-0">
+                <div class="flex items-center gap-3 min-w-0">
+                    <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover shrink-0">
+                    <h1 class="text-lg font-bold truncate">MCST Library</h1>
+                </div>
+                <button id="mobile-sidebar-close" type="button" class="p-1.5 rounded-lg hover:bg-slate-100 shrink-0"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6">
+                {% include 'components/librarian_sidebar_nav.html' %}
+            </div>
+            <div class="p-6 border-t border-[#cfd7e7] shrink-0">
+                <div class="flex flex-col items-center mb-4">
+                    <h2 class="text-base font-bold text-center break-words">{{ current_user.full_name }}</h2>
+                    <p class="text-xs text-gray-500 text-center">{{ current_user.role }}</p>
+                </div>
+                <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors">
+                    <span class="material-symbols-outlined text-[18px]">logout</span><span>Log Out</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
     <main>
         <!-- Mobile top bar -->
-        <div class="lg:hidden sticky top-0 z-30 flex items-center gap-2 bg-white border-b border-[#cfd7e7] px-4 py-3 mb-4">
-            <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover">
-            <span class="font-bold text-sm">User History</span>
+        <div class="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white border-b border-[#cfd7e7] px-4 py-3 mb-4">
+            <button id="mobile-sidebar-open" type="button" class="p-2 -ml-1 rounded-lg hover:bg-slate-100"><span class="material-symbols-outlined">menu</span></button>
+            <div class="flex items-center gap-2 min-w-0">
+                <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover shrink-0">
+                <span class="font-bold text-sm truncate">User History</span>
+            </div>
+            <div class="w-10 shrink-0"></div>
         </div>
         {% include 'components/flash_messages.html' %}
         <nav class="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm text-gray-500 mb-4">
@@ -180,5 +210,18 @@
             </div>
         </div>
     </main>
+<script>
+(function() {
+    var openBtn = document.getElementById('mobile-sidebar-open');
+    var closeBtn = document.getElementById('mobile-sidebar-close');
+    var drawer = document.getElementById('mobile-sidebar');
+    var backdrop = document.getElementById('mobile-sidebar-backdrop');
+    function open() { if (drawer) { drawer.classList.remove('hidden'); document.body.style.overflow = 'hidden'; } }
+    function close() { if (drawer) { drawer.classList.add('hidden'); document.body.style.overflow = ''; } }
+    if (openBtn) openBtn.addEventListener('click', open);
+    if (closeBtn) closeBtn.addEventListener('click', close);
+    if (backdrop) backdrop.addEventListener('click', close);
+})();
+</script>
 </body>
 </html>

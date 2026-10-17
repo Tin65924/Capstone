@@ -369,8 +369,8 @@
             <p class="text-sm sm:text-base text-gray-500">Overview of loans, returns, and priority alerts.</p>
         </div>
 
-        <!-- Quick Stats Row — stays in a row on mobile, scaled down -->
-        <div class="grid grid-cols-3 gap-1.5 sm:gap-4 lg:gap-6 mb-6 sm:mb-10 animate-slide-up" style="animation-delay: 0.1s;">
+        <!-- Quick Stats Row — stacks on mobile, 3 across on sm+ -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 lg:gap-6 mb-6 sm:mb-10 animate-slide-up" style="animation-delay: 0.1s;">
             <a href="{{ url_for('circulation.circulation_page', search=search, q=table_search, loan_status='all') }}#all-borrowings" class="stat-card" title="View all borrowings">
                 <div class="icon-box bg-blue-100 text-blue-600">
                     <span class="material-symbols-outlined text-[18px] sm:text-[24px]">import_export</span>
@@ -405,13 +405,13 @@
                     </h3>
                 </div>
                 <div class="p-6 space-y-6">
-                    <form method="GET" action="{{ url_for('circulation.circulation_page') }}" class="flex gap-3">
+                    <form method="GET" action="{{ url_for('circulation.circulation_page') }}" class="flex flex-col sm:flex-row gap-2 sm:gap-3">
                         <input type="hidden" name="loan_type" value="{{ loan_type }}">
                         <input type="hidden" name="loan_status" value="{{ loan_status }}">
                         <input type="hidden" name="borrow_date" value="{{ borrow_date }}">
                         <input type="hidden" name="q" value="{{ table_search }}">
-                        <input type="text" name="search" value="{{ search }}" placeholder="Enter ID / Faculty number (e.g. 2024-1234)" class="form-input">
-                        <button type="submit" class="btn-primary shrink-0">Search</button>
+                        <input type="text" name="search" value="{{ search }}" placeholder="Enter ID / Faculty number (e.g. 2024-1234)" class="form-input min-w-0">
+                        <button type="submit" class="btn-primary shrink-0 w-full sm:w-auto">Search</button>
                     </form>
 
                     {% if borrower %}
@@ -538,7 +538,7 @@
                             <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Note / Damage Reason (required for damaged)</label>
                             <textarea name="notes" rows="2" placeholder="e.g. torn cover, pages missing" maxlength="255" class="form-input mt-1 resize-none"></textarea>
                         </div>
-                        <div class="grid grid-cols-2 gap-2">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             <button type="submit" formaction="{{ url_for('circulation.mark_copy_lost_route') }}" class="btn-ghost !bg-red-600 !text-white hover:!bg-red-700">Mark Lost</button>
                             <button type="submit" formaction="{{ url_for('circulation.mark_copy_damaged_route') }}" class="btn-ghost !bg-amber-500 !text-white hover:!bg-amber-600">Mark Damaged</button>
                         </div>
@@ -683,7 +683,7 @@
          otherwise become its containing block and clip it to the card).
          Fields join the table search form via form="loan-filters". -->
     <div id="loan-filter-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="loan-filter-title">
-        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+        <div class="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
             <div class="flex items-center gap-3 mb-4">
                 <div class="w-10 h-10 rounded-full bg-blue-100 text-primary flex items-center justify-center shrink-0">
                     <span class="material-symbols-outlined">tune</span>

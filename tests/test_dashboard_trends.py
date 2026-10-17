@@ -11,7 +11,8 @@ class TestDailyBorrowsFill:
     def test_sparse_days_zero_filled(self, mock_db):
         """Validates quiet days fill with zero across the window."""
         from app.main.models import get_daily_borrows
-        mock_db['fetch_all'].return_value = [(date(2026, 10, 10), 3)]
+        recent = date.today() - timedelta(days=1)
+        mock_db['fetch_all'].return_value = [(recent, 3)]
         rows = get_daily_borrows(6)
         assert len(rows) == 6
         assert sum(c for _, c in rows) == 3

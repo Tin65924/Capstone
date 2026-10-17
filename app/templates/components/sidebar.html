@@ -1,4 +1,4 @@
-<aside class="w-64 bg-white dark:bg-[#151c2b] border-r border-[#e7ebf3] dark:border-gray-800 min-h-screen flex-shrink-0">
+<aside class="hidden lg:block w-64 bg-white dark:bg-[#151c2b] border-r border-[#e7ebf3] dark:border-gray-800 min-h-screen flex-shrink-0">
     <nav class="p-4 space-y-1">
         <a href="{{ url_for('main.dashboard') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm rounded-lg {% if request.endpoint == 'main.dashboard' %}bg-primary/10 text-primary font-semibold{% else %}text-[#0f172a] dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-blue-800{% endif %}">
             <span class="material-symbols-outlined text-xl">dashboard</span> Dashboard

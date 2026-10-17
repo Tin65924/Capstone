@@ -77,9 +77,12 @@
         /* Main Content Adjustments */
         main {
             flex: 1;
-            padding: 2rem 3rem;
-            max-width: calc(100vw - 256px);
+            padding: 1rem;
+            max-width: 100%;
+            min-width: 0;
         }
+        @media (min-width: 640px) { main { padding: 1.5rem; } }
+        @media (min-width: 1024px) { main { padding: 2rem 3rem; max-width: calc(100vw - 256px); } }
 
         .card {
             background: white;
@@ -93,12 +96,18 @@
         .status-header {
             background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%);
             color: white;
-            padding: 2.5rem;
+            padding: 1.25rem;
             border-radius: var(--radius);
-            margin-bottom: 2.5rem;
+            margin-bottom: 1.5rem;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+        @media (min-width: 640px) {
+            .status-header { padding: 2.5rem; margin-bottom: 2.5rem; }
+        }
+        @media (min-width: 768px) {
+            .status-header { flex-direction: row; justify-content: space-between; align-items: center; }
         }
 
         table {
@@ -209,20 +218,50 @@
       </div>
     </div>
 
+    <!-- Mobile sidebar drawer -->
+    <div id="mobile-sidebar" class="fixed inset-0 z-50 hidden lg:hidden">
+        <div id="mobile-sidebar-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+        <div class="absolute top-0 left-0 h-full w-[80%] max-w-[280px] bg-white dark:bg-[#1a2235] shadow-2xl flex flex-col overflow-hidden">
+            <div class="p-4 flex items-center justify-between border-b border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                <div class="flex items-center gap-3 min-w-0">
+                    <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-8 w-8 rounded-lg object-cover shrink-0">
+                    <h1 class="text-lg font-bold truncate">MCST Library</h1>
+                </div>
+                <button id="mobile-sidebar-close" type="button" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"><span class="material-symbols-outlined">close</span></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6">
+                {% include 'components/admin_sidebar_nav.html' %}
+            </div>
+            <div class="p-6 border-t border-[#cfd7e7] dark:border-gray-700 shrink-0">
+                <div class="flex flex-col items-center mb-4">
+                    <h2 class="text-base font-bold text-center break-words">{{ current_user.full_name }}</h2>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 text-center">{{ current_user.role }}</p>
+                </div>
+                <a href="{{ url_for('auth.logout') }}" class="flex w-full items-center justify-center gap-2 rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors">
+                    <span class="material-symbols-outlined text-[18px]">logout</span> Log Out
+                </a>
+            </div>
+        </div>
+    </div>
+
     <!-- Main Content Area -->
     <main>
         <!-- Mobile top bar -->
-        <div class="lg:hidden sticky top-0 z-30 flex items-center gap-2 bg-white dark:bg-[#1a2235] border-b border-[#cfd7e7] dark:border-gray-700 px-4 py-3 mb-4">
-            <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover">
-            <span class="font-bold text-sm">System Backup</span>
+        <div class="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-[#1a2235] border-b border-[#cfd7e7] dark:border-gray-700 px-4 py-3 mb-4">
+            <button id="mobile-sidebar-open" type="button" class="p-2 -ml-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><span class="material-symbols-outlined">menu</span></button>
+            <div class="flex items-center gap-2 min-w-0">
+                <img src="{{ url_for('static', filename='images/Library_Logo.jpg') }}" alt="MCST Library" class="h-7 w-7 rounded-lg object-cover shrink-0">
+                <span class="font-bold text-sm truncate">System Backup</span>
+            </div>
+            <div class="w-10 shrink-0"></div>
         </div>
         {% include 'components/flash_messages.html' %}
         <!-- Premium Status Header -->
         <div class="status-header animate-up">
-            <div>
-                <h1 class="text-4xl font-extrabold font-outfit mb-2">System Backup</h1>
-                <p class="text-indigo-100 font-medium">Protecting library data with automated redundancy.</p>
-                <div class="flex gap-6 mt-8">
+            <div class="min-w-0">
+                <h1 class="text-2xl sm:text-4xl font-extrabold font-outfit mb-2 break-words">System Backup</h1>
+                <p class="text-indigo-100 font-medium text-sm sm:text-base">Protecting library data with automated redundancy.</p>
+                <div class="flex flex-col sm:flex-row sm:flex-wrap gap-4 sm:gap-6 mt-6 sm:mt-8">
                     <div>
                         <div class="text-[10px] font-black uppercase tracking-widest text-indigo-200 mb-1">Status</div>
                         {% if busy %}
@@ -233,22 +272,22 @@
                         <div class="flex items-center gap-2 font-bold"><span class="w-2 h-2 rounded-full bg-amber-400"></span> Warning</div>
                         {% endif %}
                     </div>
-                    <div class="w-[1px] bg-indigo-400/50"></div>
+                    <div class="hidden sm:block w-[1px] bg-indigo-400/50"></div>
                     <div>
                         <div class="text-[10px] font-black uppercase tracking-widest text-indigo-200 mb-1">Last Backup</div>
                         <div class="font-bold">
                             {% if stats.last and stats.last[6] %}{{ stats.last[6].strftime('%Y-%m-%d %H:%M') if stats.last[6].strftime is defined else stats.last[6] }}{% else %}Never{% endif %}
                         </div>
                     </div>
-                    <div class="w-[1px] bg-indigo-400/50"></div>
+                    <div class="hidden sm:block w-[1px] bg-indigo-400/50"></div>
                     <div>
                         <div class="text-[10px] font-black uppercase tracking-widest text-indigo-200 mb-1">Backups</div>
                         <div class="font-bold">{{ stats.count }} stored &middot; {{ '%.1f' % (stats.total_size / 1048576) if stats.total_size else '0.0' }} MB</div>
                     </div>
                 </div>
             </div>
-            <form method="POST" action="{{ url_for('backup.create_backup_route') }}">
-                <button type="submit" {% if busy %}disabled{% endif %} class="bg-white text-indigo-600 px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-50 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+            <form method="POST" action="{{ url_for('backup.create_backup_route') }}" class="w-full md:w-auto shrink-0">
+                <button type="submit" {% if busy %}disabled{% endif %} class="w-full md:w-auto bg-white text-indigo-600 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-sm sm:text-base flex items-center justify-center gap-2 hover:bg-indigo-50 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
                     <span class="material-symbols-outlined">cloud_upload</span> {% if busy_kind == 'restore' %}Restore Running…{% elif busy %}Backup Running…{% else %}Run Backup Now{% endif %}
                 </button>
             </form>
@@ -382,12 +421,12 @@
 
     <!-- Restore confirmation modal (1 of 2): what restoring will do -->
     <div id="restore-confirm-modal" class="modal-overlay">
-        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-up">
+        <div class="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto animate-up">
             <div class="flex items-center gap-3 mb-3">
                 <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
                     <span class="material-symbols-outlined">warning</span>
                 </div>
-                <h3 class="text-lg font-extrabold">Restore this backup?</h3>
+                <h3 class="text-lg font-extrabold break-words min-w-0">Restore this backup?</h3>
             </div>
             <p class="text-sm text-gray-600 mb-3">You are about to restore <strong id="restore-confirm-name" class="break-all"></strong>. If you continue, this will happen:</p>
             <ul class="text-sm text-gray-600 space-y-1.5 mb-4 list-disc pl-5">
@@ -395,7 +434,7 @@
                 <li>The entire database is then replaced with the backup.</li>
                 <li>Anything added after this backup was created is permanently lost.</li>
             </ul>
-            <div class="flex gap-3 justify-end">
+            <div class="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 sm:justify-end">
                 <button id="restore-confirm-cancel" type="button" class="px-4 py-2 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-100">Cancel</button>
                 <button id="restore-confirm-proceed" type="button" class="px-4 py-2 rounded-lg text-sm font-bold bg-primary text-white hover:bg-blue-800">Yes, restore</button>
             </div>
@@ -404,12 +443,12 @@
 
     <!-- Restore started modal (2 of 2): what happens after restoring -->
     <div id="restore-result-modal" class="modal-overlay{% if restore_started %} open{% endif %}"{% if restore_started %} data-auto-open="1" data-restore-started="{{ restore_started }}"{% endif %}>
-        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-up">
+        <div class="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto animate-up">
             <div class="flex items-center gap-3 mb-3">
                 <div class="w-10 h-10 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
                     <span class="material-symbols-outlined">sync</span>
                 </div>
-                <h3 class="text-lg font-extrabold">Restore started</h3>
+                <h3 class="text-lg font-extrabold break-words min-w-0">Restore started</h3>
             </div>
             <p class="text-sm text-gray-600 mb-3"><strong class="break-all">{% if restore_started %}{{ restore_started }}{% endif %}</strong> is being restored in the background. This is what happens next:</p>
             <ul class="text-sm text-gray-600 space-y-1.5 mb-4 list-disc pl-5">
@@ -418,7 +457,7 @@
                 <li>Anything added after this backup will be lost.</li>
                 <li>This page refreshes automatically; the outcome banner appears below when it finishes.</li>
             </ul>
-            <div class="flex gap-3 justify-end">
+            <div class="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 sm:justify-end">
                 <button id="restore-result-close" type="button" class="px-4 py-2 rounded-lg text-sm font-bold bg-primary text-white hover:bg-blue-800">Got it</button>
             </div>
         </div>
@@ -426,12 +465,12 @@
 
     <!-- Delete confirmation modal (1 of 2): what deleting will do -->
     <div id="delete-confirm-modal" class="modal-overlay">
-        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-up">
+        <div class="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto animate-up">
             <div class="flex items-center gap-3 mb-3">
                 <div class="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
                     <span class="material-symbols-outlined">warning</span>
                 </div>
-                <h3 class="text-lg font-extrabold">Delete this backup?</h3>
+                <h3 class="text-lg font-extrabold break-words min-w-0">Delete this backup?</h3>
             </div>
             <p class="text-sm text-gray-600 mb-3">You are about to delete <strong id="delete-confirm-name" class="break-all"></strong>. If you continue, this will happen:</p>
             <ul class="text-sm text-gray-600 space-y-1.5 mb-4 list-disc pl-5">
@@ -439,7 +478,7 @@
                 <li>Its row is removed from the backup history.</li>
                 <li>If this is the only copy, it can never be restored afterwards.</li>
             </ul>
-            <div class="flex gap-3 justify-end">
+            <div class="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 sm:justify-end">
                 <button id="delete-confirm-cancel" type="button" class="px-4 py-2 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-100">Cancel</button>
                 <button id="delete-confirm-proceed" type="button" class="px-4 py-2 rounded-lg text-sm font-bold bg-rose-600 text-white hover:bg-rose-700">Yes, delete</button>
             </div>
@@ -448,16 +487,16 @@
 
     <!-- Delete result modal (2 of 2): what happened after deleting -->
     <div id="delete-result-modal" class="modal-overlay">
-        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-up">
+        <div class="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto animate-up">
             <div class="flex items-center gap-3 mb-3">
                 <div id="delete-result-icon" class="w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
                     <span class="material-symbols-outlined">info</span>
                 </div>
-                <h3 id="delete-result-title" class="text-lg font-extrabold">Delete finished</h3>
+                <h3 id="delete-result-title" class="text-lg font-extrabold break-words min-w-0">Delete finished</h3>
             </div>
-            <p id="delete-result-body" class="text-sm text-gray-600 mb-2"></p>
+            <p id="delete-result-body" class="text-sm text-gray-600 mb-2 break-words"></p>
             <p id="delete-result-error" class="hidden text-sm text-rose-600 bg-rose-50 border border-rose-100 rounded-lg p-3 mb-4 break-words"></p>
-            <div class="flex gap-3 justify-end">
+            <div class="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 sm:justify-end">
                 <button id="delete-result-close" type="button" class="px-4 py-2 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-100">Close</button>
                 <button id="delete-result-reload" type="button" class="hidden px-4 py-2 rounded-lg text-sm font-bold bg-primary text-white hover:bg-blue-800">Reload page</button>
             </div>
@@ -465,6 +504,17 @@
     </div>
 
 <script>
+(function() {
+    var openBtn = document.getElementById('mobile-sidebar-open');
+    var closeBtn = document.getElementById('mobile-sidebar-close');
+    var drawer = document.getElementById('mobile-sidebar');
+    var backdrop = document.getElementById('mobile-sidebar-backdrop');
+    function open() { if (drawer) { drawer.classList.remove('hidden'); document.body.style.overflow = 'hidden'; } }
+    function close() { if (drawer) { drawer.classList.add('hidden'); document.body.style.overflow = ''; } }
+    if (openBtn) openBtn.addEventListener('click', open);
+    if (closeBtn) closeBtn.addEventListener('click', close);
+    if (backdrop) backdrop.addEventListener('click', close);
+})();
 (function() {
     // Restore is a two-step confirmation: consequences first, outcome after.
     var restoreConfirm = document.getElementById('restore-confirm-modal');
