@@ -348,7 +348,7 @@
                             </div>
                             <p class="text-xs text-slate-500 truncate mt-1">{{ book[2] }}{% if book[5] %} · {{ book[5] }}{% endif %}{% if book[8] %} · ISBN {{ book[8] }}{% endif %}{% if book[7] %} · {{ book[7] }}{% endif %}</p>
                             <p class="text-[11px] {% if has_available %}text-green-600 dark:text-green-400{% else %}text-slate-400{% endif %} font-semibold mt-0.5">
-                                {% if is_ebook %}Available online{% elif has_available %}{% if book|length > 14 %}{{ avail_count }} cop{{ 'y' if (avail_count|string|int(0)) == 1 else 'ies' }} available{% else %}Available{% endif %}{% else %}No copies available{% endif %}
+                                {% if is_ebook %}Available online{% elif has_available %}Available{% else %}Not Available{% endif %}
                             </p>
                         </div>
                         <div class="flex items-center gap-2 shrink-0">
@@ -421,7 +421,7 @@
                                 </div>
                                 <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
                                     <span class="text-[11px] font-semibold {% if has_available %}text-green-600 dark:text-green-400{% else %}text-slate-400{% endif %}">
-                                        {% if is_ebook %}Available online{% elif has_available %}{% if book|length > 14 %}{{ avail_count }} cop{{ 'y' if (avail_count|string|int(0)) == 1 else 'ies' }} available{% else %}Available{% endif %}{% else %}No copies available{% endif %}
+                                        {% if is_ebook %}Available online{% elif has_available %}Available{% else %}Not Available{% endif %}
                                     </span>
                                     <div class="flex items-center gap-2 shrink-0">
                                         {% if is_ebook and eurl %}

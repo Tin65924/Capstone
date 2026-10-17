@@ -189,10 +189,6 @@
             <span class="material-icons text-slate-400">layers</span>
             Availability
         </h3>
-        {% set ns = namespace(available=0) %}
-        {% for acc, is_available in accessions %}
-            {% if is_available %}{% set ns.available = ns.available + 1 %}{% endif %}
-        {% endfor %}
         {% set user_has_book = current_user.is_authenticated and (current_user.id|int in borrower_map.values()) %}
         {% set is_archived = book|length > 11 and book[11] != 'active' %}
         <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -204,15 +200,11 @@
                 <p class="text-sm font-bold text-slate-900 dark:text-slate-100">You have this book borrowed</p>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Return your copy before borrowing it again.</p>
                 {% elif any_available %}
-                <p class="text-sm font-bold text-slate-900 dark:text-slate-100">{{ ns.available }} of {{ accessions|length }} cop{{ 'y' if accessions|length == 1 else 'ies' }} available</p>
+                <p class="text-sm font-bold text-slate-900 dark:text-slate-100">Available</p>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">A copy is ready — you can borrow it now.</p>
                 {% else %}
-                <p class="text-sm font-bold text-slate-900 dark:text-slate-100">No copies available</p>
-                {% if accessions|length == 0 %}
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">No copies have been cataloged yet — reserve below and we'll notify you if one arrives.</p>
-                {% else %}
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">All {{ accessions|length }} cop{{ 'y' if accessions|length == 1 else 'ies' }} {{ 'is' if accessions|length == 1 else 'are' }} currently borrowed — reserve instead and we'll notify you.</p>
-                {% endif %}
+                <p class="text-sm font-bold text-slate-900 dark:text-slate-100">Not Available</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">All copies are currently borrowed — reserve below and we'll notify you.</p>
                 {% endif %}
             </div>
             <div class="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-end shrink-0">
