@@ -409,6 +409,103 @@ def library_hours_label(config=None):
     return f'{oh:02d}:{om:02d}–{ch:02d}:{cm:02d}'
 
 
+def _hhmm_ampm(pair):
+    """Format an (hour, minute) pair as '5:00 PM' style wall-clock text."""
+    hour, minute = pair
+    meridiem = 'AM' if hour < 12 else 'PM'
+    hour12 = hour % 12 or 12
+    return f'{hour12}:{minute:02d} {meridiem}'
+
+
+def next_open_day(after=None, config=None, max_days=14):
+    """First day strictly after ``after`` whose date is open.
+
+    Honors both LIBRARY_OPEN_DAYS and per-date month overrides (it walks
+    :func:`is_open_day`). Returns None when nothing opens within
+    ``max_days`` (e.g. every day unchecked) or when the input date is
+    unusable.
+    """
+    day = after or library_today()
+    try:
+        day.strftime('%A')
+    except Exception:
+        return None
+    for i in range(1, max_days + 1):
+        candidate = day + timedelta(days=i)
+        if is_open_day(candidate, config):
+            return candidate
+    return None
+
+
+def library_open_status(config=None, now=None):
+    """Public open/closed banner state for the landing page.
+
+    Combines Library Hours (LIBRARY_OPENING_TIME/LIBRARY_CLOSING_TIME)
+    with the Operations Schedule (LIBRARY_OPEN_DAYS + LIBRARY_MONTH_DAYS
+    per-date overrides) into a display dict:
+
+    ``{'open': bool, 'message': str, 'hours_label': str or None}``
+
+    - open → "Open now" (+ " — closes at 5:00 PM" when hours configured)
+    - closed day (unchecked weekday / override) → "Closed today — reopens
+      {Weekday, Mon DD} at 8:00 AM"
+    - open day before opening → "Closed — opens today at 8:00 AM"
+    - open day after closing → "Closed — reopens {next open day} at ..."
+
+    Fail-open semantics follow :func:`is_library_open`: with no hours
+    configured, the library counts as always open ("No hour restrictions
+    set"). Never raises; corrupt dates degrade to 'Open now'.
+
+    Args:
+        config: Optional config mapping (defaults to
+            ``current_app.config``).
+        now: Datetime to evaluate (defaults to :func:`library_now`).
+
+    Returns:
+        Display dict for templates as described above.
+    """
+    day = now or library_now()
+    try:
+        day.date().strftime('%A')
+    except Exception:
+        return {'open': True, 'message': 'Open now',
+                'hours_label': 'No hour restrictions set'}
+    today = day.date()
+    hours = library_hours_from_config(config)
+    hours_label = None
+    if hours:
+        hours_label = f'{_hhmm_ampm(hours[0])} – {_hhmm_ampm(hours[1])}'
+    else:
+        return {'open': True, 'message': 'Open now',
+                'hours_label': 'No hour restrictions set'}
+    if is_library_open(day, config):
+        return {'open': True,
+                'message': f'Open now — closes at {_hhmm_ampm(hours[1])}',
+                'hours_label': hours_label}
+    opening_label = _hhmm_ampm(hours[0])
+    if not is_open_day(today, config):
+        nxt = next_open_day(today, config)
+        if nxt:
+            return {'open': False,
+                    'message': (f'Closed today — reopens '
+                                f'{nxt.strftime("%A, %b %d")} at {opening_label}'),
+                    'hours_label': hours_label}
+        return {'open': False, 'message': 'Closed today',
+                'hours_label': hours_label}
+    current = (day.hour if isinstance(day, datetime) else None,
+               day.minute if isinstance(day, datetime) else None)
+    if None not in current and current < hours[0]:
+        return {'open': False,
+                'message': f'Closed — opens today at {opening_label}',
+                'hours_label': hours_label}
+    nxt = next_open_day(today, config)
+    return {'open': False,
+            'message': ('Closed — reopens ' +
+                        (f'{nxt.strftime("%A, %b %d")} at {opening_label}'
+                         if nxt else 'tomorrow')),
+            'hours_label': hours_label}
+
+
 def is_library_open(now=None, config=None):
     """Check whether borrowing is allowed at a given moment.
 

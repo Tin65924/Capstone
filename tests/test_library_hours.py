@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from app.settings.models import (
     parse_hhmm, is_library_open, library_hours_label, get_closing_time,
-    get_open_days, is_open_day,
+    get_open_days, is_open_day, next_open_day, library_open_status,
 )
 
 OPEN = {'LIBRARY_OPENING_TIME': '08:00', 'LIBRARY_CLOSING_TIME': '17:00'}
@@ -72,6 +72,63 @@ class TestOpenCheck:
         assert library_hours_label({}) is None
         assert get_closing_time(OPEN) == (17, 0)
         assert get_closing_time({}) == (17, 0)
+
+
+class TestLibraryOpenStatus:
+    """library_open_status: the public open/closed banner state."""
+
+    def test_open_now_reports_closing_time(self):
+        """In-hours on an open day → open with closing time and label [TestLibraryOpenStatus / library hours].
+    If fails: the home page pill would claim the wrong open state."""
+        status = library_open_status(OPEN_DAYS, _at(10, 0))
+        assert status['open'] is True
+        assert 'Open now' in status['message']
+        assert '5:00 PM' in status['message']
+        assert status['hours_label'] == '8:00 AM – 5:00 PM'
+
+    def test_before_opening_says_opens_today(self):
+        """Open day before opening hour → opens today at the open time [TestLibraryOpenStatus / library hours].
+    If fails: early visitors would see a misleading reopen day."""
+        status = library_open_status(OPEN_DAYS, _at(7, 0))
+        assert status['open'] is False
+        assert 'opens today at 8:00 AM' in status['message']
+
+    def test_after_closing_says_reopens_next_open_day(self):
+        """Open day after closing → cites the next open day [TestLibraryOpenStatus / library hours].
+    If fails: evening visitors would see the wrong reopen info."""
+        status = library_open_status(OPEN_DAYS, _at(18, 0))
+        assert status['open'] is False
+        assert 'reopens Wednesday, Oct 07' in status['message']
+        assert '8:00 AM' in status['message']
+
+    def test_closed_weekday_names_next_open_day(self):
+        """Unscheduled day (Sunday) → 'Closed today' with next open day [TestLibraryOpenStatus / library hours].
+    If fails: Monday-open info would be wrong for Sunday visitors."""
+        sunday = datetime(2026, 10, 11, 10, 0)
+        assert is_open_day(sunday, OPEN_DAYS) is False
+        status = library_open_status(OPEN_DAYS, sunday)
+        assert status['open'] is False
+        assert 'Closed today' in status['message']
+        assert 'Monday, Oct 12' in status['message']
+
+    def test_unconfigured_fail_open(self):
+        """No hours configured → always open, no restrictions label [TestLibraryOpenStatus / library hours].
+    If fails: a misconfigured settings table would wrongly close the library on the home page."""
+        status = library_open_status({}, _at(3, 0))
+        assert status['open'] is True
+        assert status['hours_label'] == 'No hour restrictions set'
+        status = library_open_status({'LIBRARY_OPENING_TIME': 'junk'}, _at(3, 0))
+        assert status['open'] is True
+
+    def test_next_open_day_helper(self):
+        """next_open_day skips closed days and honors month overrides [TestLibraryOpenStatus / library hours].
+    If fails: closed banners would name a day the library is also closed."""
+        assert next_open_day(datetime(2026, 10, 6), OPEN_DAYS).date() == \
+            datetime(2026, 10, 7).date()
+        assert next_open_day(datetime(2026, 10, 10), OPEN_DAYS).strftime('%A') == 'Monday'
+        # Nothing opens within 14 days when every day is unchecked.
+        closed_all = dict(OPEN_DAYS, LIBRARY_OPEN_DAYS='')
+        assert next_open_day(_at(10, 0), closed_all) is None
 
 
 class TestHoursSettingsUi:

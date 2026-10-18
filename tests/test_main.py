@@ -23,6 +23,56 @@ class TestLandingPage:
         assert resp.status_code == 200
         assert b'New Book Title' in resp.data or b'New' in resp.data
 
+    def test_index_side_browse_card_and_open_status(self, client, mock_db):
+        """Browse by Book Type renders as a sidebar card next to the
+        open/closed status pill drawn from library settings
+        [TestLandingPage / main].
+    If fails: the side layout or the settings-derived open label broke."""
+        mock_db['fetch_all'].side_effect = [
+            [],                        # get_recent_books
+            [('Book', 2), ('E-Book', 1)],  # get_distinct_material_types
+        ]
+        resp = client.get('/')
+        assert resp.status_code == 200
+        body = resp.data.decode()
+        assert 'Browse by Book Type' in body
+        assert 'material_type=E-Book' in body
+        # Status label from Library Hours / Operations Schedule settings
+        # (test config has none -> fail-open "Open now").
+        assert 'Open now' in body
+        assert 'No hour restrictions set' in body
+
+    def test_index_open_status_uses_configured_hours(self, client, mock_db):
+        """With hours + open days configured the status comes from them
+        [TestLandingPage / main].
+    If fails: the label would ignore the librarian's settings."""
+        from flask import current_app
+        app = client.application
+        saved = {k: app.config.get(k) for k in (
+            'LIBRARY_OPENING_TIME', 'LIBRARY_CLOSING_TIME',
+            'LIBRARY_OPEN_DAYS', 'LIBRARY_MONTH_DAYS',
+            'MAX_BORROW_LIMIT_STUDENT')}
+        app.config.update({
+            'LIBRARY_OPENING_TIME': '08:00',
+            'LIBRARY_CLOSING_TIME': '17:00',
+            'LIBRARY_OPEN_DAYS': 'Monday,Tuesday,Wednesday,Thursday,Friday,Saturday',
+        })
+        app.config.pop('LIBRARY_MONTH_DAYS', None)
+        try:
+            mock_db['fetch_all'].side_effect = [[], []]
+            body = client.get('/').data.decode()
+            assert 'Library hours:' in body
+            assert '8:00 AM' in body
+            # Either state may show depending on wall clock; the label is
+            # always one of the two configured-hour forms.
+            assert ('Open now' in body) or ('Closed' in body)
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    app.config.pop(k, None)
+                else:
+                    app.config[k] = v
+
 
 class TestDashboard:
     def test_dashboard_unauthenticated_redirects(self, client):

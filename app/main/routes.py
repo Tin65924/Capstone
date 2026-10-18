@@ -136,8 +136,16 @@ def index():
             continue
         if name:
             book_types.append((name, count))
+    # Open/closed banner state from Library Hours + Operations Schedule
+    # settings; fails open (always "Open") if anything is unconfigured.
+    try:
+        from app.settings.models import library_open_status
+        open_status = library_open_status()
+    except Exception:
+        open_status = {'open': True, 'message': 'Open now',
+                       'hours_label': None}
     return render_template('public/index.html', new_arrivals=new_arrivals,
-                           book_types=book_types)
+                           book_types=book_types, open_status=open_status)
 
 
 @main_bp.route('/health')

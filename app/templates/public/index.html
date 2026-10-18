@@ -70,29 +70,47 @@
     </div>
 </section>
 {% set _book_types = book_types|default([]) %}
-{% if _book_types %}
-<section class="w-full max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8">
-    <div class="flex items-center justify-between gap-2 pb-3 sm:pb-4">
-        <h3 class="text-xl sm:text-2xl font-bold text-[#0f172a] dark:text-white">Browse by Book Type</h3>
-        <a class="text-primary text-xs sm:text-sm font-bold hover:underline flex items-center gap-1 self-start sm:self-auto" href="{{ url_for('cataloging.public_catalog') }}">
-            View full catalog <span class="material-symbols-outlined text-sm">arrow_forward</span>
-        </a>
-    </div>
-    <div class="flex flex-wrap gap-2 sm:gap-3">
-        {% for bt in _book_types %}
-        <a href="{{ url_for('cataloging.public_catalog', material_type=bt[0]) }}"
-            class="inline-flex items-center gap-2 rounded-full bg-white dark:bg-[#151c2b] border border-[#e7ebf3] dark:border-gray-800 px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-[#0f172a] dark:text-white shadow-sm hover:border-primary/40 hover:text-primary transition-colors">
-            <span class="material-symbols-outlined text-primary text-[18px] sm:text-[20px]">{% if bt[0] == 'E-Book' %}tablet_mac{% elif bt[0] == 'Reference' %}menu_book{% elif bt[0] == 'Periodical' %}newspaper{% elif bt[0] == 'Thesis' %}school{% else %}book{% endif %}</span>
-            {{ bt[0] }}
-            {% if bt|length > 1 %}<span class="text-gray-400 dark:text-gray-500 font-semibold">({{ bt[1] }})</span>{% endif %}
-        </a>
-        {% endfor %}
-    </div>
-</section>
-{% endif %}
 <main class="flex-grow layout-container w-full max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
-        <div class="lg:col-span-12 flex flex-col gap-4 sm:gap-6">
+        <!-- Side column (mobile-first in DOM): library status + book types -->
+        <aside class="lg:order-2 lg:col-span-4 flex flex-col gap-4 sm:gap-6">
+            {% if _book_types %}
+            <!-- Browse by Book Type sidebar card (mirrors the Current Book
+                 Borrowing Requests card on the profile page) -->
+            <div class="bg-white dark:bg-[#151c2b] rounded-xl shadow-sm border border-[#e7ebf3] dark:border-gray-800 overflow-hidden">
+                <div class="flex items-center justify-between gap-2 p-3 sm:p-4 border-b border-[#e7ebf3] dark:border-gray-800">
+                    <h2 class="font-bold text-[#0f172a] dark:text-white text-base sm:text-lg">Browse by Book Type</h2>
+                    <a href="{{ url_for('cataloging.public_catalog') }}" class="text-primary hover:underline shrink-0" title="View full catalog">
+                        <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+                    </a>
+                </div>
+                <div class="p-3 sm:p-4 flex flex-col gap-2">
+                    {% for bt in _book_types %}
+                    <a href="{{ url_for('cataloging.public_catalog', material_type=bt[0]) }}"
+                        class="flex items-center justify-between gap-2 p-2.5 sm:p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 hover:border-primary/40 transition-colors group">
+                        <span class="flex items-center gap-2 text-sm font-bold text-[#0f172a] dark:text-white group-hover:text-primary group-hover:underline transition-colors min-w-0">
+                            <span class="material-symbols-outlined text-primary text-[18px] shrink-0">{% if bt[0] == 'E-Book' %}tablet_mac{% elif bt[0] == 'Reference' %}menu_book{% elif bt[0] == 'Periodical' %}newspaper{% elif bt[0] == 'Thesis' %}school{% else %}book{% endif %}</span>
+                            <span class="truncate">{{ bt[0] }}</span>
+                        </span>
+                        {% if bt|length > 1 %}<span class="text-xs text-gray-400 dark:text-gray-500 font-semibold shrink-0">({{ bt[1] }})</span>{% endif %}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            <!-- Open/closed label from Library Hours + Library Operations
+                 Schedule settings (fail-open when nothing is configured) -->
+            <div class="bg-white dark:bg-[#151c2b] rounded-xl shadow-sm border border-[#e7ebf3] dark:border-gray-800 p-4 flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0 {% if open_status.open %}bg-green-500{% else %}bg-red-500{% endif %}"></span>
+                <div class="min-w-0">
+                    <p class="font-bold text-sm {% if open_status.open %}text-green-700 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">{{ open_status.message }}</p>
+                    {% if open_status.hours_label %}
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Library hours: {{ open_status.hours_label }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </aside>
+        <div class="lg:order-1 lg:col-span-8 flex flex-col gap-4 sm:gap-6">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#e7ebf3] dark:border-gray-800 pb-3 sm:pb-4">
                 <h3 class="text-xl sm:text-2xl font-bold text-[#0f172a] dark:text-white">New Arrivals</h3>
                 <a class="text-primary text-xs sm:text-sm font-bold hover:underline flex items-center gap-1 self-start sm:self-auto" href="{{ url_for('cataloging.public_catalog') }}">
