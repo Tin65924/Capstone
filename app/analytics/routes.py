@@ -1,6 +1,7 @@
 import calendar
 import io
 import os
+import threading
 from datetime import date, datetime, timedelta
 from xml.sax.saxutils import escape as _xml_escape
 
@@ -240,8 +241,11 @@ def compute_dashboard(start_date, end_date, departments=None, _use_cache=True):
     """Assemble Riverside-style dashboard payload from model queries.
 
     Results are cached per filter set (see models.get/set_dashboard_cache,
-    TTL 5 min). Cache is best-effort and disabled in tests; any failure
-    falls back to fresh compute.
+    TTL 15 min). Cache is best-effort and disabled in tests. On an expired
+    entry the stale payload is served immediately while a background thread
+    recomputes it (serve-stale-then-refresh), so repeat loads never block on
+    the ~40 aggregate queries; a first-ever filter set still computes
+    synchronously. Any failure falls back to fresh compute.
     """
     key = _dashboard_cache_key(start_date, end_date, departments)
     if _use_cache and _dashboard_cache_allowed():
@@ -251,6 +255,13 @@ def compute_dashboard(start_date, end_date, departments=None, _use_cache=True):
             hit = None
         if hit is not None:
             return hit
+        try:
+            stale = models.get_dashboard_cache_stale(key)
+        except Exception:
+            stale = None
+        if stale is not None and _spawn_dashboard_refresh(
+                start_date, end_date, departments, key):
+            return stale
     payload = _compute_dashboard(start_date, end_date, departments)
     if _use_cache and _dashboard_cache_allowed():
         try:
@@ -258,6 +269,51 @@ def compute_dashboard(start_date, end_date, departments=None, _use_cache=True):
         except Exception:
             pass
     return payload
+
+
+_dashboard_refresh_lock = threading.Lock()
+_dashboard_refresh_inflight = set()
+
+
+def _spawn_dashboard_refresh(start_date, end_date, departments, key):
+    """Recompute a stale dashboard cache entry in a daemon thread.
+
+    Returns True when a refresh was scheduled — the first request per key
+    wins, concurrent requests during a refresh all get the same stale
+    payload. The thread pushes its own app context and calls only compute
+    + cache-write helpers, so nothing touches the ended request.
+    """
+    from flask import current_app
+    token = repr(key)  # key is a dict — not hashable into the in-flight set
+    with _dashboard_refresh_lock:
+        if token in _dashboard_refresh_inflight:
+            return False
+        _dashboard_refresh_inflight.add(token)
+    scheduled = False
+    try:
+        app = current_app._get_current_object()
+
+        def _refresh():
+            try:
+                with app.app_context():
+                    payload = _compute_dashboard(start_date, end_date, departments)
+                    models.set_dashboard_cache(key, payload, None)
+            except Exception:
+                pass
+            finally:
+                with _dashboard_refresh_lock:
+                    _dashboard_refresh_inflight.discard(token)
+
+        threading.Thread(
+            target=_refresh, name='analytics-dashboard-refresh', daemon=True
+        ).start()
+        scheduled = True
+    finally:
+        if not scheduled:
+            # Thread never started (e.g. no app context) — release the slot.
+            with _dashboard_refresh_lock:
+                _dashboard_refresh_inflight.discard(token)
+    return True
 
 
 def _compute_dashboard(start_date, end_date, departments=None):

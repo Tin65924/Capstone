@@ -2312,6 +2312,91 @@ class TestDashboardCache:
         mock_db['fetch_all'].return_value = []
         assert routes.compute_dashboard(None, None) == routes._compute_dashboard(None, None)
 
+    def test_stale_getter_returns_expired_payload(self, mock_db):
+        """Stale getter serves expired rows for serve-stale-then-refresh; the
+        fresh getter still drops them [TestDashboardCache / analytics].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        import json as _json
+        from datetime import datetime, timedelta
+        from app.analytics.models import get_dashboard_cache, get_dashboard_cache_stale
+        payload = {'usage': {'total': 2}}
+        mock_db['fetch_one'].return_value = (
+            _json.dumps(payload), datetime.now() - timedelta(days=1))
+        assert get_dashboard_cache_stale({'start': None}) == payload
+        assert get_dashboard_cache({'start': None}) is None
+
+    def test_stale_getter_missing_or_bad_returns_none(self, mock_db):
+        """Stale getter degrades to None on absent/unparseable rows [TestDashboardCache / analytics].
+    If fails: likely model query/tuple-contract change or mock return drift.
+    Failure indicates dashboard/stats shown to staff are wrong."""
+        from datetime import datetime
+        from app.analytics.models import get_dashboard_cache_stale
+        mock_db['fetch_one'].return_value = None
+        assert get_dashboard_cache_stale({}) is None
+        mock_db['fetch_one'].return_value = ('not-json{{{', datetime.now())
+        assert get_dashboard_cache_stale({}) is None
+        mock_db['fetch_one'].return_value = (0,)
+        assert get_dashboard_cache_stale({}) is None
+
+    def test_wrapper_serves_stale_and_schedules_refresh(self, mock_db):
+        """Expired cache returns stale instantly and schedules one refresh
+        instead of blocking on the full recompute [TestDashboardCache / analytics].
+    If fails: likely serve-stale wiring broken; dashboard loads would hang ~10s on Neon."""
+        from unittest.mock import patch
+        from app.analytics import routes
+        stale = {'usage': {'total': 1}}
+        with patch.object(routes, '_dashboard_cache_allowed', return_value=True):
+            with patch.object(routes.models, 'get_dashboard_cache', return_value=None):
+                with patch.object(routes.models, 'get_dashboard_cache_stale', return_value=stale):
+                    with patch.object(routes, '_spawn_dashboard_refresh',
+                                      return_value=True) as spawn:
+                        with patch.object(routes.models, 'set_dashboard_cache') as mock_set:
+                            assert routes.compute_dashboard(None, None) == stale
+                            assert spawn.call_count == 1
+                            mock_set.assert_not_called()
+        assert mock_db['fetch_all'].call_count == 0
+
+    def test_spawn_refresh_runs_and_clears_inflight(self, mock_db, app):
+        """Background refresh computes the payload, stores it, and removes the
+        in-flight token so later requests can reschedule [TestDashboardCache / analytics].
+    If fails: refresh thread crashed or leak; dashboards would freeze on stale data."""
+        from unittest.mock import patch
+        from app.analytics import routes
+        key = {'start': None, 'end': None, 'departments': []}
+        token = repr(key)
+        ran = []
+
+        class FakeThread:
+            def __init__(self, target=None, name=None, daemon=None):
+                self._target = target
+
+            def start(self):
+                ran.append(True)
+                self._target()
+
+        mock_db['fetch_one'].return_value = (0,)
+        mock_db['fetch_all'].return_value = []
+        with app.test_request_context():
+            with patch.object(routes.threading, 'Thread', FakeThread):
+                with patch.object(routes.models, 'set_dashboard_cache') as mock_set:
+                    assert routes._spawn_dashboard_refresh(None, None, [], key) is True
+                    assert ran == [True]
+                    assert mock_set.call_args[0][0] == key
+                    assert token not in routes._dashboard_refresh_inflight
+
+    def test_spawn_refresh_skips_when_inflight(self, mock_db):
+        """Concurrent requests during a refresh are not double-scheduled [TestDashboardCache / analytics].
+    If fails: duplicate refresh threads would waste DB capacity on Neon."""
+        from app.analytics import routes
+        key = {'start': None, 'end': None, 'departments': []}
+        token = repr(key)
+        routes._dashboard_refresh_inflight.add(token)
+        try:
+            assert routes._spawn_dashboard_refresh(None, None, [], key) is False
+        finally:
+            routes._dashboard_refresh_inflight.discard(token)
+
 
 class TestDatePresets:
     """Overall filter offers Custom dates / This year / This month only."""

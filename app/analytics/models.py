@@ -350,13 +350,16 @@ def save_report_snapshot(report_type, filter_params, kpi_data, generated_by):
 # compute_dashboard() fans out to ~20 aggregate queries; the analytics page
 # and its JSON endpoint both call it per load. Cache the JSON-serializable
 # payload in analytics_cache (report_type 'circulation_summary', already in
-# the table CHECK) keyed by the exact filter set, with a short TTL so fresh
-# loans surface within minutes. Reads/writes are best-effort — any failure
+# the table CHECK) keyed by the exact filter set, with a TTL so dashes stay
+# reasonably fresh. Reads/writes are best-effort — any failure
 # degrades to uncached compute, never a 500. Pruning keeps the table bounded.
 # ---------------------------------------------------------------------------
 
 DASHBOARD_CACHE_TYPE = 'circulation_summary'
-DASHBOARD_CACHE_TTL_SECONDS = 300
+# Neon adds ~100-200ms round-trip latency per query, so a cold dashboard
+# recompute costs ~10s; a longer TTL keeps hits cheap without lying about
+# the data beyond what a staff dashboard tolerates.
+DASHBOARD_CACHE_TTL_SECONDS = 900
 
 
 def _cache_fresh(generated_date, ttl_seconds):
@@ -390,6 +393,32 @@ def get_dashboard_cache(filter_params, ttl_seconds=DASHBOARD_CACHE_TTL_SECONDS):
     except (IndexError, TypeError):
         return None
     if not _cache_fresh(stamped, ttl_seconds):
+        return None
+    if isinstance(payload, str):
+        try:
+            return json.loads(payload)
+        except (TypeError, ValueError):
+            return None
+    return payload
+
+
+def get_dashboard_cache_stale(filter_params):
+    """Cached dashboard payload regardless of TTL, or None.
+
+    Used by routes.compute_dashboard to serve an expired entry instantly
+    while it is recomputed in the background (serve-stale-then-refresh);
+    filters out nothing except absent or unparseable rows.
+    """
+    row = db.fetch_one(
+        '''SELECT kpi_data, generated_date FROM analytics_cache
+           WHERE report_type = %s AND filter_params = %s::jsonb
+           ORDER BY generated_date DESC LIMIT 1''',
+        (DASHBOARD_CACHE_TYPE, json.dumps(filter_params))
+    )
+    if not row or len(row) < 2:
+        return None
+    payload = row[0]
+    if not isinstance(payload, (str, dict)):
         return None
     if isinstance(payload, str):
         try:
