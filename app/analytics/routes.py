@@ -2269,22 +2269,44 @@ def _pdf_bytes(sections, *, preset='all', start_date=None, end_date=None,
             ParagraphStyle('RBadgeTx', parent=s_cell, fontSize=7, leading=9,
                            textColor=NAVY, alignment=TA_CENTER)))
     if badge_cells:
-        # flow into a single row table with wrapped cells
+        # Lay badges out in a wrapped grid. Rendering all badges in a single
+        # row forces every column to doc.width/N; with "export all" (30+ KPIs)
+        # each column is far too narrow for a word, so reportlab breaks the
+        # labels character-by-character into the vertical text seen in the PDF.
+        # Cap the column count so each badge keeps a readable minimum width and
+        # wrap the rest onto new rows.
         n = len(badge_cells)
-        col_w = doc.width / max(n, 1)
-        t_badges = Table([badge_cells], colWidths=[col_w] * n, hAlign='LEFT')
-        style_badges = TableStyle([
-            ('BOX', (0, 0), (-1, -1), 0.5, SLATE_300),
-            ('INNERGRID', (0, 0), (-1, -1), 0.4, SLATE_300),
+        min_cell = 1.6 * inch
+        n_cols = max(1, min(n, int(doc.width // min_cell) or 1))
+        col_w = doc.width / n_cols
+        pill_style = TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), SLATE_50),
+            ('BOX', (0, 0), (-1, -1), 0.5, SLATE_300),
             ('TOPPADDING', (0, 0), (-1, -1), 6),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-            ('LEFTPADDING', (0, 0), (-1, -1), 4),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('ROUNDEDCORNERS', [3, 3, 3, 3]),
         ])
-        t_badges.setStyle(style_badges)
+        grid_rows = []
+        for i in range(0, n, n_cols):
+            chunk = badge_cells[i:i + n_cols]
+            pills = []
+            for cell in chunk:
+                pill = Table([[cell]], colWidths=[col_w - 8], hAlign='CENTER')
+                pill.setStyle(pill_style)
+                pills.append(pill)
+            pills += [Spacer(1, 1)] * (n_cols - len(pills))
+            grid_rows.append(pills)
+        t_badges = Table(grid_rows, colWidths=[col_w] * n_cols, hAlign='LEFT')
+        t_badges.setStyle(TableStyle([
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
         story.append(Paragraph('INCLUDED IN THIS REPORT', ParagraphStyle(
             'RBadgeLbl', parent=s_meta_label, alignment=TA_LEFT, spaceAfter=4)))
         story.append(t_badges)
