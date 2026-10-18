@@ -150,6 +150,13 @@ _PROGRAM_LABEL = """COALESCE(NULLIF(b.department, ''),
     CASE WHEN r.role_name IN ('Admin', 'Librarian') THEN r.role_name
          ELSE 'No program' END)"""
 
+# E-book analogue: logged-in readers follow _PROGRAM_LABEL; visitors who
+# are not signed in are 'Offline Reader' instead of a made-up program.
+_EBOOK_PROGRAM_LABEL = """CASE WHEN e.user_id IS NULL THEN 'Offline Reader'
+     ELSE COALESCE(NULLIF(b.department, ''),
+         CASE WHEN r.role_name IN ('Admin', 'Librarian') THEN r.role_name
+              ELSE 'No program' END) END"""
+
 
 def _program_joins():
     """Return the shared JOIN fragment linking circulation to borrower, account, and role. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
@@ -1713,15 +1720,35 @@ def ebook_access_trend(start_date=None, end_date=None):
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
         '''SELECT e.accessed_at::date AS day,
-                  CASE WHEN e.user_id IS NULL THEN 'Offline Reader'
-                       ELSE ''' + _PROGRAM_LABEL + ''' END AS series_label,
+                  {} AS series_label,
                   COUNT(*) AS total
            FROM ebook_access_log e
            LEFT JOIN user_accounts u ON u.user_id = e.user_id
            LEFT JOIN borrowers b ON b.user_id = u.user_id
            LEFT JOIN roles r ON r.role_id = u.role_id
-           {} GROUP BY day, 2 ORDER BY day, 2'''.format(where),
+           {} GROUP BY day, 2 ORDER BY day, 2'''.format(
+            _EBOOK_PROGRAM_LABEL, where),
         tuple(params) if params else None
+    )
+
+
+def ebook_access_by_program_on_date(day):
+    """Return [(program_label, count)] e-book access split for one day.
+
+    Drill-down for the E-Book Reads & Downloads Trend dots: clicking a
+    trend point shows which reader program accessed e-books on that
+    date. Not-signed-in activity is labelled 'Offline Reader'. `day` is
+    'YYYY-MM-DD'; the ::date cast keeps TIMESTAMP rows comparable.
+    """
+    return db.fetch_all(
+        '''SELECT {} AS program_label, COUNT(*) AS total
+           FROM ebook_access_log e
+           LEFT JOIN user_accounts u ON u.user_id = e.user_id
+           LEFT JOIN borrowers b ON b.user_id = u.user_id
+           LEFT JOIN roles r ON r.role_id = u.role_id
+           WHERE e.accessed_at::date = %s::date
+           GROUP BY 1 ORDER BY total DESC, 1'''.format(_EBOOK_PROGRAM_LABEL),
+        (day,)
     )
 
 

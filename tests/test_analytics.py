@@ -2697,6 +2697,42 @@ class TestEbookAnalytics:
         params = mock_db['fetch_all'].call_args[0][1]
         assert params == ('2026-01-01', '2026-12-31')
 
+    def test_ebook_day_drilldown_rows(self, mock_db):
+        """Validates ebook day drilldown rows [TestEbookAnalytics / analytics].
+    If fails: likely the dot drill-down model changed shape.
+    Failure indicates the E-book trend modal shows wrong program counts."""
+        from app.analytics.models import ebook_access_by_program_on_date
+        rows = (('BSIT', 4), ('Offline Reader', 2))
+        mock_db['fetch_all'].return_value = rows
+        assert ebook_access_by_program_on_date('2026-10-18') == rows
+        query, params = mock_db['fetch_all'].call_args[0]
+        assert 'ebook_access_log' in query
+        assert "->date = %s::date" in query or '= %s::date' in query
+        assert "WHEN e.user_id IS NULL THEN 'Offline Reader'" in query
+        assert params == ('2026-10-18',)
+
+    def test_ebook_day_drilldown_endpoint(self, librarian_client, mock_db):
+        """Validates ebook day drilldown endpoint `/librarian/analytics/drilldown?type=ebook_day&date=2026-01-05` as librarian (expects 200) [TestEbookAnalytics / analytics].
+    If fails: likely the drilldown route branch changed.
+    Failure indicates E-book trend dots cannot open a modal breakdown."""
+        rows = [('BSIT', 4), ('Offline Reader', 2)]
+        mock_db['fetch_all'].return_value = rows
+        resp = librarian_client.get('/librarian/analytics/drilldown?type=ebook_day&date=2026-01-05')
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body['type'] == 'ebook_day'
+        assert body['key'] == '2026-01-05'
+        assert body['unit'] == 'e-book accesses'
+        assert body['total'] == 6
+        assert body['by_program'] == [['BSIT', 4], ['Offline Reader', 2]]
+
+    def test_ebook_day_drilldown_bad_date(self, librarian_client, mock_db):
+        """Validates ebook day drilldown bad date `/librarian/analytics/drilldown?type=ebook_day&date=nope` as librarian (expects 400) [TestEbookAnalytics / analytics].
+    If fails: likely the date guard was removed.
+    Failure indicates malformed dates reach the model queries."""
+        resp = librarian_client.get('/librarian/analytics/drilldown?type=ebook_day&date=nope')
+        assert resp.status_code == 400
+
     def test_top_ebooks_passes_rows(self, mock_db):
         """Validates top ebooks passes rows [TestEbookAnalytics / analytics].
     If fails: likely model query/tuple-contract change or mock return drift.

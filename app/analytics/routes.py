@@ -106,7 +106,7 @@ DASHBOARD_DESCRIPTIONS = {
     'requests_by_role': 'Top pending requested titles split into Student / Faculty / Other staff (pending requests only).',
     'requests_trend': 'Daily pending + rejected book-request counts in the selected period.',
     'requests_by_program': 'Pending book requests grouped by borrower program/department (pending requests only).',
-    'ebook_trend': 'Daily e-book activity in the selected period - one line per reader program; visitors who are not signed in count as Offline Reader.',
+    'ebook_trend': 'Daily e-book activity in the selected period - one line per reader program (click a dot for the day breakdown); visitors who are not signed in count as Offline Reader.',
     'top_ebooks': 'E-book titles ranked by combined reads and downloads in the selected period.',
 }
 
@@ -1445,6 +1445,7 @@ def trend_day_json():
 DRILLDOWN_TYPES = frozenset({
     'overdue_day', 'category', 'title_fines',
     'request_day', 'request_title',
+    'ebook_day',
 })
 
 # Drill-down response units per type (amounts for fines, counts otherwise).
@@ -1454,6 +1455,7 @@ _DRILLDOWN_UNITS = {
     'title_fines': 'fines',
     'request_day': 'requests',
     'request_title': 'requests',
+    'ebook_day': 'e-book accesses',
 }
 
 
@@ -1480,7 +1482,7 @@ def drilldown_json():
     key = ''
     title = ''
     rows = []
-    if drill_type in ('overdue_day', 'request_day'):
+    if drill_type in ('overdue_day', 'request_day', 'ebook_day'):
         day = request.args.get('date', '').strip()
         try:
             datetime.strptime(day, '%Y-%m-%d')
@@ -1490,6 +1492,9 @@ def drilldown_json():
         if drill_type == 'overdue_day':
             title = 'Overdue items due ' + day
             rows = models.overdue_by_program_on_date(day) or []
+        elif drill_type == 'ebook_day':
+            title = 'E-book accesses on ' + day
+            rows = models.ebook_access_by_program_on_date(day) or []
         else:
             title = 'Requests on ' + day
             rows = models.requests_by_program_on_date(day) or []

@@ -448,7 +448,7 @@
                         <p class="text-[10px] text-slate-400 mb-2">Ranked by total fines incurred (SUM of fine_amount).</p>
                         <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[480px]"><thead><tr class="text-left text-slate-500 border-b"><th class="py-2">#</th><th class="py-2">Title</th><th class="py-2">Author</th><th class="py-2 text-right">Total Fines (₱)</th><th class="py-2 text-right">Records</th></tr></thead><tbody id="fines-body"></tbody></table></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-1">16. E-Book Reads &amp; Downloads Trend</h3>
-                        <p class="text-[10px] text-slate-400 mb-2">Daily e-book activity in the selected period — one line per reader program; visitors who are not signed in count as Offline Reader.</p>
+                        <p class="text-[10px] text-slate-400 mb-2">Daily e-book activity in the selected period — one line per reader program; visitors who are not signed in count as Offline Reader. Click a dot to see that day's program breakdown.</p>
                         <div id="ebook-trend-legend" class="chart-legend mb-2"></div>
                         <div id="ebook-trend-lines" class="w-full overflow-hidden"></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">17. Top E-Books by Reads &amp; Downloads</h3>
@@ -1461,7 +1461,7 @@ function syncGlobalFilterCustomDates() {
             });
         }
 
-        function paintProgramLines(elId, legendId, pivot, colorSeed) {
+        function paintProgramLines(elId, legendId, pivot, colorSeed, drilldown) {
             var el = document.getElementById(elId);
             var legend = document.getElementById(legendId);
             if (!el) return;
@@ -1492,7 +1492,21 @@ function syncGlobalFilterCustomDates() {
                 paths += '<path d="' + line + '" fill="none" stroke="' + color + '" stroke-width="2.5"/>';
                 s.values.forEach(function (v, i) {
                     if (n > 45 && i % Math.ceil(n / 45) !== 0 && i !== n - 1) return;
-                    dots += '<circle class="line-dot" cx="' + X(i).toFixed(1) + '" cy="' + Y(v).toFixed(1) + '" r="3.5" fill="' + color + '" stroke="#fff" stroke-width="1.5"><title>' + escapeHtml(dates[i]) + ' · ' + escapeHtml(s.program) + ': ' + rNum(v) + '</title></circle>';
+                    // Drill-down (E-book trend): dots carry their date so
+                    // the delegated [data-drill] handler opens the
+                    // per-program modal; attrs survive the expand
+                    // modal's cloneNode. Halo widens the click target.
+                    var drill = '';
+                    var halo = '';
+                    if (drilldown) {
+                        var dd = escapeHtml(String(dates[i]).slice(0, 10));
+                        drill = ' data-date="' + dd + '" data-drill="' + escapeHtml(drilldown) + '"'
+                            + ' tabindex="0" role="button" aria-label="Show e-book access by program on ' + dd + '"'
+                            + ' style="cursor:pointer"';
+                        halo = '<circle class="line-dot line-dot-hit"' + drill + ' cx="' + X(i).toFixed(1) + '" cy="' + Y(v).toFixed(1) + '" r="10" fill="transparent"></circle>';
+                    }
+                    dots += halo
+                        + '<circle class="line-dot"' + drill + ' cx="' + X(i).toFixed(1) + '" cy="' + Y(v).toFixed(1) + '" r="3.5" fill="' + color + '" stroke="#fff" stroke-width="1.5"><title>' + escapeHtml(dates[i]) + ' · ' + escapeHtml(s.program) + ': ' + rNum(v) + '</title></circle>';
                 });
             });
             var yTicks = '', ti;
@@ -1602,7 +1616,7 @@ function syncGlobalFilterCustomDates() {
             else if (name === 'requests_by_role') paintReqRoleSplitInto(document.getElementById('req-role-split'), rows);
             else if (name === 'requests_trend') lineChart(document.getElementById('req-trend-line'), rows, '#1d4ed8', { xLabel: 'Date', yLabel: 'Requests', unit: 'requests', drilldown: 'requests' });
             else if (name === 'requests_by_program') hbars(document.getElementById('req-by-program'), rows, 'bg-violet-600');
-            else if (name === 'ebook_trend') paintProgramLines('ebook-trend-lines', 'ebook-trend-legend', pivotEbookRows(rows));
+            else if (name === 'ebook_trend') paintProgramLines('ebook-trend-lines', 'ebook-trend-legend', pivotEbookRows(rows), null, 'ebook_day');
             else if (name === 'top_ebooks') paintEbookTop(rows);
         }
 
@@ -1786,7 +1800,7 @@ function syncGlobalFilterCustomDates() {
             // Card 16: daily e-book activity, one line per event kind.
             // The pivot reuses the program-lines painter with '<kind>'
             // labels (Reads / Downloads) in place of programs.
-            paintProgramLines('ebook-trend-lines', 'ebook-trend-legend', E.trend || {});
+            paintProgramLines('ebook-trend-lines', 'ebook-trend-legend', E.trend || {}, null, 'ebook_day');
             // Card 17: top e-books table reads/downloads/total.
             paintEbookTop(E.top_titles || []);
         }
@@ -2769,6 +2783,11 @@ function syncGlobalFilterCustomDates() {
         function openDrilldownFor(el) {
             var kind = el.getAttribute('data-drill');
             if (kind === 'borrowings') { openTrendDayModal(el.getAttribute('data-date')); return; }
+            if (kind === 'ebook_day') {
+                var ed = el.getAttribute('data-date');
+                openProgramModal('E-book accesses on ' + ed, DRILLDOWN_URL + '?type=ebook_day&date=' + encodeURIComponent(ed), 'e-book accesses', 'on ' + ed);
+                return;
+            }
             if (kind === 'overdue') {
                 var d = el.getAttribute('data-date');
                 openProgramModal('Overdue items due ' + d, DRILLDOWN_URL + '?type=overdue_day&date=' + encodeURIComponent(d), 'overdue items', 'due ' + d);
