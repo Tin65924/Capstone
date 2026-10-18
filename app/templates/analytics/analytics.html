@@ -1526,7 +1526,7 @@ function syncGlobalFilterCustomDates() {
                 + '<line x1="' + ML + '" y1="' + base + '" x2="' + (W - MR) + '" y2="' + base + '" stroke="#cbd5e1"/>'
                 + xTicks + dots + '</svg>'
                 + '<div class="flex justify-between text-[10px] text-slate-400"><span>X: Date (' + escapeHtml(String(dates[0])) + ' → ' + escapeHtml(String(dates[dates.length - 1])) + ')</span><span>Y: Items per day · per program</span></div>';
-            el.querySelectorAll('.line-dot').forEach(function (dot) {
+            el.querySelectorAll('.line-dot:not(.line-dot-hit)').forEach(function (dot) {
                 var t = dot.querySelector('title');
                 var txt = t ? t.textContent : 'point';
                 bindChartTip(dot, function () { return '<b>' + escapeHtml(txt.split(':')[0]) + '</b><span class="tt-sub">' + escapeHtml(txt) + '</span>'; });
