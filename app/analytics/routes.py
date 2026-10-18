@@ -2,6 +2,7 @@ import calendar
 import io
 import os
 import threading
+import time
 from datetime import date, datetime, timedelta
 from xml.sax.saxutils import escape as _xml_escape
 
@@ -248,12 +249,14 @@ def compute_dashboard(start_date, end_date, departments=None, _use_cache=True):
     synchronously. Any failure falls back to fresh compute.
     """
     key = _dashboard_cache_key(start_date, end_date, departments)
+    t0 = time.perf_counter()
     if _use_cache and _dashboard_cache_allowed():
         try:
             hit = models.get_dashboard_cache(key)
         except Exception:
             hit = None
         if hit is not None:
+            _log_dashboard('HIT', t0, start_date, end_date, departments)
             return hit
         try:
             stale = models.get_dashboard_cache_stale(key)
@@ -261,6 +264,7 @@ def compute_dashboard(start_date, end_date, departments=None, _use_cache=True):
             stale = None
         if stale is not None and _spawn_dashboard_refresh(
                 start_date, end_date, departments, key):
+            _log_dashboard('STALE+refresh', t0, start_date, end_date, departments)
             return stale
     payload = _compute_dashboard(start_date, end_date, departments)
     if _use_cache and _dashboard_cache_allowed():
@@ -268,11 +272,31 @@ def compute_dashboard(start_date, end_date, departments=None, _use_cache=True):
             models.set_dashboard_cache(key, payload, _dashboard_actor())
         except Exception:
             pass
+    _log_dashboard('COLD', t0, start_date, end_date, departments)
     return payload
 
 
 _dashboard_refresh_lock = threading.Lock()
 _dashboard_refresh_inflight = set()
+
+
+def _log_dashboard(outcome, t0, start_date, end_date, departments):
+    """One Render-log line per dashboard load naming the cache path taken.
+
+    HIT = fresh cache served, STALE = expired payload served while a
+    background refresh recomputes, COLD = first-ever filter set computed
+    synchronously. Lets support/hardening grep prod latency directly.
+    """
+    try:
+        from flask import current_app
+        if current_app.config.get('TESTING'):
+            return
+        current_app.logger.info(
+            'analytics dashboard: %-13s | %4.2fs | range=%s..%s departments=%s',
+            outcome, time.perf_counter() - t0, start_date, end_date,
+            list(departments or []))
+    except Exception:
+        pass
 
 
 def _spawn_dashboard_refresh(start_date, end_date, departments, key):
@@ -296,8 +320,17 @@ def _spawn_dashboard_refresh(start_date, end_date, departments, key):
         def _refresh():
             try:
                 with app.app_context():
+                    _t = time.perf_counter()
                     payload = _compute_dashboard(start_date, end_date, departments)
                     models.set_dashboard_cache(key, payload, None)
+                    try:
+                        app.logger.info(
+                            'analytics dashboard refresh: stored | %4.2fs | '
+                            'range=%s..%s departments=%s',
+                            time.perf_counter() - _t, start_date, end_date,
+                            list(departments or []))
+                    except Exception:
+                        pass
             except Exception:
                 pass
             finally:

@@ -27,6 +27,16 @@ def create_app(test_config=None):
     from .database import init_db
     init_db(app)
 
+    try:
+        # Warm the analytics dashboard cache after boot so the first real
+        # visit never pays the full ~40-query Neon recompute. No-op in
+        # tests; failures log and never block startup.
+        if not app.config.get('TESTING'):
+            from .analytics import schedule_prewarm
+            schedule_prewarm(app)
+    except Exception:
+        app.logger.exception('analytics prewarm failed to schedule')
+
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
 

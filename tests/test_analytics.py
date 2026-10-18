@@ -2398,6 +2398,83 @@ class TestDashboardCache:
             routes._dashboard_refresh_inflight.discard(token)
 
 
+class TestPrewarmSchedule:
+    """schedule_prewarm warms common dashboard keys at boot (prod only)."""
+
+    def test_skipped_in_testing(self, app):
+        """No prewarm thread is scheduled under TESTING [TestPrewarmSchedule / analytics].
+    If fails: tests would run real background computes against mocked DB nondeterministically."""
+        from unittest.mock import patch
+        from app.analytics import schedule_prewarm
+        with patch('threading.Thread') as mock_thr:
+            schedule_prewarm(app)
+            mock_thr.assert_not_called()
+
+    def test_schedules_background_thread(self, app):
+        """A daemon prewarm thread is scheduled in prod-like mode [TestPrewarmSchedule / analytics].
+    If fails: first-ever filter sets would still block on the ~10s recompute."""
+        from unittest.mock import patch
+        from app.analytics import schedule_prewarm
+        started = []
+
+        class FakeThread:
+            def __init__(self, target=None, name=None, daemon=None):
+                self.target = target
+
+            def start(self):
+                started.append(self.target)
+
+        app.config['TESTING'] = False
+        try:
+            with patch('threading.Thread', FakeThread):
+                with patch.object(self, '_noop'):
+                    schedule_prewarm(app)
+        finally:
+            app.config['TESTING'] = True
+        assert len(started) == 1
+
+    @staticmethod
+    def _noop():
+        """No-op placeholder double for patch contexts."""
+        return None
+
+    def test_prewarm_passes_department_lists(self, app, mock_db):
+        """Single-department prewarm keys must use a department LIST, not a
+        bare string — _dashboard_cache_key iterates its departments arg, so
+        a string collapses to per-character filters that never match a real
+        request [TestPrewarmSchedule / analytics].
+    If fails: prewarmed dept combos are dead rows and dept-filtered first loads stay slow."""
+        from unittest.mock import patch
+        from app.analytics import schedule_prewarm
+        from app.analytics import routes
+        calls = []
+
+        def fake_compute(s, e, depts=None, **kw):
+            calls.append(depts)
+            if not depts:
+                return {'usage': {'by_department_all': [['BS Nursing', 3]]}}
+            return {}
+
+        class RunThread:
+            def __init__(self, target=None, name=None, daemon=None):
+                self.target = target
+
+            def start(self):
+                self.target()
+
+        app.config['TESTING'] = False
+        try:
+            with patch('threading.Thread', RunThread):
+                with patch.object(routes, 'compute_dashboard',
+                                  side_effect=fake_compute):
+                    schedule_prewarm(app)
+        finally:
+            app.config['TESTING'] = True
+        assert ['BS Nursing'] in calls, calls
+        assert not any(
+            isinstance(c, str) for c in calls), calls
+
+
 class TestDatePresets:
     """Overall filter offers Custom dates / This year / This month only."""
 
@@ -2535,6 +2612,21 @@ class TestExportAliasRegression:
         q = self._last_query(mock_db)
         assert not re.search(r'\bbr\.', q)
         assert 'b.department = %s' in q
+
+    def test_overdue_trend_breakdown_dept_alias(self, mock_db):
+        """overdue_trend_by_program joins borrowers as 'b' (_program_joins),
+        so its department clause must use 'br'-free aliases — the old 'br'
+        alias made dept-filtered overdue trends fail with "missing
+        FROM-clause entry for table br" [TestExportAliasRegression / analytics].
+    If fails: dept-filtered overdue series would silently vanish again."""
+        import re
+        from app.analytics.models import overdue_trend_by_program
+        mock_db['fetch_all'].return_value = []
+        overdue_trend_by_program(None, None, None, ['BSIS'])
+        q = self._last_query(mock_db)
+        assert not re.search(r'\bbr\.', q)
+        assert 'b.department = %s' in q
+        assert 'JOIN borrowers b ON' in q
 
     def test_report_types_cover_exportable(self):
         """Validates report types cover exportable [TestExportAliasRegression / analytics].

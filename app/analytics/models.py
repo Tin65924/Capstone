@@ -893,7 +893,10 @@ def overdue_trend_by_program(start_date=None, end_date=None, borrow_type=None,
     if borrow_type:
         parts.append('c.borrow_type = %s')
         params.append(borrow_type)
-    dept_clause, dept_params = _department_clause(departments, 'br', 'r')
+    # Borrowers are aliased 'b' by _program_joins(); passing 'br' here
+    # made every department-scoped overdue trend fail with
+    # "missing FROM-clause entry for table br" (silently swallowed).
+    dept_clause, dept_params = _department_clause(departments, 'b', 'r')
     if dept_clause:
         parts.append(dept_clause)
         params.extend(dept_params)

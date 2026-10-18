@@ -1,4 +1,6 @@
 import os
+import re
+
 import psycopg2
 from psycopg2 import pool
 from flask import current_app, g
@@ -463,6 +465,62 @@ def ensure_book_catalog_columns(app):
             pass
 
 
+def verify_schema_tables(app):
+    """Log loudly any table expected by schema.sql that is missing.
+
+    run_schema logs skipped statements per boot, but Render log search
+    only retains recent lines, so a silently skipped CREATE TABLE (e.g.
+    ebook_access_log against Neon) can go unnoticed for days. This
+    re-checks every CREATE TABLE name from schema.sql via to_regclass
+    after the sync and prints one line per missing table. Never raises.
+    """
+    if app.config.get('TESTING'):
+        return
+    schema_path = os.path.join(os.path.dirname(__file__), 'schema.sql')
+    if not os.path.isfile(schema_path):
+        return
+    try:
+        with open(schema_path, 'r') as f:
+            sql = f.read()
+        # Ignore comment lines so prose like "-- CREATE TABLE above only
+        # exists on fresh databases" doesn't register a fake table name.
+        sql = '\n'.join(
+            line for line in sql.splitlines()
+            if not line.strip().startswith('--'))
+        tables = re.findall(
+            r'CREATE TABLE (?:IF NOT EXISTS )?([a-zA-Z_][a-zA-Z0-9_.]*)', sql)
+        if not tables:
+            return
+        try:
+            conn = db._pool.getconn()
+        except Exception as e:
+            app.logger.warning('schema table verification skipped: %s', e)
+            return
+        try:
+            missing = []
+            with conn.cursor() as cur:
+                for name in tables:
+                    cur.execute('SELECT to_regclass(%s)', (name,))
+                    if cur.fetchone()[0] is None:
+                        missing.append(name)
+            if missing:
+                app.logger.warning(
+                    'Schema verification: %d table(s) missing after sync: %s',
+                    len(missing), ', '.join(missing))
+            else:
+                app.logger.info(
+                    'Schema verification: all %d tables present.', len(tables))
+        except Exception as e:
+            app.logger.warning('schema table verification failed: %s', e)
+        finally:
+            try:
+                db._pool.putconn(conn)
+            except Exception:
+                pass
+    except Exception as e:
+        app.logger.warning('schema table verification skipped: %s', e)
+
+
 def init_db(app):
     """Initialize the connection pool and sync the schema for the app.
 
@@ -482,3 +540,4 @@ def init_db(app):
     # Always ensure the critical book_catalog columns: even with the batch
     # sync skipped, a missing ebook_url silently breaks e-book saving.
     ensure_book_catalog_columns(app)
+    verify_schema_tables(app)

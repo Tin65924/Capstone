@@ -134,13 +134,60 @@ class TestInitDbSchemaGate:
         try:
             app.config['SKIP_SCHEMA_SYNC'] = True
             with patch.object(database, 'run_schema') as mock_run, \
-                    patch.object(database, 'ensure_book_catalog_columns') as mock_ensure:
+                    patch.object(database, 'ensure_book_catalog_columns') as mock_ensure, \
+                    patch.object(database, 'verify_schema_tables') as mock_verify:
                 database.init_db(app)
                 mock_run.assert_not_called()
                 mock_ensure.assert_called_once_with(app)
+                mock_verify.assert_called_once_with(app)
         finally:
             app.config['SKIP_SCHEMA_SYNC'] = False
             patcher.start()
+
+
+class TestVerifySchemaTables:
+    """verify_schema_tables surfaces tables silently missing in prod."""
+
+    def test_skipped_in_testing(self, app):
+        """TESTING guard runs before any pool access [TestVerifySchemaTables / database].
+    If fails: verification would hit the mocked pool in tests and break suites."""
+        from app import database
+        fake_db, pool = _db_with_fake_pool()
+        original = database.db
+        database.db = fake_db
+        try:
+            database.verify_schema_tables(app)
+        finally:
+            database.db = original
+        pool.getconn.assert_not_called()
+
+    def test_warning_names_missing_tables(self, app, caplog):
+        """Each schema.sql CREATE TABLE name is checked and a missing one
+        is warned by name [TestVerifySchemaTables / database].
+    If fails: silent skip of ebook_access_log-style CREATEs would stay invisible."""
+        import logging
+        from unittest.mock import MagicMock
+        from app import database
+        fake_db, pool = _db_with_fake_pool()
+        conn = MagicMock()
+        pool.getconn.return_value = conn
+        cur = conn.cursor.return_value.__enter__.return_value
+        cur.fetchone.return_value = (None,)
+        original = database.db
+        app.config['TESTING'] = False
+        database.db = fake_db
+        try:
+            with caplog.at_level(logging.WARNING):
+                database.verify_schema_tables(app)
+        finally:
+            database.db = original
+            app.config['TESTING'] = True
+        assert pool.putconn.called
+        assert cur.execute.call_count >= 1
+        assert all('to_regclass' in c.args[0] for c in cur.execute.call_args_list)
+        assert any('missing after sync' in r.getMessage() for r in caplog.records), \
+            [r.getMessage() for r in caplog.records]
+
 
 
 class TestEnsureBookCatalogColumns:
