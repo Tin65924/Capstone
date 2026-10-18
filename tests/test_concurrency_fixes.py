@@ -124,6 +124,7 @@ class TestClaimCompensation:
              '2026-08-03 10:00:00'),  # reservation
             ACC,                       # available copy
             None,                      # book lookup (active)
+            (3,),                      # floor check passes
             DETAIL,                    # borrower active
             None,                      # no active loan
             (0,),                      # under limit

@@ -27,7 +27,7 @@ from .models import (
 from app.settings.models import (
     is_library_open, library_hours_label, get_closing_time,
     library_now, library_today, is_closed_day, is_after_reservation_cutoff,
-    is_open_day,)
+    is_open_day, get_low_stock_threshold,)
 
 VALID_BORROW_TYPES = ('overnight', 'daily_circulation')
 
@@ -131,6 +131,25 @@ def _borrow_limit(role_name):
     if role_name == 'Student':
         return current_app.config.get('MAX_BORROW_LIMIT_STUDENT', 3)
     return current_app.config.get('MAX_BORROW_LIMIT_FACULTY', 5)
+
+
+def _overnight_floor_ok(book_id):
+    """True when an overnight loan may take one more copy of a title.
+
+    LOW_STOCK_THRESHOLD is a floor on availability, not just an alert:
+    overnight (outside-the-library) borrows may consume copies above the
+    floor but never drop availability below it — the last `threshold`
+    copies stay ready for in-library daily circulation. Unreadable
+    counts fail open so desk work is never blocked by bad data."""
+    try:
+        threshold = get_low_stock_threshold()
+    except Exception:
+        threshold = 2
+    try:
+        available = int(count_available_accessions(book_id) or 0)
+    except Exception:
+        return True
+    return available - 1 >= threshold
 
 
 def _borrower_status(row):
@@ -434,6 +453,12 @@ def desk_borrow():
 
     if borrow_type == 'daily_circulation' and is_book_blocked_for_daily(accession[2]):
         flash('Not Available — this book is borrowed as Overnight and already allocated.', 'error')
+        return redirect(url_for('circulation.circulation_page', search=borrower_row[1]))
+
+    if borrow_type == 'overnight' and not _overnight_floor_ok(accession[2]):
+        _floor = get_low_stock_threshold()
+        flash(f'Overnight borrow refused — {_floor} copy/copies must '
+              'stay available for in-library daily circulation.', 'error')
         return redirect(url_for('circulation.circulation_page', search=borrower_row[1]))
 
     due_date = _compute_due_date(borrow_type, borrower_row[6])
@@ -757,6 +782,13 @@ def reservation_action(reservation_id, action):
             flash('Cannot allocate — another borrower is ahead in the queue. '
                   'Allocate position 1 first, or cancel their reservation.', 'error')
             return redirect(url_for('circulation.reservations_page', **status_args))
+        # Low-stock floor guard: keep a floor of copies available for
+        # overnight allocate — daily circulation still borrows the rest.
+        if not _overnight_floor_ok(reservation[1]):
+            _floor = get_low_stock_threshold()
+            flash(f'Cannot allocate — {_floor} copy/copies must stay '
+                  'available for in-library daily circulation.', 'error')
+            return redirect(url_for('circulation.reservations_page', **status_args))
         deadline, window_label = _claim_window()
         try:
             allocate_reservation(reservation_id, deadline, updated_by=current_user.id)
@@ -793,6 +825,11 @@ def reservation_action(reservation_id, action):
         book_for_claim = get_book_by_id(reservation[1])
         if book_for_claim is not None and _book_is_archived(book_for_claim):
             flash('Cannot claim — this book is archived.', 'error')
+            return redirect(url_for('circulation.reservations_page', **status_args))
+        if not _overnight_floor_ok(reservation[1]):
+            _floor = get_low_stock_threshold()
+            flash(f'Cannot claim — {_floor} copy/copies must stay '
+                  'available for in-library daily circulation.', 'error')
             return redirect(url_for('circulation.reservations_page', **status_args))
         borrower_detail = get_borrower_details(reservation[2])
         if borrower_detail is not None and _borrower_status(borrower_detail) != 'active':

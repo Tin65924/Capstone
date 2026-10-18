@@ -278,6 +278,7 @@ class TestDeskBorrow:
             None,                                                            # no waiting queue
             None,                                                            # no active loan for this book
             (0,),                                                            # count active loans
+            (3,),                                                            # floor: 3 available, above threshold
         ]
         resp = librarian_client.post('/librarian/circulation/borrow', data={
             'borrower_id': 1,
@@ -287,6 +288,30 @@ class TestDeskBorrow:
         assert resp.status_code == 302
         call_args = mock_db['execute'].call_args_list[0]
         assert 'INSERT INTO circulation_records' in call_args[0][0]
+
+    def test_borrow_overnight_at_floor_rejected(self, librarian_client, mock_db):
+        """Validates borrow overnight at floor rejected `/librarian/circulation/borrow` as librarian (expects 302) [TestDeskBorrow / circulation].
+    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    Failure indicates the low-stock floor no longer keeps copies for in-library use."""
+        mock_db['fetch_one'].side_effect = [
+            (1, '2024-0001', 'CS', 'active', 'Test Student', 1, 'Student'),  # borrower details
+            (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),              # accession
+            None,                                                            # not lost
+            None,                                                            # book lookup (active)
+            None,                                                            # no active loan
+            None,                                                            # no waiting queue
+            None,                                                            # no active loan for this book
+            (0,),                                                            # count active loans
+            (2,),                                                            # floor: taking this copy drops to 2
+        ]
+        resp = librarian_client.post('/librarian/circulation/borrow', data={
+            'borrower_id': 1,
+            'accession_number': '2024-00123',
+            'borrow_type': 'overnight',
+        })
+        assert resp.status_code == 302
+        assert not any('INSERT INTO circulation_records' in c[0][0]
+                       for c in mock_db['execute'].call_args_list)
 
     def test_borrow_accession_not_found(self, librarian_client, mock_db):
         """Validates borrow accession not found `/librarian/circulation/borrow` as librarian (expects 302) [TestDeskBorrow / circulation].
@@ -436,8 +461,9 @@ class TestReservationLifecycle:
             None,                                                  # no active loan for this book
             (0,),                                                  # count active loans
             (0,),                                                  # count allocated reservations
-            (2,),                                                  # count available accessions
-            (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),   # this reservation is front of queue
+            (4,),                                                  # count available accessions (over-booking guard)
+            (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),  # FIFO: this reservation is front of queue
+            (4,),                                                  # floor: 4 available, above threshold
         ]
         resp = librarian_client.post('/librarian/reservations/9/allocate')
         assert resp.status_code == 302
@@ -446,6 +472,25 @@ class TestReservationLifecycle:
         notif_calls = [c for c in mock_db['execute'].call_args_list
                        if 'INSERT INTO notification_log' in c[0][0]]
         assert notif_calls
+
+    def test_allocate_rejected_at_floor(self, librarian_client, mock_db):
+        """Validates allocate rejected at floor `/librarian/reservations/9/allocate` as librarian (expects 302) [TestReservationLifecycle / circulation].
+    If fails: likely unexpected DB write (the low-stock floor is no longer enforced at allocation time)."""
+        mock_db['fetch_one'].side_effect = [
+            (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),  # reservation
+            (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),    # available copy
+            None,                                                  # book lookup (active)
+            (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),  # borrower details
+            None,                                                  # no active loan for this book
+            (0,),                                                  # count active loans
+            (0,),                                                  # count allocated reservations
+            (4,),                                                  # count available accessions (over-booking guard)
+            (9, 5, 2, 1, '2026-08-01 10:00:00', 'waiting', None),  # FIFO: this reservation is front of queue
+            (2,),                                                  # floor: allocating drops availability to 2
+        ]
+        resp = librarian_client.post('/librarian/reservations/9/allocate')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 1  # expiry sweep only
 
     def test_allocate_rejected_when_no_available_copy(self, librarian_client, mock_db):
         """Validates allocate rejected when no available copy `/librarian/reservations/9/allocate` as librarian (expects 302) [TestReservationLifecycle / circulation].
@@ -487,6 +532,7 @@ class TestReservationLifecycle:
             (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', '2026-08-03 10:00:00'),  # reservation
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),                        # available copy
             None,                                                                      # book lookup (active)
+            (3,),                                                                      # floor: 3 available, above threshold
             (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),            # borrower details
             None,                                                                      # no active loan for this book
             (0,),                                                                      # count active loans
@@ -499,6 +545,19 @@ class TestReservationLifecycle:
         assert 'overnight' in first_call[0][1]
         second_call = mock_db['execute'].call_args_list[2]
         assert "reservation_status = 'claimed'" in second_call[0][0]
+
+    def test_claim_rejected_at_floor(self, librarian_client, mock_db):
+        """Validates claim rejected at floor `/librarian/reservations/9/claim` as librarian (expects 302) [TestReservationLifecycle / circulation].
+    If fails: likely unexpected DB write (the low-stock floor is no longer enforced at claim time)."""
+        mock_db['fetch_one'].side_effect = [
+            (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', '2026-08-03 10:00:00'),  # reservation
+            (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),                        # available copy
+            None,                                                                      # book lookup (active)
+            (2,),                                                                      # floor: claiming drops availability to 2
+        ]
+        resp = librarian_client.post('/librarian/reservations/9/claim')
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 1  # expiry sweep only
 
     def test_claim_rejected_when_no_available_copy(self, librarian_client, mock_db):
         """Validates claim rejected when no available copy `/librarian/reservations/9/claim` as librarian (expects 302) [TestReservationLifecycle / circulation].
@@ -520,6 +579,7 @@ class TestReservationLifecycle:
             (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', '2026-08-03 10:00:00'),  # reservation
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),                        # available copy
             None,                                                                      # book lookup (active)
+            (3,),                                                                      # floor check passes
             (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),            # borrower details
             None,                                                                      # no active loan for this book
             (3,),                                                                      # count == student limit
@@ -536,6 +596,7 @@ class TestReservationLifecycle:
             (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', '2026-08-03 10:00:00'),  # reservation
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),                        # available copy
             None,                                                                      # book lookup (active)
+            (3,),                                                                      # floor check passes
             (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),            # borrower details
             (55, 5, 2, 1, 1, 'daily_circulation', 'borrow', '2026-08-01', '2026-08-02', None, 0, None, False, 'active'),  # already holds book 5
         ]
@@ -647,14 +708,15 @@ class TestReservationQueueFifo:
             (9, 5, 2, 1, '2026-08-01 10:00:00', 'allocated', '2026-08-03 10:00:00'),  # reservation
             (10, '2024-00123', 5, 1, '2024-01-10', 'purchase'),                        # available copy
             None,                                                                      # book lookup (active)
+            (3,),                                                                      # floor: 3 available, above threshold
             (2, '2024-0002', 'CS', 'active', 'Test Student', 1, 'Student'),            # borrower details
             None,                                                                      # no active loan for this book
             (0,),                                                                      # count active loans
         ]
         resp = librarian_client.post('/librarian/reservations/9/claim')
         assert resp.status_code == 302
-        # No extra queue query: only the four fetches above happen before
-        # the claim UPDATE executes.
+        # No queue query in claim — the floor lookup is a copy count, not
+        # a front-of-queue check, so out-of-order allocation stays impossible.
         allocate_calls = [c for c in mock_db['execute'].call_args_list
                           if "reservation_status = 'claimed'" in c[0][0]]
         assert allocate_calls
@@ -1428,6 +1490,44 @@ class TestBookInfoLabels:
         assert resp.status_code == 200
         assert b'Borrow' in resp.data
         assert b'Available in Library' in resp.data
+
+    def test_book_info_flags_overnight_limited_at_floor(self, client, mock_db):
+        """Validates book info flags overnight limited at floor `/book/1` (expects 200) [TestBookInfoLabels / circulation].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates the borrow modal no longer reflects the low-stock floor."""
+        mock_db['fetch_one'].side_effect = [
+            (1, 'Intro to Algorithms', 'Cormen', '3rd', 'MIT Press', 2022,
+             'CS', 'QA76', '978-x', 'Book', 'desc', 'active', '2026-01-01'),
+            (0,),  # daily-block check: not blocked
+            (2,),  # floor: 2 available == threshold 2
+        ]
+        mock_db['fetch_all'].side_effect = [
+            [(10, '2024-00123', 1, 1, '2026-01-10', 'purchase')],  # accessions
+            [],                                                     # no borrowed ids
+            [],                                                     # no borrowers
+        ]
+        resp = client.get('/book/1')
+        assert resp.status_code == 200
+        assert b'reserved for in-library use' in resp.data
+
+    def test_book_info_allows_overnight_above_floor(self, client, mock_db):
+        """Validates book info allows overnight above floor `/book/1` (expects 200) [TestBookInfoLabels / circulation].
+    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+    Failure indicates the borrow modal wrongly hides overnight above the low-stock floor."""
+        mock_db['fetch_one'].side_effect = [
+            (1, 'Intro to Algorithms', 'Cormen', '3rd', 'MIT Press', 2022,
+             'CS', 'QA76', '978-x', 'Book', 'desc', 'active', '2026-01-01'),
+            (0,),  # daily-block check: not blocked
+            (8,),  # 8 available, above threshold 2
+        ]
+        mock_db['fetch_all'].side_effect = [
+            [(10, '2024-00123', 1, 1, '2026-01-10', 'purchase')],  # accessions
+            [],                                                     # no borrowed ids
+            [],                                                     # no borrowers
+        ]
+        resp = client.get('/book/1')
+        assert resp.status_code == 200
+        assert b'reserved for in-library use' not in resp.data
 
     def test_book_info_shows_reserve_when_borrowed_by_someone_else(self, student_client, mock_db):
         """Validates book info shows reserve when borrowed by someone else `/book/1` as student (expects 200) [TestBookInfoLabels / circulation].

@@ -161,6 +161,7 @@ class TestAllocateClaimGuards:
              '2026-08-03 10:00:00'),
             ACC,
             None,  # book lookup (active)
+            (3,),  # floor check passes
             (5, 'S1', 'BSIS', 'blocked', 'Ann', 1, 'Student'),
         ]
         resp = librarian_client.post('/librarian/reservations/9/claim')

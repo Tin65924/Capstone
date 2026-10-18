@@ -1470,6 +1470,21 @@ def book_info(book_id):
     if any_available and is_book_blocked_for_daily(book_id):
         accessions_with_status = [(acc, False) for acc, _ in accessions_with_status]
         any_available = False
+    # LOW_STOCK_THRESHOLD is a floor on availability: overnight borrows may
+    # consume copies above it but never the last `floor` copies, which stay
+    # for in-library daily circulation. Surface that on the borrow modal.
+    try:
+        from app.circulation.models import count_available_accessions
+        from app.settings.models import get_low_stock_threshold
+        overnight_floor = get_low_stock_threshold()
+        _n = count_available_accessions(book_id)
+        overnight_available = int(_n) if _n is not None else None
+    except Exception:
+        overnight_available = None
+    if overnight_available is None:
+        overnight_floor, overnight_limited = 2, False
+    else:
+        overnight_limited = overnight_available <= overnight_floor
     user_data = get_user_by_id(current_user.id) if current_user.is_authenticated else None
     try:
         extra_categories = get_book_categories(book_id)
@@ -1492,7 +1507,9 @@ def book_info(book_id):
                            extra_categories=extra_categories,
                            ebook_url=_ebook_url or '',
                            ebook_kind=_ebook_kind or '',
-                           ebook_preview=_ebook_preview)
+                           ebook_preview=_ebook_preview,
+                           overnight_floor=overnight_floor,
+                           overnight_limited=overnight_limited)
 
 
 @cataloging_bp.route('/book/<int:book_id>/download')
