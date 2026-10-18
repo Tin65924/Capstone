@@ -448,7 +448,7 @@
                         <p class="text-[10px] text-slate-400 mb-2">Ranked by total fines incurred (SUM of fine_amount).</p>
                         <div class="overflow-x-auto"><table class="w-full text-[11px] min-w-[480px]"><thead><tr class="text-left text-slate-500 border-b"><th class="py-2">#</th><th class="py-2">Title</th><th class="py-2">Author</th><th class="py-2 text-right">Total Fines (₱)</th><th class="py-2 text-right">Records</th></tr></thead><tbody id="fines-body"></tbody></table></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-1">16. E-Book Reads &amp; Downloads Trend</h3>
-                        <p class="text-[10px] text-slate-400 mb-2">Daily e-book activity in the selected period — one line for Read Online opens, one for downloads.</p>
+                        <p class="text-[10px] text-slate-400 mb-2">Daily e-book activity in the selected period — one line per reader program; visitors who are not signed in count as Offline Reader.</p>
                         <div id="ebook-trend-legend" class="chart-legend mb-2"></div>
                         <div id="ebook-trend-lines" class="w-full overflow-hidden"></div></div>
                         <div class="bg-white rounded-xl border border-slate-200 p-4"><h3 class="text-sm font-extrabold mb-2">17. Top E-Books by Reads &amp; Downloads</h3>
@@ -1804,23 +1804,29 @@ function syncGlobalFilterCustomDates() {
         }
 
         function pivotEbookRows(rows) {
-            // Client-side pivot of (day, 'Reads'|'Downloads', count) rows
-            // into the series shape paintProgramLines expects.
-            var dates = [], byDate = {}, unread = 'Downloads';
+            // Client-side pivot of raw (day, program_label, count) rows —
+            // the server's ebook trend model groups by reader program with
+            // 'Offline Reader' for visitors who are not signed in.
+            var dates = [], labels = [], byKey = {};
             (rows || []).forEach(function (r) {
-                var d = String(r[0]), k = String(r[1]), c = Number(r[2]) || 0;
+                var d = String(r[0]), k = String(r[1]) || 'No program', c = Number(r[2]) || 0;
                 if (dates.indexOf(d) === -1) dates.push(d);
-                byDate[d] = byDate[d] || { reads: 0, downloads: 0 };
-                if (k === unread) byDate[d].downloads += c;
-                else byDate[d].reads += c;
+                if (labels.indexOf(k) === -1) labels.push(k);
             });
             dates.sort();
-            var reads = dates.map(function (d) { return byDate[d].reads; });
-            var downloads = dates.map(function (d) { return byDate[d].downloads; });
-            return { dates: dates, series: [
-                { program: 'Reads', total: reads.reduce(function (a, b) { return a + b; }, 0), values: reads },
-                { program: 'Downloads', total: downloads.reduce(function (a, b) { return a + b; }, 0), values: downloads }
-            ] };
+            labels.forEach(function (k) {
+                var idx = {};
+                dates.forEach(function (d) { idx[d] = 0; });
+                byKey[k] = idx;
+            });
+            (rows || []).forEach(function (r) {
+                byKey[String(r[1]) || 'No program'][String(r[0])] += Number(r[2]) || 0;
+            });
+            var series = labels.map(function (k) {
+                var values = dates.map(function (d) { return byKey[k][d]; });
+                return { program: k, total: values.reduce(function (a, b) { return a + b; }, 0), values: values };
+            });
+            return { dates: dates, series: series };
         }
 
         function updateUsageDeptLabel() {

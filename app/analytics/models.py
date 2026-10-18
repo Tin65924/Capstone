@@ -1702,20 +1702,25 @@ def requests_by_status(start_date=None, end_date=None):
 
 
 def ebook_access_trend(start_date=None, end_date=None):
-    """Return [(day, 'Reads'|'Downloads', count)] daily e-book activity.
+    """Return [(day, program_label, count)] daily e-book activity by program.
 
-    Grouped by accessed day and event kind so the Library tab draws one
-    line per kind (reads = Read Online opens, downloads = proxy file
-    downloads).
+    Grouped by accessed day and the reader's program (borrower department,
+    staff role, or the shared 'No program' fallback). Activity by visitors
+    who are not signed in is labelled 'Offline Reader'. Powers the E-Book
+    Reads & Downloads Trend multi-line graph on the Library tab.
     """
     parts, params = _range_clause('e.accessed_at', start_date, end_date)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
         '''SELECT e.accessed_at::date AS day,
-                  CASE e.access_kind
-                      WHEN 'read' THEN 'Reads' ELSE 'Downloads' END AS series_label,
+                  CASE WHEN e.user_id IS NULL THEN 'Offline Reader'
+                       ELSE ''' + _PROGRAM_LABEL + ''' END AS series_label,
                   COUNT(*) AS total
-           FROM ebook_access_log e {} GROUP BY day, series_label ORDER BY day'''.format(where),
+           FROM ebook_access_log e
+           LEFT JOIN user_accounts u ON u.user_id = e.user_id
+           LEFT JOIN borrowers b ON b.user_id = u.user_id
+           LEFT JOIN roles r ON r.role_id = u.role_id
+           {} GROUP BY day, 2 ORDER BY day, 2'''.format(where),
         tuple(params) if params else None
     )
 

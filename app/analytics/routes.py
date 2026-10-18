@@ -106,7 +106,7 @@ DASHBOARD_DESCRIPTIONS = {
     'requests_by_role': 'Top pending requested titles split into Student / Faculty / Other staff (pending requests only).',
     'requests_trend': 'Daily pending + rejected book-request counts in the selected period.',
     'requests_by_program': 'Pending book requests grouped by borrower program/department (pending requests only).',
-    'ebook_trend': 'Daily e-book activity in the selected period split into reads (Read Online opens) and downloads.',
+    'ebook_trend': 'Daily e-book activity in the selected period - one line per reader program; visitors who are not signed in count as Offline Reader.',
     'top_ebooks': 'E-book titles ranked by combined reads and downloads in the selected period.',
 }
 
@@ -576,10 +576,11 @@ def _compute_dashboard(start_date, end_date, departments=None):
         condition[1][1] = borrowed
 
     # E-book activity (Library tab): reads = Read Online opens,
-    # downloads = proxy downloads from the public book page. Split by
-    # event kind so the trend renders one line per kind. This block is
-    # computed last on purpose — appended queries must not disturb
-    # order-sensitive mocked fetch sequences in tests.
+    # downloads = proxy downloads from the public book page. Split by the
+    # reader's program ('Offline Reader' for visitors not signed in) so
+    # the trend renders one line per program. This block is computed last
+    # on purpose — appended queries must not disturb order-sensitive
+    # mocked fetch sequences in tests.
     ebook_trend = _pivot_trend_by_program(
         _safe(models.ebook_access_trend, start_date, end_date) or [])
     ebook_top_titles = []
@@ -1649,7 +1650,7 @@ def _as_2d_rows(kpi_type, kpi_data):
     if kpi_type == 'requests_by_program':
         return [('Program', 'Requests')] + [(r[0], r[1]) for r in (kpi_data or [])]
     if kpi_type == 'ebook_trend':
-        return [('Date', 'Kind', 'Accesses')] + [(r[0], r[1], r[2]) for r in (kpi_data or [])]
+        return [('Date', 'Program', 'Accesses')] + [(r[0], r[1], r[2]) for r in (kpi_data or [])]
     if kpi_type == 'top_ebooks':
         return [('Title', 'Author', 'Reads', 'Downloads', 'Total')] + \
             [(r[0], r[1], r[2], r[3], r[4]) for r in (kpi_data or [])]

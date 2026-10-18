@@ -2676,12 +2676,15 @@ class TestEbookAnalytics:
     Failure indicates dashboard/stats shown to staff are wrong."""
         from datetime import date
         from app.analytics.models import ebook_access_trend
-        rows = [(date(2026, 1, 5), 'Reads', 3), (date(2026, 1, 5), 'Downloads', 1)]
+        rows = [(date(2026, 1, 5), 'BSIT', 3), (date(2026, 1, 5), 'Offline Reader', 1)]
         mock_db['fetch_all'].return_value = rows
         assert ebook_access_trend() == rows
         query = mock_db['fetch_all'].call_args[0][0]
         assert 'ebook_access_log' in query
-        assert "WHEN 'read' THEN 'Reads'" in query
+        assert "WHEN e.user_id IS NULL THEN 'Offline Reader'" in query
+        assert 'LEFT JOIN user_accounts u' in query
+        assert 'LEFT JOIN borrowers b' in query
+        assert 'LEFT JOIN roles r' in query
         assert 'GROUP BY day' in query
 
     def test_ebook_access_trend_range_params(self, mock_db):
