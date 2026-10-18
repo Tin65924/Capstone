@@ -237,7 +237,8 @@ def _warn_schema_mismatch(what):
 # new code against a not-yet-migrated database degrades instead of
 # 500ing on the INSERT/UPDATE (the write-path twin of the read gate
 # below, which keeps those same columns out of SELECTs).
-_OPTIONAL_BOOK_COLUMNS = ('category_id', 'ebook_url', 'updated_at', 'updated_by')
+_OPTIONAL_BOOK_COLUMNS = ('category_id', 'ebook_url', 'updated_at', 'updated_by',
+                          'ebook_allow_download')
 
 
 def _missing_column_name(exc):
@@ -289,14 +290,16 @@ def _execute_book_write(build, optional_columns=_OPTIONAL_BOOK_COLUMNS):
 
 # Explicit book_catalog projection in the positional contract order every
 # caller indexes by (book[6] subject, book[9] material, book[11] status,
-# book[15] category_id, book[16] ebook_url). Selecting columns by name
+# book[15] category_id, book[16] ebook_url, book[17] download toggle).
+# Selecting columns by name
 # instead of SELECT * keeps those indices correct on every database:
 # ALTER TABLE migrations append new columns in deployment-dependent order,
 # so ebook_url is not reliably the 17th physical column.
 BOOK_COLUMNS = (
     'book_id, title, author, edition, publisher, year_published, '
     'subject_classification, call_number, isbn, material_type, description, '
-    'catalog_status, date_added, updated_at, updated_by, category_id, ebook_url'
+    'catalog_status, date_added, updated_at, updated_by, category_id, ebook_url, '
+    'ebook_allow_download'
 )
 
 
@@ -360,7 +363,7 @@ def multi_cat_available():
 
 def create_book(title, author, edition, publisher, year_published, subject_classification,
                 call_number, isbn, material_type, description, category_id=None,
-                ebook_url=None):
+                ebook_url=None, ebook_allow_download=True):
     """Insert a new book title into the catalog as active and return its id.
 
     Creates one row in book_catalog with catalog_status='active' holding
@@ -382,6 +385,8 @@ def create_book(title, author, edition, publisher, year_published, subject_class
         category_id: FK into categories, or None to auto-resolve from
             subject_classification (case-insensitive match or create).
         ebook_url: E-book access link (Drive/publisher), or None.
+        ebook_allow_download: Whether /book/<id>/download may serve the
+            e-book (True by default; only meaningful with a link).
 
     Returns:
         New book_id integer, or None if the INSERT returned nothing.
@@ -404,6 +409,8 @@ def create_book(title, author, edition, publisher, year_published, subject_class
             columns.append(('category_id', category_id))
         if 'ebook_url' in available:
             columns.append(('ebook_url', ebook_url))
+        if 'ebook_allow_download' in available:
+            columns.append(('ebook_allow_download', bool(ebook_allow_download)))
         names = ', '.join(name for name, _ in columns)
         placeholders = ', '.join(['%s'] * len(columns))
         return ('INSERT INTO book_catalog (' + names + ') VALUES ('
@@ -1410,7 +1417,8 @@ def get_user_favorites(user_id):
 
 def update_book(book_id, title, author, edition, publisher, year_published,
                 subject_classification, call_number, isbn, material_type, description,
-                updated_by=None, category_id=None, ebook_url=None):
+                updated_by=None, category_id=None, ebook_url=None,
+                ebook_allow_download=None):
     """Overwrite a title's bibliographic metadata plus audit stamps.
 
     Updates all editable book_catalog columns for one book_id and
@@ -1426,6 +1434,8 @@ def update_book(book_id, title, author, edition, publisher, year_published,
         updated_by: Acting staff user_id for the audit stamp.
         category_id: FK into categories, or None to auto-resolve from
             subject_classification (case-insensitive match or create).
+        ebook_allow_download: New download-toggle value; None leaves the
+            stored value untouched (edit routes always pass a bool).
 
     Returns:
         Rowcount from the UPDATE.
@@ -1450,6 +1460,9 @@ def update_book(book_id, title, author, edition, publisher, year_published,
         if 'ebook_url' in available:
             assigns.append('ebook_url=%s')
             params.append(ebook_url)
+        if 'ebook_allow_download' in available and ebook_allow_download is not None:
+            assigns.append('ebook_allow_download=%s')
+            params.append(bool(ebook_allow_download))
         if 'updated_at' in available:
             assigns.append('updated_at=NOW()')
         if 'updated_by' in available:

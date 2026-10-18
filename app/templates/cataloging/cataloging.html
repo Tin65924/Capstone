@@ -697,6 +697,9 @@
                         <label class="form-label">E-Book Link</label>
                         <input type="text" name="ebook_url" maxlength="500" class="form-input" placeholder="https://drive.google.com/... or https://docs.google.com/..." value="{{ _add.get('ebook_url', '') }}" data-ebook-input>
                         <p data-ebook-hint class="hidden mt-1 text-[11px] font-medium"></p>
+                        <label class="mt-2 inline-flex items-center gap-2 text-xs font-bold text-gray-600 dark:text-gray-300 cursor-pointer">
+                            <input type="checkbox" name="ebook_allow_download" value="1" class="rounded border-gray-300 text-primary focus:ring-primary"{% if _add and _add.get('ebook_url') and _add.get('ebook_allow_download', '') != '1' %}{% else %} checked{% endif %}> Allow download
+                        </label>
                     </div>
                     <div>
                         <label class="form-label">Source</label>
@@ -826,6 +829,9 @@
                         <label class="form-label">E-Book Link</label>
                         <input type="text" name="ebook_url" id="edit_ebook_url" maxlength="500" class="form-input" placeholder="https://drive.google.com/... or https://docs.google.com/..." data-ebook-input>
                         <p data-ebook-hint class="hidden mt-1 text-[11px] font-medium"></p>
+                        <label class="mt-2 inline-flex items-center gap-2 text-xs font-bold text-gray-600 dark:text-gray-300 cursor-pointer">
+                            <input type="checkbox" id="edit_ebook_allow_download" name="ebook_allow_download" value="1" class="rounded border-gray-300 text-primary focus:ring-primary" checked> Allow download
+                        </label>
                     </div>
                     <div class="col-span-1 sm:col-span-2">
                         <label class="form-label">Category *</label>
@@ -1356,6 +1362,7 @@
             setDropdown(document.getElementById('edit_material_type'), b[9] || 'Book');
             document.getElementById('edit_description').value = b[10] || '';
             document.getElementById('edit_ebook_url').value = (b.length > 17 ? b[16] : '') || '';
+            document.getElementById('edit_ebook_allow_download').checked = (b.length > 18 ? b[17] !== false : true);
             applyMaterialType('edit');
             openModal('editBookModal');
         }

@@ -220,8 +220,10 @@
                 {% if ebook_kind == 'drive' or ebook_kind == 'docs' %}
                 <button type="button" onclick="openEbookPreview()"
                     class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-colors">Read Online <span class="material-symbols-outlined text-[18px]">auto_stories</span></button>
+                {% if ebook_download_allowed %}
                 <a href="{{ url_for('cataloging.ebook_download', book_id=book[0]) }}"
                     class="inline-flex items-center gap-2 ml-3 px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold hover:border-primary hover:text-primary transition-colors">Download <span class="material-symbols-outlined text-[18px]">download</span></a>
+                {% endif %}
                 {% else %}
                 <a href="{{ ebook_url }}" target="_blank" rel="noopener"
                     class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-colors">Read Online <span class="material-symbols-outlined text-[18px]">open_in_new</span></a>
@@ -288,8 +290,10 @@
                 <p class="text-xs text-slate-400">Embedded preview — {{ 'Google Drive' if ebook_kind == 'drive' else 'Google Docs' }}</p>
             </div>
             <div class="flex items-center gap-3 shrink-0">
+                {% if ebook_download_allowed %}
                 <a href="{{ url_for('cataloging.ebook_download', book_id=book[0]) }}"
                     class="inline-flex items-center gap-1 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-primary transition-colors">Download <span class="material-symbols-outlined text-[16px] align-[-2px]">download</span></a>
+                {% endif %}
                 <button onclick="closeEbookPreview()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors" aria-label="Close preview">
                     <span class="material-symbols-outlined text-[22px]">close</span>
                 </button>

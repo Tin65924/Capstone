@@ -234,6 +234,9 @@ def _validate_book_form(form):
     if url_err:
         return url_err, {}
     cleaned['ebook_url'] = ebook_url
+    # Download toggle: only postable as '1' (checkbox). A value is kept
+    # only when there is a link to download; otherwise it is meaningless.
+    cleaned['ebook_allow_download'] = bool(ebook_url) and (form.get('ebook_allow_download', '') or '').strip() == '1'
     isbn_err = _validate_isbn_issn(cleaned.get('isbn') or '', material_type)
     if isbn_err:
         try:
@@ -728,6 +731,7 @@ def add_book():
         description=request.form.get('description', '').strip() or None,
         category_id=category_id,
         ebook_url=fields['ebook_url'],
+        ebook_allow_download=fields['ebook_allow_download'],
     )
     bloom_registry.mark_dirty()
     if accession_number:
@@ -791,6 +795,7 @@ def edit_book(book_id):
         updated_by=current_user.id,
         category_id=category_id,
         ebook_url=fields['ebook_url'],
+        ebook_allow_download=fields['ebook_allow_download'],
     )
     bloom_registry.mark_dirty()
     try:
@@ -1492,6 +1497,7 @@ def book_info(book_id):
         extra_categories = []
     from app.cataloging.models import ebook_link_info, drive_preview_url, docs_preview_url, clean_ebook_url
     _ebook_url = book[16] if len(book) > 16 else None
+    _ebook_allow = book[17] if len(book) > 17 else True
     _ebook_kind, _ebook_id = ebook_link_info(_ebook_url)
     if _ebook_kind == 'drive' and _ebook_id:
         _ebook_preview = drive_preview_url(_ebook_id)
@@ -1507,6 +1513,7 @@ def book_info(book_id):
                            extra_categories=extra_categories,
                            ebook_url=_ebook_url or '',
                            ebook_kind=_ebook_kind or '',
+                           ebook_download_allowed=_ebook_allow,
                            ebook_preview=_ebook_preview,
                            overnight_floor=overnight_floor,
                            overnight_limited=overnight_limited)
@@ -1530,6 +1537,11 @@ def ebook_download(book_id):
     book = get_book_by_id(book_id)
     if not book or (len(book) > 11 and (book[11] or 'active') != 'active'):
         return abort(404)
+    # Librarian toggle (book[17], default True on unmigrated databases):
+    # FALSE hides every Download button and blocks the proxy outright.
+    if len(book) > 17 and book[17] is False:
+        flash('Downloads for this e-book are disabled.', 'error')
+        return redirect(url_for('cataloging.book_info', book_id=book_id))
     _ebook_url = book[16] if len(book) > 16 else None
     kind, file_id = ebook_link_info(_ebook_url)
     source_url = download_source_url(kind, file_id, _ebook_url)

@@ -370,6 +370,11 @@ UPDATE book_catalog SET material_type = 'Book' WHERE material_type = 'Multimedia
 -- meaningful for E-Book titles, shown as Read/Preview actions.
 ALTER TABLE book_catalog ADD COLUMN IF NOT EXISTS ebook_url VARCHAR(500);
 
+-- Librarian toggle for whether the stored e-book may be downloaded
+-- through the site (/book/<id>/download). Applies to E-Book titles only;
+-- FALSE hides every Download button and blocks the proxy stream.
+ALTER TABLE book_catalog ADD COLUMN IF NOT EXISTS ebook_allow_download BOOLEAN NOT NULL DEFAULT TRUE;
+
 -- Controlled vocabulary for borrower programs (students) and departments
 -- (faculty). Registration, profile, and user-management forms only accept
 -- values from this table; borrowers.department stores the canonical name.

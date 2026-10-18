@@ -1610,7 +1610,8 @@ class TestCategories:
         query, params = mock_db['execute'].call_args[0]
         assert 'category_id' in query
         assert 'ebook_url' in query
-        assert params[-3:] == ('active', 3, None)
+        assert 'ebook_allow_download' in query
+        assert params[-3:] == (3, None, True)
 
     def test_create_book_degrades_when_ebook_url_missing(self, mock_db):
         """Validates create_book drops a missing optional column instead of 500ing [TestSchemaGate / cataloging].
@@ -1630,7 +1631,21 @@ class TestCategories:
         assert 'ebook_url' in first_sql
         assert 'ebook_url' not in retry_sql
         assert 'category_id' in retry_sql
-        assert retry_params[-2:] == ('active', 3)
+        assert 'ebook_allow_download' in retry_sql
+        assert retry_params[-3:] == ('active', 3, True)
+
+    def test_update_book_skips_toggle_when_none(self, mock_db):
+        """Validates update_book leaves ebook_allow_download untouched when None [TestSchemaGate / cataloging].
+    If fails: likely update_book gained an unconditional toggle assignment.
+    Failure indicates callers without the flag would wipe librarian toggles."""
+        from app.cataloging.models import update_book
+        mock_db['execute'].return_value = 1
+        result = update_book(7, 'T', 'A', None, None, None, 'Physics',
+                             None, None, 'Book', None,
+                             category_id=3, ebook_url='http://example.com/e')
+        assert result == 1
+        query, _ = mock_db['execute'].call_args[0]
+        assert 'ebook_allow_download' not in query
 
     def test_update_book_degrades_when_category_id_missing(self, mock_db):
         """Validates update_book drops a missing optional column instead of 500ing [TestSchemaGate / cataloging].
@@ -2416,6 +2431,124 @@ class TestEbookUrl:
         body = client.get('/book/1').data.decode()
         assert 'Read Online' in body
         assert 'drive.google.com/file/d' not in body
+
+    def test_bookinfo_hides_download_when_disabled(self, client, mock_db):
+        """We hide the Download button when ebook_allow_download is False `/book/1` (expects 200) [TestEbookUrl / cataloging].
+    If fails: likely the toggle column/guard or template gate changed.
+    Failure indicates users can download e-books a librarian disabled."""
+        book = (1, 'E Title', 'A', None, None, 2021, 'Tech', None, None,
+                'E-Book', 'D', 'active', '2024-01-01', None, None, None,
+                'https://drive.google.com/file/d/ABC123/view', False)
+        mock_db['fetch_one'].return_value = book
+        mock_db['fetch_all'].return_value = []
+        body = client.get('/book/1').data.decode()
+        assert 'openEbookPreview()' in body
+        assert '/book/1/download' not in body
+
+    def test_bookinfo_shows_download_when_allowed(self, client, mock_db):
+        """We keep the Download button when ebook_allow_download is True `/book/1` (expects 200) [TestEbookUrl / cataloging].
+    If fails: likely the toggle column/guard or template gate changed.
+    Failure indicates e-book downloads disappeared from the book page."""
+        book = (1, 'E Title', 'A', None, None, 2021, 'Tech', None, None,
+                'E-Book', 'D', 'active', '2024-01-01', None, None, None,
+                'https://drive.google.com/file/d/ABC123/view', True)
+        mock_db['fetch_one'].return_value = book
+        mock_db['fetch_all'].return_value = []
+        body = client.get('/book/1').data.decode()
+        assert '/book/1/download' in body
+
+    def test_download_blocked_when_disabled(self, client, mock_db):
+        """We block /book/1/download when ebook_allow_download is False `/book/1/download` (expects 302) [TestEbookUrl / cataloging].
+    If fails: likely the download toggle guard changed.
+    Failure indicates a direct URL bypasses the librarian's download toggle."""
+        from unittest.mock import patch
+        book = (1, 'E Title', 'A', None, None, 2021, 'Tech', None, None,
+                'E-Book', 'D', 'active', '2024-01-01', None, None, None,
+                'https://drive.google.com/file/d/ABC123/view', False)
+        mock_db['fetch_one'].return_value = book
+        with patch('app.cataloging.models.open_ebook_stream') as opener:
+            resp = client.get('/book/1/download')
+        assert resp.status_code == 302
+        assert '/book/1' in resp.location
+        assert opener.call_count == 0
+
+    def test_download_allowed_when_enabled_streams(self, client, mock_db):
+        """We stream /book/1/download when ebook_allow_download is True `/book/1/download` (expects 200) [TestEbookUrl / cataloging].
+    If fails: likely the download toggle guard changed.
+    Failure indicates enabled e-books stopped downloading."""
+        from unittest.mock import patch
+        class FakeResp:
+            headers = {'Content-Type': 'application/pdf', 'Content-Length': '2'}
+            def iter_content(self, chunk_size):
+                yield b'ok'
+            def close(self):
+                pass
+        book = (1, 'E Title', 'A', None, None, 2021, 'Tech', None, None,
+                'E-Book', 'D', 'active', '2024-01-01', None, None, None,
+                'https://drive.google.com/file/d/ABC123/view', True)
+        mock_db['fetch_one'].return_value = book
+        with patch('app.cataloging.models.open_ebook_stream',
+                   return_value=(FakeResp(), None)):
+            resp = client.get('/book/1/download')
+        assert resp.status_code == 200
+        assert resp.data == b'ok'
+
+    def test_add_ebook_checked_toggle_stored_true(self, librarian_client, mock_db):
+        """We store ebook_allow_download TRUE when the add checkbox is ticked `/librarian/cataloging/add` as librarian (expects 302) [TestEbookUrl / cataloging].
+    If fails: likely form parsing or create_book wiring changed.
+    Failure indicates the new-book download toggle never reaches the DB."""
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
+        resp = librarian_client.post('/librarian/cataloging/add', data={
+            'title': 'E', 'author': 'A', 'year_published': '2021',
+            'subject_classification': 'Tech', 'material_type': 'E-Book',
+            'ebook_url': 'https://drive.google.com/file/d/ABC123/view',
+            'ebook_allow_download': '1',
+        })
+        assert 'mstatus=success' in resp.location
+        book_calls = [c for c in mock_db['execute'].call_args_list
+                      if 'INSERT INTO book_catalog' in c[0][0]]
+        assert 'ebook_allow_download' in book_calls[0][0][0]
+        assert book_calls[0][0][1][-1] is True
+
+    def test_add_ebook_unchecked_toggle_stored_false(self, librarian_client, mock_db):
+        """We store ebook_allow_download FALSE when the add checkbox is unticked `/librarian/cataloging/add` as librarian (expects 302) [TestEbookUrl / cataloging].
+    If fails: likely form parsing or create_book wiring changed.
+    Failure indicates a missing checkbox silently re-enables downloads."""
+        mock_db['execute'].return_value = [(1,)]
+        mock_db['fetch_one'].return_value = None
+        resp = librarian_client.post('/librarian/cataloging/add', data={
+            'title': 'E', 'author': 'A', 'year_published': '2021',
+            'subject_classification': 'Tech', 'material_type': 'E-Book',
+            'ebook_url': 'https://drive.google.com/file/d/ABC123/view',
+        })
+        assert 'mstatus=success' in resp.location
+        book_calls = [c for c in mock_db['execute'].call_args_list
+                      if 'INSERT INTO book_catalog' in c[0][0]]
+        assert 'ebook_allow_download' in book_calls[0][0][0]
+        assert book_calls[0][0][1][-1] is False
+
+    def test_edit_book_toggle_stored(self, librarian_client, mock_db):
+        """We write ebook_allow_download on edit of an existing book title `/librarian/cataloging/1/edit` as librarian (expects 302) [TestEbookUrl / cataloging].
+    If fails: likely edit form parsing or update_book wiring changed.
+    Failure indicates unticking the toggle never unticks the stored value."""
+        mock_db['fetch_one'].return_value = SAMPLE_BOOKS[0]
+        mock_db['execute'].return_value = 1
+        resp = librarian_client.post('/librarian/cataloging/1/edit', data={
+            'title': 'Updated Title',
+            'author': 'Updated Author',
+            'material_type': 'E-Book',
+            'year_published': '2021',
+            'subject_classification': 'Tech',
+            'ebook_url': 'https://drive.google.com/file/d/ABC123/view',
+        })
+        assert resp.status_code == 302
+        upd_calls = [c for c in mock_db['execute'].call_args_list
+                     if 'UPDATE book_catalog' in c[0][0]]
+        assert upd_calls
+        assert 'ebook_allow_download' in upd_calls[0][0][0]
+        assert upd_calls[0][0][1][-3] is False
+        assert upd_calls[0][0][1][-1] == 1
 
     def test_download_helpers(self, mock_db):
         """Validates download source urls and filenames [TestEbookUrl / cataloging].

@@ -401,6 +401,8 @@ _REQUIRED_BOOK_COLUMNS = (
     'ALTER TABLE book_catalog '
     'ADD COLUMN IF NOT EXISTS category_id INT REFERENCES categories(category_id)',
     'ALTER TABLE book_catalog ADD COLUMN IF NOT EXISTS ebook_url VARCHAR(500)',
+    'ALTER TABLE book_catalog '
+    'ADD COLUMN IF NOT EXISTS ebook_allow_download BOOLEAN NOT NULL DEFAULT TRUE',
     'ALTER TABLE book_catalog ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP',
     'ALTER TABLE book_catalog '
     'ADD COLUMN IF NOT EXISTS updated_by INT REFERENCES user_accounts(user_id)',
