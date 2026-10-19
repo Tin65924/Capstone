@@ -9,7 +9,7 @@ from .models import (
     get_scanned_in_session, cancel_inventory_session,
     upsert_inventory_record, get_accession_status, mark_copy_damaged,
     mark_copy_lost, update_session_scan, get_session_export_rows, get_scan_history,
-    count_scan_history
+    count_scan_history, get_sessions
 )
 from app.cataloging.models import get_accession_by_number, get_accession_by_id
 from app.circulation.models import get_active_loan_by_accession
@@ -28,14 +28,16 @@ def inventory_page():
 
     GET guarded by login + Librarian/Admin. Loads the requested or
     active session (ignored when malformed), status counts for the
-    condition cards, and one page of scan history optionally filtered
-    by VALID_STATES. Renders inventory/inventory.html; never writes.
+    condition cards, one page of scan history optionally filtered by
+    VALID_STATES, and the newest inventory sessions for the shared
+    "Past Sessions" list (every session is visible to every librarian).
+    Renders inventory/inventory.html; never writes.
 
     Returns:
         Rendered inventory dashboard template response.
     """
     session_id = request.args.get('session_id', type=int)
-    session = get_session(session_id) if session_id else get_active_session(current_user.id)
+    session = get_session(session_id) if session_id else get_active_session()
     if session is not None and len(session) < 6:
         session = None
 
@@ -60,6 +62,9 @@ def inventory_page():
     total_scans = count_scan_history(status_filter=status_filter) or 0
     total_pages = max(1, (total_scans + 9) // 10)
 
+    sessions = get_sessions(limit=20)
+    sessions = [s for s in (sessions or []) if s and len(s) >= 7]
+
     return render_template(
         'inventory/inventory.html',
         session=session,
@@ -67,7 +72,8 @@ def inventory_page():
         scan_rows=scan_rows,
         current_status=status_filter,
         current_page=page,
-        total_pages=total_pages
+        total_pages=total_pages,
+        sessions=sessions
     )
 
 
@@ -75,20 +81,21 @@ def inventory_page():
 @login_required
 @librarian_required
 def start_session():
-    """Open a new annual-physical inventory session for the librarian.
+    """Open a new annual-physical inventory session.
 
-    POST guarded by login + Librarian/Admin. Refuses with an error flash
-    when the librarian already has an active session; otherwise counts
-    all accessions as the baseline, creates the session, logs
-    inventory:start_session:<id>, flashes success, and redirects to the
-    inventory page for the new session.
+    POST guarded by login + Librarian/Admin. Sessions are shared, so it
+    refuses with an error flash while any session is already active (one
+    inventory at a time); otherwise counts all accessions as the
+    baseline, creates the session, logs inventory:start_session:<id>,
+    flashes success, and redirects to the inventory page for the new
+    session.
 
     Returns:
         Redirect to the inventory page (existing or new session).
     """
-    existing = get_active_session(current_user.id)
+    existing = get_active_session()
     if existing:
-        flash('You already have an active session. Resume it instead.', 'error')
+        flash('A session is already active. Resume it instead.', 'error')
         return redirect(url_for('inventory.inventory_page', session_id=existing[0]))
 
     total_books = count_accessions()
@@ -106,7 +113,7 @@ def complete_session(session_id):
     """Close an active session by reconciling scans against the collection.
 
     POST guarded by login + Librarian/Admin. Verifies the session exists,
-    belongs to the librarian, and is active; collects scanned ids,
+    is active; collects scanned ids,
     runs reconcile_inventory (marking unscanned available copies
     missing), logs inventory:complete_session:<id>, flashes the
     discrepancy count, and redirects back to the session view.
@@ -118,7 +125,7 @@ def complete_session(session_id):
         Redirect to the inventory page for the session.
     """
     session = get_session(session_id)
-    if not session or len(session) < 6 or session[1] != int(current_user.id):
+    if not session or len(session) < 6:
         flash('Session not found.', 'error')
         return redirect(url_for('inventory.inventory_page'))
 
@@ -154,7 +161,7 @@ def cancel_session(session_id):
         Redirect to the inventory page.
     """
     session = get_session(session_id)
-    if not session or len(session) < 6 or session[1] != int(current_user.id):
+    if not session or len(session) < 6:
         flash('Session not found.', 'error')
         return redirect(url_for('inventory.inventory_page'))
 
@@ -187,7 +194,7 @@ def scan_accession():
 
     if session_id:
         session = get_session(session_id)
-        if not session or len(session) < 6 or session[1] != int(current_user.id) or session[4] != 'active':
+        if not session or len(session) < 6 or session[4] != 'active':
             flash('Session not found or not active.', 'error')
             return redirect(url_for('inventory.inventory_page'))
 
@@ -279,7 +286,7 @@ def damage_accession(accession_id):
 
     if session_id:
         session = get_session(session_id)
-        if not session or len(session) < 6 or session[1] != int(current_user.id):
+        if not session or len(session) < 6:
             flash('Session not found.', 'error')
             return redirect(url_for('inventory.inventory_page'))
 
@@ -293,10 +300,10 @@ def damage_accession(accession_id):
 @login_required
 @librarian_required
 def lost_accession(accession_id):
-    """Flag one copy as lost with an optional note.
+    """Flag one copy as lost with a required reason note.
 
     POST guarded by login + Librarian/Admin. Verifies the copy exists,
-    caps an optional note at 255 chars, optionally validates the
+    requires a non-empty note (max 255 chars), optionally validates the
     session, records via mark_copy_lost, logs inventory:mark_lost:<id>,
     flashes success, and redirects back. Lost copies leave the
     lendable pool until recovered.
@@ -314,13 +321,16 @@ def lost_accession(accession_id):
         flash('Accession copy not found.', 'error')
         return redirect(url_for('inventory.inventory_page'))
 
-    if notes is not None and len(notes) > 255:
+    if not notes:
+        flash('A reason is required to mark a copy as lost.', 'error')
+        return redirect(url_for('inventory.inventory_page'))
+    if len(notes) > 255:
         flash('Note is too long (max 255 characters).', 'error')
         return redirect(url_for('inventory.inventory_page'))
 
     if session_id:
         session = get_session(session_id)
-        if not session or len(session) < 6 or session[1] != int(current_user.id):
+        if not session or len(session) < 6:
             flash('Session not found.', 'error')
             return redirect(url_for('inventory.inventory_page'))
 
@@ -350,7 +360,7 @@ def export_session(session_id):
         CSV download response, or a redirect with an error flash.
     """
     session = get_session(session_id)
-    if not session or len(session) < 6 or session[1] != int(current_user.id):
+    if not session or len(session) < 6:
         flash('Session not found.', 'error')
         return redirect(url_for('inventory.inventory_page'))
 

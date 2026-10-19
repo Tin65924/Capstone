@@ -50,16 +50,17 @@ class TestSessionLifecycle:
         assert resp.status_code == 302
         assert mock_db['execute'].call_count >= 1
 
-    def test_complete_session_wrong_owner(self, librarian_client, mock_db):
-        """Validates complete session wrong owner `/librarian/inventory/session/7/complete` as librarian (expects 302) [TestSessionLifecycle / inventory].
-    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    def test_complete_session_any_librarian_allowed(self, librarian_client, mock_db):
+        """Validates any librarian may complete a session started by someone else [TestSessionLifecycle / inventory].
+    If fails: likely ownership check reappeared (sessions are shared, not owned).
     Failure indicates inventory counts/actions are wrong."""
         mock_db['fetch_one'].return_value = (7, 99, 10, 5, 'active', None, None)
+        mock_db['fetch_all'].return_value = []
 
         resp = librarian_client.post('/librarian/inventory/session/7/complete')
 
         assert resp.status_code == 302
-        assert mock_db['execute'].call_count == 0
+        assert mock_db['execute'].call_count >= 1
 
     def test_cancel_session_success(self, librarian_client, mock_db):
         """Validates cancel session success `/librarian/inventory/session/7/cancel` as librarian (expects 302) [TestSessionLifecycle / inventory].
@@ -73,16 +74,17 @@ class TestSessionLifecycle:
         call_args = mock_db['execute'].call_args_list[0]
         assert 'cancelled' in call_args[0][0]
 
-    def test_cancel_session_wrong_owner(self, librarian_client, mock_db):
-        """Validates cancel session wrong owner `/librarian/inventory/session/7/cancel` as librarian (expects 302) [TestSessionLifecycle / inventory].
-    If fails: likely unexpected DB write (validation/pre-check bypassed).
+    def test_cancel_session_any_librarian_allowed(self, librarian_client, mock_db):
+        """Validates any librarian may cancel a session started by someone else [TestSessionLifecycle / inventory].
+    If fails: likely ownership check reappeared (sessions are shared, not owned).
     Failure indicates inventory counts/actions are wrong."""
         mock_db['fetch_one'].return_value = (7, 99, 10, 5, 'active', None, None)
 
         resp = librarian_client.post('/librarian/inventory/session/7/cancel')
 
         assert resp.status_code == 302
-        assert mock_db['execute'].call_count == 0
+        call_args = mock_db['execute'].call_args_list[0]
+        assert 'cancelled' in call_args[0][0]
 
 
 class TestScanning:
@@ -174,11 +176,22 @@ class TestDamageAndLost:
     Failure indicates inventory counts/actions are wrong."""
         mock_db['fetch_one'].return_value = (10, 'ACC-001', 1)
 
-        resp = librarian_client.post('/librarian/inventory/accession/1/lost')
+        resp = librarian_client.post('/librarian/inventory/accession/1/lost', data={'notes': 'not on shelf'})
 
         assert resp.status_code == 302
         call_args = mock_db['execute'].call_args_list[0]
         assert 'lost' in call_args[0][1]
+
+    def test_mark_lost_requires_note(self, librarian_client, mock_db):
+        """Validates mark lost without a note is rejected with no write [TestDamageAndLost / inventory].
+    If fails: likely the required-note guard was removed.
+    Failure indicates inventory counts/actions are wrong."""
+        mock_db['fetch_one'].return_value = (10, 'ACC-001', 1)
+
+        resp = librarian_client.post('/librarian/inventory/accession/1/lost', data={})
+
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
 
 
 class TestExport:
@@ -194,59 +207,56 @@ class TestExport:
         assert resp.status_code == 200
         assert resp.mimetype == 'text/csv'
 
-    def test_export_wrong_owner(self, librarian_client, mock_db):
-        """Validates export wrong owner `/librarian/inventory/session/7/export` as librarian (expects 302) [TestExport / inventory].
-    If fails: likely redirect/flash logic changed or guard misordered.
+    def test_export_any_librarian_allowed(self, librarian_client, mock_db):
+        """Validates any librarian may export a session started by someone else [TestExport / inventory].
+    If fails: likely ownership check reappeared (sessions are shared, not owned).
     Failure indicates inventory counts/actions are wrong."""
         mock_db['fetch_one'].return_value = (7, 99, 10, 10, 'completed', None, None)
+        mock_db['fetch_all'].return_value = []
 
         resp = librarian_client.get('/librarian/inventory/session/7/export')
 
-        assert resp.status_code == 302
+        assert resp.status_code == 200
+        assert resp.mimetype == 'text/csv'
 
 class TestReconcileInventory:
-    def test_damaged_copy_preserved_through_reconcile(self, mock_db):
-        """Validates damaged copy preserved through reconcile [TestReconcileInventory / inventory].
-    If fails: likely wrong/absent SQL call or placeholder mismatch.
-    Failure indicates inventory counts/actions are wrong."""
-        mock_db['fetch_all'].return_value = [
-            (1, '2026-00001', 'damaged'),
-        ]
-        mock_db['fetch_one'].return_value = None
-
-        reconcile_inventory(session_id=1, scanned_accessions=set())
-
-        for call in mock_db['execute'].call_args_list:
-            assert 'damaged' not in call[0][1] or 'inventory_status' not in call[0][0]
-
-    def test_lost_copy_preserved_through_reconcile(self, mock_db):
-        """Validates lost copy preserved through reconcile [TestReconcileInventory / inventory].
-    If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
-    Failure indicates inventory counts/actions are wrong."""
-        mock_db['fetch_all'].return_value = [
-            (1, '2026-00001', 'lost'),
-        ]
-        mock_db['fetch_one'].return_value = None
-
-        reconcile_inventory(session_id=1, scanned_accessions=set())
-
-        for call in mock_db['execute'].call_args_list:
-            assert 'INSERT INTO inventory_status' not in call[0][0]
-            assert 'UPDATE inventory_status' not in call[0][0]
-
-    def test_unscanned_unloaned_copy_marked_missing(self, mock_db):
-        """Validates unscanned unloaned copy marked missing [TestReconcileInventory / inventory].
+    def test_closes_session_and_returns_missing(self, mock_db):
+        """Validates reconcile closes the session and maps missing rows [TestReconcileInventory / inventory].
     If fails: likely regression in route/model or mock setup drift.
     Failure indicates inventory counts/actions are wrong."""
         mock_db['fetch_all'].return_value = [
-            (1, '2026-00001', 'available'),
+            (1, '2026-00001'),
         ]
-        mock_db['fetch_one'].return_value = None
 
-        discrepancies = reconcile_inventory(session_id=1, scanned_accessions=set())
+        discrepancies = reconcile_inventory(session_id=1, scanned_accessions={2}, checked_by=3)
 
-        assert len(discrepancies) == 1
-        assert discrepancies[0]['issue'] == 'Missing'
+        assert discrepancies == [
+            {'accession_id': 1, 'accession': '2026-00001', 'issue': 'Missing'},
+        ]
+        closed = [c for c in mock_db['execute'].call_args_list if 'session_status' in c[0][0]]
+        assert closed and 'completed' in closed[0][0][1]
+
+    def test_guards_damaged_lost_and_overdue(self, mock_db):
+        """Validates reconcile SQL skips damaged/lost and counts overdue loans [TestReconcileInventory / inventory].
+    If fails: likely wrong/absent SQL call or placeholder mismatch.
+    Failure indicates inventory counts/actions are wrong."""
+        mock_db['fetch_all'].return_value = []
+
+        reconcile_inventory(session_id=1, scanned_accessions=set())
+
+        sql = ' '.join(c[0][0] for c in mock_db['execute'].call_args_list)
+        assert "NOT IN ('damaged', 'lost')" in sql
+        assert "transaction_status IN ('active', 'overdue')" in sql
+
+    def test_empty_and_none_results_are_safe(self, mock_db):
+        """Validates reconcile tolerates empty/None driver results [TestReconcileInventory / inventory].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates inventory counts/actions are wrong."""
+        mock_db['fetch_all'].return_value = []
+        assert reconcile_inventory(session_id=1, scanned_accessions=set()) == []
+
+        mock_db['fetch_all'].return_value = None
+        assert reconcile_inventory(session_id=1, scanned_accessions=set()) == []
 
 
 class TestDuplicateScanPrevention:
@@ -272,12 +282,18 @@ class TestDuplicateScanPrevention:
 
         assert mock_db['execute'].call_count == 0
 
-class TestScanSessionOwnership:
-    def test_scan_rejects_unowned_session(self, librarian_client, mock_db):
-        """Validates scan rejects unowned session `/librarian/inventory/scan` as librarian (expects 302) [TestScanSessionOwnership / inventory].
-    If fails: likely unexpected DB write (validation/pre-check bypassed).
+class TestScanSessionState:
+    def test_scan_into_other_librarian_session_allowed(self, librarian_client, mock_db):
+        """Validates any librarian may scan into a session started by someone else [TestScanSessionState / inventory].
+    If fails: likely ownership check reappeared (sessions are shared, not owned).
     Failure indicates inventory counts/actions are wrong."""
-        mock_db['fetch_one'].return_value = (5, 99, 10, 3, 'active', None, None)
+        mock_db['fetch_one'].side_effect = [
+            (5, 99, 10, 3, 'active', None, None),  # get_session -> shared/active
+            (1, '2026-00001', 5, 1, 3, None, None),  # get_accession_by_number
+            None,  # get_active_loan_by_accession -> no loan
+            None,  # update_session_scan existing-row check -> increments
+            None,  # upsert existing-row check -> insert path
+        ]
 
         resp = librarian_client.post('/librarian/inventory/scan', data={
             'accession_number': '2026-00001',
@@ -285,10 +301,10 @@ class TestScanSessionOwnership:
         })
 
         assert resp.status_code == 302
-        assert mock_db['execute'].call_count == 0
+        assert mock_db['execute'].call_count >= 1
 
     def test_scan_rejects_inactive_session(self, librarian_client, mock_db):
-        """Validates scan rejects inactive session `/librarian/inventory/scan` as librarian (expects 302) [TestScanSessionOwnership / inventory].
+        """Validates scan rejects inactive session `/librarian/inventory/scan` as librarian (expects 302) [TestScanSessionState / inventory].
     If fails: likely unexpected DB write (validation/pre-check bypassed).
     Failure indicates inventory counts/actions are wrong."""
         mock_db['fetch_one'].return_value = (5, 3, 10, 3, 'completed', None, None)
@@ -302,7 +318,7 @@ class TestScanSessionOwnership:
         assert mock_db['execute'].call_count == 0
 
     def test_scan_without_session_id_still_works(self, librarian_client, mock_db):
-        """Validates scan without session id still works `/librarian/inventory/scan` as librarian (expects 302) [TestScanSessionOwnership / inventory].
+        """Validates scan without session id still works `/librarian/inventory/scan` as librarian (expects 302) [TestScanSessionState / inventory].
     If fails: likely wrong/absent SQL call or placeholder mismatch; model SQL changed (INSERT INTO).
     Failure indicates inventory counts/actions are wrong."""
         mock_db['fetch_one'].side_effect = [
@@ -330,3 +346,73 @@ class TestExportGuard:
         resp = librarian_client.get('/librarian/inventory/session/7/export')
 
         assert resp.status_code == 302
+
+
+class TestPastSessions:
+    def test_past_sessions_listed_with_links(self, librarian_client, mock_db):
+        """Validates the dashboard lists past sessions with read-only links [TestPastSessions / inventory].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates inventory counts/actions are wrong."""
+        row = (3, 3, 'Test Librarian', 10, 10, 'completed', None, None)
+        mock_db['fetch_one'].return_value = None
+        mock_db['fetch_all'].side_effect = [[], [], [row]]
+
+        body = librarian_client.get('/librarian/inventory').data.decode()
+
+        assert 'Past Sessions' in body
+        assert 'Session #3' in body
+        assert 'session_id=3' in body
+
+    def test_past_sessions_malformed_rows_ignored(self, librarian_client, mock_db):
+        """Validates short/None session rows never crash the dashboard [TestPastSessions / inventory].
+    If fails: likely regression in route/model or mock setup drift.
+    Failure indicates inventory counts/actions are wrong."""
+        mock_db['fetch_one'].return_value = None
+        mock_db['fetch_all'].side_effect = [[], [], [(0,), None]]
+
+        assert librarian_client.get('/librarian/inventory').status_code == 200
+
+    def test_owner_sees_manage_controls(self, librarian_client, mock_db):
+        """Validates the session owner is offered Complete/Cancel [TestPastSessions / inventory].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates inventory counts/actions are wrong."""
+        mock_db['fetch_one'].return_value = (7, 3, 10, 5, 'active', None, None)
+
+        body = librarian_client.get('/librarian/inventory').data.decode()
+
+        assert 'Complete Session' in body
+        assert 'Cancel Session' in body
+
+    def test_landing_shows_shared_active_session(self, librarian_client, mock_db):
+        """Validates the landing view opens the shared active session regardless of starter [TestPastSessions / inventory].
+    If fails: likely get_active_session no longer returns the global newest active session.
+    Failure indicates inventory counts/actions are wrong."""
+        mock_db['fetch_one'].return_value = (7, 99, 10, 5, 'active', None, None)
+
+        body = librarian_client.get('/librarian/inventory').data.decode()
+
+        assert 'Complete Session' in body
+        assert 'Start New Session' not in body
+
+    def test_any_librarian_sees_manage_controls(self, librarian_client, mock_db):
+        """Validates any librarian viewing another librarian's session is offered controls [TestPastSessions / inventory].
+    If fails: likely route/template regression or mock data mismatch.
+    Failure indicates inventory counts/actions are wrong."""
+        mock_db['fetch_one'].return_value = (7, 99, 10, 5, 'active', None, None)
+
+        body = librarian_client.get('/librarian/inventory?session_id=7').data.decode()
+
+        assert 'Complete Session' in body
+        assert 'Cancel Session' in body
+
+    def test_any_librarian_can_complete(self, librarian_client, mock_db):
+        """Validates any librarian may complete a session they did not start [TestPastSessions / inventory].
+    If fails: likely ownership check reappeared (sessions are shared, not owned).
+    Failure indicates inventory counts/actions are wrong."""
+        mock_db['fetch_one'].return_value = (7, 99, 10, 5, 'active', None, None)
+        mock_db['fetch_all'].return_value = []
+
+        resp = librarian_client.post('/librarian/inventory/session/7/complete')
+
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count >= 1

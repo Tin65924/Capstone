@@ -123,6 +123,12 @@ def reconcile_inventory(session_id, scanned_accessions, checked_by=None):
     collected as a discrepancy. Then closes the session as 'completed'
     with the scanned count and today's date.
 
+    Runs as three set-based statements over the whole collection (an
+    UPDATE for copies already tracked, an INSERT for copies never
+    checked, and the session close) instead of a query per copy, then
+    reads back the missing rows tagged to the session. A copy is
+    "on loan" when its circulation record is 'active' or 'overdue'.
+
     Args:
         session_id: Inventory session being closed.
         scanned_accessions: Iterable of scanned accession_id values.
@@ -132,35 +138,73 @@ def reconcile_inventory(session_id, scanned_accessions, checked_by=None):
         List of dicts {accession_id, accession, issue} for each newly
         missing copy.
     """
-    all_copies = db.fetch_all(
-        '''SELECT al.accession_id, al.accession_number, ist.inventory_state
-           FROM accession_log al
-           LEFT JOIN inventory_status ist ON ist.accession_id = al.accession_id'''
-    )
-    scanned_set = set(scanned_accessions)
-    discrepancies = []
-    for acc_id, acc_num, current_state in all_copies:
-        if current_state in ('damaged', 'lost'):
-            continue
+    scanned = list(scanned_accessions)
 
-        active_loan = db.fetch_one(
-            "SELECT circulation_id FROM circulation_records WHERE accession_id = %s AND transaction_status = 'active'",
-            (acc_id,)
-        )
-        if acc_id in scanned_set:
-            state = 'borrowed' if active_loan else 'available'
-            upsert_inventory_record(acc_id, state, 'annual_physical', checked_by, session_id=session_id)
-        elif active_loan:
-            upsert_inventory_record(acc_id, 'borrowed', 'annual_physical', checked_by, session_id=session_id)
-        else:
-            upsert_inventory_record(acc_id, 'missing', 'annual_physical', checked_by, session_id=session_id)
-            discrepancies.append({'accession_id': acc_id, 'accession': acc_num, 'issue': 'Missing'})
+    db.execute(
+        '''UPDATE inventory_status ist
+           SET inventory_state = CASE
+                   WHEN al.accession_id = ANY(%s) THEN
+                       CASE WHEN EXISTS (
+                                SELECT 1 FROM circulation_records c
+                                WHERE c.accession_id = al.accession_id
+                                  AND c.transaction_status IN ('active', 'overdue')
+                            ) THEN 'borrowed' ELSE 'available' END
+                   WHEN EXISTS (
+                            SELECT 1 FROM circulation_records c
+                            WHERE c.accession_id = al.accession_id
+                              AND c.transaction_status IN ('active', 'overdue')
+                        ) THEN 'borrowed'
+                   ELSE 'missing'
+               END,
+               checked_by = %s,
+               last_checked_date = %s,
+               session_id = %s,
+               notes = NULL
+           FROM accession_log al
+           WHERE al.accession_id = ist.accession_id
+             AND ist.inventory_state NOT IN ('damaged', 'lost')''',
+        (scanned, checked_by, date.today(), session_id)
+    )
+
+    db.execute(
+        '''INSERT INTO inventory_status
+               (accession_id, inventory_state, inventory_type, checked_by, last_checked_date, session_id, notes)
+           SELECT al.accession_id,
+               CASE
+                   WHEN al.accession_id = ANY(%s) THEN
+                       CASE WHEN EXISTS (
+                                SELECT 1 FROM circulation_records c
+                                WHERE c.accession_id = al.accession_id
+                                  AND c.transaction_status IN ('active', 'overdue')
+                            ) THEN 'borrowed' ELSE 'available' END
+                   WHEN EXISTS (
+                            SELECT 1 FROM circulation_records c
+                            WHERE c.accession_id = al.accession_id
+                              AND c.transaction_status IN ('active', 'overdue')
+                        ) THEN 'borrowed'
+                   ELSE 'missing'
+               END,
+               'annual_physical', %s, %s, %s, NULL
+           FROM accession_log al
+           LEFT JOIN inventory_status ist ON ist.accession_id = al.accession_id
+           WHERE ist.inventory_id IS NULL''',
+        (scanned, checked_by, date.today(), session_id)
+    )
 
     db.execute(
         'UPDATE inventory_sessions SET scanned_count = %s, session_status = %s, ended_at = %s, updated_at = NOW(), updated_by = %s WHERE session_id = %s',
-        (len(scanned_accessions), 'completed', date.today(), checked_by, session_id)
+        (len(scanned), 'completed', date.today(), checked_by, session_id)
     )
-    return discrepancies
+
+    missing_rows = db.fetch_all(
+        '''SELECT al.accession_id, al.accession_number
+           FROM inventory_status ist
+           JOIN accession_log al ON al.accession_id = ist.accession_id
+           WHERE ist.session_id = %s AND ist.inventory_state = 'missing'
+           ORDER BY al.accession_number''',
+        (session_id,)
+    ) or []
+    return [{'accession_id': row[0], 'accession': row[1], 'issue': 'Missing'} for row in missing_rows]
 
 
 def get_status_summary():
@@ -216,22 +260,56 @@ def get_session(session_id):
     )
 
 
-def get_active_session(librarian_id):
-    """Fetch a librarian's currently open inventory session, if any.
+def get_active_session(librarian_id=None):
+    """Fetch the currently open inventory session, if any.
 
-    Selects the 'active' session for the staff member, enforcing the
-    one-active-session-at-a-time rule before a new session may start.
+    Sessions are shared: by default this returns the single newest
+    'active' session regardless of who started it, so every librarian
+    lands in the same ongoing inventory. Pass a librarian_id only to
+    scope the lookup to one staff member.
 
     Args:
-        librarian_id: Staff user_id who owns the session.
+        librarian_id: Optional staff user_id to scope the lookup.
 
     Returns:
         Full inventory_sessions row tuple, or None when none is open.
     """
+    if librarian_id is None:
+        return db.fetch_one(
+            "SELECT * FROM inventory_sessions WHERE session_status = 'active' "
+            "ORDER BY started_at DESC, session_id DESC LIMIT 1"
+        )
     return db.fetch_one(
         "SELECT * FROM inventory_sessions WHERE librarian_id = %s AND session_status = 'active'",
         (librarian_id,)
     )
+
+
+def get_sessions(librarian_id=None, limit=20):
+    """List inventory sessions newest-first for the history panel.
+
+    Joins the owning librarian's display name so the dashboard can show
+    a "Past Sessions" list that links back to any session read-only.
+    Pass a librarian_id to scope to one librarian's sessions, or None
+    to list every session (Admin view).
+
+    Args:
+        librarian_id: Optional staff user_id to scope to.
+        limit: Maximum rows to return, newest first.
+
+    Returns:
+        List of 8-tuple rows (session_id, librarian_id, librarian_name,
+        total_books, scanned_count, session_status, started_at,
+        ended_at), newest first.
+    """
+    base_query = '''SELECT s.session_id, s.librarian_id, u.full_name, s.total_books,
+                           s.scanned_count, s.session_status, s.started_at, s.ended_at
+                    FROM inventory_sessions s
+                    LEFT JOIN user_accounts u ON u.user_id = s.librarian_id'''
+    order = ' ORDER BY s.started_at DESC, s.session_id DESC LIMIT %s'
+    if librarian_id is None:
+        return db.fetch_all(base_query + order, (limit,))
+    return db.fetch_all(base_query + ' WHERE s.librarian_id = %s' + order, (librarian_id, limit))
 
 
 def update_session_scan(session_id, accession_id, updated_by=None):
