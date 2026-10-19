@@ -153,7 +153,7 @@
                             <div class="bg-white dark:bg-[#1a2235] rounded-lg border border-gray-100 dark:border-gray-700 p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
                                 <div class="min-w-0 flex-1">
                                     <p class="font-bold text-gray-900 dark:text-white text-sm sm:text-base truncate">{{ req[1] }}</p>
-                                    <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">{{ req[2] or 'Author unknown' }} &middot; {{ req[4].strftime('%b %d, %Y') if req[4] and req[4].strftime is defined else (req[4] or '') }}</p>
+                                    <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">{{ req[2] or 'Author unknown' }} &middot; {{ req[4]|pht('%b %d, %Y') }}</p>
                                     {% if req[5] %}
                                     <p class="text-[11px] sm:text-xs text-gray-400 mt-1 line-clamp-2 break-words">Note: {{ req[5] }}</p>
                                     {% endif %}

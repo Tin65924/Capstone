@@ -979,7 +979,7 @@ def compute_book_traffic(book_id, start_date, end_date):
     for c in (_safe(models.book_ebook_recent, book_id, 10, start_date, end_date) or []):
         try:
             ebook_recent.append([
-                str(c[0]) if len(c) > 0 and c[0] else '',
+                _pht_str(c[0]) if len(c) > 0 and c[0] else '',
                 c[1] if len(c) > 1 else '',
                 c[2] if len(c) > 2 else '',
             ])
@@ -1901,6 +1901,39 @@ def _jsonable_cell(value):
     except ImportError:
         pass
     return value
+
+
+def _pht_str(value, fmt='%Y-%m-%d %I:%M %p'):
+    """Render a DB timestamp (stored UTC) as Philippine Time text.
+
+    Naive values are assumed UTC and shifted +8h; aware values are
+    converted; date-only values render as YYYY-MM-DD. Unparseable input
+    passes through as text so one bad row never 500s the report.
+    """
+    if value is None:
+        return ''
+    dt = value
+    if isinstance(dt, str):
+        try:
+            dt = datetime.fromisoformat(dt.strip())
+        except (ValueError, TypeError):
+            return value
+    if not isinstance(dt, datetime):
+        if isinstance(dt, date):
+            return dt.strftime('%Y-%m-%d')
+        return str(value)
+    try:
+        if dt.tzinfo is None:
+            dt = dt + timedelta(hours=8)
+        else:
+            from datetime import timezone as _tz
+            dt = dt.astimezone(_tz(timedelta(hours=8)))
+    except Exception:
+        return str(value)
+    try:
+        return dt.strftime(fmt)
+    except Exception:
+        return str(value)
 
 
 def _jsonable(kpi_data):

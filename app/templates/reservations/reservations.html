@@ -360,7 +360,7 @@
                                             <td class="text-gray-400 font-bold">{{ res[1] }}</td>
                                             <td class="font-semibold">{{ res[6] }}</td>
                                             <td class="font-mono text-gray-500">{{ res[8] }}</td>
-                                            <td class="text-gray-500">{{ res[3].strftime('%b %d, %Y') if res[3] and res[3].strftime is defined else (res[3] or '—') }}</td>
+                                            <td class="text-gray-500">{{ res[3]|pht('%b %d, %Y') }}</td>
                                             <td>
                                                 {% if res[2] == 'waiting' %}
                                                 <span class="badge badge-waiting">Waiting</span>
@@ -449,7 +449,7 @@
                                 <div class="min-w-0 flex-1">
                                     <div class="font-semibold text-sm truncate">{{ res[6] }}</div>
                                     <div class="text-xs text-gray-500 font-mono truncate">{{ res[8] }}</div>
-                                    <div class="text-xs text-gray-500">{{ res[3].strftime('%b %d, %Y') if res[3] and res[3].strftime is defined else (res[3] or '—') }}</div>
+                                    <div class="text-xs text-gray-500">{{ res[3]|pht('%b %d, %Y') }}</div>
                                 </div>
                                 <div class="shrink-0">
                                     {% if res[2] == 'waiting' %}

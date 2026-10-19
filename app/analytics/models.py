@@ -1740,6 +1740,13 @@ def requests_by_status(start_date=None, end_date=None):
     )
 
 
+# ebook_access_log.accessed_at is a UTC DEFAULT NOW() timestamp. Convert it
+# to the library's Manila wall clock before day-bucketing or range-filtering
+# so the trend charts and the recent table agree with Philippine dates.
+_EBOOK_MANILA_DAY = "(e.accessed_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Manila')::date"
+_EBOOK_MANILA_DAY_BARE = "(accessed_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Manila')::date"
+
+
 def ebook_access_trend(start_date=None, end_date=None):
     """Return [(day, program_label, count)] daily e-book activity by program.
 
@@ -1748,10 +1755,10 @@ def ebook_access_trend(start_date=None, end_date=None):
     who are not signed in is labelled 'Offline Reader'. Powers the E-Book
     Reads & Downloads Trend multi-line graph on the Library tab.
     """
-    parts, params = _range_clause('e.accessed_at', start_date, end_date)
+    parts, params = _range_clause(_EBOOK_MANILA_DAY, start_date, end_date)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
-        '''SELECT e.accessed_at::date AS day,
+        '''SELECT (e.accessed_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Manila')::date AS day,
                   {} AS series_label,
                   COUNT(*) AS total
            FROM ebook_access_log e
@@ -1778,7 +1785,7 @@ def ebook_access_by_program_on_date(day):
            LEFT JOIN user_accounts u ON u.user_id = e.user_id
            LEFT JOIN borrowers b ON b.user_id = u.user_id
            LEFT JOIN roles r ON r.role_id = u.role_id
-           WHERE e.accessed_at::date = %s::date
+           WHERE (e.accessed_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Manila')::date = %s::date
            GROUP BY 1 ORDER BY total DESC, 1'''.format(_EBOOK_PROGRAM_LABEL),
         (day,)
     )
@@ -1794,7 +1801,7 @@ def top_ebooks(start_date=None, end_date=None, limit=8):
         limit = int(limit)
     except (TypeError, ValueError):
         limit = 8
-    parts, params = _range_clause('e.accessed_at', start_date, end_date)
+    parts, params = _range_clause(_EBOOK_MANILA_DAY, start_date, end_date)
     where = 'WHERE ' + ' AND '.join(parts) if parts else ''
     return db.fetch_all(
         '''SELECT b.title, b.author,
@@ -1820,7 +1827,7 @@ def book_ebook_accesses(book_id, start_date=None, end_date=None):
         book_id = int(book_id)
     except (TypeError, ValueError):
         return (0, 0, 0)
-    parts, params = _range_clause('accessed_at', start_date, end_date)
+    parts, params = _range_clause(_EBOOK_MANILA_DAY_BARE, start_date, end_date)
     parts.insert(0, 'book_id = %s')
     params = [book_id] + params
     where = 'WHERE ' + ' AND '.join(parts)
@@ -1851,7 +1858,7 @@ def book_ebook_recent(book_id, limit=10, start_date=None, end_date=None):
         limit = int(limit)
     except (TypeError, ValueError):
         return []
-    parts, params = _range_clause('e.accessed_at', start_date, end_date)
+    parts, params = _range_clause(_EBOOK_MANILA_DAY, start_date, end_date)
     where = 'WHERE e.book_id = %s' + (' AND ' + ' AND '.join(parts) if parts else '')
     params = [book_id] + params
     return db.fetch_all(

@@ -354,11 +354,11 @@
                         </form>
                         <div class="hidden sm:block h-6 w-[1px] bg-gray-200"></div>
                         <div class="text-xs sm:text-sm text-gray-500 w-full sm:w-auto mt-1 sm:mt-0">
-                                                            <strong>Session:</strong> Started {{ session[5].strftime('%b %d, %I:%M %p') if session[5] and session[5].strftime is defined else (session[5] or '') }} • <strong>Librarian:</strong> {{ current_user.full_name }}
+                                                            <strong>Session:</strong> Started {{ session[5]|pht('%b %d, %I:%M %p') }} • <strong>Librarian:</strong> {{ current_user.full_name }}
                         </div>
                         {% else %}
                         <div class="text-xs sm:text-sm text-gray-500 w-full sm:w-auto">
-                                                            <strong>Session:</strong> {{ session[4].title() }} • Started {{ session[5].strftime('%b %d, %I:%M %p') if session[5] and session[5].strftime is defined else (session[5] or '') }}
+                                                            <strong>Session:</strong> {{ session[4].title() }} • Started {{ session[5]|pht('%b %d, %I:%M %p') }}
                         </div>
                         <a href="{{ url_for('inventory.export_session', session_id=session[0]) }}" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all">
                             Export CSV

@@ -183,7 +183,7 @@
                     <div class="bg-white dark:bg-[#1a2235] p-4 sm:p-6 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                         <div class="min-w-0 flex-1">
                             <h3 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white truncate">{{ res[5] }}</h3>
-                            <p class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm truncate">{{ res[6] if res[6] else '' }} · Queue #{{ res[1] }} · {{ res[3] }}</p>
+                            <p class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm truncate">{{ res[6] if res[6] else '' }} · Queue #{{ res[1] }} · {{ res[3]|pht('%b %d, %Y') }}</p>
                             {% if res[4] %}<p class="text-gray-400 text-[11px] sm:text-xs mt-1">Claim by {{ res[4] }}</p>{% endif %}
                         </div>
                         <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold shrink-0 {% if res[2] == 'claimed' %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400{% elif res[2] == 'expired' %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400{% elif res[2] == 'allocated' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400{% else %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300{% endif %}">{{ res[2]|title }}</span>
@@ -210,7 +210,7 @@
                         </div>
                         <div class="flex flex-wrap items-center gap-2 sm:gap-4 shrink-0">
                             <span class="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500"
-                                style="">{{ req[4] }}</span>
+                                style="">{{ req[4]|pht('%b %d, %Y') }}</span>
                             <span
                                 class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold {% if req[3] == 'approved' %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400{% elif req[3] == 'rejected' %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400{% else %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400{% endif %}"
                                 style="">

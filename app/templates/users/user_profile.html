@@ -288,7 +288,7 @@
                                         <div class="flex items-center gap-2 text-orange-600 dark:text-orange-400">
                                             <span class="material-symbols-outlined text-[18px]" style="">timer</span>
                                             <span class="text-xs font-bold uppercase tracking-wide" style="">Claim by
-                                                {{ pickup[3].strftime('%b %d, %Y') if pickup[3].strftime else pickup[3] }}</span>
+                                                {{ pickup[3]|pht('%b %d, %Y') }}</span>
                                         </div>
                                         {% else %}
                                         <span class="text-xs font-bold uppercase tracking-wide text-gray-400">Pending
@@ -361,7 +361,7 @@
                                             class="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider"
                                             style="">{{ req[3]|replace('_', ' ')|title }}</span>
                                     </div>
-                                    <p class="text-xs text-gray-500" style="">{% if req[2] %}{{ req[2] }}{% else %}{{ req[4] }}{% endif %}</p>
+                                    <p class="text-xs text-gray-500" style="">{% if req[2] %}{{ req[2] }}{% else %}{{ req[4]|pht('%b %d, %Y') }}{% endif %}</p>
                                     {% if req[3] == 'pending_review' or req[3] == 'approved' %}
                                     <button type="button"
                                         class="mt-2 text-[10px] font-bold uppercase tracking-wider text-red-600 dark:text-red-400 hover:underline"
