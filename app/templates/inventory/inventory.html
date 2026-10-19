@@ -460,17 +460,21 @@
                                     <td class="text-gray-500 text-xs break-words max-w-[220px]">{{ row[6] or '—' }}</td>
                                         <td class="text-gray-500">{{ row[5].strftime('%b %d, %I:%M %p') if row[5] and row[5].strftime is defined else (row[5] or '') }}</td>
                                     <td>
-                                        <div class="flex gap-2 items-center">
-                                        <form method="POST" action="{{ url_for('inventory.damage_accession', accession_id=row[1]) }}" class="flex gap-1 items-center">
-                                            {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
-                                            <input type="text" name="notes" required maxlength="255" placeholder="Damage reason" class="border border-gray-200 rounded-lg px-2 py-1 text-xs w-32">
-                                            <button type="submit" class="text-xs font-bold text-amber-600 hover:underline whitespace-nowrap">Damaged</button>
-                                        </form>
-                                        <form method="POST" action="{{ url_for('inventory.lost_accession', accession_id=row[1]) }}" class="flex gap-1 items-center">
-                                            {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
-                                            <input type="text" name="notes" maxlength="255" placeholder="Note (optional)" class="border border-gray-200 rounded-lg px-2 py-1 text-xs w-32">
-                                            <button type="submit" class="text-xs font-bold text-gray-500 hover:underline whitespace-nowrap">Lost</button>
-                                        </form>
+                                        <div class="flex gap-3 items-center">
+                                            <button type="button" onclick="openConditionModal(this)"
+                                                data-action="{{ url_for('inventory.damage_accession', accession_id=row[1]) }}"
+                                                data-title="Mark as Damaged"
+                                                data-submit="Mark Damaged"
+                                                data-class="bg-amber-600 hover:bg-amber-700"
+                                                data-label="{{ row[2] }} — {{ row[3] }}"
+                                                class="text-xs font-bold text-amber-600 hover:underline whitespace-nowrap">Damaged</button>
+                                            <button type="button" onclick="openConditionModal(this)"
+                                                data-action="{{ url_for('inventory.lost_accession', accession_id=row[1]) }}"
+                                                data-title="Mark as Lost"
+                                                data-submit="Mark Lost"
+                                                data-class="bg-gray-600 hover:bg-gray-700"
+                                                data-label="{{ row[2] }} — {{ row[3] }}"
+                                                class="text-xs font-bold text-gray-500 hover:underline whitespace-nowrap">Lost</button>
                                         </div>
                                     </td>
                                 </tr>
@@ -498,17 +502,21 @@
                             <p class="text-xs text-gray-700 truncate mb-1">{{ row[3] }}</p>
                                 <p class="text-[11px] text-gray-500 mb-3">{{ row[5].strftime('%b %d, %I:%M %p') if row[5] and row[5].strftime is defined else (row[5] or '') }}</p>
                             {% if row[6] %}<p class="text-[11px] text-gray-500 break-words mb-3"><span class="font-bold">Reason:</span> {{ row[6] }}</p>{% endif %}
-                            <div class="flex flex-col gap-2">
-                                <form method="POST" action="{{ url_for('inventory.damage_accession', accession_id=row[1]) }}" class="flex flex-col gap-2">
-                                    {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
-                                    <input type="text" name="notes" required maxlength="255" placeholder="Damage reason (required)" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs">
-                                    <button type="submit" class="w-full py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold hover:bg-amber-100">Damaged</button>
-                                </form>
-                                <form method="POST" action="{{ url_for('inventory.lost_accession', accession_id=row[1]) }}" class="flex flex-col gap-2">
-                                    {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
-                                    <input type="text" name="notes" maxlength="255" placeholder="Note (optional)" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs">
-                                    <button type="submit" class="w-full py-2 rounded-lg border border-gray-200 bg-white text-gray-600 text-xs font-bold hover:bg-gray-50">Lost</button>
-                                </form>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button type="button" onclick="openConditionModal(this)"
+                                    data-action="{{ url_for('inventory.damage_accession', accession_id=row[1]) }}"
+                                    data-title="Mark as Damaged"
+                                    data-submit="Mark Damaged"
+                                    data-class="bg-amber-600 hover:bg-amber-700"
+                                    data-label="{{ row[2] }} — {{ row[3] }}"
+                                    class="w-full py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold hover:bg-amber-100">Damaged</button>
+                                <button type="button" onclick="openConditionModal(this)"
+                                    data-action="{{ url_for('inventory.lost_accession', accession_id=row[1]) }}"
+                                    data-title="Mark as Lost"
+                                    data-submit="Mark Lost"
+                                    data-class="bg-gray-600 hover:bg-gray-700"
+                                    data-label="{{ row[2] }} — {{ row[3] }}"
+                                    class="w-full py-2 rounded-lg border border-gray-200 bg-white text-gray-600 text-xs font-bold hover:bg-gray-50">Lost</button>
                             </div>
                         </div>
                         {% else %}
@@ -562,6 +570,40 @@
                     {% endif %}
                 </div>
 
+                <!-- Past Sessions -->
+                <div class="card animate-in" style="animation-delay: 0.35s;">
+                    <div class="card-header p-3 sm:p-4 lg:p-6">
+                        <h3 class="card-title text-sm sm:text-base">
+                            <span class="material-symbols-outlined text-primary">history</span>
+                            Past Sessions
+                        </h3>
+                    </div>
+                    <div class="divide-y divide-gray-100 max-h-80 overflow-y-auto custom-scrollbar">
+                        {% for s in sessions %}
+                        <a href="{{ url_for('inventory.inventory_page', session_id=s[0]) }}"
+                           class="flex items-center justify-between gap-2 px-3 sm:px-4 py-3 hover:bg-gray-50 transition-colors {% if session and s[0] == session[0] %}bg-indigo-50/50{% endif %}">
+                            <div class="min-w-0">
+                                <div class="text-sm font-bold truncate">Session #{{ s[0] }}{% if session and s[0] == session[0] %} <span class="text-primary text-[11px] font-bold">• viewing</span>{% endif %}</div>
+                                <div class="text-[11px] text-gray-500 truncate">
+                                    {{ s[2] or 'Unknown' }} • {{ s[6].strftime('%b %d, %Y') if s[6] and s[6].strftime is defined else (s[6] or '') }}
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <span class="text-[11px] text-gray-500 font-semibold">{{ s[4] }}/{{ s[3] }}</span>
+                                <span class="badge text-[11px]
+                                    {% if s[5] == 'active' %}bg-emerald-100 text-emerald-700
+                                    {% elif s[5] == 'completed' %}bg-indigo-100 text-indigo-700
+                                    {% else %}bg-gray-200 text-gray-600{% endif %}">
+                                    {{ s[5].title() }}
+                                </span>
+                            </div>
+                        </a>
+                        {% else %}
+                        <div class="p-6 text-center text-gray-400 text-sm">No sessions yet.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+
                 <!-- Quick Status Check -->
                 <div class="card p-4 sm:p-6 animate-in bg-indigo-50/30 border-indigo-100" style="animation-delay: 0.4s;">
                     <h3 class="card-title mb-3 sm:mb-4 text-sm sm:text-base">
@@ -591,6 +633,56 @@
         if (backdrop) backdrop.addEventListener('click', close);
         document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && drawer && !drawer.classList.contains('hidden')) close(); });
     })();
+    </script>
+    <!-- Condition Modal -->
+    <div id="conditionModal" class="fixed inset-0 z-50 hidden bg-black/40 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-md p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-1">
+                <h3 class="text-lg font-bold text-gray-900" id="conditionTitle">Update Condition</h3>
+                <button type="button" onclick="closeConditionModal()" class="text-gray-400 hover:text-gray-600">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <p class="text-xs text-gray-500 mb-4 break-words" id="conditionLabel"></p>
+            <form method="POST" id="conditionForm">
+                {% if session %}<input type="hidden" name="session_id" value="{{ session[0] }}">{% endif %}
+                <label class="block text-xs font-bold text-gray-600 mb-1" for="conditionNotes">Reason / note <span class="text-rose-500">*</span></label>
+                <textarea id="conditionNotes" name="notes" required maxlength="255" rows="3"
+                    placeholder="Enter a reason (required)"
+                    class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4"></textarea>
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="closeConditionModal()"
+                        class="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
+                    <button type="submit" id="conditionSubmit"
+                        class="px-4 py-2 text-sm font-bold text-white rounded-lg transition-colors bg-amber-600 hover:bg-amber-700">Confirm</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script>
+    function openConditionModal(btn) {
+        var form = document.getElementById('conditionForm');
+        form.action = btn.getAttribute('data-action');
+        document.getElementById('conditionTitle').textContent = btn.getAttribute('data-title') || 'Update Condition';
+        document.getElementById('conditionLabel').textContent = btn.getAttribute('data-label') || '';
+        var submit = document.getElementById('conditionSubmit');
+        submit.textContent = btn.getAttribute('data-submit') || 'Confirm';
+        submit.className = 'px-4 py-2 text-sm font-bold text-white rounded-lg transition-colors ' + (btn.getAttribute('data-class') || 'bg-amber-600 hover:bg-amber-700');
+        var notes = document.getElementById('conditionNotes');
+        notes.value = '';
+        document.getElementById('conditionModal').classList.remove('hidden');
+        notes.focus();
+    }
+    function closeConditionModal() {
+        document.getElementById('conditionModal').classList.add('hidden');
+    }
+    document.addEventListener('click', function(e) {
+        var m = document.getElementById('conditionModal');
+        if (e.target === m) closeConditionModal();
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') { closeConditionModal(); }
+    });
     </script>
 </body>
 </html>

@@ -302,7 +302,7 @@ class TestInventoryReasonColumn:
     def _history(mock_db, rows):
         """Test helper _history: build mocked data or DB stub for the test."""
         mock_db['fetch_one'].return_value = (0,)
-        mock_db['fetch_all'].side_effect = [[], rows]
+        mock_db['fetch_all'].side_effect = [[], rows, []]
 
     def test_reason_shown_in_history(self, librarian_client, mock_db):
         """Validates reason shown in history `/librarian/inventory` as librarian [TestInventoryReasonColumn / condition fixes].
