@@ -140,6 +140,8 @@
         .badge-claimed { background: #dcfce7; color: #166534; }
         .badge-expired { background: #e2e8f0; color: #475569; }
         .badge-count { background: #eef2ff; color: #4338ca; }
+        .badge-overnight { background: #ede9fe; color: #5b21b6; }
+        .badge-daily { background: #cffafe; color: #0e7490; }
 
         .btn-action {
             display: inline-flex;
@@ -350,6 +352,7 @@
                                             <th>Borrower</th>
                                             <th>ID Number</th>
                                             <th>Reserved On</th>
+                                            <th>Type of Borrowing</th>
                                             <th>Status</th>
                                             <th class="text-right">Manage</th>
                                         </tr>
@@ -361,6 +364,13 @@
                                             <td class="font-semibold">{{ res[6] }}</td>
                                             <td class="font-mono text-gray-500">{{ res[8] }}</td>
                                             <td class="text-gray-500">{{ res[3]|pht('%b %d, %Y') }}</td>
+                                            <td>
+                                                {% if res[9] == 'daily_circulation' %}
+                                                <span class="badge badge-daily" title="Checked out for in-library daily circulation">Daily Circulation</span>
+                                                {% else %}
+                                                <span class="badge badge-overnight" title="Claims are checked out as overnight borrows">Overnight</span>
+                                                {% endif %}
+                                            </td>
                                             <td>
                                                 {% if res[2] == 'waiting' %}
                                                 <span class="badge badge-waiting">Waiting</span>
@@ -396,7 +406,7 @@
                                             </td>
                                         </tr>
                                         {% else %}
-                                        <tr><td colspan="6" class="text-center text-gray-400 py-6">No reservations for this book.</td></tr>
+                                        <tr><td colspan="7" class="text-center text-gray-400 py-6">No reservations for this book.</td></tr>
                                         {% endfor %}
                                     </tbody>
                                 </table>
@@ -465,6 +475,11 @@
                             </div>
                             <div class="flex items-center gap-1.5 mt-1">
                                 <span class="text-[11px] text-gray-400 font-bold">#{{ res[1] }}</span>
+                                {% if res[9] == 'daily_circulation' %}
+                                <span class="badge badge-daily text-[10px]">Daily Circulation</span>
+                                {% else %}
+                                <span class="badge badge-overnight text-[10px]">Overnight</span>
+                                {% endif %}
                             </div>
                             <div class="flex flex-wrap gap-2 mt-3">
                                 {% if res[2] == 'waiting' %}

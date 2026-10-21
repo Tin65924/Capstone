@@ -1250,21 +1250,34 @@ def get_reservations_by_book(book_id):
 
     Joins to catalog, borrowers, and users to show who waits where
     (reservation_id, position, status, dates, title, name, user_id,
-    id_number) for staff queue management.
+    id_number, borrow_type) for staff queue management. borrow_type is
+    the loan type the slot claims into: the claimed loan's actual type
+    when one matches the claim date, otherwise 'overnight' — the type
+    every reservation claim is created as.
 
     Args:
         book_id: Title FK.
 
     Returns:
-        List of 9-tuple reservation rows ordered by queue_position.
+        List of 10-tuple reservation rows ordered by queue_position.
     """
     return db.fetch_all(
         '''SELECT r.reservation_id, r.queue_position, r.reservation_status, r.request_date, r.claim_deadline,
-                  b.title, u.full_name, u.user_id, br.id_number
+                  b.title, u.full_name, u.user_id, br.id_number,
+                  COALESCE(loan.borrow_type, 'overnight') AS borrow_type
            FROM reservation_queue r
            JOIN book_catalog b ON r.book_id = b.book_id
            JOIN borrowers br ON r.borrower_id = br.borrower_id
            JOIN user_accounts u ON br.user_id = u.user_id
+           LEFT JOIN LATERAL (
+               SELECT c.borrow_type
+               FROM circulation_records c
+               WHERE c.book_id = r.book_id AND c.borrower_id = r.borrower_id
+                 AND c.transaction_type = 'borrow'
+                 AND DATE(r.updated_at) = c.borrow_date
+               ORDER BY c.borrow_date DESC
+               LIMIT 1
+           ) loan ON TRUE
            WHERE r.book_id = %s
            ORDER BY r.queue_position''',
         (book_id,)
