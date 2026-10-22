@@ -107,10 +107,14 @@ class TestMarkNotificationRead:
         assert resp.get_json() == {'read': 1, 'unread_count': 2}
 
     def test_mark_all_read_json(self, student_client, mock_db):
-        """Validates mark all read json `/user/notifications/read-all` as student (expects 200) [TestMarkNotificationRead / main notifications].
-    If fails: likely template text/context changed or mock fetch_* shape mismatched.
+        """Validates mark all read `/user/notifications/read-all` as student (expects 200) [TestMarkNotificationRead / main notifications].
+    If fails: likely mark-all/read count JSON regressed for AJAX.
     Failure indicates notifications are missing or misrouted."""
-        mock_db['fetch_one'].return_value = (1, 1, '2024-0001', 'CS', 'active')
+        # Borrower lookup, then the post-read-all remaining count (0).
+        mock_db['fetch_one'].side_effect = [
+            (1, 1, '2024-0001', 'CS', 'active'),
+            (0,),
+        ]
         resp = student_client.post('/user/notifications/read-all', headers=self.JSON)
         assert resp.status_code == 200
         assert resp.get_json() == {'read_all': True, 'unread_count': 0}
@@ -443,15 +447,30 @@ class TestNotifPanel:
     Failure indicates the staff bell misses notifications addressed to
     the account itself (e.g. reservation/hold-ready messages only seen
     on /profile)."""
-        # get_user_by_id is patched in conftest (no DB call), so the two
-        # fetch_one hits are the borrower row then the unread count.
+        # get_user_by_id is patched in conftest (no DB call). fetch_one
+        # order: borrower row, pending count, waiting count, overdue
+        # loans count, unpaid fines count, low-stock titles count,
+        # cancelled requests count, personal unread subquery (badge),
+        # and the personal-notes unread re-count (unused) →
+        # badge = 1 pending + 2 personal unread.
         mock_db['fetch_one'].side_effect = [
             (7, 3, 'S1', 'BSIS', '0917', 'active', None, None),
+            (1,),
+            (0,),
+            (0,),
+            (0,),
+            (0,),
+            (0,),
+            (2,),
             (2,),
         ]
         mock_db['fetch_all'].side_effect = [
             [(5, 'Needed Book', '2026-10-01 10:00:00')],  # pending requests
             [],                                           # waiting reservations
+            [],                                           # overdue loans
+            [],                                           # unpaid fines
+            [],                                           # low-stock titles
+            [],                                           # cancelled requests
             [],                                           # recent circulation
             [(9, 'Reservation #35 allocated. Claim by Oct 20, 2026 10:00 AM.',
                'reservation', '35', '2026-10-19 18:15:00', False)],
@@ -459,8 +478,8 @@ class TestNotifPanel:
         resp = librarian_client.get('/api/notifications')
         assert resp.status_code == 200
         data = resp.get_json()
-        # Personal unread carries the badge; staff items are dismissible.
-        assert data['unread_count'] == 2
+        # Server-authoritative badge = attention counts + personal unread.
+        assert data['unread_count'] == 3
         personal = data['notifications'][0]
         assert personal['id'] == 9
         assert personal.get('dismissible') is not True
@@ -475,11 +494,18 @@ class TestNotifPanel:
     Failure indicates the staff bell hides already-read personal
     notifications instead of greying them out."""
         mock_db['fetch_one'].side_effect = [
+            (0,),
+            (0,),
+            (0,),
+            (0,),
+            (0,),
+            (0,),
             (7, 3, 'S1', 'BSIS', '0917', 'active', None, None),
+            (0,),
             (0,),
         ]
         mock_db['fetch_all'].side_effect = [
-            [], [], [],
+            [], [], [], [], [], [], [],
             [(9, 'Old hold ready', 'hold_ready', '9',
               '2026-10-14 09:00:00', True)],
         ]
@@ -501,7 +527,12 @@ class TestNotifPanel:
     If fails: likely route/template regression or mock data mismatch.
     Failure indicates notifications are missing or misrouted."""
         mock_db['fetch_one'].return_value = None
-        mock_db['fetch_all'].return_value = [(7, 'Title', '2026-10-01 10:00:00')]
+        mock_db['fetch_all'].side_effect = [
+            [(7, 'Title', '2026-10-01 10:00:00')],  # pending requests
+            [(7, 'Title', '2026-10-01 10:00:00')],  # waiting reservations
+            [], [], [], [],                         # overdue/fines/lowstock/cancel
+            [(7, 'Title', '2026-10-01 10:00:00')],  # recent circulation
+        ]
         resp = librarian_client.get('/api/notifications/live')
         assert resp.status_code == 200
         data = resp.get_json()
@@ -516,14 +547,113 @@ class TestNotifPanel:
         mock_db['fetch_one'].side_effect = [
             (7, 3, 'S1', 'BSIS', '0917', 'active', None, None),
             (1,),
+            (1,),
+            (0,),
+            (0,),
+            (0,),
+            (0,),
+            (1,),
+            (1,),
         ]
         mock_db['fetch_all'].side_effect = [
             [(5, 'Needed Book', '2026-10-01 10:00:00')],
-            [], [],
+            [], [], [], [], [], [],
             [(9, 'Reminder: hold ready', 'hold_ready', '9',
               '2026-10-19 18:15:00', False)],
         ]
         data = librarian_client.get('/api/notifications/live').get_json()
         ids = [n['id'] for n in data['notifications']]
-        assert data['unread_count'] == 1
+        assert data['unread_count'] == 3
         assert ids == [9, 'req-5']
+
+class TestRoleNotifFeed:
+    """Role-based staff bell feed (librarian desk items plus admin
+    governance items) and the shared badge formula."""
+
+    def test_librarian_sees_desk_attention_items(self, librarian_client, mock_db):
+        """Validates librarian sees desk attention items `/api/notifications` as librarian (expects 200) [TestRoleNotifFeed / main notifications].
+    If fails: likely role feed builder (routes) or model attention
+    getters regressed. Failure indicates overdue loans, unpaid fines,
+    low-stock titles, or member cancellations never reach the staff
+    bell."""
+        # fetch_one: borrower lookup (None — no borrower record), then
+        # role counts: pending 2, waiting 0, overdue 3, fines 1,
+        # low-stock 1, cancelled 1, personal unread subquery — badge = 8.
+        mock_db['fetch_one'].side_effect = [
+            None, (2,), (0,), (3,), (1,), (1,), (1,), (0,),
+        ]
+        mock_db['fetch_all'].side_effect = [
+            [(5, 'Needed Book', '2026-10-01 10:00:00')],   # pending requests
+            [],                                           # waiting reservations
+            [(201, 'Jane Doe', 'Clean Code',
+              '2026-10-19 17:00:00')],                    # overdue loans
+            [(202, 75.5, 'John Cruz', 'Rizal')],          # unpaid fines
+            [(9, 'Rare Book', 1)],                        # low-stock titles
+            [(77, 'Foo Title', '2026-10-18 09:00:00')],   # cancelled requests
+            [],                                           # recent circulation
+        ]
+        data = librarian_client.get('/api/notifications?limit=20').get_json()
+        assert data['unread_count'] == 8
+        by_id = {n['id']: n for n in data['notifications']}
+        for key in ('overdue-201', 'fine-202', 'low-9', 'cancel-77',
+                    'req-5'):
+            assert key in by_id
+        assert 'Jane Doe' in by_id['overdue-201']['message']
+        assert by_id['overdue-201']['url'] == '/librarian/circulation'
+        assert by_id['overdue-201']['badge'] is True
+        assert '75.50' in by_id['fine-202']['message']
+        assert by_id['low-9']['url'] == '/librarian/inventory'
+        assert by_id['cancel-77']['url'] == '/librarian/requests'
+        assert by_id['cancel-77']['dismissible'] is True
+
+    def test_admin_sees_governance_items_plus_desk_items(self, admin_client, mock_db):
+        """Validates admin sees governance items plus desk items `/api/notifications` as admin (expects 200) [TestRoleNotifFeed / main notifications].
+    If fails: likely _admin_feed_items or the Admin superset merge
+    regressed. Failure indicates the admin bell misses pending faculty
+    signups, system errors, or the audit trail."""
+        # fetch_one: borrower None, librarian counts all zero, faculty
+        # pending 2, system errors 3, personal unread 0 → badge = 5.
+        mock_db['fetch_one'].side_effect = [
+            None, (0,), (0,), (0,), (0,), (0,), (0,), (2,), (3,), (0,),
+        ]
+        mock_db['fetch_all'].side_effect = [
+            [], [], [], [], [], [], [],   # librarian feed slots
+            [(11, 'Prof X', '2026-10-15 08:00:00')],            # faculty pending
+            [(91, 'system:error:500:/x', '2026-10-19 12:00:00')],
+            [(90, 'Aye Bee', 'a@x', 'Admin', 'user:approve:11',
+              '2026-10-19 11:00:00'),
+             (89, None, None, None, 'system:error:500:/y',
+              '2026-10-19 10:00:00')],
+        ]
+        data = admin_client.get('/api/notifications?limit=20').get_json()
+        assert data['unread_count'] == 5
+        by_id = {n['id']: n for n in data['notifications']}
+        for key in ('fac-11', 'syserr-91', 'audit-90'):
+            assert key in by_id
+        assert 'audit-89' not in by_id  # system error rows shown once
+        assert by_id['fac-11']['message'] == ('Faculty account for Prof X is'
+                                              ' pending approval.')
+        assert by_id['fac-11']['url'] == '/librarian/users'
+        assert by_id['fac-11']['badge'] is True
+        assert by_id['syserr-91']['url'] == '/admin/audits?tab=system'
+        assert by_id['audit-90']['url'] == '/admin/audits'
+        assert by_id['audit-90']['badge'] is False
+        assert 'req-' not in ' '.join(by_id)  # librarian slots empty this mock
+
+    def test_admin_badge_excludes_audit_context(self, admin_client, mock_db):
+        """Validates admin badge excludes audit context `/api/notifications` as admin (expects 200) [TestRoleNotifFeed / main notifications].
+    If fails: likely badge math drifted from the attention-count
+    formula. Failure indicates the bell badge counts audit-trail
+    context cards that never need action."""
+        mock_db['fetch_one'].side_effect = [
+            None, (1,), (1,), (0,), (0,), (0,), (0,), (0,), (0,), (0,),
+        ]
+        mock_db['fetch_all'].side_effect = [
+            [], [], [], [], [], [], [],
+            [],
+            [(91, 'system:error:500:/x', '2026-10-19 12:00:00')],
+            [],
+        ]
+        # pending 1 + waiting 1 = 2; faculty 0, system errors 0 → badge 2
+        data = admin_client.get('/api/notifications?limit=20').get_json()
+        assert data['unread_count'] == 2

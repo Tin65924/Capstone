@@ -128,52 +128,29 @@ def create_app(test_config=None):
     def _inject_notif_unread():
         """Header badge count for the notification bell (all pages).
 
-        Members: unread notification_log rows. Staff: pending requests
-        plus waiting reservations, plus — when the staff account also
-        holds a borrower record — their unread notification_log rows,
-        so the badge matches the merged bell feed on every page.
-        Fail-open to 0 so a DB blip never breaks page renders.
+        Delegates to _badge_count (main.routes) so every badge surface
+        — header, /profile, /user/notifications, mark-read AJAX — runs
+        one formula: members get unread personal notification_log rows;
+        Librarian/Admin get the uncapped role attention counts (pending
+        review requests, waiting reservations, overdue loans, unpaid
+        fines, low-stock titles, recent member cancellations; Admin adds
+        pending faculty signups and system errors) plus their own
+        unread personal rows when the account also borrows. Fail-open
+        to 0 so a DB blip never breaks page renders.
         """
         try:
             from flask_login import current_user as _cu
             if not getattr(_cu, 'is_authenticated', False):
                 return {'notif_unread': 0}
-            role = getattr(_cu, 'role', '') or ''
-            if role in ('Librarian', 'Admin'):
-                from app.database import db as _db
-                total = 0
-                try:
-                    r = _db.fetch_one(
-                        "SELECT COUNT(*) FROM request_records WHERE request_status = 'pending_review'")
-                    total += (r[0] or 0) if r else 0
-                except Exception:
-                    pass
-                try:
-                    r = _db.fetch_one(
-                        "SELECT COUNT(*) FROM reservation_queue WHERE reservation_status = 'waiting'")
-                    total += (r[0] or 0) if r else 0
-                except Exception:
-                    pass
-                try:
-                    # Staff accounts that also borrow get member
-                    # notifications (reservations, hold-ready, reminders);
-                    # count their unread rows in one query so the bell
-                    # badge matches the personal inbox on /profile.
-                    r = _db.fetch_one(
-                        'SELECT COUNT(*) FROM notification_log'
-                        ' WHERE is_read IS FALSE'
-                        ' AND recipient_id ='
-                        ' (SELECT borrower_id FROM borrowers'
-                        '  WHERE user_id = %s)', (_cu.id,))
-                    total += (r[0] or 0) if r else 0
-                except Exception:
-                    pass
-                return {'notif_unread': total}
-            from app.circulation.models import get_borrower_by_user, count_unread_notifications
-            b = get_borrower_by_user(_cu.id)
-            if not b:
-                return {'notif_unread': 0}
-            return {'notif_unread': count_unread_notifications(b[0]) or 0}
+            from app.main import routes as main_routes
+            try:
+                from app.circulation.models import get_borrower_by_user
+                borrower = get_borrower_by_user(_cu.id)
+            except Exception:
+                borrower = None
+            return {'notif_unread': main_routes._badge_count(
+                _cu.id, borrower[0] if borrower else None,
+                getattr(_cu, 'role', '') or '')}
         except Exception:
             return {'notif_unread': 0}
 

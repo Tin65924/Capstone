@@ -1,5 +1,6 @@
 from app.database import db
 from app.auth.models import get_pending_users
+from app.settings.models import library_today
 from app.circulation.models import (
     get_circulation_stats,
     get_reservations_grouped,
@@ -133,7 +134,8 @@ def _get_dashboard_stats():
         "SELECT COUNT(*) FROM request_records WHERE request_status IN ('pending_review', 'approved')"
     )
     overdue = db.fetch_one(
-        "SELECT COUNT(*) FROM circulation_records WHERE transaction_type = 'borrow' AND transaction_status IN ('active', 'overdue') AND due_date::date < CURRENT_DATE"
+        "SELECT COUNT(*) FROM circulation_records WHERE transaction_type = 'borrow' AND transaction_status IN ('active', 'overdue') AND due_date::date < (%s)::date",
+        (library_today(),)
     )
     total_titles = titles[0] if titles else 0
     total_accessions = accessions[0] if accessions else 0
@@ -169,6 +171,437 @@ def count_waiting_reservations():
         except (IndexError, TypeError, ValueError):
             continue
     return total
+
+
+def get_staff_attention_counts():
+    """Full (pending-review requests, waiting reservations) counts.
+
+    The two operational numbers behind the staff bell badge — every
+    pending book request and every waiting reservation, uncapped (the
+    bell feed previews cap at 5 per kind, so badge math must count the
+    tables directly). Each count fails open to 0 so a DB blip never
+    breaks rendering; the query order matches the header context
+    processor so mocked call sequences stay stable.
+
+    Args:
+        None.
+
+    Returns:
+        Tuple (pending_review_count, waiting_count), ints or readable
+        count-like values (badge math coerces).
+    """
+    pending = waiting = 0
+    try:
+        r = db.fetch_one(
+            "SELECT COUNT(*) FROM request_records WHERE request_status = 'pending_review'")
+        pending = (r[0] or 0) if r else 0
+    except Exception:
+        pass
+    try:
+        r = db.fetch_one(
+            "SELECT COUNT(*) FROM reservation_queue WHERE reservation_status = 'waiting'")
+        waiting = (r[0] or 0) if r else 0
+    except Exception:
+        pass
+    return pending, waiting
+
+
+def count_overdue_loans():
+    """Count loans needing attention: status 'overdue' plus active loans
+    past due (the DB never flips status on its own, so date-past-due
+    actives count too, same as the page badge logic). due_date holds
+    naive PHT wall-clock, so the cutoff is library_now().
+
+    Args:
+        None.
+
+    Returns:
+        Integer overdue loan count (fail-open to 0).
+    """
+    try:
+        from app.settings.models import library_now
+        cutoff = library_now()
+        r = db.fetch_one(
+            "SELECT COUNT(*) FROM circulation_records"
+            " WHERE transaction_status = 'overdue'"
+            " OR (transaction_status = 'active' AND due_date < %s)",
+            (cutoff,))
+        return int(r[0] or 0) if r else 0
+    except Exception:
+        return 0
+
+
+def count_unpaid_fines():
+    """Count every circulation record still owing money (fine_amount
+    above zero and fine_paid false, any loan state — returns included —
+    so no unpaid fine escapes the bell).
+
+    Args:
+        None.
+
+    Returns:
+        Integer unpaid fine count (fail-open to 0).
+    """
+    try:
+        r = db.fetch_one(
+            "SELECT COUNT(*) FROM circulation_records"
+            " WHERE fine_amount > 0 AND NOT fine_paid")
+        return int(r[0] or 0) if r else 0
+    except Exception:
+        return 0
+
+
+_COUNT_LOW_STOCK_WHERES = '''
+WHERE b.catalog_status = 'active'
+  AND (
+    SELECT COUNT(*) FROM accession_log a
+    WHERE a.book_id = b.book_id
+      AND NOT EXISTS (
+          SELECT 1 FROM circulation_records c
+          WHERE c.accession_id = a.accession_id
+            AND c.transaction_status IN ('active', 'overdue')
+      )
+      AND COALESCE((
+            SELECT c3.lost_flag FROM circulation_records c3
+            WHERE c3.accession_id = a.accession_id
+            ORDER BY c3.circulation_id DESC LIMIT 1
+        ), FALSE) = FALSE
+      AND COALESCE((
+            SELECT ist.inventory_state FROM inventory_status ist
+            WHERE ist.accession_id = a.accession_id
+        ), '') != 'lost'
+  ) <= %s'''
+
+
+def count_low_stock_titles(threshold):
+    """Count active titles whose lendable copies sit at or below the
+    low-stock threshold. Availability mirrors
+    count_available_accessions (no active/overdue loan, not lost) as an
+    aggregate, so one query covers every title.
+
+    Args:
+        threshold: Lendable-copy floor (LOW_STOCK_THRESHOLD setting).
+
+    Returns:
+        Integer low-stock title count (fail-open to 0).
+    """
+    try:
+        r = db.fetch_one(
+            f"SELECT COUNT(*) FROM book_catalog b {_COUNT_LOW_STOCK_WHERES}",
+            (int(threshold),))
+        return int(r[0] or 0) if r else 0
+    except Exception:
+        return 0
+
+
+def count_recent_cancelled_requests():
+    """Count member-cancelled book requests from the last 30 days
+    (library clock), so old history never inflates the staff badge.
+
+    Args:
+        None.
+
+    Returns:
+        Integer recent cancellation count (fail-open to 0).
+    """
+    try:
+        from datetime import timedelta
+        from app.settings.models import library_now
+        cutoff = library_now() - timedelta(days=30)
+        r = db.fetch_one(
+            "SELECT COUNT(*) FROM request_records r"
+            " WHERE r.request_status = 'cancelled'"
+            " AND COALESCE(r.updated_at, r.review_date, r.request_date) >= %s",
+            (cutoff,))
+        return int(r[0] or 0) if r else 0
+    except Exception:
+        return 0
+
+
+def count_pending_faculty():
+    """Count signups on the Faculty role awaiting account approval.
+
+    Args:
+        None.
+
+    Returns:
+        Integer pending faculty count (fail-open to 0).
+    """
+    try:
+        r = db.fetch_one(
+            "SELECT COUNT(*) FROM user_accounts u"
+            " JOIN roles r ON u.role_id = r.role_id"
+            " WHERE u.account_status = 'pending' AND r.role_name = 'Faculty'")
+        return int(r[0] or 0) if r else 0
+    except Exception:
+        return 0
+
+
+def count_system_errors():
+    """Count audit rows logged by the 500 handler (system:error:*
+    activity codes) — the admin 'System Errors' bell signal.
+
+    Args:
+        None.
+
+    Returns:
+        Integer system error count (fail-open to 0).
+    """
+    try:
+        r = db.fetch_one(
+            "SELECT COUNT(*) FROM audit_trail"
+            " WHERE activity LIKE 'system:error%'")
+        return int(r[0] or 0) if r else 0
+    except Exception:
+        return 0
+
+
+def get_overdue_loan_attention(limit=5):
+    """Newest overdue loans for the staff bell feed.
+
+    Args:
+        limit: Maximum rows to return.
+
+    Returns:
+        List of (circulation_id, borrower_name, book_title, due_date)
+        tuples for loans past due, oldest due first (most urgent).
+    """
+    try:
+        from app.settings.models import library_now
+        cutoff = library_now()
+        return db.fetch_all(
+            '''SELECT c.circulation_id, u.full_name, b.title, c.due_date
+               FROM circulation_records c
+               JOIN borrowers bo ON c.borrower_id = bo.borrower_id
+               JOIN user_accounts u ON bo.user_id = u.user_id
+               JOIN book_catalog b ON c.book_id = b.book_id
+               WHERE c.transaction_status = 'overdue'
+                  OR (c.transaction_status = 'active' AND c.due_date < %s)
+               ORDER BY c.due_date ASC
+               LIMIT %s''',
+            (cutoff, limit)) or []
+    except Exception:
+        return []
+
+
+def get_unpaid_fine_attention(limit=5):
+    """Newest unpaid fines for the staff bell feed.
+
+    Args:
+        limit: Maximum rows to return.
+
+    Returns:
+        List of (circulation_id, fine_amount, borrower_name, book_title)
+        tuples, newest loan first.
+    """
+    try:
+        return db.fetch_all(
+            '''SELECT c.circulation_id, c.fine_amount, u.full_name, b.title
+               FROM circulation_records c
+               JOIN borrowers bo ON c.borrower_id = bo.borrower_id
+               JOIN user_accounts u ON bo.user_id = u.user_id
+               JOIN book_catalog b ON c.book_id = b.book_id
+               WHERE c.fine_amount > 0 AND NOT c.fine_paid
+               ORDER BY c.circulation_id DESC
+               LIMIT %s''',
+            (limit,)) or []
+    except Exception:
+        return []
+
+
+def get_low_stock_titles(threshold, limit=5):
+    """Active titles at or below the low-stock threshold for the staff
+    bell feed (same availability rule as count_low_stock_titles).
+
+    Args:
+        threshold: Lendable-copy floor (LOW_STOCK_THRESHOLD setting).
+        limit: Maximum rows to return.
+
+    Returns:
+        List of (book_id, title, available_count) tuples.
+    """
+    try:
+        return db.fetch_all(
+            f'''SELECT b.book_id, b.title,
+                   (SELECT COUNT(*) FROM accession_log a
+                    WHERE a.book_id = b.book_id
+                      AND NOT EXISTS (
+                          SELECT 1 FROM circulation_records c
+                          WHERE c.accession_id = a.accession_id
+                            AND c.transaction_status IN ('active', 'overdue')
+                      )
+                      AND COALESCE((
+                            SELECT c3.lost_flag FROM circulation_records c3
+                            WHERE c3.accession_id = a.accession_id
+                            ORDER BY c3.circulation_id DESC LIMIT 1
+                        ), FALSE) = FALSE
+                      AND COALESCE((
+                            SELECT ist.inventory_state FROM inventory_status ist
+                            WHERE ist.accession_id = a.accession_id
+                        ), '') != 'lost'
+                   ) AS available
+               FROM book_catalog b
+               WHERE b.catalog_status = 'active'
+                 AND (
+                   SELECT COUNT(*) FROM accession_log a
+                   WHERE a.book_id = b.book_id
+                     AND NOT EXISTS (
+                         SELECT 1 FROM circulation_records c
+                         WHERE c.accession_id = a.accession_id
+                           AND c.transaction_status IN ('active', 'overdue')
+                     )
+                     AND COALESCE((
+                           SELECT c3.lost_flag FROM circulation_records c3
+                           WHERE c3.accession_id = a.accession_id
+                           ORDER BY c3.circulation_id DESC LIMIT 1
+                       ), FALSE) = FALSE
+                     AND COALESCE((
+                           SELECT ist.inventory_state FROM inventory_status ist
+                           WHERE ist.accession_id = a.accession_id
+                       ), '') != 'lost'
+                 ) <= %s
+               ORDER BY b.title
+               LIMIT %s''',
+            (int(threshold), limit)) or []
+    except Exception:
+        return []
+
+
+def get_cancelled_request_attention(limit=5):
+    """Newest member-cancelled book requests (last 30 days) for the
+    staff bell feed.
+
+    Args:
+        limit: Maximum rows to return.
+
+    Returns:
+        List of (request_id, book_title, cancelled_at) tuples, newest
+        cancellation first.
+    """
+    try:
+        from datetime import timedelta
+        from app.settings.models import library_now
+        cutoff = library_now() - timedelta(days=30)
+        return db.fetch_all(
+            '''SELECT r.request_id, r.book_title,
+                      COALESCE(r.updated_at, r.review_date, r.request_date)
+               FROM request_records r
+               WHERE r.request_status = 'cancelled'
+                 AND COALESCE(r.updated_at, r.review_date, r.request_date) >= %s
+               ORDER BY 3 DESC
+               LIMIT %s''',
+            (cutoff, limit)) or []
+    except Exception:
+        return []
+
+
+def get_pending_faculty_attention(limit=5):
+    """Oldest-waiting pending Faculty signups for the admin bell feed.
+
+    Args:
+        limit: Maximum rows to return.
+
+    Returns:
+        List of (user_id, full_name, created_at) tuples.
+    """
+    try:
+        return db.fetch_all(
+            '''SELECT u.user_id, u.full_name, u.created_at
+               FROM user_accounts u
+               JOIN roles r ON u.role_id = r.role_id
+               WHERE u.account_status = 'pending' AND r.role_name = 'Faculty'
+               ORDER BY u.created_at ASC
+               LIMIT %s''',
+            (limit,)) or []
+    except Exception:
+        return []
+
+
+def get_system_error_attention(limit=5):
+    """Newest 500-handler audit rows for the admin bell feed.
+
+    Args:
+        limit: Maximum rows to return.
+
+    Returns:
+        List of (log_id, activity, log_timestamp) tuples, newest first.
+    """
+    try:
+        return db.fetch_all(
+            '''SELECT log_id, activity, log_timestamp
+               FROM audit_trail
+               WHERE activity LIKE 'system:error%'
+               ORDER BY log_id DESC
+               LIMIT %s''',
+            (limit,)) or []
+    except Exception:
+        return []
+
+
+def get_role_attention_counts(role):
+    """Uncapped role attention counts behind the staff bell badge.
+
+    Librarian: pending-review requests, waiting reservations, overdue
+    loans, unpaid fines, low-stock titles, and member-cancelled
+    requests (last 30 days). Admin: all of the librarian counts plus
+    pending faculty signups and system errors — the same sources the
+    role's bell feed lists, so badge math can never disagree with card
+    counts in kind. Every piece fails open to 0; role is a fixed
+    internal value ('Librarian'/'Admin'), never user input.
+
+    Args:
+        role: Role name from the logged-in account.
+
+    Returns:
+        Dict with keys pending, waiting, overdue, fines, low_stock,
+        cancelled, faculty_pending, system_errors, and total (the
+        admin-inclusive sum for that role).
+    """
+    try:
+        from app.settings.models import get_low_stock_threshold
+        threshold = get_low_stock_threshold()
+    except Exception:
+        threshold = 2
+    counts = {'pending': 0, 'waiting': 0, 'overdue': 0, 'fines': 0,
+              'low_stock': 0, 'cancelled': 0, 'faculty_pending': 0,
+              'system_errors': 0}
+    try:
+        pending, waiting = get_staff_attention_counts()
+        counts['pending'] = int(pending or 0)
+        counts['waiting'] = int(waiting or 0)
+    except Exception:
+        pass
+    try:
+        counts['overdue'] = count_overdue_loans()
+    except Exception:
+        pass
+    try:
+        counts['fines'] = count_unpaid_fines()
+    except Exception:
+        pass
+    try:
+        counts['low_stock'] = count_low_stock_titles(threshold)
+    except Exception:
+        pass
+    try:
+        counts['cancelled'] = count_recent_cancelled_requests()
+    except Exception:
+        pass
+    counts['total'] = (counts['pending'] + counts['waiting']
+                       + counts['overdue'] + counts['fines']
+                       + counts['low_stock'] + counts['cancelled'])
+    if role == 'Admin':
+        try:
+            counts['faculty_pending'] = count_pending_faculty()
+        except Exception:
+            pass
+        try:
+            counts['system_errors'] = count_system_errors()
+        except Exception:
+            pass
+        counts['total'] += (counts['faculty_pending']
+                            + counts['system_errors'])
+    return counts
 
 
 def count_open_procurement():
@@ -318,7 +751,9 @@ def get_daily_borrows(days=6):
     Aggregates borrow transactions by date over the last days window,
     then zero-fills quiet days so the dashboard axis always spans the
     full trailing period. Clamps days to 1-31 and tolerates DATE,
-    datetime, and ISO-string day keys from mocks.
+    datetime, and ISO-string day keys from mocks. Anchored to the PHT
+    library calendar: borrow_date rows hold naive PHT dates, while
+    Render's Postgres CURRENT_DATE and the host clock are UTC.
 
     Args:
         days: Trailing window length in days (defaults to 6, max 31).
@@ -327,20 +762,24 @@ def get_daily_borrows(days=6):
         List of (day_date, borrow_count) tuples oldest-first, one per
         day in the window.
     """
-    from datetime import date, timedelta
+    from datetime import timedelta
+    from app.settings.models import library_today
     try:
         days = int(days)
     except (TypeError, ValueError):
         days = 6
     days = max(1, min(days, 31))
+    # PHT wall clock (Asia/Manila): the SQL cutoff is a bound date so
+    # Postgres's UTC CURRENT_DATE cannot drift the trailing window.
+    today = library_today()
     rows = db.fetch_all(
         '''SELECT DATE(borrow_date) AS d, COUNT(*) AS cnt
            FROM circulation_records
            WHERE transaction_type = 'borrow'
-             AND borrow_date >= CURRENT_DATE - INTERVAL '%s days'
+             AND borrow_date >= %s
            GROUP BY DATE(borrow_date)
            ORDER BY d''',
-        (days,)
+        (today - timedelta(days=days - 1),)
     )
     if not rows:
         return []
@@ -353,7 +792,6 @@ def get_daily_borrows(days=6):
             by_day[key] = by_day.get(key, 0) + int(row[1] or 0)
         except (IndexError, TypeError, ValueError):
             continue
-    today = date.today()
     filled = []
     for back in range(days - 1, -1, -1):
         day = today - timedelta(days=back)
