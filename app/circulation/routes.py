@@ -27,7 +27,8 @@ from .models import (
 from app.settings.models import (
     is_library_open, library_hours_label, get_closing_time,
     library_now, library_today, is_closed_day, is_after_reservation_cutoff,
-    is_open_day, get_low_stock_threshold,)
+    is_open_day, get_low_stock_threshold, library_hours_from_config,
+    _hhmm_ampm,)
 
 VALID_BORROW_TYPES = ('overnight', 'daily_circulation')
 
@@ -181,34 +182,65 @@ def _book_is_archived(book):
 
 
 def _claim_window():
-    """(deadline datetime, label) for reservation pickup, from the claim
-    hours setting. After the reservation cutoff (closing time minus the
-    claim hours) the pickup rolls to the next open day."""
+    """(deadline datetime, claim phrase) for reservation pickup, from the
+    claim hours setting. Before the reservation cutoff (closing time
+    minus the claim hours) the pickup runs now plus the claim hours and
+    the phrase reads 'within 2 hour(s)'. After the cutoff the pickup
+    rolls to the next open day at its opening time, and the phrase reads
+    'by tomorrow (Oct 20, 8:00 AM–10:00 AM)' — opening time plus the
+    claim hours — so a 6:15 PM allocation with a 7:00 PM close and an
+    8:00 AM open is due at 10:00 AM the next morning, not 8:15 PM."""
+    rolled = False
+    opening_pair = None
+    pickup_date = None
     try:
-        from datetime import timedelta as _td
         base = library_now().replace(tzinfo=None)
         if is_after_reservation_cutoff():
-            base = base + _td(days=1)
+            rolled = True
+            pickup_date = base.date() + timedelta(days=1)
             # skip Sunday/holiday closures for next-day pickup
             for _ in range(7):
                 try:
-                    if not is_closed_day(base.date()):
+                    if not is_closed_day(pickup_date):
                         break
-                    base = base + _td(days=1)
+                    pickup_date = pickup_date + timedelta(days=1)
                 except Exception:
                     break
-        hours = current_app.config.get('RESERVATION_CLAIM_HOURS')
+            parsed_hours = library_hours_from_config()
+            if parsed_hours is not None:
+                opening_pair = parsed_hours[0]
+                base = datetime(pickup_date.year, pickup_date.month,
+                                pickup_date.day, opening_pair[0],
+                                opening_pair[1])
+            else:
+                base = datetime(pickup_date.year, pickup_date.month,
+                                pickup_date.day, base.hour, base.minute)
     except Exception:
         base = library_now().replace(tzinfo=None)
-        hours = None
+        rolled = False
     try:
-        hours = float(hours)
+        claim_hours = float(current_app.config.get('RESERVATION_CLAIM_HOURS'))
     except (TypeError, ValueError):
-        hours = 2
+        claim_hours = 2
     try:
-        return base + timedelta(hours=hours), f'{hours:g} hour(s)'
+        deadline = base + timedelta(hours=claim_hours)
     except Exception:
-        return library_now().replace(tzinfo=None) + timedelta(hours=hours), f'{hours:g} hour(s)'
+        deadline = library_now().replace(tzinfo=None) + timedelta(hours=claim_hours)
+    if rolled:
+        if opening_pair:
+            start = _hhmm_ampm(opening_pair)
+        else:
+            start = base.strftime('%I:%M %p').lstrip('0')
+        end = _hhmm_ampm((deadline.hour, deadline.minute))
+        try:
+            days_ahead = (pickup_date - library_today()).days
+        except Exception:
+            days_ahead = 1
+        day_word = 'tomorrow' if days_ahead == 1 else pickup_date.strftime('%a, %b %d')
+        label = f'by {day_word} ({start}–{end})'
+    else:
+        label = f'within {claim_hours:g} hour(s)'
+    return deadline, label
 
 
 def _compute_due_date(borrow_type, role_name):
@@ -799,13 +831,14 @@ def reservation_action(reservation_id, action):
             raise
         _safe_notify(
             reservation[2],
-            f'Your reserved book is ready. Claim within {window_label}.',
+            f'Your reserved book is ready. Claim {window_label}.',
             'hold_ready',
             str(reservation_id),
         )
         _safe_notify(
             reservation[2],
-            f'Reservation #{reservation_id} allocated. Claim by {deadline.strftime("%b %d, %Y %I:%M %p")}.',
+            f'Reservation #{reservation_id} allocated. Claim by '
+            f'{deadline.strftime("%b %d, %Y %I:%M %p")}.',
             'reservation',
             str(reservation_id),
         )
