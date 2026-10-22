@@ -209,13 +209,17 @@ Each tab's Export Report targets its own sections; Export All is the union."""
         resp = librarian_client.get(
             '/librarian/analytics?preset=semester&from=2020-01-01&to=2020-12-31')
         assert resp.status_code == 200
-        today = date.today()
+        # First card query is count_circulation_status, whose overdue
+        # CASE binds the PHT library cutoff (Asia/Manila) before the
+        # range params.
+        from app.settings.models import library_today
+        today = library_today()
         if today.month >= 8:
             expected = (date(today.year, 8, 1), date(today.year, 12, 31))
         else:
             expected = (date(today.year, 1, 1), date(today.year, 5, 31))
         params = mock_db['fetch_all'].call_args_list[0][0][1]
-        assert params == expected
+        assert params == (today,) + expected
 
     def test_invalid_preset_ignores_dates(self, librarian_client, mock_db):
         """Validates invalid preset ignores dates `/librarian/analytics?preset=bogus&from=2020-01-01&to=2020-12-31` as librarian (expects 200) [TestAnalyticsPage / analytics].
@@ -227,7 +231,9 @@ Each tab's Export Report targets its own sections; Export All is the union."""
             '/librarian/analytics?preset=bogus&from=2020-01-01&to=2020-12-31')
         assert resp.status_code == 200
         params = mock_db['fetch_all'].call_args_list[0][0][1]
-        assert params is None
+        # PHT cutoff for the overdue CASE is bound even without a range.
+        from app.settings.models import library_today
+        assert params == (library_today(),)
 
 
 class TestKpiJson:
@@ -1121,7 +1127,10 @@ class TestChartJson:
         resp = librarian_client.get(
             '/librarian/analytics/chart?name=overdue_trend&preset=custom&from=2026-05-01&to=2026-05-31')
         assert resp.status_code == 200
-        assert mock_db['fetch_all'].call_args[0][1] == (date(2026, 5, 1), date(2026, 5, 31))
+        # overdue_trend appends its PHT overdue cutoff after the range.
+        from app.settings.models import library_today
+        assert mock_db['fetch_all'].call_args[0][1] == (
+            date(2026, 5, 1), date(2026, 5, 31), library_today())
 
     def test_chart_invalid_dates_fall_back(self, librarian_client, mock_db):
         """Validates chart invalid dates fall back `/librarian/analytics/chart?name=top_categories&from=nope` as librarian (expects 200) [TestChartJson / analytics].
@@ -1818,8 +1827,10 @@ Recent circulation exposes Accession No., not the TXN id."""
         assert "transaction_status = 'overdue'" in query
         assert 'reservation_queue' in query
         assert 'reservation_status' in query
-        # book_id scopes all four legs (3 circulation + 1 reservation)
-        assert params[:4] == (1, 1, 1, 1)
+        # book_id scopes all four legs (3 circulation + 1 reservation);
+        # the overdue leg binds its PHT cutoff between the legs.
+        from app.settings.models import library_today
+        assert params == (1, 1, 1, library_today(), 1)
         assert 'ORDER BY day' in query
 
     def test_book_status_trends_bad_id_runs_no_query(self, mock_db):
@@ -2502,12 +2513,14 @@ class TestDatePresets:
         resp = librarian_client.get(
             '/librarian/analytics?preset=month&from=2020-01-01&to=2020-12-31')
         assert resp.status_code == 200
-        today = date.today()
+        # count_circulation_status binds its PHT overdue cutoff first.
+        from app.settings.models import library_today
+        today = library_today()
         last_day = calendar.monthrange(today.year, today.month)[1]
         expected = (date(today.year, today.month, 1),
                     date(today.year, today.month, last_day))
         params = mock_db['fetch_all'].call_args_list[0][0][1]
-        assert params == expected
+        assert params == (today,) + expected
 
     def test_semester_still_honored_for_bookmarks(
             self, librarian_client, mock_db):
@@ -2519,13 +2532,15 @@ class TestDatePresets:
         mock_db['fetch_all'].return_value = []
         resp = librarian_client.get('/librarian/analytics?preset=semester')
         assert resp.status_code == 200
-        today = date.today()
+        # PHT cutoff of the status CASE leads the params tuple.
+        from app.settings.models import library_today
+        today = library_today()
         if today.month >= 8:
             expected = (date(today.year, 8, 1), date(today.year, 12, 31))
         else:
             expected = (date(today.year, 1, 1), date(today.year, 5, 31))
         params = mock_db['fetch_all'].call_args_list[0][0][1]
-        assert params == expected
+        assert params == (today,) + expected
 
     def test_only_three_presets_offered(self, librarian_client, mock_db):
         """Validates only three presets offered `/librarian/analytics` as librarian [TestDatePresets / analytics].

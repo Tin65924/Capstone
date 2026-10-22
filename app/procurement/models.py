@@ -1,8 +1,8 @@
-from datetime import date
-from app.database import db
+﻿from app.database import db
+from app.settings.models import library_today
 
 
-# Canonical row shape (contract — explicit columns, never SELECT *):
+# Canonical row shape (contract â€” explicit columns, never SELECT *):
 # (procurement_id, request_id, order_status, order_date, date_received,
 #  book_id, remarks, updated_at, updated_by, book_title, author).
 # Explicit lists immunize readers against physical column drift (audit
@@ -118,7 +118,7 @@ def create_procurement(request_id):
         '''INSERT INTO procurement_log (request_id, order_status, order_date)
            SELECT %s, %s, %s
            WHERE NOT EXISTS (SELECT 1 FROM procurement_log WHERE request_id = %s)''',
-        (request_id, 'for_ordering', date.today(), request_id)
+        (request_id, 'for_ordering', library_today(), request_id)
     )
 
 
