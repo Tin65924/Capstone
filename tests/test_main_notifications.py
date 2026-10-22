@@ -424,6 +424,7 @@ class TestNotifPanel:
         """Validates feed staff payload `/api/notifications` as librarian (expects 200) [TestNotifPanel / main notifications].
     If fails: likely route/template regression or mock data mismatch.
     Failure indicates notifications are missing or misrouted."""
+        mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = [(5, 'X', '2026-10-01 10:00:00')]
         resp = librarian_client.get('/api/notifications')
         assert resp.status_code == 200
@@ -436,6 +437,58 @@ class TestNotifPanel:
         assert urls['res-5'] == '/librarian/reservations'
         assert urls['circ-5'] == '/librarian/circulation'
 
+    def test_feed_staff_with_borrower_shows_personal(self, librarian_client, mock_db):
+        """Validates feed staff with borrower shows personal `/api/notifications` as librarian (expects 200) [TestNotifPanel / main notifications].
+    If fails: likely staff personal-notification merge (routes) regressed.
+    Failure indicates the staff bell misses notifications addressed to
+    the account itself (e.g. reservation/hold-ready messages only seen
+    on /profile)."""
+        # get_user_by_id is patched in conftest (no DB call), so the two
+        # fetch_one hits are the borrower row then the unread count.
+        mock_db['fetch_one'].side_effect = [
+            (7, 3, 'S1', 'BSIS', '0917', 'active', None, None),
+            (2,),
+        ]
+        mock_db['fetch_all'].side_effect = [
+            [(5, 'Needed Book', '2026-10-01 10:00:00')],  # pending requests
+            [],                                           # waiting reservations
+            [],                                           # recent circulation
+            [(9, 'Reservation #35 allocated. Claim by Oct 20, 2026 10:00 AM.',
+               'reservation', '35', '2026-10-19 18:15:00', False)],
+        ]
+        resp = librarian_client.get('/api/notifications')
+        assert resp.status_code == 200
+        data = resp.get_json()
+        # Personal unread carries the badge; staff items are dismissible.
+        assert data['unread_count'] == 2
+        personal = data['notifications'][0]
+        assert personal['id'] == 9
+        assert personal.get('dismissible') is not True
+        assert personal['read'] is False
+        assert personal['url'] == '/user/history?tab=reservations'
+        staff_ids = {n['id'] for n in data['notifications'][1:]}
+        assert staff_ids == {'req-5'}
+
+    def test_feed_staff_with_borrower_unread_seen(self, librarian_client, mock_db):
+        """Validates read personal rows still appear for staff `/api/notifications` as librarian (expects 200) [TestNotifPanel / main notifications].
+    If fails: likely personal-card dict shape (read flag) regressed.
+    Failure indicates the staff bell hides already-read personal
+    notifications instead of greying them out."""
+        mock_db['fetch_one'].side_effect = [
+            (7, 3, 'S1', 'BSIS', '0917', 'active', None, None),
+            (0,),
+        ]
+        mock_db['fetch_all'].side_effect = [
+            [], [], [],
+            [(9, 'Old hold ready', 'hold_ready', '9',
+              '2026-10-14 09:00:00', True)],
+        ]
+        data = librarian_client.get('/api/notifications').get_json()
+        personal = data['notifications'][0]
+        assert personal['id'] == 9
+        assert personal['read'] is True
+        assert personal.get('dismissible') is not True
+
     def test_feed_anonymous_401(self, client):
         """Validates feed anonymous 401 `/api/notifications` (expects 401) [TestNotifPanel / main notifications].
     If fails: likely redirect/flash logic changed or guard misordered.
@@ -447,9 +500,30 @@ class TestNotifPanel:
         """Validates live preserved for staff `/api/notifications/live` as librarian (expects 200) [TestNotifPanel / main notifications].
     If fails: likely route/template regression or mock data mismatch.
     Failure indicates notifications are missing or misrouted."""
+        mock_db['fetch_one'].return_value = None
         mock_db['fetch_all'].return_value = [(7, 'Title', '2026-10-01 10:00:00')]
         resp = librarian_client.get('/api/notifications/live')
         assert resp.status_code == 200
         data = resp.get_json()
         ids = [n['id'] for n in data['notifications']]
         assert 'req-7' in ids and 'res-7' in ids and 'circ-7' in ids
+
+    def test_live_staff_with_borrower_merges_personal(self, librarian_client, mock_db):
+        """Validates live staff with borrower merges personal `/api/notifications/live` as librarian (expects 200) [TestNotifPanel / main notifications].
+    If fails: likely live endpoint personal-notification merge regressed.
+    Failure indicates unread personal rows are dropped from the staff
+    live poll side of the bell."""
+        mock_db['fetch_one'].side_effect = [
+            (7, 3, 'S1', 'BSIS', '0917', 'active', None, None),
+            (1,),
+        ]
+        mock_db['fetch_all'].side_effect = [
+            [(5, 'Needed Book', '2026-10-01 10:00:00')],
+            [], [],
+            [(9, 'Reminder: hold ready', 'hold_ready', '9',
+              '2026-10-19 18:15:00', False)],
+        ]
+        data = librarian_client.get('/api/notifications/live').get_json()
+        ids = [n['id'] for n in data['notifications']]
+        assert data['unread_count'] == 1
+        assert ids == [9, 'req-5']

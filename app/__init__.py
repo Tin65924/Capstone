@@ -128,9 +128,11 @@ def create_app(test_config=None):
     def _inject_notif_unread():
         """Header badge count for the notification bell (all pages).
 
-        Borrowers: unread notification_log rows. Staff: pending requests
-        plus waiting reservations. Fail-open to 0 so a DB blip never
-        breaks page renders; the 15s live poll corrects it anyway.
+        Members: unread notification_log rows. Staff: pending requests
+        plus waiting reservations, plus — when the staff account also
+        holds a borrower record — their unread notification_log rows,
+        so the badge matches the merged bell feed on every page.
+        Fail-open to 0 so a DB blip never breaks page renders.
         """
         try:
             from flask_login import current_user as _cu
@@ -149,6 +151,20 @@ def create_app(test_config=None):
                 try:
                     r = _db.fetch_one(
                         "SELECT COUNT(*) FROM reservation_queue WHERE reservation_status = 'waiting'")
+                    total += (r[0] or 0) if r else 0
+                except Exception:
+                    pass
+                try:
+                    # Staff accounts that also borrow get member
+                    # notifications (reservations, hold-ready, reminders);
+                    # count their unread rows in one query so the bell
+                    # badge matches the personal inbox on /profile.
+                    r = _db.fetch_one(
+                        'SELECT COUNT(*) FROM notification_log'
+                        ' WHERE is_read IS FALSE'
+                        ' AND recipient_id ='
+                        ' (SELECT borrower_id FROM borrowers'
+                        '  WHERE user_id = %s)', (_cu.id,))
                     total += (r[0] or 0) if r else 0
                 except Exception:
                     pass

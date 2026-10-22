@@ -1,8 +1,9 @@
 {# Navbar bell + dropdown panel. Included once per page from the navbar;
    staff dashboards and the profile sidebar link to full pages instead.
-   Members get persistent inbox rows with server-side mark-as-read; staff
-   get the live attention feed with client-side dismiss (no persistent
-   staff inbox). Cards deep-link to the page holding each item. #}
+   Every user gets their personal notification_log rows with
+   server-side mark-as-read; staff additionally see the live attention
+   feed with client-side dismiss (no persistent staff inbox). Cards
+   deep-link to the page holding each item. #}
 {% if current_user.is_authenticated %}
 <div data-notif-root style="display:contents">
 <button type="button" data-notif-open aria-label="Notifications"
@@ -123,15 +124,21 @@
     }
     function refreshBadge(items, serverCount) {
         var dismissed = dismissedSet();
-        var visible = items.filter(function (n) {
-            if (n.dismissible && dismissed.has(String(n.id))) return false;
-            if (!n.dismissible && n.read) return false;
-            return true;
-        }).length;
-        // Staff feed has no server-side read state: the visible (undismissed)
-        // count is authoritative. Members use the server unread count.
-        var staff = items.some(function (n) { return n.dismissible; });
-        setBadge(staff ? visible : (typeof serverCount === 'number' ? serverCount : visible));
+        var staffCount = 0;
+        var memberVisible = 0;
+        items.forEach(function (n) {
+            if (n.dismissible) {
+                if (!dismissed.has(String(n.id))) staffCount++;
+            } else if (!n.read) {
+                memberVisible++;
+            }
+        });
+        // Staff feed items have no server-side read state: the visible
+        // (undismissed) count is authoritative and is added on top of
+        // the server unread count, which now covers the persistent
+        // personal rows (staff with a borrower record get both).
+        var member = (typeof serverCount === 'number') ? serverCount : memberVisible;
+        setBadge(Math.max(0, member) + staffCount);
     }
     function position(panel, btn) {
         var r = btn.getBoundingClientRect();
@@ -181,13 +188,19 @@
         if (openPanel && !openPanel.contains(e.target)) closePanels();
         var mark = e.target.closest('[data-notif-mark]');
         if (mark) {
+            var markPanel = mark.closest('[data-notif-panel]');
+            var staffCards = markPanel
+                ? markPanel.querySelectorAll('[data-notif-dismiss]').length : 0;
             fetch(mark.getAttribute('data-read-url'), { method: 'POST', credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (data) {
                     if (!data || data.read === undefined) return;
                     var card = mark.closest('[data-notif-card]');
                     if (card) card.remove();
-                    if (typeof data.unread_count === 'number') setBadge(data.unread_count);
+                    // The server count covers personal rows only; keep the
+                    // staff attention cards still shown in the panel counted.
+                    if (typeof data.unread_count === 'number')
+                        setBadge(data.unread_count + staffCards);
                 })
                 .catch(function () {});
             return;
@@ -212,9 +225,18 @@
             var shown = panel2 ? Array.prototype.slice.call(panel2.querySelectorAll('[data-notif-card]')) : [];
             var hasMember = shown.some(function (c) { return c.querySelector('[data-notif-mark]'); });
             if (hasMember && btn2) {
+                var staffShown = shown.filter(function (c) {
+                    return c.querySelector('[data-notif-dismiss]');
+                }).length;
                 fetch(btn2.getAttribute('data-read-all-url'), { method: 'POST', credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
                     .then(function (r) { return r.ok ? r.json() : null; })
-                    .then(function (data) { if (root) load(root, false); if (data && typeof data.unread_count === 'number') setBadge(data.unread_count); })
+                    .then(function (data) {
+                        if (root) load(root, false);
+                        // Mark-all only clears the persistent member rows; the
+                        // still-visible staff attention cards stay counted.
+                        if (data && typeof data.unread_count === 'number')
+                            setBadge(data.unread_count + staffShown);
+                    })
                     .catch(function () {});
             } else {
                 var set2 = dismissedSet();
