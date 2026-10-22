@@ -702,13 +702,59 @@ def _notif_date_pht(value):
         return str(value)
 
 
+def _staff_personal_notes(borrower_id, limit=None):
+    """Personal inbox cards for a staff account that also borrows.
+
+    Admin/Librarian accounts can hold a borrower record and receive
+    member notifications (reservations, hold-ready, reminders) — the
+    same rows /profile and /user/notifications show. Returns
+    (cards, unread_count): cards are the same dicts the member bell
+    branch renders (numeric ids, read state, deep-link url, not
+    dismissible — they mark-as-read server-side), unread_count is an
+    int badge contribution. Fail-open to ([], 0) so a DB blip never
+    breaks the staff bell.
+
+    Args:
+        borrower_id: Notification recipient's borrower FK.
+        limit: Optional cap on cards fetched (bell preview).
+
+    Returns:
+        Tuple (list of card dicts, int unread count).
+    """
+    cards, unread = [], 0
+    try:
+        from app.circulation.models import (
+            get_notifications_by_borrower, count_unread_notifications,
+        )
+        rows = (get_notifications_by_borrower(borrower_id, limit=limit)
+                if limit else get_notifications_by_borrower(borrower_id))
+        cards = [
+            {'id': n[0], 'message': n[1],
+             'type': n[2] if len(n) > 2 else '',
+             'date': _notif_date_pht(n[4]) if len(n) > 4 else '',
+             'read': bool(n[5]) if len(n) > 5 else False,
+             'url': _member_notif_url(n[2] if len(n) > 2 else '')}
+            for n in (rows or []) if n and len(n) > 1
+        ]
+        try:
+            unread = max(0, int(count_unread_notifications(borrower_id) or 0))
+        except (TypeError, ValueError):
+            unread = 0
+    except Exception:
+        pass
+    return cards, unread
+
+
 @main_bp.route('/api/notifications')
 def notifications_feed():
     """Bell-panel payload for every role (GET, login).
 
     Members get their latest notification_log rows (read state
     included); staff get the live attention feed (dismissible,
-    client-side). Honors ?limit= (1-20, default 8). Read-only; 401
+    client-side) plus — when they also hold a borrower record — their
+    personal notification_log rows, so the bell shows every notification
+    addressed to that account on any page (matching /profile). Honors
+    ?limit= (1-20, default 8) for the personal rows. Read-only; 401
     JSON when anonymous, 404 JSON for members without a borrower row.
     """
     from flask_login import current_user as _cu
@@ -728,8 +774,8 @@ def notifications_feed():
     except Exception:
         pass
     if role in ('Librarian', 'Admin'):
-        items = _staff_feed_items()[:limit]
-        for item in items:
+        staff_items = _staff_feed_items()[:limit]
+        for item in staff_items:
             item['dismissible'] = True
             if item['id'].startswith('req-'):
                 item['url'] = url_for('requests.list_requests')
@@ -737,7 +783,23 @@ def notifications_feed():
                 item['url'] = url_for('circulation.reservations_page')
             else:
                 item['url'] = url_for('circulation.circulation_page')
-        return jsonify({'unread_count': len(items), 'notifications': items})
+        # The bell is the user's inbox: personal notification_log rows
+        # first (persistent, server-side mark-as-read), then the staff
+        # attention feed. unread_count covers only the persistent rows —
+        # staff items have no server read state; the panel adds the
+        # undismissed cards client-side.
+        items = list(staff_items)
+        personal_unread = 0
+        try:
+            from app.circulation.models import get_borrower_by_user
+            borrower = get_borrower_by_user(_cu.id)
+            if borrower:
+                personal, personal_unread = _staff_personal_notes(
+                    borrower[0], limit=limit)
+                items = personal + staff_items
+        except Exception:
+            pass
+        return jsonify({'unread_count': personal_unread, 'notifications': items})
     from app.circulation.models import (
         get_borrower_by_user, get_notifications_by_borrower,
         count_unread_notifications,
@@ -793,9 +855,10 @@ def notifications_live():
 
     Students/Faculty: unread borrower notifications (request approved,
     reservation allocated, due reminders) — no page reload needed.
-    Librarian/Admin: staff feed of newest pending requests, waiting
-    reservations, and overdue loans so desk staff are notified while
-    browsing any module. Read-only; 401 JSON when anonymous.
+    Librarian/Admin: their personal unread notifications plus the staff
+    feed of newest pending requests, waiting reservations, and overdue
+    loans so desk staff are notified while browsing any module.
+    Read-only; 401 JSON when anonymous.
     """
     from flask_login import current_user as _cu
     if not getattr(_cu, 'is_authenticated', False):
@@ -809,8 +872,21 @@ def notifications_live():
     except Exception:
         pass
     if role in ('Librarian', 'Admin'):
-        items = _staff_feed_items()
-        return jsonify({'unread_count': len(items), 'notifications': items[:5]})
+        staff_items = _staff_feed_items()
+        personal_unread = 0
+        items = list(staff_items)
+        try:
+            from app.circulation.models import get_borrower_by_user
+            borrower = get_borrower_by_user(_cu.id)
+            if borrower:
+                personal, personal_unread = _staff_personal_notes(
+                    borrower[0])
+                unseen = [p for p in personal if not p.get('read')] or personal[:5]
+                items = unseen[:5] + staff_items
+        except Exception:
+            pass
+        return jsonify({'unread_count': personal_unread,
+                        'notifications': items[:5]})
     from app.circulation.models import (
         get_borrower_by_user, get_notifications_by_borrower,
         count_unread_notifications,
