@@ -29,6 +29,7 @@ from reportlab.graphics.charts.lineplots import LinePlot
 from . import analytics_bp
 from app.auth.decorators import librarian_required
 from app.analytics import models
+from app.settings.models import library_today
 
 VALID_KPIS = {
     'books_borrowed_per_program',
@@ -125,7 +126,7 @@ def resolve_dates(preset, from_str, to_str):
     win over explicit dates (prevents stale ``from``/``to`` from hidden
     custom inputs from overriding the preset).
     """
-    today = date.today()
+    today = library_today()
 
     # Preset ranges take precedence — ignore any stale from/to.
     if preset == 'year':
@@ -1176,7 +1177,7 @@ def _forecast_payload(start_date, end_date, preset='all', from_str='', to_str=''
     except (TypeError, ValueError, IndexError):
         shares = []
         weekday_mix = []
-    today = date.today()
+    today = library_today()
     projected_trend = []
     for i in range(1, 31):
         day = today + timedelta(days=i)
@@ -1970,12 +1971,12 @@ def _format_period(start_date, end_date, preset, from_str, to_str):
         if end_date:
             return f"Until {end_date:%b %d, %Y}"
     if preset == 'year':
-        return f"Calendar Year {date.today().year}"
+        return f"Calendar Year {library_today().year}"
     if preset == 'month':
-        return date.today().strftime('%B %Y')
+        return library_today().strftime('%B %Y')
     if preset == 'semester':
         return 'Current Semester' + (
-            ' (Aug–Dec)' if date.today().month >= 8 else ' (Jan–May)'
+            ' (Aug–Dec)' if library_today().month >= 8 else ' (Jan–May)'
         )
     return 'All Time'
 

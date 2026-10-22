@@ -12,6 +12,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from . import cataloging_bp
 from app.auth.decorators import librarian_required
+from app.settings.models import library_today
 from app.cataloging.models import (
     get_all_books, search_books, get_book_by_id, create_book,
     update_book, update_book_status, delete_book, create_accession,
@@ -1353,7 +1354,9 @@ def public_catalog():
     if view not in ('grid', 'list'):
         view = 'grid'
 
-    current_year = datetime.now().year
+    # Year filter aligns to the PHT library calendar so the boundary
+    # years follow the Asia/Manila wall clock, not the host clock.
+    current_year = library_today().year
     # Dynamic year options: current year + previous three, descending.
     # A preset value IS the year ("2026" means published since 2026).
     # Legacy since_* values from older links map to the same outcome.

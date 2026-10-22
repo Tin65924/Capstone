@@ -869,7 +869,8 @@ def get_audit_stats(days=AUDIT_STATS_DAYS, limit=AUDIT_STATS_MAX_ROWS,
     Args:
         days: Trailing window size in days for the query cutoff.
         limit: Maximum audit rows to pull for aggregation.
-        today: Injectable date for tests (defaults to date.today()).
+        today: Injectable date for tests (defaults to the PHT library
+            calendar day via library_today()).
 
     Returns:
         Dict with window_days, total_events, logins_today, logins_7d,
@@ -879,7 +880,10 @@ def get_audit_stats(days=AUDIT_STATS_DAYS, limit=AUDIT_STATS_MAX_ROWS,
     """
     from collections import Counter
     from datetime import date, datetime, timedelta
-    today = today or date.today()
+    from app.settings.models import library_today
+    # PHT wall clock: audit windows and "today" counts follow the
+    # Asia/Manila calendar, not the host clock (UTC on Render).
+    today = today or library_today()
     cutoff = datetime.combine(today - timedelta(days=days - 1),
                               datetime.min.time())
     rows = db.fetch_all(
