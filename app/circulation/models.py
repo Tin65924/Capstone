@@ -527,15 +527,18 @@ def get_borrowing_by_program(program):
 def get_overdue_loans():
     """List every loan past its due date still marked out.
 
-    Selects active/overdue rows whose due_date::date is before today;
-    the desk overdue tab and reminder jobs consume this.
+    Selects active/overdue rows whose due_date::date is before the PHT
+    library calendar day (due_date holds naive PHT values; Postgres's
+    UTC CURRENT_DATE would drift the cutoff on Render); the desk
+    overdue tab and reminder jobs consume this.
 
     Returns:
         List of full circulation_records row tuples overdue.
     """
     return db.fetch_all(
         '''SELECT * FROM circulation_records
-              WHERE transaction_status IN ('active', 'overdue') AND due_date::date < CURRENT_DATE'''
+              WHERE transaction_status IN ('active', 'overdue') AND due_date::date < (%s)::date''',
+        (library_today(),)
     )
 
 
@@ -572,15 +575,20 @@ def get_due_soon_detail(days=2):
     Returns:
         List of (circulation_id, due_date, full_name) tuples.
     """
+    from datetime import timedelta
+    # PHT wall clock: due_date rows are naive Asia/Manila values, so the
+    # window is bounded from library_today() instead of Postgres's UTC
+    # CURRENT_DATE (Render hosts run UTC and would drift the range).
+    today = library_today()
     return db.fetch_all(
         '''SELECT c.circulation_id, c.due_date, u.full_name
            FROM circulation_records c
            JOIN borrowers br ON c.borrower_id = br.borrower_id
            JOIN user_accounts u ON br.user_id = u.user_id
            WHERE c.transaction_status = 'active'
-              AND c.due_date::date BETWEEN CURRENT_DATE AND CURRENT_DATE + %s
+              AND c.due_date::date BETWEEN (%s)::date AND (%s)::date + %s
            ORDER BY c.due_date''',
-        (days,)
+        (today, today, days)
     )
 
 
@@ -602,8 +610,9 @@ def get_overdue_loans_detail():
            JOIN user_accounts u ON br.user_id = u.user_id
            JOIN book_catalog b ON c.book_id = b.book_id
            JOIN accession_log a ON c.accession_id = a.accession_id
-            WHERE c.transaction_status IN ('active', 'overdue') AND c.due_date::date < CURRENT_DATE
-           ORDER BY c.due_date'''
+            WHERE c.transaction_status IN ('active', 'overdue') AND c.due_date::date < (%s)::date
+            ORDER BY c.due_date''',
+        (library_today(),)
     )
 
 
@@ -612,7 +621,9 @@ def get_circulation_stats():
 
     Runs three bounded COUNT(*) queries (active/overdue, overdue by
     date, active due within 2 days) for the circulation dashboard
-    cards.
+    cards. Day math is PHT (Asia/Manila) via library_today() —
+    due_date rows hold naive PHT values and Postgres CURRENT_DATE is
+    UTC on Render.
 
     Returns:
         Dict with active_loans, overdue_items, and due_in_days counts.
@@ -621,10 +632,12 @@ def get_circulation_stats():
         "SELECT COUNT(*) FROM circulation_records WHERE transaction_status IN ('active', 'overdue')"
     )
     overdue = db.fetch_one(
-        "SELECT COUNT(*) FROM circulation_records WHERE transaction_status IN ('active', 'overdue') AND due_date::date < CURRENT_DATE"
+        "SELECT COUNT(*) FROM circulation_records WHERE transaction_status IN ('active', 'overdue') AND due_date::date < (%s)::date",
+        (library_today(),)
     )
     due_soon = db.fetch_one(
-        "SELECT COUNT(*) FROM circulation_records WHERE transaction_status = 'active' AND due_date::date BETWEEN CURRENT_DATE AND CURRENT_DATE + 2"
+        "SELECT COUNT(*) FROM circulation_records WHERE transaction_status = 'active' AND due_date::date BETWEEN (%s)::date AND (%s)::date + 2",
+        (library_today(), library_today())
     )
     return {
         'active_loans': active[0] if active else 0,
@@ -904,7 +917,9 @@ def notification_exists(recipient_id, notif_type, related_reference):
     """Check whether the same notification was already sent today.
 
     Guards reminder jobs against spamming: matches on recipient, type,
-    and reference with date_sent = today.
+    and reference for the same Asia/Manila day. date_sent holds UTC
+    timestamps (DEFAULT NOW()), so the day conversion goes UTC →
+    Asia/Manila before comparing against the PHT library today.
 
     Args:
         recipient_id: Borrower FK who would receive it.
@@ -917,8 +932,9 @@ def notification_exists(recipient_id, notif_type, related_reference):
     row = db.fetch_one(
         '''SELECT notification_id FROM notification_log
            WHERE recipient_id = %s AND notif_type = %s AND related_reference = %s
-             AND DATE(date_sent) = CURRENT_DATE''',
-        (recipient_id, notif_type, related_reference)
+             AND DATE(date_sent AT TIME ZONE 'UTC'
+                      AT TIME ZONE 'Asia/Manila') = (%s)::date''',
+        (recipient_id, notif_type, related_reference, library_today())
     )
     return bool(row)
 
@@ -1250,21 +1266,34 @@ def get_reservations_by_book(book_id):
 
     Joins to catalog, borrowers, and users to show who waits where
     (reservation_id, position, status, dates, title, name, user_id,
-    id_number) for staff queue management.
+    id_number, borrow_type) for staff queue management. borrow_type is
+    the loan type the slot claims into: the claimed loan's actual type
+    when one matches the claim date, otherwise 'overnight' — the type
+    every reservation claim is created as.
 
     Args:
         book_id: Title FK.
 
     Returns:
-        List of 9-tuple reservation rows ordered by queue_position.
+        List of 10-tuple reservation rows ordered by queue_position.
     """
     return db.fetch_all(
         '''SELECT r.reservation_id, r.queue_position, r.reservation_status, r.request_date, r.claim_deadline,
-                  b.title, u.full_name, u.user_id, br.id_number
+                  b.title, u.full_name, u.user_id, br.id_number,
+                  COALESCE(loan.borrow_type, 'overnight') AS borrow_type
            FROM reservation_queue r
            JOIN book_catalog b ON r.book_id = b.book_id
            JOIN borrowers br ON r.borrower_id = br.borrower_id
            JOIN user_accounts u ON br.user_id = u.user_id
+           LEFT JOIN LATERAL (
+               SELECT c.borrow_type
+               FROM circulation_records c
+               WHERE c.book_id = r.book_id AND c.borrower_id = r.borrower_id
+                 AND c.transaction_type = 'borrow'
+                 AND DATE(r.updated_at) = c.borrow_date
+               ORDER BY c.borrow_date DESC
+               LIMIT 1
+           ) loan ON TRUE
            WHERE r.book_id = %s
            ORDER BY r.queue_position''',
         (book_id,)

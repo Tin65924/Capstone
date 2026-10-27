@@ -1,5 +1,5 @@
-from datetime import date
-from app.database import db
+﻿from app.database import db
+from app.settings.models import library_today
 
 
 def mark_copy_present(accession_id, checked_by=None):
@@ -108,7 +108,7 @@ def upsert_inventory_record(accession_id, state, inventory_type, checked_by, ses
                last_checked_date = EXCLUDED.last_checked_date,
                session_id = EXCLUDED.session_id,
                notes = EXCLUDED.notes''',
-        (accession_id, state, inventory_type, checked_by, date.today(), session_id, notes)
+        (accession_id, state, inventory_type, checked_by, library_today(), session_id, notes)
     )
 
 
@@ -163,7 +163,7 @@ def reconcile_inventory(session_id, scanned_accessions, checked_by=None):
            FROM accession_log al
            WHERE al.accession_id = ist.accession_id
              AND ist.inventory_state NOT IN ('damaged', 'lost')''',
-            (scanned, checked_by, date.today(), session_id)
+            (scanned, checked_by, library_today(), session_id)
         )
 
         db.execute(
@@ -189,12 +189,12 @@ def reconcile_inventory(session_id, scanned_accessions, checked_by=None):
            LEFT JOIN inventory_status ist ON ist.accession_id = al.accession_id
             WHERE ist.inventory_id IS NULL
             ON CONFLICT (accession_id) DO NOTHING''',
-            (scanned, checked_by, date.today(), session_id)
+            (scanned, checked_by, library_today(), session_id)
         )
 
         db.execute(
             'UPDATE inventory_sessions SET scanned_count = %s, session_status = %s, ended_at = %s, updated_at = NOW(), updated_by = %s WHERE session_id = %s',
-            (len(scanned), 'completed', date.today(), checked_by, session_id)
+            (len(scanned), 'completed', library_today(), checked_by, session_id)
         )
 
     missing_rows = db.fetch_all(
@@ -239,7 +239,7 @@ def create_inventory_session(librarian_id, total_books):
     return db.fetch_one(
         '''INSERT INTO inventory_sessions (librarian_id, total_books, scanned_count, session_status, started_at)
            VALUES (%s, %s, %s, %s, %s) RETURNING session_id''',
-        (librarian_id, total_books, 0, 'active', date.today())
+        (librarian_id, total_books, 0, 'active', library_today())
     )
 
 
@@ -319,7 +319,7 @@ def update_session_scan(session_id, accession_id, updated_by=None):
     Skips (returns None) when the copy was already scanned in this
     session; otherwise increments inventory_sessions.scanned_count and
     stamps audit fields. The actual copy-state write happens via the
-    mark_* path — this only tracks progress.
+    mark_* path â€” this only tracks progress.
 
     Args:
         session_id: Active inventory session being counted.
@@ -358,7 +358,7 @@ def end_session(session_id, updated_by=None):
     """
     return db.execute(
         "UPDATE inventory_sessions SET session_status = 'completed', ended_at = %s, updated_at = NOW(), updated_by = %s WHERE session_id = %s",
-        (date.today(), updated_by, session_id)
+        (library_today(), updated_by, session_id)
     )
 
 def get_scanned_in_session(session_id):
@@ -483,8 +483,8 @@ def get_conditions_for_accessions(accession_ids):
 
     Row is (inventory_state or None, reason or None, loan_damage or None,
     circ_lost bool). Lost = inventory 'lost' OR the latest loan flagged
-    lost (legacy return-path data). Damaged = inventory 'damaged', or —
-    when inventory never assessed the copy — damage recorded on the
+    lost (legacy return-path data). Damaged = inventory 'damaged', or â€”
+    when inventory never assessed the copy â€” damage recorded on the
     latest loan. The reason prefers the inventory note and falls back to
     that loan note. Returns {} for empty/None.
     """
@@ -524,7 +524,7 @@ def cancel_inventory_session(session_id, updated_by=None):
     """
     return db.execute(
         "UPDATE inventory_sessions SET session_status = 'cancelled', ended_at = %s, updated_at = NOW(), updated_by = %s WHERE session_id = %s",
-        (date.today(), updated_by, session_id)
+        (library_today(), updated_by, session_id)
     )
 
 def get_session_export_rows(session_id):

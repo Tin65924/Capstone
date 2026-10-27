@@ -29,6 +29,7 @@ from reportlab.graphics.charts.lineplots import LinePlot
 from . import analytics_bp
 from app.auth.decorators import librarian_required
 from app.analytics import models
+from app.settings.models import library_today
 
 VALID_KPIS = {
     'books_borrowed_per_program',
@@ -125,7 +126,7 @@ def resolve_dates(preset, from_str, to_str):
     win over explicit dates (prevents stale ``from``/``to`` from hidden
     custom inputs from overriding the preset).
     """
-    today = date.today()
+    today = library_today()
 
     # Preset ranges take precedence — ignore any stale from/to.
     if preset == 'year':
@@ -979,7 +980,7 @@ def compute_book_traffic(book_id, start_date, end_date):
     for c in (_safe(models.book_ebook_recent, book_id, 10, start_date, end_date) or []):
         try:
             ebook_recent.append([
-                str(c[0]) if len(c) > 0 and c[0] else '',
+                _pht_str(c[0]) if len(c) > 0 and c[0] else '',
                 c[1] if len(c) > 1 else '',
                 c[2] if len(c) > 2 else '',
             ])
@@ -1176,7 +1177,7 @@ def _forecast_payload(start_date, end_date, preset='all', from_str='', to_str=''
     except (TypeError, ValueError, IndexError):
         shares = []
         weekday_mix = []
-    today = date.today()
+    today = library_today()
     projected_trend = []
     for i in range(1, 31):
         day = today + timedelta(days=i)
@@ -1903,6 +1904,39 @@ def _jsonable_cell(value):
     return value
 
 
+def _pht_str(value, fmt='%Y-%m-%d %I:%M %p'):
+    """Render a DB timestamp (stored UTC) as Philippine Time text.
+
+    Naive values are assumed UTC and shifted +8h; aware values are
+    converted; date-only values render as YYYY-MM-DD. Unparseable input
+    passes through as text so one bad row never 500s the report.
+    """
+    if value is None:
+        return ''
+    dt = value
+    if isinstance(dt, str):
+        try:
+            dt = datetime.fromisoformat(dt.strip())
+        except (ValueError, TypeError):
+            return value
+    if not isinstance(dt, datetime):
+        if isinstance(dt, date):
+            return dt.strftime('%Y-%m-%d')
+        return str(value)
+    try:
+        if dt.tzinfo is None:
+            dt = dt + timedelta(hours=8)
+        else:
+            from datetime import timezone as _tz
+            dt = dt.astimezone(_tz(timedelta(hours=8)))
+    except Exception:
+        return str(value)
+    try:
+        return dt.strftime(fmt)
+    except Exception:
+        return str(value)
+
+
 def _jsonable(kpi_data):
     """Recursively coerce analytics payloads into JSON-serializable structures. It applies the shared date-range and department filters so dashboard, chart, and export views stay consistent, querying live tables on each call.
     
@@ -1937,12 +1971,12 @@ def _format_period(start_date, end_date, preset, from_str, to_str):
         if end_date:
             return f"Until {end_date:%b %d, %Y}"
     if preset == 'year':
-        return f"Calendar Year {date.today().year}"
+        return f"Calendar Year {library_today().year}"
     if preset == 'month':
-        return date.today().strftime('%B %Y')
+        return library_today().strftime('%B %Y')
     if preset == 'semester':
         return 'Current Semester' + (
-            ' (Aug–Dec)' if date.today().month >= 8 else ' (Jan–May)'
+            ' (Aug–Dec)' if library_today().month >= 8 else ' (Jan–May)'
         )
     return 'All Time'
 

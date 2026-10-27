@@ -90,6 +90,14 @@ CREATE TABLE IF NOT EXISTS request_records (
 
 ALTER TABLE request_records ADD COLUMN IF NOT EXISTS remarks VARCHAR(255);
 
+-- DB-side defaults stamp times with the PHT library calendar:
+-- Render's Postgres runs UTC, so plain CURRENT_DATE writes the wrong
+-- Asia/Manila day for rows created between midnight PHT and 8 AM PHT.
+ALTER TABLE book_catalog ALTER COLUMN date_added SET DEFAULT
+    (now() AT TIME ZONE 'Asia/Manila')::date;
+ALTER TABLE accession_log ALTER COLUMN date_accessioned SET DEFAULT
+    (now() AT TIME ZONE 'Asia/Manila')::date;
+
 -- 'cancelled' lets members withdraw their own requests from /user/profile
 -- before (or while) procurement orders them. The inline CHECK in the
 -- CREATE TABLE above only exists on fresh databases, so re-declare the

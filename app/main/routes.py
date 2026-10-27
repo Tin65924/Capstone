@@ -7,6 +7,7 @@ from .models import (get_dashboard_stats, get_recent_activity, get_daily_borrows
                      get_tutorial_progress, save_tutorial_progress)
 from app.cataloging.models import get_recent_books, suggest_book_values, suggest_books_rich, get_book_by_title_author_isbn, get_accession_by_number
 from app.auth.decorators import librarian_required, admin_required
+from app.settings.models import library_today
 
 SUGGEST_FIELDS = {
     'book_title', 'book_author', 'book_publisher', 'book_subject',
@@ -268,7 +269,10 @@ def user_profile():
         except Exception:
             current_app.logger.warning('expire_overdue_reservations failed', exc_info=True)
         loans = get_loans_by_borrower(borrower_id) or []
-        today = date.today()
+        # PHT library calendar: due_date rows hold naive PHT values, so
+        # date-past-due math uses library_today() (Asia/Manila), not the
+        # host clock (UTC on Render).
+        today = library_today()
         overdue_ids = _overdue_loan_ids(loans, today)
         overdue_count = sum(1 for loan in loans if len(loan) > 0 and loan[0] in overdue_ids)
         try:
@@ -304,10 +308,8 @@ def user_profile():
             notifications = get_notifications_by_borrower(borrower_id) or []
         except Exception:
             notifications = []
-        try:
-            unread_count = count_unread_notifications(borrower_id)
-        except Exception:
-            unread_count = 0
+        # The badge is recomputed after the reminders below are generated
+        # so a due-soon reminder minted by this request is counted too.
         try:
             fines = get_fines_by_borrower(borrower_id) or []
             total_fines = get_total_fines(borrower_id) or 0
@@ -334,7 +336,7 @@ def user_profile():
                 if not hasattr(due, 'timetuple'):
                     continue
                 due_day = due.date() if isinstance(due, datetime) else due
-                delta = (due_day - date.today()).days
+                delta = (due_day - library_today()).days
                 if status == 'overdue' or delta < 0:
                     if not notification_exists(borrower_id, 'overdue_reminder', str(circ_id)):
                         create_notification(
@@ -353,8 +355,20 @@ def user_profile():
                         )
             except Exception:
                 continue
+        try:
+            unread_count = _badge_count(current_user.id, borrower_id,
+                                        getattr(current_user, 'role', '') or '')
+        except Exception:
+            unread_count = 0
     else:
         borrowing_requests = []
+        # Staff without a borrower record still carry the attention
+        # badge (role counts; no personal rows to read).
+        try:
+            unread_count = _badge_count(current_user.id, None,
+                                        getattr(current_user, 'role', '') or '')
+        except Exception:
+            unread_count = 0
 
     return render_template('users/user_profile.html', user_data=user_data,
                            profile=profile,
@@ -478,7 +492,9 @@ def user_notifications():
         except Exception:
             all_notifications = []
         try:
-            unread_count = count_unread_notifications(borrower[0])
+            unread_count = _badge_count(
+                current_user.id, borrower[0],
+                getattr(current_user, 'role', '') or '')
         except Exception:
             unread_count = 0
         total = len(all_notifications)
@@ -516,9 +532,12 @@ def mark_notification_read_route(notification_id):
     mark_notification_read(notification_id, borrower[0], updated_by=current_user.id)
     log_activity(current_user.id, f'notifications:read:{notification_id}')
     if _wants_json():
-        from app.circulation.models import count_unread_notifications
+        # Same formula as the badge on every page surface (unread
+        # personal notifications plus staff attention counts).
         return jsonify({'read': notification_id,
-                        'unread_count': count_unread_notifications(borrower[0]) or 0})
+                        'unread_count': _badge_count(
+                            current_user.id, borrower[0],
+                            getattr(current_user, 'role', '') or '')})
     return redirect(_safe_next('main.user_profile'))
 
 
@@ -546,7 +565,12 @@ def mark_all_notifications_read_route():
     mark_all_notifications_read(borrower[0], updated_by=current_user.id)
     log_activity(current_user.id, 'notifications:read_all')
     if _wants_json():
-        return jsonify({'read_all': True, 'unread_count': 0})
+        # Same formula as every badge surface: after read-all this is
+        # just the staff attention counts (0 for members).
+        return jsonify({'read_all': True,
+                        'unread_count': _badge_count(
+                            current_user.id, borrower[0],
+                            getattr(current_user, 'role', '') or '')})
     flash('All notifications marked as read.', 'success')
     return redirect(_safe_next('main.user_profile'))
 
@@ -639,7 +663,7 @@ def user_history():
     records = active_list[start:start + HISTORY_PER_PAGE]
     # History rows carry status at index 5 (see get_user_loan_history);
     # flag date-past-due actives as overdue for the badge.
-    overdue_ids = _overdue_loan_ids(transactions, date.today(), status_idx=5)
+    overdue_ids = _overdue_loan_ids(transactions, library_today(), status_idx=5)
     return render_template('users/user_history.html',
                            tab=tab, page=page, total_pages=total_pages,
                            total=total, counts=counts, records=records,
@@ -647,11 +671,65 @@ def user_history():
                            overdue_ids=overdue_ids)
 
 
+def _badge_count(user_id, borrower_id, role):
+    """Bell badge for an account — one formula for every surface.
+
+    Members: unread personal notification_log rows. Librarian/Admin:
+    the uncapped role attention counts (pending review requests,
+    waiting reservations, overdue loans, unpaid fines, low-stock
+    titles, recent member cancellations; Admin adds pending faculty
+    signups and system errors), plus unread personal notification_log
+    rows when the account also holds a borrower record. Each piece
+    fails open to 0 so DB blips never break a render.
+
+    Args:
+        user_id: Flask-Login account id (for the unread subquery).
+        borrower_id: Notification recipient's borrower FK, or None.
+        role: Role name for the current user ('Librarian'/'Admin').
+
+    Returns:
+        Non-negative int badge count.
+    """
+    total = 0
+    if role in ('Librarian', 'Admin'):
+        try:
+            from app.main.models import get_role_attention_counts
+            counts = get_role_attention_counts(role)
+            total += _int_count((counts or {}).get('total'))
+        except Exception:
+            pass
+        try:
+            from app.database import db as _db
+            r = _db.fetch_one(
+                'SELECT COUNT(*) FROM notification_log'
+                ' WHERE is_read IS FALSE'
+                ' AND recipient_id ='
+                ' (SELECT borrower_id FROM borrowers'
+                '  WHERE user_id = %s)', (user_id,))
+            total += _int_count(r[0] if r else 0)
+        except Exception:
+            pass
+        try:
+            return max(0, int(total))
+        except (TypeError, ValueError):
+            return 0
+    if borrower_id:
+        try:
+            from app.circulation.models import count_unread_notifications
+            total = _int_count(count_unread_notifications(borrower_id))
+        except Exception:
+            pass
+    return total
+
+
 def _staff_feed_items():
-    """Newest staff attention items (pending requests, waiting reservations,
-    recent circulation). Same rows the header badge counts; fail-open to []
-    so a DB blip never breaks the bell panel. IDs are stable feed keys
-    (req-<id>, res-<id>, circ-<id>), not notification_log rows — staff
+    """Newest librarian desk attention items (newest-first across kinds):
+    pending review requests, waiting reservations, overdue loans, unpaid
+    fines, low-stock titles, member cancellations, recent circulation.
+    Same rows get_role_attention_counts('Librarian') sums for the badge;
+    fail-open to [] so a DB blip never breaks the bell panel. IDs are
+    stable feed keys (req-<id>, res-<id>, overdue-<id>, fine-<id>,
+    low-<id>, cancel-<id>, circ-<id>), not notification_log rows — staff
     dismiss them client-side since there is no persistent staff inbox."""
     items = []
     try:
@@ -679,6 +757,53 @@ def _staff_feed_items():
     except Exception:
         pass
     try:
+        from app.main.models import get_overdue_loan_attention
+        for r in get_overdue_loan_attention():
+            items.append({'id': f"overdue-{r[0]}",
+                          'message': (f"\"{r[2]}\" is overdue for {r[1]}"
+                                      f" (loan #{r[0]})."),
+                          'type': 'staff_overdue',
+                          'date': str(r[3]) if len(r) > 3 else ''})
+    except Exception:
+        pass
+    try:
+        from app.main.models import get_unpaid_fine_attention
+        for r in get_unpaid_fine_attention():
+            try:
+                amount = f"₱{float(r[1]):.2f}"
+            except (TypeError, ValueError):
+                amount = '₱0.00'
+            items.append({'id': f"fine-{r[0]}",
+                          'message': (f"{amount} unpaid fine for {r[2]}"
+                                      f" (\"{r[3]}\", loan #{r[0]})."),
+                          'type': 'staff_fine', 'date': ''})
+    except Exception:
+        pass
+    try:
+        from app.settings.models import get_low_stock_threshold
+        from app.main.models import get_low_stock_titles
+        for r in get_low_stock_titles(get_low_stock_threshold()):
+            try:
+                avail = int(r[2])
+            except (TypeError, ValueError):
+                avail = 0
+            items.append({'id': f"low-{r[0]}",
+                          'message': (f"\"{r[1]}\" is low on copies"
+                                      f" ({avail} available)."),
+                          'type': 'staff_low_stock', 'date': ''})
+    except Exception:
+        pass
+    try:
+        from app.main.models import get_cancelled_request_attention
+        for r in get_cancelled_request_attention():
+            items.append({'id': f"cancel-{r[0]}",
+                          'message': (f"Book request for \"{r[1]}\" was"
+                                      " cancelled by a member."),
+                          'type': 'staff_cancel',
+                          'date': str(r[2]) if len(r) > 2 else ''})
+    except Exception:
+        pass
+    try:
         from app.database import db as _db3
         recent = _db3.fetch_all(
             "SELECT circulation_id, transaction_type, borrow_date, return_date"
@@ -693,6 +818,103 @@ def _staff_feed_items():
     except Exception:
         pass
     return items
+
+
+def _admin_feed_items():
+    """Newest admin attention items on top of the librarian feed:
+    pending Faculty signups, system errors (500-handler audit rows),
+    and the newest audit-trail entries ("everything in audit"). IDs are
+    stable feed keys (fac-<user_id>, syserr-<log_id>, audit-<log_id>);
+    fail-open to [] like the librarian feed."""
+    items = []
+    try:
+        from app.main.models import get_pending_faculty_attention
+        for r in get_pending_faculty_attention():
+            items.append({'id': f"fac-{r[0]}",
+                          'message': (f"Faculty account for {r[1]} is pending"
+                                      " approval."),
+                          'type': 'staff_faculty',
+                          'date': str(r[2]) if len(r) > 2 else ''})
+    except Exception:
+        pass
+    try:
+        from app.main.models import get_system_error_attention
+        for r in get_system_error_attention():
+            items.append({'id': f"syserr-{r[0]}",
+                          'message': f"System error: {r[1]}.",
+                          'type': 'staff_system_error',
+                          'date': _notif_date_pht(r[2]) if len(r) > 2 else ''})
+    except Exception:
+        pass
+    try:
+        from app.auth.models import get_audit_logs
+        for row in (get_audit_logs(limit=5, tab='all') or []):
+            if len(row) > 4 and str(row[4]).startswith('system:error'):
+                # already shown as its own System error card above
+                continue
+            items.append({'id': f"audit-{row[0]}",
+                          'message': f"Audit: {row[1]} — {row[4]}.",
+                          'type': 'staff_audit',
+                          'date': _notif_date_pht(row[5]) if len(row) > 5 else ''})
+    except Exception:
+        pass
+    return items
+
+
+def _staff_feed(role):
+    """Attention feed line-up for one staff role: the librarian desk
+    feed plus — for Admin — the admin governance feed."""
+    items = _staff_feed_items()
+    if role == 'Admin':
+        items = items + _admin_feed_items()
+    return items
+
+
+_ATTENTION_URLS = {
+    'req-': ('requests.list_requests', {}),
+    'cancel-': ('requests.list_requests', {}),
+    'res-': ('circulation.reservations_page', {}),
+    'circ-': ('circulation.circulation_page', {}),
+    'overdue-': ('circulation.circulation_page', {}),
+    'fine-': ('circulation.circulation_page', {}),
+    'low-': ('inventory.inventory_page', {}),
+    'fac-': ('auth.admin_users', {}),
+    'syserr-': ('main.admin_audits', {'tab': 'system'}),
+    'audit-': ('main.admin_audits', {}),
+}
+
+# Card id prefixes that represent actionable data (the kinds whose FULL
+# table counts feed the bell badge). Context cards (recent circulation,
+# audit trail) never increase the badge.
+_BADGE_PREFIXES = ('req-', 'res-', 'overdue-', 'fine-', 'low-',
+                   'cancel-', 'fac-', 'syserr-')
+
+
+def _decorate_staff_items(items):
+    """Fill url/badge/dismissible for raw staff feed dicts by id prefix.
+
+    Mutates and returns the list: every card is dismissible (staff have
+    no persistent inbox), url comes from _ATTENTION_URLS, and badge is
+    True only for kinds counted by the badge formula.
+    """
+    from urllib.parse import urlencode
+    for item in items or []:
+        iid = str(item.get('id') or '')
+        prefix = next((p for p in _ATTENTION_URLS if iid.startswith(p)), None)
+        if prefix:
+            endpoint, values = _ATTENTION_URLS[prefix]
+            try:
+                url = url_for(endpoint)
+                if values:
+                    url += '?' + urlencode(values)
+            except Exception:
+                url = ''
+            item['url'] = url
+        else:
+            item['url'] = ''
+        item['badge'] = iid.startswith(_BADGE_PREFIXES)
+        item['dismissible'] = True
+    return items or []
 
 
 def _notif_date_pht(value):
@@ -734,13 +956,68 @@ def _notif_date_pht(value):
         return str(value)
 
 
+def _int_count(value):
+    """Coerce a COUNT(*) result (or mock junk) to a non-negative int.
+
+    Badge math reads aggregated counts from several queries; anything
+    unreadable counts as 0 so the badge can never crash a render.
+    """
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _staff_personal_notes(borrower_id, limit=None):
+    """Personal inbox cards for a staff account that also borrows.
+
+    Admin/Librarian accounts can hold a borrower record and receive
+    member notifications (reservations, hold-ready, reminders) — the
+    same rows /profile and /user/notifications show. Returns
+    (cards, unread_count): cards are the same dicts the member bell
+    branch renders (numeric ids, read state, deep-link url, not
+    dismissible — they mark-as-read server-side), unread_count is an
+    int badge contribution. Fail-open to ([], 0) so a DB blip never
+    breaks the staff bell.
+
+    Args:
+        borrower_id: Notification recipient's borrower FK.
+        limit: Optional cap on cards fetched (bell preview).
+
+    Returns:
+        Tuple (list of card dicts, int unread count).
+    """
+    cards, unread = [], 0
+    try:
+        from app.circulation.models import (
+            get_notifications_by_borrower, count_unread_notifications,
+        )
+        rows = (get_notifications_by_borrower(borrower_id, limit=limit)
+                if limit else get_notifications_by_borrower(borrower_id))
+        cards = [
+            {'id': n[0], 'message': n[1],
+             'type': n[2] if len(n) > 2 else '',
+             'date': _notif_date_pht(n[4]) if len(n) > 4 else '',
+             'read': bool(n[5]) if len(n) > 5 else False,
+             'url': _member_notif_url(n[2] if len(n) > 2 else '')}
+            for n in (rows or []) if n and len(n) > 1
+        ]
+        unread = _int_count(count_unread_notifications(borrower_id))
+    except Exception:
+        pass
+    return cards, unread
+
+
 @main_bp.route('/api/notifications')
 def notifications_feed():
     """Bell-panel payload for every role (GET, login).
 
     Members get their latest notification_log rows (read state
     included); staff get the live attention feed (dismissible,
-    client-side). Honors ?limit= (1-20, default 8). Read-only; 401
+    client-side) plus — when they also hold a borrower record — their
+    personal notification_log rows, so the bell shows every notification
+    addressed to that account on any page (matching /profile). Honors
+    ?limit= (1-20, default 8) for the personal rows. Read-only; 401
     JSON when anonymous, 404 JSON for members without a borrower row.
     """
     from flask_login import current_user as _cu
@@ -760,16 +1037,36 @@ def notifications_feed():
     except Exception:
         pass
     if role in ('Librarian', 'Admin'):
-        items = _staff_feed_items()[:limit]
-        for item in items:
-            item['dismissible'] = True
-            if item['id'].startswith('req-'):
-                item['url'] = url_for('requests.list_requests')
-            elif item['id'].startswith('res-'):
-                item['url'] = url_for('circulation.reservations_page')
-            else:
-                item['url'] = url_for('circulation.circulation_page')
-        return jsonify({'unread_count': len(items), 'notifications': items})
+        staff_items = _decorate_staff_items(_staff_feed(role))[:limit]
+        # The bell is the user's inbox: personal notification_log rows
+        # first (persistent, server-side mark-as-read), then the staff
+        # attention feed. unread_count is the authoritative badge: the
+        # header context processor's exact formula (_badge_count) —
+        # uncapped role attention counts plus personal unread — so
+        # client-side recounting of capped cards can't disagree with
+        # /profile, which has no bell JS.
+        borrower = None
+        try:
+            from app.circulation.models import get_borrower_by_user
+            borrower = get_borrower_by_user(_cu.id)
+        except Exception:
+            borrower = None
+        items = list(staff_items)
+        try:
+            unread_count = _badge_count(_cu.id,
+                                        borrower[0] if borrower else None,
+                                        role)
+        except Exception:
+            unread_count = 0
+        if borrower:
+            try:
+                personal, _pu = _staff_personal_notes(borrower[0],
+                                                      limit=limit)
+                items = personal + staff_items
+            except Exception:
+                pass
+        return jsonify({'unread_count': unread_count,
+                        'notifications': items})
     from app.circulation.models import (
         get_borrower_by_user, get_notifications_by_borrower,
         count_unread_notifications,
@@ -825,9 +1122,12 @@ def notifications_live():
 
     Students/Faculty: unread borrower notifications (request approved,
     reservation allocated, due reminders) — no page reload needed.
-    Librarian/Admin: staff feed of newest pending requests, waiting
-    reservations, and overdue loans so desk staff are notified while
-    browsing any module. Read-only; 401 JSON when anonymous.
+    Librarian/Admin: their personal unread notifications plus the role
+    attention feed (pending requests, waiting reservations, overdue
+    loans, unpaid fines, low-stock titles, member cancellations; Admin
+    adds pending faculty signups, system errors, and audit trail) so
+    staff are notified while browsing any module. Read-only; 401 JSON
+    when anonymous.
     """
     from flask_login import current_user as _cu
     if not getattr(_cu, 'is_authenticated', False):
@@ -841,8 +1141,28 @@ def notifications_live():
     except Exception:
         pass
     if role in ('Librarian', 'Admin'):
-        items = _staff_feed_items()
-        return jsonify({'unread_count': len(items), 'notifications': items[:5]})
+        borrower = None
+        try:
+            from app.circulation.models import get_borrower_by_user
+            borrower = get_borrower_by_user(_cu.id)
+        except Exception:
+            borrower = None
+        items = _decorate_staff_items(_staff_feed(role))
+        try:
+            unread_count = _badge_count(_cu.id,
+                                        borrower[0] if borrower else None,
+                                        role)
+        except Exception:
+            unread_count = 0
+        if borrower:
+            try:
+                personal, _pu = _staff_personal_notes(borrower[0])
+                unseen = [p for p in personal if not p.get('read')] or personal[:5]
+                items = unseen[:5] + items
+            except Exception:
+                pass
+        return jsonify({'unread_count': unread_count,
+                        'notifications': items[:5]})
     from app.circulation.models import (
         get_borrower_by_user, get_notifications_by_borrower,
         count_unread_notifications,

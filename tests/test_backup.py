@@ -446,9 +446,9 @@ class TestBackupRoutes:
         assert resp.status_code == 200
         assert b'Warning' in resp.data
         assert b'Healthy' not in resp.data
-        # Timestamps render without microseconds.
+        # Timestamps render without microseconds, converted to PHT (UTC+8).
         assert b'.123456' not in resp.data
-        assert now.strftime('%Y-%m-%d %H:%M').encode() in resp.data
+        assert (now + timedelta(hours=8)).strftime('%Y-%m-%d %H:%M').encode() in resp.data
 
     def test_create_route_starts_async_and_completes(self, admin_client, mock_db):
         """Validates create route starts async and completes `/admin/backup/create` as admin (expects 302) [TestBackupRoutes / backup].

@@ -147,7 +147,7 @@
                         <tr>
                             <td class="font-bold">{{ r[5] }}<div class="font-normal text-gray-500 text-xs">{{ r[6] or '' }}</div></td>
                             <td class="text-gray-500">#{{ r[1] }}</td>
-                            <td class="text-gray-500">{{ r[3] }}</td>
+                            <td class="text-gray-500">{{ r[3]|pht('%b %d, %Y %I:%M %p') }}</td>
                             <td class="text-gray-500">{{ r[4] or '—' }}</td>
                             <td><span class="badge {% if r[2] == 'claimed' %}badge-green{% elif r[2] == 'expired' %}badge-gray{% elif r[2] == 'allocated' %}badge-blue{% else %}badge-amber{% endif %}">{{ r[2] }}</span></td>
                         </tr>
@@ -169,7 +169,7 @@
                         <tr>
                             <td class="font-bold">{{ q[1] }}</td>
                             <td class="text-gray-500">{{ q[2] or '—' }}</td>
-                            <td class="text-gray-500">{{ q[4] }}</td>
+                            <td class="text-gray-500">{{ q[4]|pht('%b %d, %Y %I:%M %p') }}</td>
                             <td><span class="badge {% if q[3] == 'approved' %}badge-green{% elif q[3] == 'rejected' %}badge-red{% else %}badge-blue{% endif %}">{{ q[3]|replace('_', ' ') }}</span></td>
                         </tr>
                         {% else %}

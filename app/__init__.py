@@ -181,40 +181,29 @@ def create_app(test_config=None):
     def _compute_notif_unread():
         """Compute the header badge count for the logged-in user.
 
-        Borrowers: unread notification_log rows. Staff: pending requests
-        plus waiting reservations.
+        Use the unified role and personal-notification formula.
         """
         from flask_login import current_user as _cu
-        role = getattr(_cu, 'role', '') or ''
-        if role in ('Librarian', 'Admin'):
-            from app.database import db as _db
-            total = 0
-            try:
-                r = _db.fetch_one(
-                    "SELECT COUNT(*) FROM request_records WHERE request_status = 'pending_review'")
-                total += (r[0] or 0) if r else 0
-            except Exception:
-                pass
-            try:
-                r = _db.fetch_one(
-                    "SELECT COUNT(*) FROM reservation_queue WHERE reservation_status = 'waiting'")
-                total += (r[0] or 0) if r else 0
-            except Exception:
-                pass
-            return total
-        from app.circulation.models import get_borrower_by_user, count_unread_notifications
-        b = get_borrower_by_user(_cu.id)
-        if not b:
-            return 0
-        return count_unread_notifications(b[0]) or 0
+        from app.main import routes as main_routes
+        from app.circulation.models import get_borrower_by_user
+        borrower = get_borrower_by_user(_cu.id)
+        return main_routes._badge_count(
+            _cu.id, borrower[0] if borrower else None,
+            getattr(_cu, 'role', '') or '')
 
     @app.context_processor
     def _inject_notif_unread():
         """Header badge count for the notification bell (all pages).
 
-        Fail-open to 0 so a DB blip never breaks page renders; the 15s
-        live poll corrects it anyway. Memoized per user outside tests so
-        the badge does not cost 1-2 COUNT queries on every page render.
+        Delegates to _badge_count (main.routes) so every badge surface
+        — header, /profile, /user/notifications, mark-read AJAX — runs
+        one formula: members get unread personal notification_log rows;
+        Librarian/Admin get the uncapped role attention counts (pending
+        review requests, waiting reservations, overdue loans, unpaid
+        fines, low-stock titles, recent member cancellations; Admin adds
+        pending faculty signups and system errors) plus their own
+        unread personal rows when the account also borrows. Fail-open
+        to 0 so a DB blip never breaks page renders.
         """
         try:
             from flask_login import current_user as _cu

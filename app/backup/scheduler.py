@@ -113,8 +113,9 @@ def reschedule(app):
         return False
     day = _clamp_int(app, 'BACKUP_DAY', app.config.get('BACKUP_DAY', 1), 1, 28, 1)
     hour = _clamp_int(app, 'BACKUP_HOUR', app.config.get('BACKUP_HOUR', 2), 0, 23, 2)
-    job.reschedule(trigger='cron', day=day, hour=hour, minute=0)
-    app.logger.info('Backup schedule updated (monthly: day=%s hour=%s).', day, hour)
+    job.reschedule(trigger='cron', day=day, hour=hour, minute=0,
+                   timezone='Asia/Manila')
+    app.logger.info('Backup schedule updated (monthly: day=%s hour=%s, PHT).', day, hour)
     return True
 
 
@@ -122,10 +123,16 @@ def next_scheduled_backup(day, hour, now=None):
     """Next automatic-backup datetime after `now` for a monthly day/hour.
 
     Day is clamped to 1..28 (same rule as the scheduler) so it is valid
-    in every month; a passed this-month slot rolls to next month.
+    in every month; a passed this-month slot rolls to next month. The
+    clock is the PHT library wall clock (Asia/Manila) to match the cron
+    trigger's timezone — Render hosts run UTC otherwise.
+
+    Returns:
+        Timezone-aware datetime stamped with the PHT fixed offset.
     """
     from datetime import datetime
-    now = now or datetime.now()
+    from app.settings.models import library_now
+    now = now or library_now()
     try:
         day = max(1, min(28, int(day)))
     except (TypeError, ValueError):
@@ -166,7 +173,7 @@ def start_scheduler(app):
     # a typo'd env var must never silently disable backups.
     day = _clamp_int(app, 'BACKUP_DAY', app.config.get('BACKUP_DAY', 1), 1, 28, 1)
     hour = _clamp_int(app, 'BACKUP_HOUR', app.config.get('BACKUP_HOUR', 2), 0, 23, 2)
-    _scheduler = BackgroundScheduler()
+    _scheduler = BackgroundScheduler(timezone='Asia/Manila')
     _scheduler.add_job(
         lambda: run_scheduled_backup(app),
         'cron',

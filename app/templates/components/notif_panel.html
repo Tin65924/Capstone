@@ -1,8 +1,9 @@
 {# Navbar bell + dropdown panel. Included once per page from the navbar;
    staff dashboards and the profile sidebar link to full pages instead.
-   Members get persistent inbox rows with server-side mark-as-read; staff
-   get the live attention feed with client-side dismiss (no persistent
-   staff inbox). Cards deep-link to the page holding each item. #}
+   Every user gets their personal notification_log rows with
+   server-side mark-as-read; staff additionally see the live attention
+   feed with client-side dismiss (no persistent staff inbox). Cards
+   deep-link to the page holding each item. #}
 {% if current_user.is_authenticated %}
 <div data-notif-root style="display:contents">
 <button type="button" data-notif-open aria-label="Notifications"
@@ -65,6 +66,7 @@
     function cardHtml(n, readUrl) {
         var wrap = document.createElement('div');
         wrap.setAttribute('data-notif-card', n.id);
+        if (n.badge) wrap.setAttribute('data-badge-item', '1');
         wrap.style.cssText = 'background:#f8fafc;border:1px solid #f1f5f9;border-radius:0.75rem;padding:0.75rem 1rem;display:flex;flex-direction:column;gap:0.375rem;';
         var top = document.createElement('div');
         top.style.cssText = 'display:flex;align-items:flex-start;justify-content:space-between;gap:0.5rem;';
@@ -122,16 +124,21 @@
         }
     }
     function refreshBadge(items, serverCount) {
+        // The server response is the single badge authority: the same
+        // formula the header context processor renders (personal unread
+        // plus pending-review requests and waiting reservations — full
+        // counts, not the capped feed preview). recounting the capped
+        // card list client-side made the bell disagree with /profile.
+        if (typeof serverCount === 'number') {
+            setBadge(Math.max(0, serverCount));
+            return;
+        }
         var dismissed = dismissedSet();
         var visible = items.filter(function (n) {
-            if (n.dismissible && dismissed.has(String(n.id))) return false;
-            if (!n.dismissible && n.read) return false;
-            return true;
+            if (n.dismissible) return !dismissed.has(String(n.id));
+            return !n.read;
         }).length;
-        // Staff feed has no server-side read state: the visible (undismissed)
-        // count is authoritative. Members use the server unread count.
-        var staff = items.some(function (n) { return n.dismissible; });
-        setBadge(staff ? visible : (typeof serverCount === 'number' ? serverCount : visible));
+        setBadge(visible);
     }
     function position(panel, btn) {
         var r = btn.getBoundingClientRect();
@@ -185,9 +192,11 @@
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (data) {
                     if (!data || data.read === undefined) return;
-                    var card = mark.closest('[data-notif-card]');
-                    if (card) card.remove();
-                    if (typeof data.unread_count === 'number') setBadge(data.unread_count);
+                    // Re-load the feed so both the read state and the
+                    // badge come straight from the server formula; a
+                    // manual badge recount would drift from /profile.
+                    var mroot = mark.closest('[data-notif-root]');
+                    if (mroot) load(mroot, false);
                 })
                 .catch(function () {});
             return;
@@ -198,10 +207,13 @@
             set.add(String(dis.getAttribute('data-notif-dismiss')));
             saveDismissed(set);
             var card = dis.closest('[data-notif-card]');
+            var counted = card ? card.hasAttribute('data-badge-item') : false;
             if (card) card.remove();
-            var badge = document.querySelector('[data-notif-badge]');
-            var cur = badge ? parseInt(badge.textContent || '0', 10) : 0;
-            setBadge(Math.max(0, (isNaN(cur) ? 1 : cur) - 1));
+            if (counted) {
+                var badge = document.querySelector('[data-notif-badge]');
+                var cur = badge ? parseInt(badge.textContent || '0', 10) : 0;
+                setBadge(Math.max(0, (isNaN(cur) ? 1 : cur) - 1));
+            }
             return;
         }
         var all = e.target.closest('[data-notif-read-all]');
@@ -212,9 +224,18 @@
             var shown = panel2 ? Array.prototype.slice.call(panel2.querySelectorAll('[data-notif-card]')) : [];
             var hasMember = shown.some(function (c) { return c.querySelector('[data-notif-mark]'); });
             if (hasMember && btn2) {
+                var staffShown = shown.filter(function (c) {
+                    return c.querySelector('[data-notif-dismiss]');
+                }).length;
                 fetch(btn2.getAttribute('data-read-all-url'), { method: 'POST', credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
                     .then(function (r) { return r.ok ? r.json() : null; })
-                    .then(function (data) { if (root) load(root, false); if (data && typeof data.unread_count === 'number') setBadge(data.unread_count); })
+                    .then(function (data) {
+                        if (root) load(root, false);
+                        // Mark-all only clears the persistent member rows; the
+                        // still-visible staff attention cards stay counted.
+                        if (data && typeof data.unread_count === 'number')
+                            setBadge(data.unread_count + staffShown);
+                    })
                     .catch(function () {});
             } else {
                 var set2 = dismissedSet();

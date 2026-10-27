@@ -104,10 +104,10 @@ class TestBadgeContextProcessor:
         try:
             with app.test_request_context('/'):
                 with patch('flask_login.current_user', _FakeUser(4, 'Admin')):
-                    assert fn() == {'notif_unread': 4}
+                    assert fn() == {'notif_unread': 18}
                     first = len(_badge_query_calls(mock_db['fetch_one']))
                     assert first == 2
-                    assert fn() == {'notif_unread': 4}
+                    assert fn() == {'notif_unread': 18}
                     second = len(_badge_query_calls(mock_db['fetch_one']))
             assert second == first
         finally:
