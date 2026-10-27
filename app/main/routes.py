@@ -15,6 +15,23 @@ SUGGEST_FIELDS = {
 }
 TUTORIAL_KEY = 'member-basics'
 TUTORIAL_VERSION = 1
+
+
+@main_bp.route('/tutorials/example/<kind>')
+@login_required
+def tutorial_example(kind):
+    """Return safe catalog/detail URLs for a real tutorial example."""
+    if kind not in ('borrow', 'ebook'):
+        return jsonify({'error': 'Unknown guide.'}), 400
+    from .models import get_tutorial_book
+    book = get_tutorial_book(kind == 'ebook')
+    if not book:
+        return jsonify({'error': 'No suitable book is currently available for this guide.'}), 404
+    return jsonify({
+        'book_id': book[0],
+        'catalog_url': url_for('cataloging.public_catalog', q=book[1], field='title', view='grid'),
+        'book_url': url_for('cataloging.book_info', book_id=book[0]),
+    })
 BOOK_FIELD_MAP = {
     'book_title': 'title', 'book_author': 'author', 'book_publisher': 'publisher',
     'book_subject': 'subject', 'book_isbn': 'isbn', 'book_search': 'search',

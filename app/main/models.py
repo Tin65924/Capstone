@@ -1,4 +1,16 @@
 from app.database import db
+
+
+def get_tutorial_book(is_ebook):
+    """Find a real active example without creating circulation/access records."""
+    return db.fetch_one(
+        '''SELECT book_id, title FROM book_catalog
+           WHERE catalog_status = 'active'
+             AND (material_type = 'E-Book') = %s
+             AND (%s = FALSE OR NULLIF(TRIM(ebook_url), '') IS NOT NULL)
+           ORDER BY book_id LIMIT 1''',
+        (is_ebook, is_ebook),
+    )
 from app.auth.models import get_pending_users
 from app.settings.models import library_today
 from app.circulation.models import (

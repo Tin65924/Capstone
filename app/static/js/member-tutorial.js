@@ -44,6 +44,7 @@
         ]
     };
     var guideName = 'intro';
+    var example = null;
     var steps = intro;
     var storageKey = 'mcst-member-tutorial-step';
     var stepIndex = -1;
@@ -68,13 +69,17 @@
         return window.location.pathname === destination.pathname && window.location.search === destination.search;
     }
     function targetFor(index) {
+        if (!steps[index]) return null;
         return Array.prototype.slice.call(document.querySelectorAll(steps[index].selector)).find(function (element) {
             var rect = element.getBoundingClientRect();
             return element.offsetParent !== null && rect.width > 0 && rect.height > 0;
         }) || null;
     }
     function navigate(index) {
-        window.sessionStorage.setItem(storageKey, JSON.stringify({ guide: guideName, index: index }));
+        window.sessionStorage.setItem(storageKey, JSON.stringify({ guide: guideName, index: index, example: example }));
+        copy.textContent = 'Opening the next page… Your tutorial will continue automatically.';
+        next.disabled = true;
+        back.disabled = true;
         window.location.assign(steps[index].url);
     }
     function setShade(shade, left, top, width, height) {
@@ -147,14 +152,34 @@
         menu.classList.remove('hidden'); menu.classList.add('flex'); menu.setAttribute('aria-hidden', 'false');
         menu.querySelector('[data-guide="intro"]').focus();
     }
+    function exampleSteps(name, data) {
+        var result = 'a[href="' + data.book_url + '"]';
+        return [
+            { url: data.catalog_url, selector: '[data-tour="catalog-search"]', title: name === 'ebook' ? 'Find an e-book' : 'Find a physical book', copy: 'We searched for a real library title for this example. Nothing has been borrowed or reserved.' },
+            { url: data.catalog_url, selector: result, title: 'Open the matching title', copy: 'This result opens the book details. Choose Open book to continue the walkthrough.' },
+            { url: data.book_url, selector: name === 'ebook' ? '[data-tour="ebook-access"]' : '[data-tour="book-availability"]', title: name === 'ebook' ? 'Read online' : 'Availability and borrowing', copy: name === 'ebook' ? 'Read Online opens the provider preview or external reader. The tutorial does not open it or record a read.' : 'Borrow opens the overnight and in-library choices when a copy is available. Otherwise Reserve joins the queue. The tutorial never submits either action.' },
+            { url: data.book_url, selector: name === 'ebook' ? '[data-tour="ebook-access"]' : '[data-tour="book-availability"]', title: name === 'ebook' ? 'Reader and downloads' : 'After your request', copy: name === 'ebook' ? 'Use the provider’s page, zoom, and navigation controls after opening the reader. Download appears only when the library permits it. Close the reader to return to details.' : 'Overnight requests need approval. Check Notifications and Ready for Pickup for the claim deadline. Return borrowed books at the circulation desk.' }
+        ];
+    }
     function startGuide(name) {
         guideName = name;
+        example = null;
         steps = guides[name];
-        var bookPage = /^\/book\/\d+\/?$/.test(window.location.pathname);
-        if (bookPage && name === 'borrow' && document.body.dataset.bookType !== 'E-Book' && targetForSelector('[data-tour="book-availability"]')) {
-            steps = [{ url: window.location.pathname, selector: '[data-tour="book-availability"]', title: 'Borrow or reserve', copy: 'When available, Borrow opens choices for overnight or in-library use. Overnight requests need librarian approval. If unavailable, Reserve joins the queue. Review before submitting; this guide does not submit.' }];
-        } else if (bookPage && name === 'ebook' && targetForSelector('[data-tour="ebook-access"]')) {
-            steps = [{ url: window.location.pathname, selector: '[data-tour="ebook-access"]', title: 'Read this e-book', copy: 'Choose Read Online to open the embedded preview or an external reader. Download is available only when permitted. Reader controls depend on the provider.' }];
+        if (name === 'borrow' || name === 'ebook') {
+            root.classList.remove('hidden'); root.setAttribute('aria-hidden', 'false');
+            title.textContent = 'Finding a library example…'; copy.textContent = 'Please wait while we select a real title for this guide.';
+            next.disabled = true; back.disabled = true; spotlight(null); positionPanel(null); panel.focus();
+            window.fetch('/tutorials/example/' + name).then(function (response) {
+                return response.json().then(function (data) { if (!response.ok) throw new Error(data.error); return data; });
+            }).then(function (data) {
+                if (root.classList.contains('hidden') || guideName !== name) return;
+                example = data; steps = exampleSteps(name, data); next.disabled = false; back.disabled = false; open(0);
+            }).catch(function (error) {
+                if (root.classList.contains('hidden')) return;
+                steps = [{ url: window.location.pathname + window.location.search, selector: '[data-tutorial-launcher]', title: 'Example unavailable', copy: error.message || 'Could not load a title. Please try again later.' }];
+                next.disabled = false; back.disabled = false; open(0);
+            });
+            return;
         }
         open(0);
     }
@@ -181,8 +206,17 @@
         title.textContent = step.title;
         copy.textContent = step.copy;
         back.classList.toggle('invisible', stepIndex === 0);
-        next.textContent = stepIndex === steps.length - 1 ? 'Finish' : (steps[stepIndex + 1].url !== step.url ? 'Continue to ' + (steps[stepIndex + 1].url.indexOf('/history') !== -1 ? 'History' : 'next page') : 'Next');
+        next.disabled = false; back.disabled = stepIndex === 0;
+        next.textContent = stepIndex === steps.length - 1 ? 'Finish' : (steps[stepIndex + 1].url !== step.url ? (example ? 'Open book' : 'Continue to next page') : 'Next');
         spotlight(target); positionPanel(target);
+        // Only prefetch read-only catalog/detail pages; member pages may run
+        // reminder/expiry work. Browsers may decline this low-priority hint.
+        var upcoming = steps.slice(stepIndex + 1).find(function (item) { return item.url !== step.url; });
+        if (upcoming && /^\/(catalog\?|book\/\d+)/.test(upcoming.url) && !(navigator.connection && (navigator.connection.saveData || /2g/.test(navigator.connection.effectiveType)))) {
+            var hint = document.querySelector('link[data-tutorial-prefetch]');
+            if (!hint) { hint = document.createElement('link'); hint.rel = 'prefetch'; hint.as = 'document'; hint.dataset.tutorialPrefetch = ''; document.head.appendChild(hint); }
+            if (hint.getAttribute('href') !== upcoming.url) hint.setAttribute('href', upcoming.url);
+        }
         if (!panel.contains(document.activeElement)) panel.focus();
     }
     launcher.addEventListener('click', showMenu);
@@ -215,7 +249,15 @@
     var resume = window.sessionStorage.getItem(storageKey);
     if (resume !== null) {
         window.sessionStorage.removeItem(storageKey);
-        try { var saved = JSON.parse(resume); if (saved && guides[saved.guide] && Number.isInteger(saved.index) && saved.index >= 0 && saved.index < guides[saved.guide].length) { guideName = saved.guide; steps = guides[guideName]; open(saved.index); return; } } catch (e) { /* Ignore stale session state. */ }
+        try {
+            var saved = JSON.parse(resume);
+            if (saved && guides[saved.guide]) {
+                guideName = saved.guide; example = saved.example;
+                var validExample = example && /^\/book\/\d+$/.test(example.book_url) && /^\/catalog\?/.test(example.catalog_url);
+                steps = validExample && (guideName === 'borrow' || guideName === 'ebook') ? exampleSteps(guideName, example) : guides[guideName];
+                if (Number.isInteger(saved.index) && saved.index >= 0 && saved.index < steps.length) { open(saved.index); return; }
+            }
+        } catch (e) { /* Ignore stale session state. */ }
     }
     if (document.body.hasAttribute('data-tutorial-invite')) {
         window.fetch('/tutorials/status').then(function (response) { return response.ok ? response.json() : null; }).then(function (data) {

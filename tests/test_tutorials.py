@@ -1,6 +1,22 @@
 """Tests for the optional Student and Faculty member tutorial API."""
 
 
+def test_ebook_example_uses_real_title(student_client, mock_db):
+    mock_db['fetch_one'].return_value = (15, 'A & B')
+    response = student_client.get('/tutorials/example/ebook')
+    assert response.status_code == 200
+    assert response.json['book_url'] == '/book/15'
+    assert 'field=title' in response.json['catalog_url']
+    assert mock_db['fetch_one'].call_args.args[1] == (True, True)
+    mock_db['execute'].assert_not_called()
+
+
+def test_physical_example_empty(student_client, mock_db):
+    response = student_client.get('/tutorials/example/borrow')
+    assert response.status_code == 404
+    mock_db['execute'].assert_not_called()
+
+
 def test_student_tutorial_status_is_available(student_client, mock_db):
     mock_db['fetch_one'].return_value = ('dismissed',)
 
