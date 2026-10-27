@@ -42,6 +42,9 @@ def test_profile_includes_member_tutorial_launcher(student_client, mock_db):
     assert b'Help / Tutorials' in response.data
     assert b'Start tutorial' in response.data
     assert b'Not now' in response.data
+    assert b'data-guide="catalog"' in response.data
+    assert b'data-guide="borrow"' in response.data
+    assert b'data-guide="ebook"' in response.data
     assert b'data-tutorial-invite' in response.data
 
 
@@ -52,3 +55,11 @@ def test_history_includes_tutorial_targets(student_client, mock_db):
     assert b'data-tour="history-tabs"' in response.data
     assert b'data-tour="history-reservations"' in response.data
     assert b'Help / Tutorials' in response.data
+
+
+def test_catalog_tutorial_has_search_and_responsive_filters(student_client):
+    response = student_client.get('/catalog')
+    assert response.status_code == 200
+    assert b'data-tour="catalog-search"' in response.data
+    assert response.data.count(b'data-tour="catalog-filters"') == 2
+    assert b'data-tour="catalog-results"' in response.data

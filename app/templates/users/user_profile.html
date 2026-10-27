@@ -137,7 +137,7 @@
                             <h2 class="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">Profile Information</h2>
                             <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Update your contact details. Your {{ 'faculty number (9 digits)' if current_user.role == 'Faculty' else ('librarian ID' if current_user.role == 'Librarian' else ('admin ID' if current_user.role == 'Admin' else 'student ID (0000-00000)')) }} cannot be changed here.</p>
                         </div>
-                        <button type="button" onclick="openProfileModal()"
+                        <button data-tour="profile-edit" type="button" onclick="openProfileModal()"
                             class="shrink-0 px-4 py-2 text-sm font-bold text-primary border border-primary rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all">Edit Profile</button>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-4 text-sm">

@@ -4,12 +4,12 @@
 <main class="flex-grow mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 w-full max-w-[1400px]">
     <div class="flex flex-col lg:flex-row gap-6 lg:gap-8 items-start">
         <!-- Mobile filter toggle -->
-        <button type="button" id="mobile-filter-toggle" class="lg:hidden w-full flex items-center justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 shadow-sm hover:border-primary/30 transition-colors">
+        <button data-tour="catalog-filters" type="button" id="mobile-filter-toggle" class="lg:hidden w-full flex items-center justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 shadow-sm hover:border-primary/30 transition-colors">
             <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[20px]">tune</span> Filters</span>
             <span class="material-symbols-outlined text-[20px]">expand_more</span>
         </button>
         <!-- Filter Sidebar - Desktop -->
-        <aside class="hidden lg:block w-52 shrink-0">
+        <aside data-tour="catalog-filters" class="hidden lg:block w-52 shrink-0">
             <form method="GET" action="{{ url_for('cataloging.public_catalog') }}" id="filter-form" class="sticky top-8">
                     <input type="hidden" name="q" value="{{ search_query or '' }}">
                     <input type="hidden" name="field" value="{{ search_field or '' }}">
@@ -286,7 +286,7 @@
                         {% endif %}
                     </form>
 
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 sm:mb-6">
+            <div data-tour="catalog-results" class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 sm:mb-6">
                 <div class="min-w-0">
                     <h2 class="text-base sm:text-lg font-bold text-slate-800 dark:text-white py-1 sm:py-3">Catalog Results</h2>
                     <p class="text-xs sm:text-sm text-slate-500 truncate">
