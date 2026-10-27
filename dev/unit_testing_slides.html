@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Unit Testing Report — MCST Library Management System</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI', Inter, system-ui, sans-serif; background:#0f172a; color:#e2e8f0;
+         min-height:100vh; display:flex; align-items:center; justify-content:center; padding:32px; }
+  .page { width:100%; max-width:1180px; }
+  .banner { display:flex; align-items:center; gap:18px; margin-bottom:26px; }
+  .badge { display:inline-block; background:linear-gradient(90deg,#2563eb,#7c3aed); color:#fff;
+           font-weight:800; letter-spacing:4px; font-size:15px; padding:9px 22px; border-radius:999px;
+           box-shadow:0 6px 24px rgba(37,99,235,.45); }
+  .subtitle { font-size:14px; color:#94a3b8; }
+  .grid { display:grid; grid-template-columns:340px 1fr; gap:24px; align-items:stretch; }
+  .card { background:#1e293b; border:1px solid #334155; border-radius:18px; padding:28px;
+          box-shadow:0 10px 40px rgba(2,6,23,.5); }
+  .hero { display:flex; flex-direction:column; justify-content:center; align-items:flex-start; gap:8px;
+          background:linear-gradient(145deg,#1e293b 0%, #16233e 100%); position:relative; overflow:hidden; }
+  .hero::after { content:''; position:absolute; right:-70px; top:-70px; width:230px; height:230px;
+                 border-radius:50%; background:radial-gradient(circle,#22c55e33,transparent 65%); }
+  .big { font-size:84px; font-weight:800; line-height:1; color:#4ade80;
+         text-shadow:0 0 30px rgba(74,222,128,.35); }
+  .big-sub { font-size:20px; font-weight:700; letter-spacing:6px; color:#4ade80; }
+  .verdict .row { font-size:15px; color:#94a3b8; }
+  .verdict .row b { color:#e2e8f0; }
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-top:24px; margin-bottom:24px; }
+  .stat { background:#1e293b; border:1px solid #334155; border-radius:14px; padding:16px 18px; }
+  .stat .v { font-size:28px; font-weight:800; color:#f8fafc; }
+  .stat .k { font-size:11px; font-weight:700; letter-spacing:1.5px; color:#64748b; margin-top:3px; text-transform:uppercase; }
+  .k .g { color:#4ade80; }
+  .bars-title { font-size:13px; font-weight:800; letter-spacing:3px; color:#94a3b8; margin:6px 0 14px; }
+  .bar-row { display:grid; grid-template-columns:210px 1fr 46px; gap:12px; align-items:center; margin-bottom:9px; }
+  .bar-label { font-size:13px; font-weight:600; color:#cbd5e1; }
+  .bar-track { background:#0f172a; border-radius:999px; height:22px; overflow:hidden; border:1px solid #334155; }
+  .bar-fill { height:100%; border-radius:999px; display:flex; align-items:center; justify-content:flex-end; }
+  .bar-fill span { font-size:11px; font-weight:800; color:#fff; padding-right:8px; }
+  .bar-pct { font-size:12px; color:#64748b; font-variant-numeric:tabular-nums; }
+  .footer { margin-top:26px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .chip { background:#1e293b; border:1px solid #334155; color:#94a3b8; font-size:12px; font-weight:600;
+          padding:6px 12px; border-radius:999px; }
+  @media (max-width:900px) { .grid { grid-template-columns:1fr; } .big { font-size:64px; } }
+  @media print { body { background:#fff; color:#111; } .card,.stat { border-color:#cbd5e1; color:#111; } }
+</style>
+</head>
+<body>
+  <!-- This page intentionally has no external assets so it opens offline -->
+  <div class="page">
+    <div class="banner">
+      <span class="badge">UNIT TESTING</span>
+      <span class="subtitle">MCST Library Management System — pytest suite result, 1578 tests</span>
+    </div>
+    <div class="grid">
+      <div class="card hero">
+        <div class="big">1578</div>
+        <div class="big-sub">PASSED</div>
+        <div class="verdict">
+          <div class="row"><b>0</b> failed &nbsp;·&nbsp; <b>0</b> errors &nbsp;·&nbsp; <b>0</b> skipped</div>
+          <div class="row" style="margin-top:2px">100% pass rate across 53 test files</div>
+        </div>
+      </div>
+      <div class="card">
+    <div class="bar-row">
+      <div class="bar-label">Cataloging & Search</div>
+      <div class="bar-track"><div class="bar-fill" style="width:100.0%;background:#2563eb"><span>333</span></div></div>
+      <div class="bar-pct">21%</div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">Analytics & Forecasting</div>
+      <div class="bar-track"><div class="bar-fill" style="width:99.1%;background:#0ea5e9"><span>330</span></div></div>
+      <div class="bar-pct">21%</div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">Circulation & Returns</div>
+      <div class="bar-track"><div class="bar-fill" style="width:44.7%;background:#8b5cf6"><span>149</span></div></div>
+      <div class="bar-pct">9%</div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">Users & Requests</div>
+      <div class="bar-track"><div class="bar-fill" style="width:52.0%;background:#10b981"><span>173</span></div></div>
+      <div class="bar-pct">11%</div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">Notifications & Audit Trail</div>
+      <div class="bar-track"><div class="bar-fill" style="width:28.5%;background:#f59e0b"><span>95</span></div></div>
+      <div class="bar-pct">6%</div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">Main Dashboard & Settings</div>
+      <div class="bar-track"><div class="bar-fill" style="width:49.8%;background:#ef4444"><span>166</span></div></div>
+      <div class="bar-pct">11%</div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">Auth & Access Control</div>
+      <div class="bar-track"><div class="bar-fill" style="width:26.7%;background:#14b8a6"><span>89</span></div></div>
+      <div class="bar-pct">6%</div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">Database, Backup & Inventory</div>
+      <div class="bar-track"><div class="bar-fill" style="width:73.0%;background:#6366f1"><span>243</span></div></div>
+      <div class="bar-pct">15%</div>
+    </div></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="v">1578</div><div class="k">Tests run</div></div>
+      <div class="stat"><div class="v green" style="color:#4ade80">0</div><div class="k">Failures / Errors</div></div>
+      <div class="stat"><div class="v">9:18</div><div class="k">Suite Duration</div></div>
+      <div class="stat"><div class="v">57</div><div class="k">Test Files</div></div>
+    </div>
+    <div class="footer">
+      <span class="chip">Python 3.13.0</span><span class="chip">Windows 11</span><span class="chip">pytest 9.1.1</span><span class="chip">pytest-html 4.2.0</span><span class="chip">Flask 3.1 (test client)</span><span class="chip">PostgreSQL mocked (no DB needed)</span>
+      <span class="chip">Run: pytest -q · 20 Oct 2026</span>
+    </div>
+  </div>
+</body>
+</html>

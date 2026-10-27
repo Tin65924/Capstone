@@ -219,6 +219,12 @@ def main(reset=True):
             sys.exit("seed pool too small to weight top titles")
 
         # --- 3. 100 circulation rows ----------------------------------------
+        # Partial unique indexes (uq_active_loan_per_accession,
+        # uq_active_loan_per_book_borrower) allow only one active/overdue
+        # loan per copy and per (book, borrower): downgrade colliding picks
+        # to returned rows.
+        busy_accessions = set()
+        busy_book_borrowers = set()
         inserted = 0
         for n in range(N_CIRCULATION):
             borrower_id, is_faculty, _prog = borrower_ids[n % len(borrower_ids)]
@@ -254,6 +260,16 @@ def main(reset=True):
                     due_date = borrow_date + timedelta(days=loan_days)
                 return_date = None
                 lost = rng.random() < 0.2
+            if status in ("active", "overdue") and (
+                accession_id in busy_accessions
+                or (book_id, borrower_id) in busy_book_borrowers
+            ):
+                status = "returned"
+                return_date = borrow_date + timedelta(days=rng.randint(0, max(loan_days, 2)))
+                lost = False
+            if status in ("active", "overdue"):
+                busy_accessions.add(accession_id)
+                busy_book_borrowers.add((book_id, borrower_id))
             cur.execute(
                 """INSERT INTO circulation_records
                    (book_id, accession_id, borrower_id, processed_by, borrow_type,

@@ -1,6 +1,15 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
+    "gdocs": {
+      "type": "local",
+      "command": ["workspace-mcp", "--tools", "docs", "drive", "--tool-tier", "core"],
+      "enabled": true,
+      "environment": {
+        "GOOGLE_OAUTH_CLIENT_ID": "{env:GOOGLE_OAUTH_CLIENT_ID}",
+        "GOOGLE_OAUTH_CLIENT_SECRET": "{env:GOOGLE_OAUTH_CLIENT_SECRET}"
+      }
+    },
     "github": {
       "type": "local",
       "command": ["gh", "mcp"],
@@ -9,6 +18,11 @@
         "GITHUB_READ_ONLY": "1",
         "GITHUB_TOOLSETS": "repos,issues,pull_requests"
       }
+    },
+    "drawio": {
+      "type": "remote",
+      "url": "https://mcp.draw.io/mcp",
+      "enabled": true
     }
   }
 }

@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MCST Library — Nine Improvements, filmed live</title>
+<meta name="viewport" content="width=1920, height=1080">
+<link rel="stylesheet" href="./runtime/fonts.css">
+<link rel="stylesheet" href="./brand.css">
+<style>
+:root {
+  --ground: #f7f7f7;
+  --close: #172554;
+  --ink: #0f172a;
+  --ink-soft: #334155;
+  --accent: #1e3a8a;
+  --font: "Manrope", "Inter", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+#main { position: absolute; inset: 0; overflow: hidden; background: var(--ground); color: var(--ink); font-family: var(--font); }
+.scene { position: absolute; inset: 0; }
+.cam { position: absolute; inset: 0; will-change: transform; }
+.frame img { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; display: block; }
+.cap { position: absolute; right: 120px; top: 918px; left: auto; font-size: 64px; line-height: 1.12; font-weight: 800; letter-spacing: -0.5px; color: var(--ink); max-width: 1500px; white-space: nowrap; text-align: right; }
+.cap .soft { color: var(--ink-soft); font-weight: 700; }
+.cursor { position: absolute; left: 0; top: 0; width: 34px; height: 34px; background: var(--accent); border-radius: 50% 50% 50% 4px; transform: rotate(-45deg); box-shadow: 0 6px 18px rgba(15,23,42,.35); }
+#closeBg { position: absolute; inset: 0; background: radial-gradient(1400px 780px at 50% 38%, #1e3a8a 0%, var(--close) 58%, #0b1228 100%); }
+#seal { position: absolute; left: 870px; top: 240px; width: 180px; height: 180px; border-radius: 50%; }
+#closeName { position: absolute; left: 0; top: 560px; width: 1920px; text-align: center; font-size: 44px; font-weight: 700; color: #cbd5e1; }
+#closeLine { position: absolute; left: 0; top: 640px; width: 1920px; text-align: center; font-size: 104px; font-weight: 800; letter-spacing: -2px; color: #f8fafc; }
+</style>
+</head>
+<body>
+<div id="main">
+
+  <!-- S0 0-114 hook: real institutional login -->
+  <section id="s0" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/00_login_hook.png" alt=""></div></div>
+    <div id="cap0" class="cap">The MCST Library, newly rebuilt.</div>
+  </section>
+
+  <!-- S1a 114-186 F1 student -->
+  <section id="s1a" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/11a_profile_student.png" alt=""></div></div>
+    <div id="cap1" class="cap">Your ID number, <span class="soft">labeled for your role.</span></div>
+  </section>
+
+  <!-- S1b 186-240 F1 librarian -->
+  <section id="s1b" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/12a_profile_librarian.png" alt=""></div></div>
+  </section>
+
+  <!-- S1c 240-288 F1 faculty -->
+  <section id="s1c" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/12b_profile_faculty.png" alt=""></div></div>
+  </section>
+
+  <!-- S2a 288-360 F6 profile wide -->
+  <section id="s2a" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/11b_profile_student_claim.png" alt=""></div></div>
+    <div id="cap2" class="cap">Updates the moment you arrive.</div>
+  </section>
+
+  <!-- S2b 360-450 F6 panel -->
+  <section id="s2b" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/11c_notifications_panel.png" alt=""></div></div>
+  </section>
+
+  <!-- S3 450-612 F3 settings -->
+  <section id="s3" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/02_settings_full.png" alt=""></div></div>
+    <div id="cap3" class="cap">Set the week. Close a day.</div>
+  </section>
+
+  <!-- S4a 612-678 F2 desk -->
+  <section id="s4a" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/04_reservations.png" alt=""></div></div>
+    <div id="cur4" class="cursor"></div>
+  </section>
+
+  <!-- S4a2 678-720 F2 expanded row + Allocate press -->
+  <section id="s4a2" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/04b_reservation_row_expanded.png" alt=""></div></div>
+    <div id="cur4b" class="cursor"></div>
+  </section>
+
+  <!-- S4b 720-768 F2 confirmed -->
+  <section id="s4b" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/04c_allocation_confirmed.png" alt=""></div></div>
+    <div id="cap4" class="cap">Claim after the cutoff? <span class="soft">Next morning.</span></div>
+  </section>
+
+  <!-- S4c 768-810 F2 claim card -->
+  <section id="s4c" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/11b_profile_student_claim.png" alt=""></div></div>
+  </section>
+
+  <!-- S5a 810-886 F4 dropdown -->
+  <section id="s5a" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/06_category_multicheck_open.png" alt=""></div></div>
+    <div id="cap5" class="cap">Pick categories. <span class="soft">Add new. Assign many.</span></div>
+  </section>
+
+  <!-- S5b 886-946 F4 selected -->
+  <section id="s5b" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/06b_categories_selected.png" alt=""></div></div>
+  </section>
+
+  <!-- S5c 946-984 F4 manage modal -->
+  <section id="s5c" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/06c_manage_categories.png" alt=""></div></div>
+  </section>
+
+  <!-- S6a 984-1064 F5 edit modal -->
+  <section id="s6a" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/06d_edit_ebook_filled.png" alt=""></div></div>
+    <div id="cap6" class="cap">Add an e-book. <span class="soft">Lend it twice.</span></div>
+  </section>
+
+  <!-- S6b 1064-1112 F5 book page -->
+  <section id="s6b" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/07_book_ebook_page.png" alt=""></div></div>
+  </section>
+
+  <!-- S6c 1112-1200 F5 reader modal -->
+  <section id="s6c" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/07b_read_online_modal.png" alt=""></div></div>
+  </section>
+
+  <!-- S7 1200-1380 F8 clusters -->
+  <section id="s7" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/08_requests_clusters.png" alt=""></div></div>
+    <div id="cap7" class="cap">Same book, one request.</div>
+  </section>
+
+  <!-- S8 1380-1560 F7 audits -->
+  <section id="s8" class="scene">
+    <div class="cam" id="cam8"><div class="frame"><img src="captures/09a_audits_top.png" alt=""></div></div>
+    <div class="frame" id="img8b" style="position:absolute;inset:0"><img src="captures/09b_audits_library.png" alt=""></div>
+    <div id="cap8" class="cap">Every library action, in the record.</div>
+  </section>
+
+  <!-- S9a 1560-1608 F9 analytics -->
+  <section id="s9a" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/10a_analytics.png" alt=""></div></div>
+  </section>
+
+  <!-- S9b 1608-1740 F9 pdf hero -->
+  <section id="s9b" class="scene">
+    <div class="cam"><div class="frame"><img src="captures/10b_analytics_pdf_p1.png" alt=""></div></div>
+    <div id="cap9" class="cap">Professional reports, library-branded.</div>
+  </section>
+
+  <!-- S10 1740-1932 close -->
+  <section id="s10" class="scene">
+    <div id="closeBg"></div>
+    <div id="pulse" style="position:absolute;left:0;top:0;width:1920px;height:1080px;background:radial-gradient(closest-side, rgba(190,220,255,0.85), rgba(120,170,240,0.28) 45%, transparent 75%);opacity:0"></div>
+    <img id="seal" src="captures/logo.jpg" alt="">
+    <div id="closeName">The MCST Library Management System.</div>
+    <div id="closeLine">Discover Knowledge.</div>
+  </section>
+
+</div>
+
+<script src="./runtime/vendor/gsap.min.js"></script>
+<script src="./runtime/motion.js"></script>
+<script>
+const M = Motion.film({ fps: 30, duration: 64.4, width: 1920, height: 1080, clock: 'smooth' });
+
+/* ghost hitbox over the real Allocate button in shot s4a2 (position from the actual capture) */
+(function () {
+  var ghost = document.createElement('div');
+  ghost.id = 'allocGhost';
+  ghost.style.cssText = 'position:absolute;left:1650px;top:525px;width:176px;height:92px;pointer-events:none;';
+  document.getElementById('s4a2').appendChild(ghost);
+})();
+
+/* S0 hook 0-114: push toward the Google sign-in card, cut on motion */
+M.camera('#s0 .cam', [[0, { scale: 1.08, x: 0, y: 0 }], [114, { scale: 1.45, x: -180, y: -80 }]], { origin: '780px 480px', ease: 'glide' });
+M.words('#cap0', { at: 8, mech: 'rise', gaps: [3, 5, 6, 7, 8], dist: 46 });
+M.exit('#cap0', { at: 106, frames: 8, to: { y: -30, opacity: 0 }, hide: true });
+
+/* S1a 114-186 student: cut mid-push, camera lands on STUDENT ID row */
+M.camera('#s1a .cam', [[0, { scale: 1.75, x: 0, y: 0 }], [186, { scale: 1.92, x: 0, y: -8 }]], { origin: '1000px 252px', ease: 'glide' });
+M.show('#s1a', 114);
+M.words('#cap1', { at: 132, mech: 'rise', gaps: [4, 5, 6, 7, 8, 9], dist: 46 });
+
+/* S1b 186-240 librarian */
+M.camera('#s1b .cam', [[0, { scale: 1.85, x: 0, y: 0 }], [240, { scale: 1.95, x: 0, y: -6 }]], { origin: '1000px 248px', ease: 'glide' });
+M.show('#s1b', 186);
+M.show('#cap1', 114, 212);
+
+/* S1c 240-288 faculty */
+M.camera('#s1c .cam', [[0, { scale: 1.85, x: 0, y: 0 }], [288, { scale: 1.95, x: 0, y: -6 }]], { origin: '1000px 248px', ease: 'glide' });
+M.show('#s1c', 240);
+
+/* S2a 288-360 F6: pull back from bell badge */
+M.camera('#s2a .cam', [[0, { scale: 1.5, x: 0, y: 0 }], [360, { scale: 1.04 }]], { origin: '1436px 64px', ease: 'glide' });
+M.show('#s2a', 288);
+M.words('#cap2', { at: 306, mech: 'rise', gaps: [4, 5, 6, 7, 8], dist: 46 });
+
+/* S2b 360-450 panel: hard cut mid-pull, push into the dropdown */
+M.camera('#s2b .cam', [[0, { scale: 1.38 }], [450, { scale: 1.6, y: -12 }]], { origin: '640px 350px', ease: 'glide' });
+M.show('#s2b', 360);
+M.exit('#cap2', { at: 352, frames: 8, to: { y: -30, opacity: 0 }, hide: true });
+
+/* S3 450-612 settings: glide from the whole desk into the Library Hours card */
+M.camera('#s3 .cam', [[0, { scale: 1.05, y: 0 }], [300, { scale: 1.3 }, 'glide'], [612, { scale: 1.55 }, 'glide']], { origin: '960px 430px', ease: 'glide' });
+M.show('#s3', 450);
+M.words('#cap3', { at: 476, mech: 'rise', gaps: [4, 6, 7, 5, 8], dist: 46 });
+M.exit('#cap3', { at: 604, frames: 8, to: { y: -30, opacity: 0 }, hide: true });
+
+/* S4a 612-678 desk wide, camera leaning in while the cursor glides to park */
+M.camera('#s4a .cam', [[0, { scale: 1.06 }], [678, { scale: 1.28 }]], { origin: '960px 480px', ease: 'glide' });
+M.show('#s4a', 612);
+M.cursor('#cur4', { keys: [[616, 700, 640, 4.5, 0], [652, 1180, 470, 1, 0]] });
+
+/* S4a2 678-720 expanded row: cursor enters and presses the real Allocate button, cut on max compression */
+M.camera('#s4a2 .cam', [[0, { scale: 1.42, x: -80 }], [720, { scale: 1.55, x: 110 }]], { origin: '1180px 560px', ease: 'glide' });
+M.show('#s4a2', 678);
+M.cursor('#cur4b', { keys: [[680, 620, 760, 3.2, 0], [700, 1737, 571, 1, 0]] });
+M.press('#cur4b', '#allocGhost', { at: 708, frames: 3, lag: 1 });
+
+/* S4b 720-768 confirmed: whip into the flash, copy lands */
+M.camera('#s4b .cam', [[0, { scale: 1.5 }], [768, { scale: 1.44 }]], { origin: '960px 210px', ease: 'glide' });
+M.show('#s4b', 720);
+M.enter('#cap4', { at: 728, frames: 10, ease: 'softLand', from: { y: 40, opacity: 0 } });
+M.show('#cur4b', 720, 730);
+
+/* S4c 768-810 claim card: dive to the deadline card */
+M.camera('#s4c .cam', [[0, { scale: 2.0 }], [810, { scale: 2.16 }]], { origin: '540px 700px', ease: 'glide' });
+M.show('#s4c', 768);
+
+/* S5a 810-886 F4 dropdown crashes open (category multi-check sits low in the modal) */
+M.camera('#s5a .cam', [[0, { scale: 1.55 }], [886, { scale: 1.72 }]], { origin: '930px 930px', ease: 'softLand' });
+M.show('#s5a', 810);
+M.enter('#cap5', { at: 828, frames: 10, ease: 'softLand', from: { y: 44, opacity: 0 } });
+M.show('#cur4b', 886, 890);
+
+/* S5b 886-946 selected: the composed category label */
+M.camera('#s5b .cam', [[0, { scale: 1.8 }], [946, { scale: 2.0 }]], { origin: '930px 790px', ease: 'glide' });
+M.show('#s5b', 886);
+M.show('#cap5', 886, 920);
+
+/* S5c 946-984 manage modal */
+M.camera('#s5c .cam', [[0, { scale: 1.5 }], [984, { scale: 1.58 }]], { origin: '960px 560px', ease: 'glide' });
+M.show('#s5c', 946);
+M.exit('#cap5', { at: 976, frames: 8, to: { y: -30, opacity: 0 }, hide: true });
+
+/* S6a 984-1064 F5 edit modal filled */
+M.camera('#s6a .cam', [[0, { scale: 1.9, y: 30 }], [1064, { scale: 1.98, y: 10 }]], { origin: '1010px 420px', ease: 'glide' });
+M.show('#s6a', 984);
+M.enter('#cap6', { at: 1000, frames: 10, ease: 'softLand', from: { y: 44, opacity: 0 } });
+
+/* S6b 1064-1112 book page ONLINE ACCESS */
+M.camera('#s6b .cam', [[0, { scale: 1.3 }], [1112, { scale: 1.42, y: -30 }]], { origin: '960px 300px', ease: 'glide' });
+M.show('#s6b', 1064);
+
+/* S6c 1112-1200 reader modal drifts into the lorem embed */
+M.camera('#s6c .cam', [[0, { scale: 1.1 }], [1200, { scale: 1.4 }]], { origin: '960px 520px', ease: 'glide' });
+M.show('#s6c', 1112);
+M.show('#cap6', 1112, 1150);
+M.exit('#cap6', { at: 1192, frames: 8, to: { y: -30, opacity: 0 }, hide: true });
+
+/* S7 1200-1380 F8: wide drift then push to the biggest cluster */
+M.camera('#s7 .cam', [[0, { scale: 1.12 }], [1240, { scale: 1.18 }, 'glide'], [1380, { scale: 1.9 }, 'glide']], { origin: '960px 460px', ease: 'glide' });
+M.show('#s7', 1200);
+M.enter('#cap7', { at: 1218, frames: 10, ease: 'softLand', from: { y: 44, opacity: 0 } });
+
+/* S8 1380-1560 F7: wide, then the library tab push */
+M.camera('#cam8', [[0, { scale: 1.1 }], [1448, { scale: 1.24 }, 'glide']], { origin: '960px 440px', ease: 'glide' });
+M.camera('#img8b', [[0, { scale: 1.45 }], [1560, { scale: 1.78, y: -16 }]], { origin: '960px 480px', ease: 'glide' });
+M.show('#s8', 1380);
+M.show('#img8b', 1448);
+M.enter('#cap8', { at: 1398, frames: 10, ease: 'softLand', from: { y: 44, opacity: 0 } });
+
+/* S9a 1560-1608 analytics desk */
+M.camera('#s9a .cam', [[0, { scale: 1.08 }], [1608, { scale: 1.3 }]], { origin: '960px 500px', ease: 'glide' });
+M.show('#s9a', 1560);
+M.show('#cap8', 1560, 1590);
+
+/* S9b 1608-1740 HERO: pdf page full-frame, logo push (hardest move) */
+M.camera('#s9b .cam', [[0, { scale: 1.06 }], [1660, { scale: 1.3 }, 'glide'], [1740, { scale: 1.62 }, 'glide']], { origin: '960px 250px', ease: 'glide' });
+M.show('#s9b', 1608);
+M.enter('#cap9', { at: 1626, frames: 10, ease: 'softLand', from: { y: 40, opacity: 0 } });
+
+/* S10 1740-1932 close: seal crash-settles, name + line, ground keeps breathing */
+M.show('#s10', 1740);
+M.enter('#seal', { at: 1746, frames: 16, ease: 'snapSettle', from: { scale: 3.5, blur: 10 }, opacity: 1 });
+M.drift('#seal', { prop: 'scale', from: 1, to: 0.9, start: 1764, end: 1930 });
+M.drift('#closeBg', { prop: 'scale', from: 1, to: 1.07, start: 1748, end: 1930 });
+M.kf('#pulse', 'opacity', [[1740, 0], [1776, 0.9], [1812, 0.2], [1848, 0.85], [1886, 0.25], [1926, 0.85]], { ease: 'glide' });
+M.words('#closeName', { at: 1790, mech: 'rise', gaps: [5, 6, 7, 8, 9, 10], dist: 36 });
+M.words('#closeLine', { at: 1802, mech: 'shrink', gaps: [5, 6, 7], dist: 1.6 });
+
+M.cut(114, { hide: ['#s0'], show: ['#s1a'] });
+M.cut(186, { hide: ['#s1a'], show: ['#s1b'] });
+M.cut(240, { hide: ['#s1b'], show: ['#s1c'] });
+M.cut(288, { hide: ['#s1c'], show: ['#s2a'] });
+M.cut(360, { hide: ['#s2a'], show: ['#s2b'] });
+M.cut(450, { hide: ['#s2b'], show: ['#s3'] });
+M.cut(612, { hide: ['#s3'], show: ['#s4a'] });
+M.cut(678, { hide: ['#s4a'], show: ['#s4a2'] });
+M.cut(720, { hide: ['#s4a2'], show: ['#s4b'] });
+M.cut(768, { hide: ['#s4b'], show: ['#s4c'] });
+M.cut(810, { hide: ['#s4c'], show: ['#s5a'] });
+M.cut(886, { hide: ['#s5a'], show: ['#s5b'] });
+M.cut(946, { hide: ['#s5b'], show: ['#s5c'] });
+M.cut(984, { hide: ['#s5c'], show: ['#s6a'] });
+M.cut(1064, { hide: ['#s6a'], show: ['#s6b'] });
+M.cut(1112, { hide: ['#s6b'], show: ['#s6c'] });
+M.cut(1200, { hide: ['#s6c'], show: ['#s7'] });
+M.cut(1380, { hide: ['#s7'], show: ['#s8'] });
+M.cut(1560, { hide: ['#s8'], show: ['#s9a'] });
+M.cut(1608, { hide: ['#s9a'], show: ['#s9b'] });
+M.cut(1740, { hide: ['#s9b'], show: ['#s10'] });
+
+window.__ready = Motion.loaded().then(() => { if (/selftest/.test(location.search)) Motion.selfTest(M, { samples: 24 }); });
+</script>
+</body>
+</html>
