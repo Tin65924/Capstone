@@ -184,7 +184,8 @@ def google_callback():
         Redirect to profile/next page, pending page, role select, or login.
     """
     state = session.pop('_oauth_state', None)
-    if not state:
+    callback_state = request.args.get('state', '')
+    if not state or not callback_state or not secrets.compare_digest(state, callback_state):
         log_system_event('system:login_failed:invalid_state')
         flash('Invalid OAuth state. Please try again.', 'error')
         return redirect(url_for('auth.login'))
@@ -243,6 +244,10 @@ def google_callback():
     if not _allowed_email(email):
         log_system_event('system:login_failed:domain')
         flash(f'Only @{ALLOWED_DOMAIN} email addresses are allowed.', 'error')
+        return redirect(url_for('auth.login'))
+    if id_info.get('email_verified') is not True or id_info.get('hd') != ALLOWED_DOMAIN:
+        log_system_event('system:login_failed:unverified_workspace_identity')
+        flash('A verified MCST Google Workspace account is required.', 'error')
         return redirect(url_for('auth.login'))
 
     oauth_sub = id_info.get('sub')
@@ -811,7 +816,7 @@ def approve_user_route(user_id):
         '''SELECT u.user_id, u.email, r.role_name, u.full_name
            FROM user_accounts u
            JOIN roles r ON u.role_id = r.role_id
-           WHERE u.user_id = %s''',
+           WHERE u.user_id = %s AND u.account_status = 'pending' ''',
         (user_id,)
     )
     if not user:
@@ -856,6 +861,9 @@ def toggle_user_status_route(user_id):
     if len(record) > 4 and record[4] not in ('active', 'disabled'):
         flash('Only active or disabled accounts can have their status toggled.', 'info')
         return redirect(url_for('auth.admin_users'))
+    if len(record) > 2 and record[2] == 'Admin' and record[4] == 'active' and get_admin_count() <= 1:
+        flash('This is the last active admin account. Assign another admin before disabling it.', 'error')
+        return redirect(url_for('auth.admin_users'))
     toggle_user_status(user_id, updated_by=current_user.id)
     log_activity(current_user.id, f'toggled_user_status:{user_id}:{_target_name(user_id)}')
     flash('User status updated.', 'success')
@@ -876,8 +884,12 @@ def archive_user_route(user_id):
     Returns:
         Redirect to the User Management listing with a flash message.
     """
-    if not get_user_record(user_id):
+    record = get_user_record(user_id)
+    if not record:
         flash('User not found.', 'error')
+        return redirect(url_for('auth.admin_users'))
+    if len(record) > 4 and record[4] == 'active' and len(record) > 2 and record[2] == 'Admin' and get_admin_count() <= 1:
+        flash('This is the last active admin account. Assign another admin before archiving it.', 'error')
         return redirect(url_for('auth.admin_users'))
     archive_user(user_id, updated_by=current_user.id)
     log_activity(current_user.id, f'archived_user:{user_id}:{_target_name(user_id)}')
@@ -1237,10 +1249,10 @@ def _wants_json():
     return 'application/json' in (request.headers.get('Accept') or '')
 
 
-@auth_bp.route('/logout')
+@auth_bp.route('/logout', methods=['POST'])
 @login_required
 def logout():
-    """Sign out the current user (GET /logout, login required).
+    """Sign out the current user (POST /logout, login required).
     Requires login with no role restriction. Writes a logout audit row
     via log_activity, clears the Flask-Login session, and redirects to
     the public login page.

@@ -360,9 +360,9 @@
                         <div class="text-xs sm:text-sm text-gray-500 w-full sm:w-auto">
                                                             <strong>Session:</strong> {{ session[4].title() }} • Started {{ session[5].strftime('%b %d, %I:%M %p') if session[5] and session[5].strftime is defined else (session[5] or '') }}
                         </div>
-                        <a href="{{ url_for('inventory.export_session', session_id=session[0]) }}" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all">
+                        {% if session[4] == 'completed' %}<a href="{{ url_for('inventory.export_session', session_id=session[0]) }}" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all">
                             Export CSV
-                        </a>
+                        </a>{% endif %}
                         <a href="{{ url_for('inventory.inventory_page') }}" class="text-primary text-xs sm:text-sm font-bold hover:underline">
                             Back to current view
                         </a>

@@ -276,6 +276,15 @@ class TestCatalogingCRUD:
         call_args = mock_db['execute'].call_args_list[0]
         assert 'DELETE FROM book_catalog' in call_args[0][0]
 
+    def test_delete_book_with_dependencies_is_refused(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = SAMPLE_BOOKS[2]
+        mock_db['fetch_all'].return_value = [('accession copies',)]
+
+        resp = librarian_client.post('/librarian/cataloging/3/delete')
+
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
     def test_delete_book_not_archived_fails(self, librarian_client, mock_db):
         """Validates delete book not archived fails `/librarian/cataloging/1/delete` as librarian (expects 302) [TestCatalogingCRUD / cataloging].
     If fails: likely unexpected DB write (validation/pre-check bypassed).

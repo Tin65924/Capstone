@@ -8,6 +8,7 @@ psql's DROP TABLE of the same table forever.
 from unittest.mock import MagicMock
 
 import pytest
+import time
 
 
 def _db_with_fake_pool():
@@ -70,6 +71,110 @@ class TestExecuteTransactions:
                 db.execute('UPDATE t SET a = %s', (1,))
         conn.rollback.assert_called_once()
         conn.commit.assert_not_called()
+
+
+class TestConnectionRevalidation:
+    """get_connection probes a pooled connection with SELECT 1 only once it
+    may have gone stale; a connection used inside the idle window is trusted
+    so a hot path does not pay a round-trip per request."""
+
+    def test_first_checkout_is_validated(self, app):
+        """Validates first checkout is validated [TestConnectionRevalidation / database].
+    If fails: likely regression in get_connection or the pool stub.
+    Failure indicates a dead pooled connection would 500 the first request."""
+        db, pool = _db_with_fake_pool()
+        conn = MagicMock()
+        pool.getconn.return_value = conn
+        with app.app_context():
+            assert db.get_connection() is conn
+        cur = conn.cursor.return_value.__enter__.return_value
+        assert any('SELECT 1' in str(c.args[0]) for c in cur.execute.call_args_list)
+
+    def test_recent_checkout_skips_validation(self, app):
+        """Validates a connection used inside the idle window is not probed [TestConnectionRevalidation / database].
+    If fails: get_connection probes every checkout again (per-request round-trip regression).
+    Failure indicates the audit's hot-path saving is gone."""
+        db, pool = _db_with_fake_pool()
+        conn = MagicMock()
+        pool.getconn.return_value = conn
+        db._conn_used_at[conn] = time.monotonic()
+        with app.app_context():
+            assert db.get_connection() is conn
+        cur = conn.cursor.return_value.__enter__.return_value
+        cur.execute.assert_not_called()
+        assert db._conn_used_at[conn] >= 0
+
+    def test_stale_checkout_is_validated(self, app):
+        """Validates a connection idle past the window is probed [TestConnectionRevalidation / database].
+    If fails: stale connections are trusted and can 500 (provider-closed conn).
+    Failure indicates the revalidation window is not enforced."""
+        db, pool = _db_with_fake_pool()
+        conn = MagicMock()
+        pool.getconn.return_value = conn
+        db._revalidate_idle_seconds = 5
+        db._conn_used_at[conn] = time.monotonic() - 60
+        with app.app_context():
+            assert db.get_connection() is conn
+        cur = conn.cursor.return_value.__enter__.return_value
+        assert any('SELECT 1' in str(c.args[0]) for c in cur.execute.call_args_list)
+
+    def test_zero_window_always_validates(self, app):
+        """Validates DB_REVALIDATE_IDLE_SECONDS=0 restores per-checkout probing [TestConnectionRevalidation / database].
+    If fails: the escape hatch to the old behaviour is broken.
+    Failure indicates operators cannot disable the window."""
+        db, pool = _db_with_fake_pool()
+        conn = MagicMock()
+        pool.getconn.return_value = conn
+        db._revalidate_idle_seconds = 0
+        db._conn_used_at[conn] = time.monotonic()
+        with app.app_context():
+            db.get_connection()
+        cur = conn.cursor.return_value.__enter__.return_value
+        assert any('SELECT 1' in str(c.args[0]) for c in cur.execute.call_args_list)
+
+    def test_dead_connection_slot_is_replaced(self, app):
+        """Validates a failed probe discards the slot and checks out a fresh one [TestConnectionRevalidation / database].
+    If fails: a provider-closed pooled connection is returned and the request 500s.
+    Failure indicates broken-connection recovery regressed."""
+        db, pool = _db_with_fake_pool()
+        dead = MagicMock()
+        dead_cur = dead.cursor.return_value.__enter__.return_value
+        dead_cur.execute.side_effect = RuntimeError('server closed the connection')
+        fresh = MagicMock()
+        pool.getconn.side_effect = [dead, fresh]
+        with app.app_context():
+            assert db.get_connection() is fresh
+        pool.putconn.assert_any_call(dead, close=True)
+        assert dead not in db._conn_used_at
+        assert db._conn_used_at[fresh] >= 0
+
+
+class TestPoolSizing:
+    def test_pool_uses_configured_sizes(self, app):
+        """Validates ThreadedConnectionPool is built from DB_POOL_MINCONN/MAXCONN [TestPoolSizing / database].
+    If fails: pool sizing is hardcoded again and threads can exhaust it (PoolError -> 500).
+    Failure indicates the configurable pool sizing regressed."""
+        from unittest.mock import patch
+        from app.database import Database
+        db = Database()
+        app.config['DB_POOL_MINCONN'] = 2
+        app.config['DB_POOL_MAXCONN'] = 21
+        with patch('app.database.pool.ThreadedConnectionPool') as mock_pool:
+            db.init_app(app)
+        assert mock_pool.call_args.kwargs['minconn'] == 2
+        assert mock_pool.call_args.kwargs['maxconn'] == 21
+
+    def test_revalidate_window_read_from_config(self, app):
+        """Validates DB_REVALIDATE_IDLE_SECONDS is read into the wrapper [TestPoolSizing / database].
+    If fails: operators cannot tune the probe window.
+    Failure indicates the config wiring regressed."""
+        from unittest.mock import patch
+        from app.database import Database
+        db = Database()
+        app.config['DB_REVALIDATE_IDLE_SECONDS'] = 45
+        with patch('app.database.pool.ThreadedConnectionPool'):
+            db.init_app(app)
+        assert db._revalidate_idle_seconds == 45
 
 
 class TestInitDbSchemaGate:

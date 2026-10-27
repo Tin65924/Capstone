@@ -286,8 +286,8 @@ def damage_accession(accession_id):
 
     if session_id:
         session = get_session(session_id)
-        if not session or len(session) < 6:
-            flash('Session not found.', 'error')
+        if not session or len(session) < 6 or session[4] != 'active':
+            flash('Session not found or not active.', 'error')
             return redirect(url_for('inventory.inventory_page'))
 
     mark_copy_damaged(accession_id, notes, session_id=session_id, checked_by=current_user.id)
@@ -330,8 +330,8 @@ def lost_accession(accession_id):
 
     if session_id:
         session = get_session(session_id)
-        if not session or len(session) < 6:
-            flash('Session not found.', 'error')
+        if not session or len(session) < 6 or session[4] != 'active':
+            flash('Session not found or not active.', 'error')
             return redirect(url_for('inventory.inventory_page'))
 
     mark_copy_lost(accession_id, notes, session_id=session_id, checked_by=current_user.id)

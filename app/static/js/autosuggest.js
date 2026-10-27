@@ -7,10 +7,10 @@
 //   Keyboard: Tab / Enter / Right Arrow (caret at end) accept the highlighted
 //   value; ArrowUp/Down move the highlight; Escape closes. After accepting via
 //   Tab, the next Tab navigates normally. Clicking a suggestion also selects it.
-// - Forms with data-exists-book / data-exists-student run a duplicate check
+// - Forms with data-exists-book run a duplicate check
 //   once the identifying fields are filled. A Bloom filter (GET /api/bloom) is
 //   used as a local pre-filter: only when it says "maybe exists" is the
-//   confirming DB query (/api/book-exists or /api/student-exists) issued. The
+//   confirming DB query (/api/book-exists) issued. The
 //   message is only ever shown for confirmed duplicate records.
 // - Forms with data-exists-accession check the accession number on
 //   focus-out (and while typing) via GET /api/accession-exists, writing to
@@ -379,33 +379,6 @@
         accInput.addEventListener('input', debounce(check, EXISTS_DEBOUNCE));
     }
 
-    function attachStudentExists(form) {
-        var idInput = form.querySelector('[name="id_number"]');
-        if (!idInput) return;
-
-        function check() {
-            var idNumber = idInput.value.trim();
-            if (idNumber.length < 3) {
-                hideExists(form);
-                return;
-            }
-            var key = normalize(idNumber);
-            if (recordFilters.student_record && !likelyContains(recordFilters.student_record, key)) {
-                hideExists(form);
-                return;
-            }
-            fetch('/api/student-exists?id_number=' + encodeURIComponent(idNumber))
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (data.exists) showExists(form, 'Student already exists.');
-                    else hideExists(form);
-                })
-                .catch(function () { hideExists(form); });
-        }
-
-        idInput.addEventListener('input', debounce(check, EXISTS_DEBOUNCE));
-    }
-
     // ---------- init ----------
     function init() {
         var suggestInputs = document.querySelectorAll('[data-suggest]');
@@ -414,13 +387,11 @@
         }
 
         var bookForms = document.querySelectorAll('[data-exists-book]');
-        var studentForms = document.querySelectorAll('[data-exists-student]');
         var accessionForms = document.querySelectorAll('[data-exists-accession]');
-        if (!bookForms.length && !studentForms.length && !accessionForms.length) return;
+        if (!bookForms.length && !accessionForms.length) return;
 
         loadBloomFilters().then(function () {
             for (var b = 0; b < bookForms.length; b++) attachBookExists(bookForms[b]);
-            for (var s = 0; s < studentForms.length; s++) attachStudentExists(studentForms[s]);
             for (var a = 0; a < accessionForms.length; a++) attachAccessionExists(accessionForms[a]);
         });
     }

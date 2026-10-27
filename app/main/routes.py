@@ -919,24 +919,6 @@ def book_exists():
     return jsonify({'exists': bool(get_book_by_title_author_isbn(title, author, isbn))})
 
 
-@main_bp.route('/api/student-exists')
-def student_exists():
-    """Answer whether a borrower ID number is already registered.
-
-    Public GET used by registration validation. Returns exists False
-    for a blank id_number, otherwise checks via
-    get_user_by_id_number. Returns JSON {exists: bool}.
-
-    Returns:
-        JSON response with the exists boolean.
-    """
-    id_number = request.args.get('id_number', '').strip()
-    if not id_number:
-        return jsonify({'exists': False})
-    from app.auth.models import get_user_by_id_number
-    return jsonify({'exists': bool(get_user_by_id_number(id_number))})
-
-
 @main_bp.route('/api/accession-exists')
 def accession_exists():
     """Answer whether a barcode accession number already exists.

@@ -101,10 +101,10 @@ def reset_seed(cur):
         row counts.
     """
     id_pattern = SEED_TAG + "-%"
-    email_pattern = SEED_TAG.lower() + "_%@%s" % SEED_DOMAIN
+    email_pattern = SEED_TAG.lower() + "!_%%@%s" % SEED_DOMAIN
     cur.execute("SELECT borrower_id FROM borrowers WHERE id_number LIKE %s", (id_pattern,))
     bids = [r[0] for r in cur.fetchall()]
-    cur.execute("SELECT user_id FROM user_accounts WHERE email LIKE %s", (email_pattern,))
+    cur.execute("SELECT user_id FROM user_accounts WHERE email LIKE %s ESCAPE '!'", (email_pattern,))
     uids = [r[0] for r in cur.fetchall()]
     if bids:
         cur.execute("DELETE FROM procurement_log WHERE request_id IN "
@@ -115,11 +115,13 @@ def reset_seed(cur):
         cur.execute("DELETE FROM request_records WHERE requester_id = ANY(%s)", (bids,))
         print(f"removed {cur.rowcount} prior {SEED_TAG} request rows")
     if uids:
+        cur.execute("DELETE FROM user_favorites WHERE user_id = ANY(%s)", (uids,))
+        print(f"removed {cur.rowcount} prior {SEED_TAG} favorite rows")
         cur.execute("DELETE FROM audit_trail WHERE user_id = ANY(%s)", (uids,))
         print(f"removed {cur.rowcount} prior {SEED_TAG} audit rows")
     cur.execute("DELETE FROM borrowers WHERE id_number LIKE %s", (id_pattern,))
     print(f"removed {cur.rowcount} prior {SEED_TAG} borrowers")
-    cur.execute("DELETE FROM user_accounts WHERE email LIKE %s", (email_pattern,))
+    cur.execute("DELETE FROM user_accounts WHERE email LIKE %s ESCAPE '!'", (email_pattern,))
     print(f"removed {cur.rowcount} prior {SEED_TAG} users")
 
 

@@ -429,7 +429,7 @@
                             </td>
                         </tr>
                         <tr id="copies-{{ book[0] }}" class="hidden">
-                            <td colspan="8" class="bg-gray-50/70 px-6 py-3">
+                            <td colspan="{{ 9 if show_reason_col else 8 }}" class="bg-gray-50/70 px-6 py-3">
                                 <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                                     {{ copies|length }} copy/copies for &quot;{{ book[1] }}&quot;
                                 </div>
@@ -492,7 +492,7 @@
                         {% endfor %}
                         {% else %}
                         <tr>
-                            <td colspan="8" class="text-center py-16 text-gray-400">
+                            <td colspan="{{ 9 if show_reason_col else 8 }}" class="text-center py-16 text-gray-400">
                                 <div class="flex flex-col items-center gap-2">
                                     <span class="material-symbols-outlined text-4xl">search_off</span>
                                     <span class="font-medium">No books found</span>

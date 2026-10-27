@@ -98,17 +98,16 @@ def upsert_inventory_record(accession_id, state, inventory_type, checked_by, ses
     Returns:
         Rowcount from the UPDATE or INSERT.
     """
-    existing = db.fetch_one(
-        'SELECT inventory_id FROM inventory_status WHERE accession_id = %s',
-        (accession_id,)
-    )
-    if existing:
-        return db.execute(
-            'UPDATE inventory_status SET inventory_state = %s, checked_by = %s, last_checked_date = %s, session_id = %s, notes = %s WHERE accession_id = %s',
-            (state, checked_by, date.today(), session_id, notes, accession_id)
-        )
     return db.execute(
-        'INSERT INTO inventory_status (accession_id, inventory_state, inventory_type, checked_by, last_checked_date, session_id, notes) VALUES (%s, %s, %s, %s, %s, %s, %s)',
+        '''INSERT INTO inventory_status
+               (accession_id, inventory_state, inventory_type, checked_by, last_checked_date, session_id, notes)
+           VALUES (%s, %s, %s, %s, %s, %s, %s)
+           ON CONFLICT (accession_id) DO UPDATE
+           SET inventory_state = EXCLUDED.inventory_state,
+               checked_by = EXCLUDED.checked_by,
+               last_checked_date = EXCLUDED.last_checked_date,
+               session_id = EXCLUDED.session_id,
+               notes = EXCLUDED.notes''',
         (accession_id, state, inventory_type, checked_by, date.today(), session_id, notes)
     )
 
@@ -140,8 +139,9 @@ def reconcile_inventory(session_id, scanned_accessions, checked_by=None):
     """
     scanned = list(scanned_accessions)
 
-    db.execute(
-        '''UPDATE inventory_status ist
+    with db.transaction():
+        db.execute(
+            '''UPDATE inventory_status ist
            SET inventory_state = CASE
                    WHEN al.accession_id = ANY(%s) THEN
                        CASE WHEN EXISTS (
@@ -163,11 +163,11 @@ def reconcile_inventory(session_id, scanned_accessions, checked_by=None):
            FROM accession_log al
            WHERE al.accession_id = ist.accession_id
              AND ist.inventory_state NOT IN ('damaged', 'lost')''',
-        (scanned, checked_by, date.today(), session_id)
-    )
+            (scanned, checked_by, date.today(), session_id)
+        )
 
-    db.execute(
-        '''INSERT INTO inventory_status
+        db.execute(
+            '''INSERT INTO inventory_status
                (accession_id, inventory_state, inventory_type, checked_by, last_checked_date, session_id, notes)
            SELECT al.accession_id,
                CASE
@@ -187,14 +187,15 @@ def reconcile_inventory(session_id, scanned_accessions, checked_by=None):
                'annual_physical', %s, %s, %s, NULL
            FROM accession_log al
            LEFT JOIN inventory_status ist ON ist.accession_id = al.accession_id
-           WHERE ist.inventory_id IS NULL''',
-        (scanned, checked_by, date.today(), session_id)
-    )
+            WHERE ist.inventory_id IS NULL
+            ON CONFLICT (accession_id) DO NOTHING''',
+            (scanned, checked_by, date.today(), session_id)
+        )
 
-    db.execute(
-        'UPDATE inventory_sessions SET scanned_count = %s, session_status = %s, ended_at = %s, updated_at = NOW(), updated_by = %s WHERE session_id = %s',
-        (len(scanned), 'completed', date.today(), checked_by, session_id)
-    )
+        db.execute(
+            'UPDATE inventory_sessions SET scanned_count = %s, session_status = %s, ended_at = %s, updated_at = NOW(), updated_by = %s WHERE session_id = %s',
+            (len(scanned), 'completed', date.today(), checked_by, session_id)
+        )
 
     missing_rows = db.fetch_all(
         '''SELECT al.accession_id, al.accession_number
@@ -547,4 +548,4 @@ def get_session_export_rows(session_id):
            WHERE ist.session_id = %s
            ORDER BY ist.last_checked_date DESC''',
         (session_id,)
-    )
+        )

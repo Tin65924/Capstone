@@ -52,15 +52,25 @@ class TestNoneGuards:
     Failure indicates dashboard/stats shown to staff are wrong.
 
 Trend/activity widgets tolerate ISO strings, not just dates."""
-        from datetime import date
+        from datetime import date, timedelta
         mock_db['fetch_one'].return_value = (0,)
-        mock_db['fetch_all'].side_effect = [
-            [], [], [],  # stats: grouped, procurement x2
-            [('Ann', 1, 'Borrowed', 'T', '2026-01-05', None, None)],
-            [('2026-01-05', 3)],  # daily as ISO strings
-            [], [], [], [],
-        ]
-        assert librarian_client.get('/librarian').status_code == 200
+        # Anchored to today: get_daily_borrows() zero-fills a window ending
+        # today, so a fixed calendar date would be dropped and the chart
+        # assertion below could pass vacuously or rot as the clock moves.
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+
+        def _fetch_all(query, params=None):
+            q = str(query)
+            if 'DATE(borrow_date)' in q:
+                return [(yesterday, 3)]  # daily as ISO strings
+            if 'full_name' in q:
+                return [('Ann', 1, 'Borrowed', 'T', '2026-01-05', None, None)]
+            return []
+
+        mock_db['fetch_all'].side_effect = _fetch_all
+        resp = librarian_client.get('/librarian')
+        assert resp.status_code == 200
+        assert 'data-count="3"' in resp.data.decode()
 
     def test_librarian_none_models(self, librarian_client, mock_db):
         """Validates librarian none models `/librarian` as librarian (expects 200) [TestNoneGuards / overview edge cases].

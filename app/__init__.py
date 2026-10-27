@@ -1,8 +1,56 @@
 import os
+import threading
+import time
 from flask import Flask, render_template, request, redirect, flash, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 from .config import Config
 from .extensions import login_manager
+
+# Per-user memo for the notification-badge count rendered by the context
+# processor on every page. The header's live poll re-syncs the badge every
+# 15s, so a short TTL is invisible to users while removing 1-2 COUNT
+# queries from each page render. Disabled under TESTING so route tests see
+# the exact query count they mock for.
+_notif_badge_cache = {}
+_notif_badge_lock = threading.Lock()
+
+
+def _badge_count_cached(cache_key, compute, ttl=None):
+    """Return ``compute()`` for ``cache_key``, memoized for ``ttl`` seconds.
+
+    Args:
+        cache_key: Hashable identity for the cached value.
+        compute: Zero-argument callable producing the value on a miss.
+        ttl: Seconds to keep a value; defaults to the app's
+            ``NOTIF_BADGE_CACHE_SECONDS``. ``0`` always recomputes.
+
+    Returns:
+        The cached value, or a freshly computed one on a miss.
+    """
+    from flask import current_app
+    if ttl is None:
+        ttl = current_app.config.get('NOTIF_BADGE_CACHE_SECONDS', 15)
+    now = time.monotonic()
+    with _notif_badge_lock:
+        hit = _notif_badge_cache.get(cache_key)
+    if hit is not None and now - hit[0] < ttl:
+        return hit[1]
+    value = compute()
+    with _notif_badge_lock:
+        # Bound the dict: drop expired entries once it grows past a few
+        # hundred users rather than holding a stamp per user forever.
+        if len(_notif_badge_cache) > 512:
+            cutoff = now - ttl
+            for key in [k for k, stamp in _notif_badge_cache.items() if stamp[0] < cutoff]:
+                _notif_badge_cache.pop(key, None)
+        _notif_badge_cache[cache_key] = (now, value)
+    return value
+
+
+def clear_notif_badge_cache():
+    """Drop every cached badge count (used by tests)."""
+    with _notif_badge_lock:
+        _notif_badge_cache.clear()
 
 def create_app(test_config=None):
     """Create and configure the MCST LMS Flask application instance.
@@ -23,6 +71,12 @@ def create_app(test_config=None):
 
     if test_config:
         app.config.update(test_config)
+
+    if not app.config.get('TESTING') and not app.config.get('SECRET_KEY'):
+        raise RuntimeError('SECRET_KEY must be configured before starting the application.')
+
+    from .csrf import init_csrf
+    init_csrf(app)
 
     from .database import init_db
     init_db(app)
@@ -70,7 +124,7 @@ def create_app(test_config=None):
                 from .settings.models import sync_settings_to_config
                 sync_settings_to_config(app)
     except Exception:
-        pass
+        app.logger.exception('DB-backed settings sync failed')
 
     register_error_handlers(app)
 
@@ -124,40 +178,52 @@ def create_app(test_config=None):
 
     app.template_filter('pht')(_pht_filter)
 
+    def _compute_notif_unread():
+        """Compute the header badge count for the logged-in user.
+
+        Borrowers: unread notification_log rows. Staff: pending requests
+        plus waiting reservations.
+        """
+        from flask_login import current_user as _cu
+        role = getattr(_cu, 'role', '') or ''
+        if role in ('Librarian', 'Admin'):
+            from app.database import db as _db
+            total = 0
+            try:
+                r = _db.fetch_one(
+                    "SELECT COUNT(*) FROM request_records WHERE request_status = 'pending_review'")
+                total += (r[0] or 0) if r else 0
+            except Exception:
+                pass
+            try:
+                r = _db.fetch_one(
+                    "SELECT COUNT(*) FROM reservation_queue WHERE reservation_status = 'waiting'")
+                total += (r[0] or 0) if r else 0
+            except Exception:
+                pass
+            return total
+        from app.circulation.models import get_borrower_by_user, count_unread_notifications
+        b = get_borrower_by_user(_cu.id)
+        if not b:
+            return 0
+        return count_unread_notifications(b[0]) or 0
+
     @app.context_processor
     def _inject_notif_unread():
         """Header badge count for the notification bell (all pages).
 
-        Borrowers: unread notification_log rows. Staff: pending requests
-        plus waiting reservations. Fail-open to 0 so a DB blip never
-        breaks page renders; the 15s live poll corrects it anyway.
+        Fail-open to 0 so a DB blip never breaks page renders; the 15s
+        live poll corrects it anyway. Memoized per user outside tests so
+        the badge does not cost 1-2 COUNT queries on every page render.
         """
         try:
             from flask_login import current_user as _cu
             if not getattr(_cu, 'is_authenticated', False):
                 return {'notif_unread': 0}
-            role = getattr(_cu, 'role', '') or ''
-            if role in ('Librarian', 'Admin'):
-                from app.database import db as _db
-                total = 0
-                try:
-                    r = _db.fetch_one(
-                        "SELECT COUNT(*) FROM request_records WHERE request_status = 'pending_review'")
-                    total += (r[0] or 0) if r else 0
-                except Exception:
-                    pass
-                try:
-                    r = _db.fetch_one(
-                        "SELECT COUNT(*) FROM reservation_queue WHERE reservation_status = 'waiting'")
-                    total += (r[0] or 0) if r else 0
-                except Exception:
-                    pass
-                return {'notif_unread': total}
-            from app.circulation.models import get_borrower_by_user, count_unread_notifications
-            b = get_borrower_by_user(_cu.id)
-            if not b:
-                return {'notif_unread': 0}
-            return {'notif_unread': count_unread_notifications(b[0]) or 0}
+            if app.config.get('TESTING'):
+                return {'notif_unread': _compute_notif_unread()}
+            return {'notif_unread': _badge_count_cached(
+                'notif_badge:%s' % getattr(_cu, 'id', ''), _compute_notif_unread)}
         except Exception:
             return {'notif_unread': 0}
 

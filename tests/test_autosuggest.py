@@ -165,28 +165,9 @@ class TestBookExists:
 
 
 class TestStudentExists:
-    def test_student_exists_true(self, client, mock_db):
-        """Validates student exists true `/api/student-exists?id_number=2024-8192` [TestStudentExists / autosuggest].
-    If fails: likely template text/context changed or mock fetch_* shape mismatched.
-    Failure indicates autosuggest is broken for this case (users see wrong page, blocked action, or bad data)."""
-        mock_db['fetch_one'].return_value = (1, 'x@mcst.edu.ph', 'Student', 'X')
+    def test_student_existence_endpoint_is_not_public(self, client, mock_db):
         resp = client.get('/api/student-exists?id_number=2024-8192')
-        assert resp.get_json() == {'exists': True}
-
-    def test_student_exists_false(self, client, mock_db):
-        """Validates student exists false `/api/student-exists?id_number=2024-9999` [TestStudentExists / autosuggest].
-    If fails: likely template text/context changed or mock fetch_* shape mismatched.
-    Failure indicates autosuggest is broken for this case (users see wrong page, blocked action, or bad data)."""
-        mock_db['fetch_one'].return_value = None
-        resp = client.get('/api/student-exists?id_number=2024-9999')
-        assert resp.get_json() == {'exists': False}
-
-    def test_student_exists_requires_id(self, client, mock_db):
-        """Validates student exists requires id `/api/student-exists?id_number=` [TestStudentExists / autosuggest].
-    If fails: likely template text/context changed or mock fetch_* shape mismatched.
-    Failure indicates autosuggest is broken for this case (users see wrong page, blocked action, or bad data)."""
-        resp = client.get('/api/student-exists?id_number=')
-        assert resp.get_json() == {'exists': False}
+        assert resp.status_code == 404
         mock_db['fetch_one'].assert_not_called()
 
 

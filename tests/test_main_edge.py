@@ -61,8 +61,7 @@ class TestEmptyDb:
         self._empty(mock_db)
         for url in ('/api/bloom',
                     '/api/suggestions?field=book_title&q=clean',
-                    '/api/book-exists?title=T&author=A',
-                    '/api/student-exists?id_number=1'):
+                    '/api/book-exists?title=T&author=A'):
             assert client.get(url).status_code == 200, url
 
 
@@ -94,7 +93,6 @@ class TestHostileParams:
     Failure indicates main edge cases is broken for this case (users see wrong page, blocked action, or bad data)."""
         self._ok(mock_db)
         for url in ('/api/book-exists', '/api/book-exists?title=T',
-                    '/api/student-exists', '/api/student-exists?id_number=',
                     '/api/book-exists?title=' + 'T' * 2000 + '&author=A'):
             assert client.get(url).status_code == 200, url[:60]
 

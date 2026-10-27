@@ -45,7 +45,12 @@ class TestTrendsCard:
         mock_db['fetch_one'].return_value = (0,)
         activity = [('Ann', 1, 'Borrowed', 'Some Title', '2026-01-05',
                      None, None)]
-        daily = [(date(2026, 10, 12), 4), (date(2026, 10, 13), 7)]
+        # get_daily_borrows() zero-fills a window that ends *today* and drops
+        # out-of-window rows, so these days must be relative to today — fixed
+        # calendar dates silently rot into all-zero "data-count" once the
+        # clock moves past the window.
+        today = date.today()
+        daily = [(today - timedelta(days=1), 4), (today, 7)]
 
         def _fetch_all(query, params=None):
             """Test helper _fetch_all: build mocked data or DB stub for the test."""
@@ -83,7 +88,10 @@ class TestTrendsCard:
     def test_string_dates_render(self, librarian_client, mock_db):
         """Validates ISO string days render without assuming dates."""
         mock_db['fetch_one'].return_value = (0,)
-        mock_db['fetch_all'].return_value = [('2026-10-13', 5)]
+        # Inside the trailing window (see TestTrendsCard._rows): a fixed ISO
+        # date would drift out of get_daily_borrows()'s zero-fill window.
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        mock_db['fetch_all'].return_value = [(yesterday, 5)]
         body = librarian_client.get('/librarian').data.decode()
         assert '<svg' in body
         assert 'data-count="5"' in body

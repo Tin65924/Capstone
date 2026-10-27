@@ -268,7 +268,7 @@ def download_backup(backup_id):
         File download response, or a redirect with an error flash.
     """
     row = get_backup_by_id(backup_id)
-    if not row or len(row) < 2:
+    if not row or len(row) < 4 or row[3] != 'completed':
         flash('Backup not found.', 'error')
         return redirect(url_for('backup.backup_page'))
     try:

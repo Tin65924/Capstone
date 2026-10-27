@@ -1,11 +1,11 @@
-from app.procurement.models import create_procurement, get_procurement_by_request, update_procurement_status
+from app.procurement.models import get_procurement_by_request, update_procurement_status
 from app.auth.models import log_activity
 from flask import render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
 from . import requests_bp
 from .models import (
     create_request, get_requests, get_request_by_id,
-    update_request_status, get_demand_by_role, get_borrower_by_user,
+    update_request_status, approve_request_with_procurement, get_demand_by_role, get_borrower_by_user,
     check_duplicate_request, check_catalog_exists,
     check_approved_request_exists, get_requests_with_details, get_requests_by_borrower,
     count_requests, count_requests_by_status, build_stacked_chart, build_variant_lookup,
@@ -298,9 +298,12 @@ def bulk_review(action):
         if not existing or existing[5] != 'pending_review':
             skipped += 1
             continue
-        update_request_status(rid, status, reviewer_id=current_user.id, remarks=remarks)
         if action == 'approve':
-            create_procurement(rid)
+            if not approve_request_with_procurement(rid, current_user.id, remarks):
+                skipped += 1
+                continue
+        else:
+            update_request_status(rid, status, reviewer_id=current_user.id, remarks=remarks)
         try:
             from app.circulation.models import create_notification
             borrower_id = existing[1] if len(existing) > 1 else None
@@ -359,10 +362,12 @@ def review_request(request_id, action):
 
     status = 'approved' if action == 'approve' else 'rejected'
     remarks = request.form.get('remarks', '').strip() or None
-    update_request_status(request_id, status, reviewer_id=current_user.id, remarks=remarks)
-
     if action == 'approve':
-        create_procurement(request_id)
+        if not approve_request_with_procurement(request_id, current_user.id, remarks):
+            flash('This request has already been reviewed.', 'error')
+            return redirect(url_for('requests.list_requests'))
+    else:
+        update_request_status(request_id, status, reviewer_id=current_user.id, remarks=remarks)
 
     try:
         from app.circulation.models import create_notification

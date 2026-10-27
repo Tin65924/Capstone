@@ -5,14 +5,10 @@ Usage:
     python setup_db.py
 
 What it does:
-    1. Locates your PostgreSQL 18 installation
-    2. Temporarily enables trust authentication for local connections
-    3. Sets a known password for the postgres user
-    4. Creates the library_db database
-    5. Runs app/schema.sql to create all tables
-    6. Inserts seed data (roles)
-    7. Restores original pg_hba.conf
-    8. Updates .env with the connection string
+    1. Connects with the administrator credentials you provide
+    2. Creates the library_db database
+    3. Runs app/schema.sql to create all tables and seed roles
+    4. Updates .env with the connection string
 """
 
 import os
@@ -21,9 +17,10 @@ import shutil
 import re
 import subprocess
 import glob
+from getpass import getpass
+from urllib.parse import quote
 
 DB_NAME = 'library_db'
-DB_PASSWORD = 'postgres'
 SCHEMA_FILE = os.path.join(os.path.dirname(__file__), 'app', 'schema.sql')
 ENV_FILE = os.path.join(os.path.dirname(__file__), '.env')
 
@@ -212,61 +209,39 @@ def update_env(db_url):
 def main():
     """Run the one-shot local database bootstrap.
 
-    Backs up ``pg_hba.conf``, enables temporary trust auth, sets the
-    ``postgres`` password, drops/recreates ``library_db``, applies
-    ``app/schema.sql`` (tables + role seed), restores ``pg_hba.conf``
-    and reloads, then writes ``DATABASE_URL`` to ``.env``. On any
-    failure the original ``pg_hba.conf`` is restored and the process
-    exits non-zero.
+    Connects with an explicitly supplied PostgreSQL password,
+    drops/recreates ``library_db``, applies ``app/schema.sql`` (tables +
+    role seed), then writes ``DATABASE_URL`` to ``.env``. It never edits
+    PostgreSQL authentication configuration or changes database passwords.
 
     Returns:
         None.
 
     Side effects:
-        Rewrites ``pg_hba.conf`` (temporarily), manages the
-        ``library_db`` database, writes ``.env``, prints progress.
+        Manages the ``library_db`` database, writes ``.env``, prints progress.
     """
-    data_dir = find_pg_data_dir()
-    if not data_dir:
-        print('Could not find PostgreSQL data directory.')
-        print('Make sure PostgreSQL is installed at C:\\Program Files\\PostgreSQL\\18\\')
-        sys.exit(1)
-
-    hba_path = os.path.join(data_dir, 'pg_hba.conf')
-    bak_path = hba_path + '.setup.bak'
-
-    print(f'PostgreSQL data directory: {data_dir}')
-    print(f'pg_hba.conf: {hba_path}')
-
-    # Backup original pg_hba.conf
-    shutil.copy2(hba_path, bak_path)
-    print('Backed up pg_hba.conf → pg_hba.conf.setup.bak')
-
-    # Enable trust auth
-    enable_trust_auth(hba_path)
-    print('Added temporary trust authentication rules.')
-
-    # Reload PostgreSQL
-    reload_pg(data_dir)
-
-    # Connect and set up
     import psycopg2
     from psycopg2 import sql as psql
+
+    db_user = os.environ.get('POSTGRES_USER', 'postgres')
+    db_password = os.environ.get('POSTGRES_PASSWORD') or getpass(
+        f'Password for PostgreSQL user {db_user}: '
+    )
+    if not db_password:
+        print('A PostgreSQL password is required. Set POSTGRES_PASSWORD or enter it when prompted.')
+        sys.exit(1)
 
     try:
         conn = psycopg2.connect(
             host='localhost',
             port=5432,
-            user='postgres',
+            user=db_user,
+            password=db_password,
             dbname='postgres'
         )
         conn.autocommit = True
         cur = conn.cursor()
-        print('Connected to PostgreSQL (trust auth).')
-
-        # Set password
-        cur.execute(psql.SQL("ALTER USER postgres WITH PASSWORD %s"), [DB_PASSWORD])
-        print(f'Password for postgres user set to: {DB_PASSWORD}')
+        print('Connected to PostgreSQL.')
 
         # Drop database if exists, then recreate
         cur.execute(
@@ -287,8 +262,8 @@ def main():
         conn = psycopg2.connect(
             host='localhost',
             port=5432,
-            user='postgres',
-            password=DB_PASSWORD,
+            user=db_user,
+            password=db_password,
             dbname=DB_NAME
         )
         conn.autocommit = True
@@ -309,29 +284,16 @@ def main():
 
     except Exception as e:
         print(f'Error during setup: {e}')
-        print('Restoring original pg_hba.conf...')
-        shutil.copy2(bak_path, hba_path)
-        remove_trust_auth(hba_path)
-        reload_pg(data_dir)
         sys.exit(1)
 
-    # Restore original pg_hba.conf
-    remove_trust_auth(hba_path)
-    os.remove(bak_path)
-    print('Restored original pg_hba.conf (removed temporary rules).')
-
-    # Reload PostgreSQL
-    reload_pg(data_dir)
-
     # Update .env
-    db_url = f'postgresql://postgres:{DB_PASSWORD}@localhost:5432/{DB_NAME}'
+    db_url = f'postgresql://{quote(db_user, safe="")}:{quote(db_password, safe="")}@localhost:5432/{DB_NAME}'
     update_env(db_url)
 
     print('\n=== Setup complete! ===')
     print(f'Database: {DB_NAME}')
-    print(f'Username: postgres')
-    print(f'Password: {DB_PASSWORD}')
-    print(f'URL: {db_url}')
+    print(f'Username: {db_user}')
+    print('DATABASE_URL saved to .env.')
     print('\nYou can now run: python run.py')
 
 

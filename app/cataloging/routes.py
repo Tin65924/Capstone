@@ -17,7 +17,7 @@ from app.cataloging.models import (
     update_book, update_book_status, delete_book, create_accession,
     get_accessions_by_book, get_accession_by_number,
     get_accession_by_id, get_accessions_for_books, update_accession,
-    delete_accession, accession_referenced,
+    delete_accession, accession_referenced, get_book_deletion_blocker,
     get_book_by_title_author_isbn, search_books_paginated,
     get_categories, get_categories_for_books, get_book_categories,
     resolve_category, set_book_categories, normalize_isbn,
@@ -296,6 +296,16 @@ def _validate_accession_number(accession_number):
     if not re.fullmatch(r'\d{6}', accession_number):
         return 'Accession number must be exactly 6 digits (e.g. 000001).'
     return None
+
+
+def _normalize_source(value):
+    """Return a valid optional accession source or a user-facing error."""
+    source = (value or '').strip().lower()
+    if not source:
+        return None, None
+    if source not in ('purchase', 'donation', 'others'):
+        return None, 'Source must be purchase, donation, or others.'
+    return source, None
 
 
 def _stash_book_form(modal, extra=None):
@@ -704,7 +714,11 @@ def add_book():
 
     isbn = fields['isbn']
     existing_book = get_book_by_title_author_isbn(title, author, isbn)
-    source = request.form.get('source', '').strip() or None
+    source, source_error = _normalize_source(request.form.get('source'))
+    if source_error:
+        flash(source_error, 'error')
+        _stash_book_form('addBookModal')
+        return redirect(url_for('cataloging.cataloging_page', modal='addBookModal', mstatus='error'))
     category_id, canonical_subject = resolve_category(fields['subject_classification'])
     fields['subject_classification'] = canonical_subject or fields['subject_classification']
     if existing_book:
@@ -718,33 +732,32 @@ def add_book():
             flash(f'"{title}" already exists in the catalog.', 'info')
         return redirect(url_for('cataloging.cataloging_page', modal='addBookModal', mstatus='success'))
 
-    book_id = create_book(
-        title=title,
-        author=author,
-        edition=fields['edition'],
-        publisher=fields['publisher'],
-        year_published=fields['year_published'],
-        subject_classification=fields['subject_classification'],
-        call_number=fields['call_number'],
-        isbn=isbn,
-        material_type=fields['material_type'],
-        description=request.form.get('description', '').strip() or None,
-        category_id=category_id,
-        ebook_url=fields['ebook_url'],
-        ebook_allow_download=fields['ebook_allow_download'],
-    )
-    bloom_registry.mark_dirty()
-    if accession_number:
-        create_accession(
-            accession_number=accession_number,
-            book_id=book_id,
-            librarian_id=current_user.id,
-            source=source,
+    from app.database import db
+    with db.transaction():
+        book_id = create_book(
+            title=title,
+            author=author,
+            edition=fields['edition'],
+            publisher=fields['publisher'],
+            year_published=fields['year_published'],
+            subject_classification=fields['subject_classification'],
+            call_number=fields['call_number'],
+            isbn=isbn,
+            material_type=fields['material_type'],
+            description=request.form.get('description', '').strip() or None,
+            category_id=category_id,
+            ebook_url=fields['ebook_url'],
+            ebook_allow_download=fields['ebook_allow_download'],
         )
-    try:
+        if accession_number:
+            create_accession(
+                accession_number=accession_number,
+                book_id=book_id,
+                librarian_id=current_user.id,
+                source=source,
+            )
         set_book_categories(book_id, request.form.getlist('extra_categories'))
-    except Exception:
-        current_app.logger.warning('set_book_categories failed for book %s', book_id, exc_info=True)
+    bloom_registry.mark_dirty()
     log_activity(current_user.id, 'cataloging:add_book')
     flash('Book added to catalog.', 'success')
     return redirect(url_for('cataloging.cataloging_page', modal='addBookModal', mstatus='success'))
@@ -780,28 +793,27 @@ def edit_book(book_id):
     category_id, canonical_subject = resolve_category(fields['subject_classification'])
     fields['subject_classification'] = canonical_subject or fields['subject_classification']
 
-    update_book(
-        book_id=book_id,
-        title=title,
-        author=author,
-        edition=fields['edition'],
-        publisher=fields['publisher'],
-        year_published=fields['year_published'],
-        subject_classification=fields['subject_classification'],
-        call_number=fields['call_number'],
-        isbn=fields['isbn'],
-        material_type=fields['material_type'],
-        description=request.form.get('description', '').strip() or None,
-        updated_by=current_user.id,
-        category_id=category_id,
-        ebook_url=fields['ebook_url'],
-        ebook_allow_download=fields['ebook_allow_download'],
-    )
-    bloom_registry.mark_dirty()
-    try:
+    from app.database import db
+    with db.transaction():
+        update_book(
+            book_id=book_id,
+            title=title,
+            author=author,
+            edition=fields['edition'],
+            publisher=fields['publisher'],
+            year_published=fields['year_published'],
+            subject_classification=fields['subject_classification'],
+            call_number=fields['call_number'],
+            isbn=fields['isbn'],
+            material_type=fields['material_type'],
+            description=request.form.get('description', '').strip() or None,
+            updated_by=current_user.id,
+            category_id=category_id,
+            ebook_url=fields['ebook_url'],
+            ebook_allow_download=fields['ebook_allow_download'],
+        )
         set_book_categories(book_id, request.form.getlist('extra_categories'))
-    except Exception:
-        current_app.logger.warning('set_book_categories failed for book %s', book_id, exc_info=True)
+    bloom_registry.mark_dirty()
     from app.auth.models import audit_text
     old_title = (book[1] or '') if len(book) > 1 else ''
     detail = ''
@@ -838,6 +850,10 @@ def delete_book_route(book_id):
         return redirect(url_for('cataloging.cataloging_page'))
     if status != 'archived':
         flash('Book must be archived before deletion.', 'error')
+        return redirect(url_for('cataloging.cataloging_page'))
+    blocker = get_book_deletion_blocker(book_id)
+    if blocker:
+        flash(f'Cannot delete this book because it still has {blocker}.', 'error')
         return redirect(url_for('cataloging.cataloging_page'))
     delete_book(book_id)
     bloom_registry.mark_dirty()
@@ -899,7 +915,10 @@ def add_accession(book_id):
         return redirect(url_for('cataloging.cataloging_page'))
 
     accession_number = request.form.get('accession_number', '').strip()
-    source = request.form.get('source', '').strip() or None
+    source, source_error = _normalize_source(request.form.get('source'))
+    if source_error:
+        flash(source_error, 'error')
+        return redirect(url_for('cataloging.cataloging_page', modal='addAccessionModal', mstatus='error'))
 
     acc_error = _validate_accession_number(accession_number)
     if acc_error:
@@ -943,7 +962,10 @@ def edit_accession(accession_id):
         return redirect(url_for('cataloging.cataloging_page'))
 
     accession_number = request.form.get('accession_number', '').strip()
-    source = request.form.get('source', '').strip() or None
+    source, source_error = _normalize_source(request.form.get('source'))
+    if source_error:
+        flash(source_error, 'error')
+        return redirect(url_for('cataloging.cataloging_page', modal='editAccessionModal', mstatus='error'))
 
     acc_error = _validate_accession_number(accession_number)
     if acc_error:

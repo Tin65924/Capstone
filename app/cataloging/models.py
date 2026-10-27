@@ -980,18 +980,18 @@ def set_book_categories(book_id, category_ids):
             continue
         if cid not in ids:
             ids.append(cid)
-    db.execute('DELETE FROM book_categories WHERE book_id = %s', (book_id,))
-    if not ids:
-        return
-    db.execute(
-        '''INSERT INTO book_categories (book_id, category_id)
-           SELECT %s, category_id FROM categories
-           WHERE category_id = ANY(%s)
-             AND category_id IS DISTINCT FROM
-                 (SELECT category_id FROM book_catalog WHERE book_id = %s)
-           ON CONFLICT DO NOTHING''',
-        (book_id, ids, book_id)
-    )
+    with db.transaction():
+        db.execute('DELETE FROM book_categories WHERE book_id = %s', (book_id,))
+        if ids:
+            db.execute(
+                '''INSERT INTO book_categories (book_id, category_id)
+                   SELECT %s, category_id FROM categories
+                   WHERE category_id = ANY(%s)
+                     AND category_id IS DISTINCT FROM
+                         (SELECT category_id FROM book_catalog WHERE book_id = %s)
+                   ON CONFLICT DO NOTHING''',
+                (book_id, ids, book_id)
+            )
 
 
 def get_distinct_material_types():
@@ -1509,6 +1509,25 @@ def delete_book(book_id):
         book_id: Target title's primary key.
     """
     db.execute('DELETE FROM book_catalog WHERE book_id = %s', (book_id,))
+
+
+def get_book_deletion_blocker(book_id):
+    """Return a friendly reason when a title still has dependent records."""
+    rows = db.fetch_all(
+        '''SELECT 'accession copies' WHERE EXISTS
+               (SELECT 1 FROM accession_log WHERE book_id = %s)
+           UNION ALL SELECT 'circulation history' WHERE EXISTS
+               (SELECT 1 FROM circulation_records WHERE book_id = %s)
+           UNION ALL SELECT 'reservations' WHERE EXISTS
+               (SELECT 1 FROM reservation_queue WHERE book_id = %s)
+           UNION ALL SELECT 'member favorites' WHERE EXISTS
+               (SELECT 1 FROM user_favorites WHERE book_id = %s)
+           UNION ALL SELECT 'e-book access history' WHERE EXISTS
+               (SELECT 1 FROM ebook_access_log WHERE book_id = %s)
+           LIMIT 1''',
+        (book_id, book_id, book_id, book_id, book_id)
+    ) or []
+    return rows[0][0] if rows else None
 
 
 def update_book_status(book_id, status, updated_by=None):

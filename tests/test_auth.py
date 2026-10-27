@@ -59,6 +59,15 @@ class TestGoogleCallback:
         assert resp.status_code == 302
         assert resp.location.endswith('/login')
 
+    def test_callback_rejects_mismatched_state(self, client):
+        with client.session_transaction() as sess:
+            sess['_oauth_state'] = 'expected-state'
+
+        resp = client.get('/login/google/callback', query_string={'state': 'wrong-state'})
+
+        assert resp.status_code == 302
+        assert resp.location.endswith('/login')
+
     def test_callback_valid_user_logs_in(self, client, mock_oauth_flow):
         """Validates callback valid user logs in `/login/google/callback` (expects 302) [TestGoogleCallback / auth].
     If fails: likely redirect/flash logic changed or guard misordered.
@@ -81,6 +90,8 @@ class TestGoogleCallback:
             mock_id_token.verify_oauth2_token.return_value = {
                 'iss': 'accounts.google.com',
                 'email': 'user@mcst.edu.ph',
+                'email_verified': True,
+                'hd': 'mcst.edu.ph',
                 'sub': 'google-sub-123',
                 'name': 'Test User',
             }
@@ -163,7 +174,9 @@ class TestGoogleCallback:
             with patch.object(auth_routes, 'id_token') as mock_id_token:
                 mock_id_token.verify_oauth2_token.return_value = {
                     'iss': 'accounts.google.com',
-                    'email': 'first@mcst.edu.ph',
+                'email': 'first@mcst.edu.ph',
+                'email_verified': True,
+                'hd': 'mcst.edu.ph',
                     'sub': 'google-admin-sub',
                     'name': 'First Admin',
                 }
@@ -192,6 +205,8 @@ class TestGoogleCallback:
             mock_id_token.verify_oauth2_token.return_value = {
                 'iss': 'accounts.google.com',
                 'email': 'a@mcst.edu.ph',
+                'email_verified': True,
+                'hd': 'mcst.edu.ph',
                 'sub': 'google-sub-1',
                 'name': 'Ann',
             }
@@ -219,6 +234,8 @@ class TestGoogleCallback:
             mock_id_token.verify_oauth2_token.return_value = {
                 'iss': 'accounts.google.com',
                 'email': 'f@mcst.edu.ph',
+                'email_verified': True,
+                'hd': 'mcst.edu.ph',
                 'sub': 'google-sub-2',
                 'name': 'Fac',
             }
@@ -246,7 +263,9 @@ class TestGoogleCallback:
             with patch.object(auth_routes, 'id_token') as mock_id_token:
                 mock_id_token.verify_oauth2_token.return_value = {
                     'iss': 'accounts.google.com',
-                    'email': 'second@mcst.edu.ph',
+                'email': 'second@mcst.edu.ph',
+                'email_verified': True,
+                'hd': 'mcst.edu.ph',
                     'sub': 'google-sub-456',
                     'name': 'Second User',
                 }
@@ -799,17 +818,17 @@ class TestLogout:
         """Validates logout `/logout` as student (expects 302) [TestLogout / auth].
     If fails: likely auth guard/session mock changed or route path renamed.
     Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
-        resp = student_client.get('/logout')
+        resp = student_client.post('/logout')
         assert resp.status_code == 302
         assert resp.location.endswith('/login')
+        mock_log_activity.assert_called_once()
 
     def test_logout_unauthenticated_redirects(self, client):
         """Validates logout unauthenticated redirects `/logout` (expects 302) [TestLogout / auth].
     If fails: likely redirect/flash logic changed or guard misordered.
     Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = client.get('/logout')
-        assert resp.status_code == 302
-        assert '/login' in resp.location
+        assert resp.status_code == 405
 
 
 class TestUserManagement:
@@ -855,6 +874,14 @@ class TestUserManagement:
         resp = librarian_client.post('/librarian/users/2/approve')
         assert resp.status_code == 302
 
+    def test_approve_user_rejects_non_pending_account(self, librarian_client, mock_db):
+        mock_db['fetch_one'].return_value = None
+
+        resp = librarian_client.post('/librarian/users/2/approve')
+
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
+
     def test_approve_user_student_forbidden(self, student_client, mock_db):
         """Validates approve user student forbidden `/librarian/users/2/approve` as student (expects 302) [TestUserManagement / auth].
     If fails: likely redirect/flash logic changed or guard misordered.
@@ -871,6 +898,17 @@ class TestUserManagement:
         mock_db['execute'].return_value = 1
         resp = admin_client.post('/admin/users/1/toggle-status')
         assert resp.status_code == 302
+
+    def test_toggle_status_rejects_last_active_admin(self, admin_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (1, 'admin@mcst.edu.ph', 'Admin', 'Admin', 'active'),
+            (1,),
+        ]
+
+        resp = admin_client.post('/admin/users/1/toggle-status')
+
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
 
     def test_toggle_status_librarian_forbidden(self, librarian_client, mock_db):
         """Validates toggle status librarian forbidden `/admin/users/1/toggle-status` as librarian (expects 302) [TestUserManagement / auth].
@@ -907,6 +945,17 @@ class TestUserManagement:
         assert mock_db['execute'].call_count >= 1
         call_args = mock_db['execute'].call_args_list[0]
         assert 'UPDATE user_accounts' in call_args[0][0]
+
+    def test_archive_rejects_last_active_admin(self, admin_client, mock_db):
+        mock_db['fetch_one'].side_effect = [
+            (1, 'admin@mcst.edu.ph', 'Admin', 'Admin', 'active'),
+            (1,),
+        ]
+
+        resp = admin_client.post('/admin/users/1/archive')
+
+        assert resp.status_code == 302
+        assert mock_db['execute'].call_count == 0
 
     def test_archive_user_librarian_forbidden(self, librarian_client, mock_db):
         """Validates archive user librarian forbidden `/admin/users/1/archive` as librarian (expects 302) [TestUserManagement / auth].

@@ -1,5 +1,7 @@
 import os
 import re
+import time
+from contextlib import contextmanager
 
 import psycopg2
 from psycopg2 import pool
@@ -14,6 +16,12 @@ class Database:
     recovery, and pool return live in one place.
     """
 
+    # A pooled connection used within this many seconds is assumed still
+    # live; only older checkouts are probed with SELECT 1 (see
+    # :meth:`get_connection`). 0 restores validate-on-every-checkout.
+    # Overridable per app via DB_REVALIDATE_IDLE_SECONDS.
+    _revalidate_idle_seconds = 30
+
     def __init__(self, app=None):
         """Create the wrapper, optionally binding it to a Flask app immediately.
 
@@ -22,6 +30,11 @@ class Database:
                 bind later (the module-level ``db`` singleton uses this).
         """
         self._pool = None
+        # Last-use stamps for pooled connections, used to skip the
+        # revalidation probe on hot checkouts (see get_connection). Kept on
+        # the wrapper rather than the connection object so it works for any
+        # connection type.
+        self._conn_used_at = {}
         if app is not None:
             self.init_app(app)
 
@@ -30,30 +43,34 @@ class Database:
 
         Reads ``DATABASE_URL`` from the Flask config, adds connect timeout
         and TCP keepalive parameters, creates a ThreadedConnectionPool
-        (1-10 connections), and registers :meth:`close_connection` as the
-        app-context teardown so each request returns its connection.
+        (sized by ``DB_POOL_MINCONN``/``DB_POOL_MAXCONN``), and registers
+        :meth:`close_connection` as the app-context teardown so each
+        request returns its connection.
 
         Args:
             app: Flask application whose config holds DATABASE_URL.
         """
         dsn = _with_conn_params(app.config['DATABASE_URL'])
         self._pool = pool.ThreadedConnectionPool(
-            minconn=1,
-            maxconn=10,
+            minconn=app.config.get('DB_POOL_MINCONN', 1),
+            maxconn=app.config.get('DB_POOL_MAXCONN', 16),
             dsn=dsn
         )
+        self._revalidate_idle_seconds = app.config.get(
+            'DB_REVALIDATE_IDLE_SECONDS', self._revalidate_idle_seconds)
         app.teardown_appcontext(self.close_connection)
 
     def get_connection(self):
         """Return the current request's pooled PostgreSQL connection.
 
         Reuses the connection stored on ``flask.g`` when one already exists
-        for this request, otherwise checks one out of the pool. Validates
-        the checkout with ``SELECT 1`` because hosting providers
-        (Render/Neon/Supabase) silently close idle connections, and a dead
-        pooled connection would otherwise cause a random 500 on the next
-        page load. A failed validation discards that slot and checks out
-        a fresh connection.
+        for this request, otherwise checks one out of the pool. Hosting
+        providers (Render/Neon/Supabase) silently close idle connections
+        and psycopg2 does not verify on checkout, but a ``SELECT 1`` on
+        every request costs a full round-trip on a hot path. So a
+        connection used within ``_revalidate_idle_seconds`` is assumed
+        live; an older checkout is probed with ``SELECT 1`` and, if dead,
+        its slot is discarded and a fresh connection checked out.
 
         Returns:
             A live psycopg2 connection bound to the current request.
@@ -61,23 +78,29 @@ class Database:
         if 'db_conn' in g:
             return g.db_conn
         conn = self._pool.getconn()
-        # Validate pooled connections: Render/Neon/Supabase close idle
-        # connections, and psycopg2 does not check on checkout. A dead
-        # conn would otherwise 500 the next page navigation at random.
-        try:
-            with conn.cursor() as cur:
-                cur.execute('SELECT 1')
-            # No commit/rollback here on success: the validation SELECT
-            # joins the request's transaction, which execute() commits.
-            # (A separate rollback/commit would break transaction tests
-            # and leave nothing for the real query to clean up.)
-        except Exception:
+        # Validate only once a pooled connection may have gone stale; a slot
+        # never seen before has no stamp and is always validated. The stamp
+        # survives the connection's trips back into the pool, so a busy pool
+        # pays at most one SELECT 1 per connection per window.
+        now = time.monotonic()
+        last_used = self._conn_used_at.get(conn)
+        if last_used is None or now - last_used >= self._revalidate_idle_seconds:
             try:
-                self._pool.putconn(conn, close=True)
+                with conn.cursor() as cur:
+                    cur.execute('SELECT 1')
+                # No commit/rollback here on success: the validation SELECT
+                # joins the request's transaction, which execute() commits.
+                # (A separate rollback/commit would break transaction tests
+                # and leave nothing for the real query to clean up.)
             except Exception:
-                pass
-            g.pop('db_conn', None)
-            conn = self._pool.getconn()
+                self._conn_used_at.pop(conn, None)
+                try:
+                    self._pool.putconn(conn, close=True)
+                except Exception:
+                    pass
+                g.pop('db_conn', None)
+                conn = self._pool.getconn()
+        self._conn_used_at[conn] = now
         g.db_conn = conn
         return conn
 
@@ -96,6 +119,7 @@ class Database:
         if conn is not None:
             try:
                 if getattr(conn, 'closed', 0):
+                    self._conn_used_at.pop(conn, None)
                     self._pool.putconn(conn, close=True)
                 else:
                     self._pool.putconn(conn)
@@ -133,6 +157,7 @@ class Database:
         try:
             with conn.cursor() as cur:
                 cur.execute(query, params)
+                in_transaction = getattr(g, 'db_transaction_depth', 0) > 0
                 if cur.description:
                     rows = cur.fetchall()
                     # End the read transaction: otherwise the pooled
@@ -140,9 +165,11 @@ class Database:
                     # locks, which blocks DDL (e.g. a backup restore's
                     # DROP TABLE) forever. Harmless under READ COMMITTED —
                     # every statement already sees the latest snapshot.
-                    conn.commit()
+                    if not in_transaction:
+                        conn.commit()
                     return rows
-                conn.commit()
+                if not in_transaction:
+                    conn.commit()
                 return cur.rowcount
         except Exception as e:
             try:
@@ -161,7 +188,38 @@ class Database:
                 current_app.logger.warning('DB query failed: %s', e)
             except Exception:
                 pass
-            raise e
+            raise
+
+    @contextmanager
+    def transaction(self):
+        """Group several database statements into one atomic transaction.
+
+        Single-statement model methods retain ``execute``'s commit behavior.
+        Multi-write workflows opt in to this context so an error rolls back
+        every statement in the unit of work. Nested uses share the outer
+        transaction. The no-pool branch keeps the lightweight mocked test
+        database compatible with model-level transaction tests.
+        """
+        if self._pool is None:
+            yield
+            return
+
+        conn = self.get_connection()
+        depth = getattr(g, 'db_transaction_depth', 0)
+        g.db_transaction_depth = depth + 1
+        try:
+            yield
+            if depth == 0:
+                conn.commit()
+        except Exception:
+            if depth == 0:
+                conn.rollback()
+            raise
+        finally:
+            if depth:
+                g.db_transaction_depth = depth
+            else:
+                g.pop('db_transaction_depth', None)
 
     def fetch_one(self, query, params=None):
         """Fetch a single row for a SELECT expected to match zero or one rows.
@@ -240,6 +298,10 @@ def _with_connect_timeout(dsn, seconds=10):
     return _with_conn_params(dsn, seconds=seconds)
 
 
+class RequiredSchemaMigrationError(RuntimeError):
+    """A required invariant could not be installed without operator review."""
+
+
 def run_schema(app):
     """Apply schema.sql plus follow-up constraint patches at app startup.
 
@@ -250,7 +312,9 @@ def run_schema(app):
     patches (account/backup/accession status checks, phone/is_read
     columns, notification and analytics-cache checks) the same way.
     Skips entirely with a warning when schema.sql is missing or a
-    statement fails, logging applied/skipped counts. Never raises.
+    statement fails, logging applied/skipped counts. Adjacent constraint
+    replacement pairs are committed together so a failed replacement never
+    leaves an existing database without its former constraint. Never raises.
 
     Args:
         app: Flask application providing config and ``logger``.
@@ -292,19 +356,46 @@ def run_schema(app):
             """
             ok, failed = 0, 0
             with conn.cursor() as cur:
-                for stmt in statements:
+                statements = list(statements)
+                index = 0
+                while index < len(statements):
+                    stmt = statements[index]
                     stmt = stmt.strip()
                     if not stmt:
+                        index += 1
                         continue
                     try:
+                        # Constraint migrations are written as adjacent
+                        # DROP/ADD pairs. Run them in one transaction: a
+                        # rejected ADD rolls the DROP back instead of
+                        # silently weakening an existing database.
+                        next_stmt = (
+                            statements[index + 1].strip()
+                            if index + 1 < len(statements) else ''
+                        )
+                        is_constraint_drop = 'DROP CONSTRAINT' in stmt.upper()
+                        is_constraint_add = 'ADD CONSTRAINT' in next_stmt.upper()
                         cur.execute(stmt)
+                        if is_constraint_drop and is_constraint_add:
+                            cur.execute(next_stmt)
+                            index += 1
                         conn.commit()
                         ok += 1
                     except Exception as e:
                         conn.rollback()
+                        if any(name in stmt for name in (
+                            'uq_procurement_log_request_id',
+                            'uq_inventory_status_accession_id',
+                        )):
+                            raise RequiredSchemaMigrationError(
+                                'Required uniqueness index could not be created. '
+                                'Review duplicate procurement request IDs and inventory '
+                                'accession IDs and reconcile them before restarting.'
+                            ) from e
                         failed += 1
                         app.logger.warning('Schema statement skipped: %s | %.120s',
-                                           e, stmt)
+                                            e, stmt)
+                    index += 1
             return ok, failed
 
         with open(schema_path, 'r') as f:
@@ -384,6 +475,10 @@ def run_schema(app):
         ] + _cache_patches)
         app.logger.info('Database schema initialized: %d applied, %d skipped.',
                         ok + ok2, failed + failed2)
+    except RequiredSchemaMigrationError:
+        conn.rollback()
+        app.logger.exception('Required schema migration failed; no duplicate rows were removed')
+        raise
     except Exception as e:
         conn.rollback()
         app.logger.warning('Schema initialization skipped (may already exist): %s', e)

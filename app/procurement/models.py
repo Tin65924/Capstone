@@ -116,9 +116,9 @@ def create_procurement(request_id):
     """
     return db.execute(
         '''INSERT INTO procurement_log (request_id, order_status, order_date)
-           SELECT %s, %s, %s
-           WHERE NOT EXISTS (SELECT 1 FROM procurement_log WHERE request_id = %s)''',
-        (request_id, 'for_ordering', date.today(), request_id)
+            SELECT %s, %s, %s
+            ON CONFLICT (request_id) DO NOTHING''',
+        (request_id, 'for_ordering', date.today())
     )
 
 
@@ -151,6 +151,17 @@ def update_procurement_status(procurement_id, order_status, remarks=None, date_r
         'UPDATE procurement_log SET order_status = %s, remarks = %s, updated_at = NOW(), updated_by = %s WHERE procurement_id = %s',
         (order_status, remarks, updated_by, procurement_id)
     )
+
+
+def update_status_with_request(procurement_id, request_id, order_status, updated_by=None):
+    """Update an order and mark its request procured in one transaction."""
+    with db.transaction():
+        update_procurement_status(procurement_id, order_status, updated_by=updated_by)
+        if order_status == 'procured':
+            db.execute(
+                "UPDATE request_records SET request_status = 'procured', updated_at = NOW(), updated_by = %s WHERE request_id = %s",
+                (updated_by, request_id),
+            )
 
 
 VALID_STATUSES = ['for_ordering', 'ordered', 'delivered', 'cancelled', 'out_of_stock', 'procured']

@@ -118,6 +118,11 @@ CREATE TABLE IF NOT EXISTS procurement_log (
     updated_by     INT REFERENCES user_accounts(user_id)
 );
 
+-- Existing duplicates must be reviewed and reconciled before adding this
+-- index; never discard procurement history automatically at startup.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_procurement_log_request_id
+    ON procurement_log (request_id);
+
 CREATE TABLE IF NOT EXISTS circulation_records (
     circulation_id     SERIAL PRIMARY KEY,
     book_id            INT NOT NULL REFERENCES book_catalog(book_id),
@@ -151,6 +156,11 @@ CREATE TABLE IF NOT EXISTS inventory_status (
     checked_by       INT REFERENCES user_accounts(user_id),
     last_checked_date DATE NOT NULL
 );
+
+-- Existing duplicates must be reviewed before adding this index; the most
+-- recently inserted row does not necessarily represent the correct state.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_inventory_status_accession_id
+    ON inventory_status (accession_id);
 
 CREATE TABLE IF NOT EXISTS inventory_sessions (
     session_id     SERIAL PRIMARY KEY,
@@ -451,6 +461,27 @@ CREATE INDEX IF NOT EXISTS idx_ebook_access_time ON ebook_access_log (accessed_a
 CREATE INDEX IF NOT EXISTS idx_notif_recipient ON notification_log (recipient_id);
 CREATE INDEX IF NOT EXISTS idx_user_accounts_status ON user_accounts (account_status);
 CREATE INDEX IF NOT EXISTS idx_user_accounts_role ON user_accounts (role_id);
+-- Hot-path indexes added from the performance audit: borrower-scoped loan
+-- lookups, due-date/overdue scans and the desk's recent-transactions ORDER
+-- BY, inventory session readback, per-request/order procurement joins, the
+-- admin user list's created_at sort, and the analytics cache lookup all
+-- had no supporting index and full-scanned their tables. IF NOT EXISTS
+-- keeps the re-applied schema idempotent (see run_schema).
+CREATE INDEX IF NOT EXISTS idx_circ_borrower ON circulation_records (borrower_id);
+CREATE INDEX IF NOT EXISTS idx_circ_due ON circulation_records (due_date);
+CREATE INDEX IF NOT EXISTS idx_circ_recent
+    ON circulation_records ((COALESCE(return_date, borrow_date)) DESC);
+CREATE INDEX IF NOT EXISTS idx_inventory_session ON inventory_status (session_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_checked ON inventory_status (last_checked_date DESC);
+CREATE INDEX IF NOT EXISTS idx_reservation_borrower ON reservation_queue (borrower_id);
+CREATE INDEX IF NOT EXISTS idx_requests_date ON request_records (request_date);
+CREATE INDEX IF NOT EXISTS idx_requests_status_date
+    ON request_records (request_status, request_date);
+CREATE INDEX IF NOT EXISTS idx_procurement_request ON procurement_log (request_id);
+CREATE INDEX IF NOT EXISTS idx_procurement_status ON procurement_log (order_status);
+CREATE INDEX IF NOT EXISTS idx_user_accounts_created ON user_accounts (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_analytics_cache_lookup
+    ON analytics_cache (report_type, generated_date DESC);
 -- Race guards for concurrent borrows/reserves (F2): the app checks
 -- first (SELECT-then-INSERT), but two simultaneous POSTs can both pass
 -- the check. These partial unique indexes make the loser fail with a

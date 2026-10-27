@@ -992,7 +992,7 @@ def approve_user(user_id, updated_by=None):
         updated_by: Approving staff user_id for the audit stamp.
     """
     db.execute(
-        'UPDATE user_accounts SET account_status = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s',
+        "UPDATE user_accounts SET account_status = %s, updated_at = NOW(), updated_by = %s WHERE user_id = %s AND account_status = 'pending'",
         ('active', updated_by, user_id)
     )
 
@@ -1088,55 +1088,56 @@ def delete_user(user_id):
         user_id: Archived user_accounts row to hard-delete. Caller must
             have verified account_status='archived' and no blocker.
     """
-    borrower = db.fetch_one(
-        'SELECT borrower_id FROM borrowers WHERE user_id = %s',
-        (user_id,)
-    )
-    borrower_id = borrower[0] if borrower else None
-    if borrower_id is not None:
-        db.execute(
-            'DELETE FROM notification_log WHERE recipient_id = %s',
-            (borrower_id,)
-        )
-        # Active waiting/allocated reservations are blocked by the
-        # pre-check; whatever remains here is terminal and safe to clear.
-        db.execute(
-            'DELETE FROM reservation_queue WHERE borrower_id = %s',
-            (borrower_id,)
-        )
-        req_rows = db.fetch_all(
-            'SELECT request_id FROM request_records WHERE requester_id = %s',
-            (borrower_id,)
-        ) or []
-        for req in req_rows:
-            try:
-                request_id = req[0]
-            except (IndexError, TypeError):
-                continue
-            db.execute(
-                'DELETE FROM procurement_log WHERE request_id = %s',
-                (request_id,)
-            )
-        db.execute(
-            'DELETE FROM request_records WHERE requester_id = %s',
-            (borrower_id,)
-        )
-        # Active/overdue loans are blocked by the pre-check; remaining
-        # returned rows are cleared so the borrower row can go.
-        db.execute(
-            'DELETE FROM circulation_records WHERE borrower_id = %s',
-            (borrower_id,)
-        )
-    db.execute('DELETE FROM user_favorites WHERE user_id = %s', (user_id,))
-    # Keep the audit history row, just detach the deleted actor.
-    db.execute('UPDATE audit_trail SET user_id = NULL WHERE user_id = %s', (user_id,))
-    for _table, _column in _NULLABLE_USER_REFS:
-        db.execute(
-            f'UPDATE {_table} SET {_column} = NULL WHERE {_column} = %s',
+    with db.transaction():
+        borrower = db.fetch_one(
+            'SELECT borrower_id FROM borrowers WHERE user_id = %s',
             (user_id,)
         )
-    db.execute('DELETE FROM borrowers WHERE user_id = %s', (user_id,))
-    db.execute('DELETE FROM user_accounts WHERE user_id = %s', (user_id,))
+        borrower_id = borrower[0] if borrower else None
+        if borrower_id is not None:
+            db.execute(
+                'DELETE FROM notification_log WHERE recipient_id = %s',
+                (borrower_id,)
+            )
+            # Active waiting/allocated reservations are blocked by the
+            # pre-check; whatever remains here is terminal and safe to clear.
+            db.execute(
+                'DELETE FROM reservation_queue WHERE borrower_id = %s',
+                (borrower_id,)
+            )
+            req_rows = db.fetch_all(
+                'SELECT request_id FROM request_records WHERE requester_id = %s',
+                (borrower_id,)
+            ) or []
+            for req in req_rows:
+                try:
+                    request_id = req[0]
+                except (IndexError, TypeError):
+                    continue
+                db.execute(
+                    'DELETE FROM procurement_log WHERE request_id = %s',
+                    (request_id,)
+                )
+            db.execute(
+                'DELETE FROM request_records WHERE requester_id = %s',
+                (borrower_id,)
+            )
+            # Active/overdue loans are blocked by the pre-check; remaining
+            # returned rows are cleared so the borrower row can go.
+            db.execute(
+                'DELETE FROM circulation_records WHERE borrower_id = %s',
+                (borrower_id,)
+            )
+        db.execute('DELETE FROM user_favorites WHERE user_id = %s', (user_id,))
+        # Keep the audit history row, just detach the deleted actor.
+        db.execute('UPDATE audit_trail SET user_id = NULL WHERE user_id = %s', (user_id,))
+        for _table, _column in _NULLABLE_USER_REFS:
+            db.execute(
+                f'UPDATE {_table} SET {_column} = NULL WHERE {_column} = %s',
+                (user_id,)
+            )
+        db.execute('DELETE FROM borrowers WHERE user_id = %s', (user_id,))
+        db.execute('DELETE FROM user_accounts WHERE user_id = %s', (user_id,))
 
 
 # Every nullable FK column pointing at user_accounts(user_id). Table and

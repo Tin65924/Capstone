@@ -27,7 +27,11 @@ def _int_env(name, default):
 
 
 class Config:
-    SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+    SECRET_KEY = os.getenv('SECRET_KEY')
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', '1') == '1'
+    CSRF_ENABLED = True
     DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/library_db')
     GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID')
     GOOGLE_OAUTH_CLIENT_SECRET = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET')
@@ -54,3 +58,19 @@ class Config:
     # initialized). Default OFF (run it) so fresh databases never break —
     # only set SKIP_SCHEMA_SYNC=1 after the schema is known-good.
     SKIP_SCHEMA_SYNC = os.getenv('SKIP_SCHEMA_SYNC', '0') == '1'
+
+    # Connection-pool sizing. The deploy runs one gunicorn worker with 8
+    # request threads, and the scheduler/analytics/backup threads also check
+    # connections out of the same pool, so 10 left request threads competing
+    # for slots (PoolError -> 500). 16 gives the request threads full
+    # headroom while staying well under typical provider connection caps.
+    DB_POOL_MINCONN = _int_env('DB_POOL_MINCONN', 1)
+    DB_POOL_MAXCONN = _int_env('DB_POOL_MAXCONN', 16)
+    # A pooled connection used within this many seconds is assumed live;
+    # older checkouts are probed with SELECT 1. 0 restores probing on every
+    # checkout (the pre-audit behaviour).
+    DB_REVALIDATE_IDLE_SECONDS = _int_env('DB_REVALIDATE_IDLE_SECONDS', 30)
+    # Seconds to memoize the header notification badge count per user. The
+    # badge renders on every page and the live poll refreshes it every 15s,
+    # so a short TTL removes 1-2 COUNT queries per page view.
+    NOTIF_BADGE_CACHE_SECONDS = _int_env('NOTIF_BADGE_CACHE_SECONDS', 15)

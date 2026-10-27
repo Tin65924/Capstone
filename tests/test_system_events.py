@@ -210,6 +210,8 @@ class TestLoginFailureSystemEvents:
             mock_id_token.verify_oauth2_token.return_value = {
                 'iss': 'accounts.google.com',
                 'email': 'user@mcst.edu.ph',
+                'email_verified': True,
+                'hd': 'mcst.edu.ph',
                 'sub': 'google-sub-123',
                 'name': 'Test User',
             }

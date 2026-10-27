@@ -10,7 +10,37 @@
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <script>
+        (() => {
+            const token = document.querySelector('meta[name="csrf-token"]')?.content;
+            const originalFetch = window.fetch;
+            window.fetch = (input, init = {}) => {
+                const method = (init.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+                const url = new URL(input instanceof Request ? input.url : input, window.location.href);
+                if (token && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && url.origin === window.location.origin) {
+                    const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
+                    headers.set('X-CSRFToken', token);
+                    init = {...init, headers};
+                }
+                return originalFetch(input, init);
+            };
+            document.addEventListener('click', (event) => {
+                const link = event.target.closest('a[href$="/logout"]');
+                if (!link) return;
+                event.preventDefault();
+                const form = document.createElement('form');
+                form.method = 'post';
+                form.action = link.href;
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'csrf_token';
+                input.value = token;
+                form.append(input);
+                document.body.append(form);
+                form.submit();
+            });
+        })();
         tailwind.config = {
             darkMode: "class",
             theme: {

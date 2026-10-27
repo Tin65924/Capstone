@@ -1,4 +1,5 @@
 import re
+from datetime import date
 from difflib import SequenceMatcher
 from app.database import db
 
@@ -252,6 +253,32 @@ def update_request_status(request_id, status, reviewer_id=None, remarks=None):
         'UPDATE request_records SET request_status = %s, remarks = %s, updated_at = NOW(), updated_by = %s WHERE request_id = %s',
         (status, remarks, None, request_id)
     )
+
+
+def approve_request_with_procurement(request_id, reviewer_id, remarks=None):
+    """Approve a pending request and create its order as one transaction.
+
+    The conditional status transition makes concurrent reviewer clicks
+    idempotent, while the unique procurement index is the database-level
+    backstop against duplicate orders.
+    """
+    with db.transaction():
+        updated = db.execute(
+            '''UPDATE request_records
+               SET request_status = 'approved', reviewed_by = %s,
+                   review_date = NOW(), remarks = %s, updated_at = NOW(), updated_by = %s
+               WHERE request_id = %s AND request_status = 'pending_review' ''',
+            (reviewer_id, remarks, reviewer_id, request_id)
+        )
+        if updated == 0:
+            return False
+        db.execute(
+            '''INSERT INTO procurement_log (request_id, order_status, order_date)
+               VALUES (%s, 'for_ordering', %s)
+               ON CONFLICT (request_id) DO NOTHING''',
+            (request_id, date.today())
+        )
+    return True
 
 
 def get_demand_count(book_title):

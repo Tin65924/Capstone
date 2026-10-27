@@ -239,13 +239,17 @@ def utilization_rate(start_date=None, end_date=None):
     
     Returns:
         Query rows or computed payload for the caller (see implementation for shape)."""
-    total = db.fetch_one("SELECT COUNT(*) FROM book_catalog WHERE catalog_status = 'active'")
-    parts, params = _date_filter({'start': start_date, 'end': end_date}, 'borrow_date')
-    where = 'WHERE transaction_status = \'active\'' + (' AND ' + ' AND '.join(parts) if parts else '')
+    total = db.fetch_one(
+        '''SELECT COUNT(*) FROM accession_log al
+           JOIN book_catalog b ON b.book_id = al.book_id
+           WHERE b.catalog_status = 'active' '''
+    )
     borrowed = db.fetch_one(
-        '''SELECT COUNT(DISTINCT book_id) FROM circulation_records
-           {}'''.format(where),
-        tuple(params) if params else None
+        '''SELECT COUNT(DISTINCT c.accession_id) FROM circulation_records c
+           JOIN accession_log al ON al.accession_id = c.accession_id
+           JOIN book_catalog b ON b.book_id = al.book_id
+           WHERE b.catalog_status = 'active'
+             AND c.transaction_status IN ('active', 'overdue')'''
     )
     t = total[0] if total and total[0] > 0 else 1
     b = borrowed[0] if borrowed else 0
