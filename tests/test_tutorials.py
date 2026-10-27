@@ -7,13 +7,29 @@ def test_ebook_example_uses_real_title(student_client, mock_db):
     assert response.status_code == 200
     assert response.json['book_url'] == '/book/15'
     assert 'field=title' in response.json['catalog_url']
-    assert mock_db['fetch_one'].call_args.args[1] == (True, True)
+    assert mock_db['fetch_one'].call_args.args[1] == (True, True, '1')
     mock_db['execute'].assert_not_called()
 
 
 def test_physical_example_empty(student_client, mock_db):
     response = student_client.get('/tutorials/example/borrow')
     assert response.status_code == 404
+    mock_db['execute'].assert_not_called()
+
+
+def test_physical_example_requires_available_copy_not_borrowed_by_member(student_client, mock_db):
+    mock_db['fetch_one'].return_value = (8, 'Example')
+    response = student_client.get('/tutorials/example/borrow')
+    assert response.status_code == 200
+    query, params = mock_db['fetch_one'].call_args.args
+    assert 'accession_log' in query
+    assert 'br.user_id = %s' in query
+    assert params == (False, False, '1')
+
+
+def test_tutorial_rejects_invalid_progress(student_client, mock_db):
+    response = student_client.post('/tutorials/progress', json={'status': 'started'})
+    assert response.status_code == 400
     mock_db['execute'].assert_not_called()
 
 
@@ -61,6 +77,7 @@ def test_profile_includes_member_tutorial_launcher(student_client, mock_db):
     assert b'data-guide="catalog"' in response.data
     assert b'data-guide="borrow"' in response.data
     assert b'data-guide="ebook"' in response.data
+    assert b'aria-live="polite"' in response.data
     assert b'data-tutorial-invite' in response.data
 
 

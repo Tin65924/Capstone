@@ -8,6 +8,7 @@
     if (!root || !launcher || !invitation || !menu) return;
 
     var role = root.getAttribute('data-role');
+    var dismissalKey = 'mcst-tutorial-dismissed-' + root.getAttribute('data-user');
     var intro = [
         { url: '/user/profile', selector: '[data-tour="dashboard"]', title: 'Your library overview', copy: 'Start here to see your current loans, due dates, reservations ready for pickup, and recent requests.' },
         { url: '/user/profile', selector: '[data-tour="current-borrowings"]', title: 'Check borrowed books', copy: 'Your active books and their due dates appear here. Open View Details when you need the borrowing information.' },
@@ -19,7 +20,10 @@
         intro: intro,
         catalog: [
             { url: '/catalog', selector: '[data-tour="catalog-search"]', title: 'Search the catalog', copy: 'Search by title, author, keyword, or ISBN. Use All Fields to narrow the kind of search.' },
-            { url: '/catalog', selector: '[data-tour="catalog-filters"]', title: 'Sort and filter', copy: 'Sort by relevance, title, or newest year. Filter by category, book type, or publication year. On mobile, open Filters first.' },
+            { url: '/catalog', selector: '[data-tour="catalog-filters"]', title: 'Find filters', copy: 'Use the filter panel to narrow results. On mobile, open the Filters drawer.' },
+            { url: '/catalog', selector: '[data-tour="catalog-sort"]', filterDrawer: true, title: 'Sort results', copy: 'Sort by relevance, title, or newest year.' },
+            { url: '/catalog', selector: '[data-tour="catalog-category"]', filterDrawer: true, title: 'Choose a category', copy: 'Use a category to narrow your search. You can also show all categories.' },
+            { url: '/catalog', selector: '[data-tour="catalog-type"]', filterDrawer: true, title: 'Choose a book type', copy: 'Filter by material type, such as E-Book. The filter panel also offers publication-year options.' },
             { url: '/catalog', selector: '[data-tour="catalog-results"]', title: 'Explore results', copy: 'Choose grid or list view, then open a title to see its details and available actions.' }
         ],
         borrow: [
@@ -57,12 +61,19 @@
     var count = root.querySelector('[data-tutorial-count]');
     var back = root.querySelector('[data-tutorial-back]');
     var next = root.querySelector('[data-tutorial-next]');
+    var retry = root.querySelector('[data-tutorial-retry]');
+    var announcement = root.querySelector('[data-tutorial-announcement]');
+    var ownedBorrowModal = false;
+    var ownedFilterDrawer = false;
+    var pendingSave = null;
+    var requestSequence = 0;
 
     function save(status) {
+        try { window.sessionStorage.setItem(dismissalKey, '1'); } catch (e) { /* Storage is optional. */ }
         window.fetch('/tutorials/progress', {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ status: status })
-        }).catch(function () {});
+        }).then(function (response) { if (!response.ok) throw new Error('Save failed'); pendingSave = null; }).catch(function () { pendingSave = status; });
     }
     function matchesUrl(url) {
         var destination = new URL(url, window.location.origin);
@@ -154,14 +165,23 @@
     }
     function exampleSteps(name, data) {
         var result = 'a[href="' + data.book_url + '"]';
-        return [
+        var items = [
             { url: data.catalog_url, selector: '[data-tour="catalog-search"]', title: name === 'ebook' ? 'Find an e-book' : 'Find a physical book', copy: 'We searched for a real library title for this example. Nothing has been borrowed or reserved.' },
             { url: data.catalog_url, selector: result, title: 'Open the matching title', copy: 'This result opens the book details. Choose Open book to continue the walkthrough.' },
-            { url: data.book_url, selector: name === 'ebook' ? '[data-tour="ebook-access"]' : '[data-tour="book-availability"]', title: name === 'ebook' ? 'Read online' : 'Availability and borrowing', copy: name === 'ebook' ? 'Read Online opens the provider preview or external reader. The tutorial does not open it or record a read.' : 'Borrow opens the overnight and in-library choices when a copy is available. Otherwise Reserve joins the queue. The tutorial never submits either action.' },
-            { url: data.book_url, selector: name === 'ebook' ? '[data-tour="ebook-access"]' : '[data-tour="book-availability"]', title: name === 'ebook' ? 'Reader and downloads' : 'After your request', copy: name === 'ebook' ? 'Use the provider’s page, zoom, and navigation controls after opening the reader. Download appears only when the library permits it. Close the reader to return to details.' : 'Overnight requests need approval. Check Notifications and Ready for Pickup for the claim deadline. Return borrowed books at the circulation desk.' }
+            { url: data.book_url, selector: name === 'ebook' ? '[data-tour="ebook-access"]' : '[data-tour="book-availability"]', title: name === 'ebook' ? 'Online access' : 'Availability and borrowing', copy: name === 'ebook' ? 'Online access depends on the link supplied for this title.' : 'This area shows availability. A copy may become unavailable or already be borrowed while you are browsing.' }
         ];
+        if (name === 'ebook') {
+            items.push({ url: data.book_url, selector: '[data-tour="ebook-read"]', title: 'Read online', copy: 'Read Online opens the provider’s preview or an external reader. This guide does not open it or record a read.' });
+            items.push({ url: data.book_url, selector: '[data-tour="ebook-download"]', optional: true, title: 'Download when permitted', copy: 'Download appears when the library permits it. This guide will not download the book.' });
+        } else {
+            items.push({ url: data.book_url, selector: '[data-tour="borrow-overnight"]', borrowModal: true, title: 'Overnight borrowing', copy: 'Overnight requests require librarian approval. The option may be unavailable when copies are reserved for in-library use.' });
+            items.push({ url: data.book_url, selector: '[data-tour="borrow-daily"]', borrowModal: true, title: 'In-library borrowing', copy: 'Daily circulation is for in-library use; check the displayed due time and return the book at the desk.' });
+            items.push({ url: data.book_url, selector: '[data-tour="borrow-submit"]', borrowModal: true, title: 'Review before submitting', copy: 'Only submit when you are ready to request a loan. The tutorial never submits this form.' });
+        }
+        return items;
     }
     function startGuide(name) {
+        var requestId = ++requestSequence;
         guideName = name;
         example = null;
         steps = guides[name];
@@ -172,11 +192,11 @@
             window.fetch('/tutorials/example/' + name).then(function (response) {
                 return response.json().then(function (data) { if (!response.ok) throw new Error(data.error); return data; });
             }).then(function (data) {
-                if (root.classList.contains('hidden') || guideName !== name) return;
+                if (root.classList.contains('hidden') || requestId !== requestSequence) return;
                 example = data; steps = exampleSteps(name, data); next.disabled = false; back.disabled = false; open(0);
             }).catch(function (error) {
-                if (root.classList.contains('hidden')) return;
-                steps = [{ url: window.location.pathname + window.location.search, selector: '[data-tutorial-launcher]', title: 'Example unavailable', copy: error.message || 'Could not load a title. Please try again later.' }];
+                if (root.classList.contains('hidden') || requestId !== requestSequence) return;
+                steps = [{ url: window.location.pathname + window.location.search, selector: '[data-tutorial-launcher]', exampleError: true, title: 'Example unavailable', copy: error.message || 'Could not load a title. Please try again later.' }];
                 next.disabled = false; back.disabled = false; open(0);
             });
             return;
@@ -185,17 +205,29 @@
     }
     function targetForSelector(selector) { return document.querySelector(selector); }
     function close(status) {
+        requestSequence++;
+        if (ownedBorrowModal && typeof window.closeBorrowModal === 'function') window.closeBorrowModal();
+        ownedBorrowModal = false;
+        if (ownedFilterDrawer && typeof window.closeMobileFilters === 'function') window.closeMobileFilters();
+        ownedFilterDrawer = false;
         root.classList.add('hidden');
         root.setAttribute('aria-hidden', 'true');
         document.querySelectorAll('[data-tutorial-active]').forEach(function (el) { el.removeAttribute('data-tutorial-active'); });
         window.sessionStorage.removeItem(storageKey);
-        if (status) save(status);
-        if (returnFocus && returnFocus.focus) returnFocus.focus();
+        if (status && guideName === 'intro') save(status);
+        if (returnFocus && returnFocus.isConnected && returnFocus !== document.body && returnFocus.focus) returnFocus.focus();
+        else launcher.focus();
         returnFocus = null;
     }
     function render() {
         var step = steps[stepIndex];
         if (!matchesUrl(step.url)) { navigate(stepIndex); return; }
+        if (step.filterDrawer && window.matchMedia('(max-width: 1023px)').matches && !ownedFilterDrawer && typeof window.openMobileFilters === 'function') {
+            window.openMobileFilters(); ownedFilterDrawer = true;
+        } else if (!step.filterDrawer && ownedFilterDrawer) { window.closeMobileFilters(); ownedFilterDrawer = false; }
+        if (step.borrowModal && !ownedBorrowModal && document.querySelector('[data-tour="borrow-open"]') && typeof window.openBorrowModal === 'function') {
+            window.openBorrowModal(''); ownedBorrowModal = true;
+        } else if (!step.borrowModal && ownedBorrowModal) { window.closeBorrowModal(); ownedBorrowModal = false; }
         var target = targetFor(stepIndex);
         document.querySelectorAll('[data-tutorial-active]').forEach(function (el) { el.removeAttribute('data-tutorial-active'); });
         if (target) {
@@ -203,11 +235,13 @@
             target.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
         }
         count.textContent = (role === 'Faculty' ? 'Faculty guide' : 'Student guide') + ' ' + (stepIndex + 1) + ' of ' + steps.length;
-        title.textContent = step.title;
-        copy.textContent = step.copy;
+        title.textContent = target ? step.title : (step.optional ? 'Not available for this title' : 'This step is unavailable');
+        copy.textContent = target ? step.copy : (step.optional ? 'Download is not offered for this title. Continue to finish the guide.' : 'The control or example is no longer available. Retry this step, skip it, or exit the tutorial.');
+        retry.classList.toggle('hidden', !step.exampleError && (!!target || !!step.optional));
+        announcement.textContent = title.textContent + '. ' + copy.textContent;
         back.classList.toggle('invisible', stepIndex === 0);
         next.disabled = false; back.disabled = stepIndex === 0;
-        next.textContent = stepIndex === steps.length - 1 ? 'Finish' : (steps[stepIndex + 1].url !== step.url ? (example ? 'Open book' : 'Continue to next page') : 'Next');
+        next.textContent = stepIndex === steps.length - 1 ? 'Finish' : (!target ? 'Skip step' : (steps[stepIndex + 1].url !== step.url ? (example ? 'Open book' : 'Continue to next page') : 'Next'));
         spotlight(target); positionPanel(target);
         // Only prefetch read-only catalog/detail pages; member pages may run
         // reminder/expiry work. Browsers may decline this low-priority hint.
@@ -220,6 +254,7 @@
         if (!panel.contains(document.activeElement)) panel.focus();
     }
     launcher.addEventListener('click', showMenu);
+    retry.addEventListener('click', function () { if (steps[stepIndex].exampleError) startGuide(guideName); else render(); });
     menu.querySelector('[data-tutorial-menu-close]').addEventListener('click', function () { closeMenu(); if (returnFocus) returnFocus.focus(); });
     menu.querySelectorAll('[data-guide]').forEach(function (button) { button.addEventListener('click', function () { closeMenu(); startGuide(button.dataset.guide); }); });
     invitation.querySelector('[data-tutorial-start]').addEventListener('click', function () { closeInvitation(); startGuide('intro'); });
@@ -242,6 +277,7 @@
     window.addEventListener('resize', function () {
         if (!root.classList.contains('hidden')) { var target = targetFor(stepIndex); spotlight(target); positionPanel(target); }
     });
+    window.addEventListener('online', function () { if (pendingSave) save(pendingSave); });
     document.addEventListener('scroll', function () {
         if (!root.classList.contains('hidden') && steps[stepIndex]) { var target = targetFor(stepIndex); spotlight(target); positionPanel(target); }
     }, true);
@@ -261,7 +297,7 @@
     }
     if (document.body.hasAttribute('data-tutorial-invite')) {
         window.fetch('/tutorials/status').then(function (response) { return response.ok ? response.json() : null; }).then(function (data) {
-            if (data && data.available && !data.status && menu.classList.contains('hidden') && root.classList.contains('hidden')) openInvitation();
+            if (data && data.available && !data.status && !window.sessionStorage.getItem(dismissalKey) && menu.classList.contains('hidden') && root.classList.contains('hidden')) openInvitation();
         }).catch(function () {});
     }
 })();

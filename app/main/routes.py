@@ -24,7 +24,7 @@ def tutorial_example(kind):
     if kind not in ('borrow', 'ebook'):
         return jsonify({'error': 'Unknown guide.'}), 400
     from .models import get_tutorial_book
-    book = get_tutorial_book(kind == 'ebook')
+    book = get_tutorial_book(kind == 'ebook', current_user.id)
     if not book:
         return jsonify({'error': 'No suitable book is currently available for this guide.'}), 404
     return jsonify({

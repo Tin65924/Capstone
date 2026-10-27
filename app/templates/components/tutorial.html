@@ -32,18 +32,20 @@
         </div>
     </div>
 </div>
-<div id="member-tutorial" data-tutorial-csrf="{{ csrf_token() }}" data-role="{{ current_user.role }}" class="fixed inset-0 z-[100] hidden" aria-hidden="true">
+<div id="member-tutorial" data-tutorial-csrf="{{ csrf_token() }}" data-role="{{ current_user.role }}" data-user="{{ current_user.id }}" class="fixed inset-0 z-[100] hidden" aria-hidden="true">
     <div data-tutorial-shade class="absolute bg-slate-950/70"></div>
     <div data-tutorial-shade class="absolute bg-slate-950/70"></div>
     <div data-tutorial-shade class="absolute bg-slate-950/70"></div>
     <div data-tutorial-shade class="absolute bg-slate-950/70"></div>
-    <div data-tutorial-panel class="fixed z-10 w-[min(24rem,calc(100vw-2rem))] rounded-2xl border border-blue-100 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="tutorial-title" tabindex="-1">
+    <div data-tutorial-panel class="fixed z-10 w-[min(24rem,calc(100vw-2rem))] max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl border border-blue-100 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="tutorial-title" aria-describedby="tutorial-description" tabindex="-1">
         <div class="flex items-start justify-between gap-4">
             <p data-tutorial-count class="text-xs font-bold uppercase tracking-widest text-primary"></p>
             <button type="button" data-tutorial-exit class="text-sm font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white">Exit tutorial</button>
         </div>
         <h2 id="tutorial-title" data-tutorial-title class="mt-3 text-xl font-extrabold text-slate-900 dark:text-white"></h2>
-        <p data-tutorial-copy class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300"></p>
+        <p id="tutorial-description" data-tutorial-copy class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300"></p>
+        <p data-tutorial-announcement class="sr-only" role="status" aria-live="polite"></p>
+        <button type="button" data-tutorial-retry class="hidden mt-3 rounded-lg border border-blue-200 px-3 py-2 text-sm font-bold text-primary">Retry</button>
         <div class="mt-5 flex items-center justify-between gap-3">
             <button type="button" data-tutorial-back class="rounded-lg px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">Back</button>
             <button type="button" data-tutorial-next class="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">Next</button>

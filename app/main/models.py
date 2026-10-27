@@ -1,15 +1,25 @@
 from app.database import db
 
 
-def get_tutorial_book(is_ebook):
+def get_tutorial_book(is_ebook, user_id):
     """Find a real active example without creating circulation/access records."""
     return db.fetch_one(
-        '''SELECT book_id, title FROM book_catalog
-           WHERE catalog_status = 'active'
-             AND (material_type = 'E-Book') = %s
-             AND (%s = FALSE OR NULLIF(TRIM(ebook_url), '') IS NOT NULL)
-           ORDER BY book_id LIMIT 1''',
-        (is_ebook, is_ebook),
+        '''SELECT b.book_id, b.title FROM book_catalog b
+           WHERE b.catalog_status = 'active'
+             AND ((%s AND b.material_type = 'E-Book'
+                        AND NULLIF(TRIM(b.ebook_url), '') IS NOT NULL)
+                  OR (NOT %s AND b.material_type = 'Book'
+                      AND EXISTS (SELECT 1 FROM accession_log a
+                                  WHERE a.book_id = b.book_id
+                                  AND NOT EXISTS (SELECT 1 FROM circulation_records c
+                                      WHERE c.accession_id = a.accession_id
+                                      AND c.transaction_status IN ('active', 'overdue')))
+                      AND NOT EXISTS (SELECT 1 FROM circulation_records c
+                          JOIN borrowers br ON br.borrower_id = c.borrower_id
+                          WHERE c.book_id = b.book_id AND br.user_id = %s
+                          AND c.transaction_status IN ('active', 'overdue'))))
+           ORDER BY b.book_id LIMIT 1''',
+        (is_ebook, is_ebook, user_id),
     )
 from app.auth.models import get_pending_users
 from app.settings.models import library_today
@@ -816,7 +826,8 @@ def get_tutorial_progress(user_id, tutorial_key, tutorial_version):
     return db.fetch_one(
         '''SELECT status
            FROM tutorial_progress
-           WHERE user_id = %s AND tutorial_key = %s AND tutorial_version = %s''',
+           WHERE user_id = %s AND tutorial_key = %s AND tutorial_version <= %s
+           ORDER BY tutorial_version DESC LIMIT 1''',
         (user_id, tutorial_key, tutorial_version),
     )
 

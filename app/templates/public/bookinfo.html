@@ -135,7 +135,7 @@
                     class="px-5 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 text-sm font-bold cursor-not-allowed opacity-60 text-center">Borrowed</button>
                 {% elif any_available %}
                     {% if current_user.is_authenticated %}
-                    <button type="button" onclick="openBorrowModal('')"
+                    <button data-tour="borrow-open" type="button" onclick="openBorrowModal('')"
                         class="px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-blue-800 transition-colors text-center">Borrow</button>
                     {% else %}
                     <a href="{{ url_for('auth.login', next=request.path) }}"
@@ -221,14 +221,14 @@
             <div data-tour="ebook-access" class="mt-8">
                 <h3 class="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Online Access</h3>
                 {% if ebook_kind == 'drive' or ebook_kind == 'docs' %}
-                <button type="button" onclick="openEbookPreview()"
+                <button data-tour="ebook-read" type="button" onclick="openEbookPreview()"
                     class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-colors">Read Online <span class="material-symbols-outlined text-[18px]">auto_stories</span></button>
                 {% if ebook_download_allowed %}
-                <a href="{{ url_for('cataloging.ebook_download', book_id=book[0]) }}"
+                <a data-tour="ebook-download" href="{{ url_for('cataloging.ebook_download', book_id=book[0]) }}"
                     class="inline-flex items-center gap-2 ml-3 px-5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold hover:border-primary hover:text-primary transition-colors">Download <span class="material-symbols-outlined text-[18px]">download</span></a>
                 {% endif %}
                 {% else %}
-                <a href="{{ ebook_url }}" target="_blank" rel="noopener"
+                <a data-tour="ebook-read" href="{{ ebook_url }}" target="_blank" rel="noopener"
                     class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-colors">Read Online <span class="material-symbols-outlined text-[18px]">open_in_new</span></a>
                 {% endif %}
             </div>
@@ -257,7 +257,7 @@
             <input type="hidden" name="book_id" value="{{ book[0] }}">
             <input type="hidden" id="borrowAccessionId" name="accession_id" value="">
             <p class="text-sm text-slate-500 dark:text-slate-400">Choose a borrow type. The due date is computed automatically based on your role.</p>
-            <label class="flex items-start gap-3 p-4 border border-slate-200 dark:border-slate-700 rounded cursor-pointer has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary {% if overnight_limited %}opacity-60{% endif %}">
+            <label data-tour="borrow-overnight" class="flex items-start gap-3 p-4 border border-slate-200 dark:border-slate-700 rounded cursor-pointer has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary {% if overnight_limited %}opacity-60{% endif %}">
                 <input type="radio" name="borrow_type" value="overnight" {% if not overnight_limited %}checked{% endif %} {% if overnight_limited %}disabled{% endif %} class="mt-0.5 accent-primary">
                 <span>
                     <span class="font-bold text-sm text-slate-900 dark:text-white">Overnight</span>
@@ -268,14 +268,14 @@
                     {% endif %}
                 </span>
             </label>
-            <label class="flex items-start gap-3 p-4 border border-slate-200 dark:border-slate-700 rounded cursor-pointer has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary">
+            <label data-tour="borrow-daily" class="flex items-start gap-3 p-4 border border-slate-200 dark:border-slate-700 rounded cursor-pointer has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary">
                 <input type="radio" name="borrow_type" value="daily_circulation" {% if overnight_limited %}checked{% endif %} class="mt-0.5 accent-primary">
                 <span>
                     <span class="font-bold text-sm text-slate-900 dark:text-white">In-Library (Daily Circulation)</span>
                     <span class="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">Same-day loan, 8:00 AM&ndash;5:00 PM (~9 hours), for any role. Checked out immediately at the desk.</span>
                 </span>
             </label>
-            <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded font-bold text-sm transition-all flex items-center justify-center gap-2">
+            <button data-tour="borrow-submit" type="submit" class="w-full bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded font-bold text-sm transition-all flex items-center justify-center gap-2">
                 Submit Request <span class="material-symbols-outlined text-lg">check_circle</span>
             </button>
         </form>
