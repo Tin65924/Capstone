@@ -78,6 +78,8 @@ def test_profile_includes_member_tutorial_launcher(student_client, mock_db):
     assert b'data-guide="borrow"' in response.data
     assert b'data-guide="ebook"' in response.data
     assert b'aria-live="polite"' in response.data
+    assert b'max-height: calc(100dvh - 1.5rem)' in response.data
+    assert b'overscroll-behavior: contain' in response.data
     assert b'data-tutorial-invite' in response.data
 
 

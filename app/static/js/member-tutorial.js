@@ -101,15 +101,16 @@
     }
     function spotlight(target) {
         if (!target) {
-            shades.forEach(function (shade) { setShade(shade, 0, 0, window.innerWidth, window.innerHeight); });
+            setShade(shades[0], 0, 0, window.innerWidth, window.innerHeight);
+            Array.prototype.slice.call(shades, 1).forEach(function (shade) { setShade(shade, 0, 0, 0, 0); });
             return;
         }
         var rect = target.getBoundingClientRect();
         var gap = 8;
-        var left = rect.left - gap;
-        var top = rect.top - gap;
-        var right = rect.right + gap;
-        var bottom = rect.bottom + gap;
+        var left = Math.max(0, Math.min(window.innerWidth, rect.left - gap));
+        var top = Math.max(0, Math.min(window.innerHeight, rect.top - gap));
+        var right = Math.max(left, Math.min(window.innerWidth, rect.right + gap));
+        var bottom = Math.max(top, Math.min(window.innerHeight, rect.bottom + gap));
         setShade(shades[0], 0, 0, window.innerWidth, top);
         setShade(shades[1], 0, bottom, window.innerWidth, window.innerHeight - bottom);
         setShade(shades[2], 0, top, left, bottom - top);
@@ -121,13 +122,15 @@
         var width = panel.offsetWidth;
         var height = panel.offsetHeight;
         var left = rect ? Math.min(Math.max(gap, rect.left), window.innerWidth - width - gap) : (window.innerWidth - width) / 2;
-        var top = rect && rect.bottom + gap + height <= window.innerHeight ? rect.bottom + gap : rect && rect.top - gap - height >= gap ? rect.top - gap - height : (window.innerHeight - height) / 2;
+        var below = rect ? window.innerHeight - rect.bottom : 0;
+        var above = rect ? rect.top : 0;
+        var top = rect && below >= height + gap ? rect.bottom + gap : rect && above >= height + gap ? rect.top - gap - height : rect ? (above > below ? gap : window.innerHeight - height - gap) : (window.innerHeight - height) / 2;
         panel.style.left = Math.max(gap, left) + 'px';
-        panel.style.top = Math.max(gap, top) + 'px';
+        panel.style.top = Math.max(gap, Math.min(top, window.innerHeight - height - gap)) + 'px';
         panel.style.transform = 'none';
     }
     function focusables(container) {
-        return Array.prototype.slice.call(container.querySelectorAll('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'));
+        return Array.prototype.slice.call(container.querySelectorAll('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')).filter(function (element) { return element.getClientRects().length && window.getComputedStyle(element).visibility !== 'hidden'; });
     }
     function trapFocus(event, container) {
         var items = focusables(container);
@@ -278,7 +281,8 @@
         if (!root.classList.contains('hidden')) { var target = targetFor(stepIndex); spotlight(target); positionPanel(target); }
     });
     window.addEventListener('online', function () { if (pendingSave) save(pendingSave); });
-    document.addEventListener('scroll', function () {
+    document.addEventListener('scroll', function (event) {
+        if (panel.contains(event.target)) return;
         if (!root.classList.contains('hidden') && steps[stepIndex]) { var target = targetFor(stepIndex); spotlight(target); positionPanel(target); }
     }, true);
 
