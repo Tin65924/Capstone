@@ -37,7 +37,7 @@
     </script>
 </head>
 
-<body class="bg-background-light dark:bg-background-dark text-[#0f172a] dark:text-white font-display overflow-hidden">
+<body data-tutorial-role="{{ current_user.role }}" class="bg-background-light dark:bg-background-dark text-[#0f172a] dark:text-white font-display overflow-hidden">
     <div class="flex h-screen w-full flex-row">
         <!-- Sidebar - Desktop -->
         <div
@@ -110,7 +110,7 @@
                 <!-- Form Card -->
                 <div
                     class="bg-white dark:bg-[#1a2235] rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 sm:p-6 md:p-8 lg:p-12">
-                    <form class="space-y-6 sm:space-y-8" method="POST">
+                    <form data-tour="request-form" class="space-y-6 sm:space-y-8" method="POST">
                         <!-- Book Title Field -->
                         <div>
                             <label class="block text-xs sm:text-sm font-bold text-gray-900 dark:text-white mb-1.5 sm:mb-2" for="book-title"
@@ -135,7 +135,7 @@
                         </div>
                         <!-- Submit Button -->
                         <div class="pt-2 sm:pt-4">
-                            <button
+                            <button data-tour="request-submit"
                                 class="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-3.5 bg-primary text-white font-bold rounded-lg hover:bg-blue-800 transition-colors shadow-md sm:shadow-lg active:transform active:scale-[0.98] text-sm sm:text-base flex items-center justify-center gap-2"
                                 type="submit" style="">
                                 <span class="material-symbols-outlined text-[18px] sm:text-[20px]">send</span>
@@ -191,6 +191,7 @@
     })();
     </script>
     <script src="{{ url_for('static', filename='js/autosuggest.js') }}"></script>
+    {% include 'components/tutorial.html' %}
 </body>
 
 </html>

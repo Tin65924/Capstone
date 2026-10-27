@@ -3,7 +3,7 @@
                 <span class="material-symbols-outlined">home</span>
                 <span class="text-sm">Home</span>
     </a>
-    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('cataloging.public_catalog') }}">
+    <a data-tour="catalog-link" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors" href="{{ url_for('cataloging.public_catalog') }}">
         <span class="material-symbols-outlined">menu_book</span>
         <span class="text-sm">Catalog</span>
     </a>
@@ -12,11 +12,11 @@
         <span class="material-symbols-outlined">Overview</span>
         <span class="text-sm">Overview</span>
     </a>
-    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'requests.user_request_book' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('requests.user_request_book') }}">
+    <a data-tour="request-link" class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'requests.user_request_book' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('requests.user_request_book') }}">
         <span class="material-symbols-outlined">book_online</span>
         <span class="text-sm">Request Book</span>
     </a>
-    <a class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'main.user_history' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('main.user_history') }}">
+    <a data-tour="history-link" class="flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors {% if request.endpoint == 'main.user_history' %}bg-primary/10 text-primary{% else %}text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}" href="{{ url_for('main.user_history') }}">
         <span class="material-symbols-outlined">history</span>
         <span class="text-sm">History</span>
     </a>

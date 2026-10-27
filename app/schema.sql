@@ -118,6 +118,17 @@ CREATE TABLE IF NOT EXISTS procurement_log (
     updated_by     INT REFERENCES user_accounts(user_id)
 );
 
+-- Members can dismiss or finish an optional guide without being prompted on
+-- every visit. A newer guide version remains opt-in through Help / Tutorials.
+CREATE TABLE IF NOT EXISTS tutorial_progress (
+    user_id          INT NOT NULL REFERENCES user_accounts(user_id) ON DELETE CASCADE,
+    tutorial_key     VARCHAR(50) NOT NULL,
+    tutorial_version INT NOT NULL DEFAULT 1,
+    status           VARCHAR(20) NOT NULL CHECK (status IN ('dismissed', 'completed')),
+    updated_at       TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, tutorial_key, tutorial_version)
+);
+
 -- Existing duplicates must be reviewed and reconciled before adding this
 -- index; never discard procurement history automatically at startup.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_procurement_log_request_id

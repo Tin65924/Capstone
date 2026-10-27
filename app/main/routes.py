@@ -2,7 +2,9 @@ from flask import render_template, redirect, url_for, jsonify, request, flash, c
 from datetime import date, datetime
 from flask_login import login_required, current_user
 from . import main_bp
-from .models import get_dashboard_stats, get_recent_activity, get_daily_borrows, get_attention_summary, get_admin_overview_stats
+from .models import (get_dashboard_stats, get_recent_activity, get_daily_borrows,
+                     get_attention_summary, get_admin_overview_stats,
+                     get_tutorial_progress, save_tutorial_progress)
 from app.cataloging.models import get_recent_books, suggest_book_values, suggest_books_rich, get_book_by_title_author_isbn, get_accession_by_number
 from app.auth.decorators import librarian_required, admin_required
 
@@ -10,6 +12,8 @@ SUGGEST_FIELDS = {
     'book_title', 'book_author', 'book_publisher', 'book_subject',
     'book_isbn', 'book_search', 'student_program',
 }
+TUTORIAL_KEY = 'member-basics'
+TUTORIAL_VERSION = 1
 BOOK_FIELD_MAP = {
     'book_title': 'title', 'book_author': 'author', 'book_publisher': 'publisher',
     'book_subject': 'subject', 'book_isbn': 'isbn', 'book_search': 'search',
@@ -38,6 +42,34 @@ def _safe_next(default_endpoint):
     if not nxt.startswith('/') or nxt.startswith('//'):
         return fallback
     return nxt
+
+
+@main_bp.route('/tutorials/status')
+@login_required
+def tutorial_status():
+    """Return the current member guide status for the client-side overlay."""
+    if current_user.role not in ('Student', 'Faculty'):
+        return jsonify({'available': False})
+    progress = get_tutorial_progress(current_user.id, TUTORIAL_KEY, TUTORIAL_VERSION)
+    return jsonify({
+        'available': True,
+        'status': progress[0] if progress else None,
+        'version': TUTORIAL_VERSION,
+    })
+
+
+@main_bp.route('/tutorials/progress', methods=['POST'])
+@login_required
+def tutorial_progress():
+    """Persist an optional guide dismissal or completion without a redirect."""
+    if current_user.role not in ('Student', 'Faculty'):
+        return jsonify({'error': 'Tutorials are not available for this role.'}), 403
+    status = request.get_json(silent=True) or {}
+    state = status.get('status')
+    if state not in ('dismissed', 'completed'):
+        return jsonify({'error': 'Invalid tutorial status.'}), 400
+    save_tutorial_progress(current_user.id, TUTORIAL_KEY, TUTORIAL_VERSION, state)
+    return jsonify({'status': state})
 
 
 def _safe_departments(dept_type):

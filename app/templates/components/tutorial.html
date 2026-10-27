@@ -1,0 +1,38 @@
+{% if current_user.is_authenticated and current_user.role in ('Student', 'Faculty') %}
+<style>
+    [data-tutorial-active="true"] { outline: 3px solid #60a5fa !important; outline-offset: 4px; border-radius: 0.5rem; }
+</style>
+<button type="button" data-tutorial-launcher class="fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white px-4 py-2.5 text-sm font-bold text-primary shadow-lg hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800">
+    <span class="material-symbols-outlined text-[18px]">help</span> Help / Tutorials
+</button>
+<div id="member-tutorial-invitation" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/70 p-4" aria-hidden="true">
+    <div class="w-full max-w-md rounded-2xl border border-blue-100 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="tutorial-invitation-title">
+        <p class="text-xs font-bold uppercase tracking-widest text-primary">MCST Library</p>
+        <h2 id="tutorial-invitation-title" class="mt-2 text-2xl font-extrabold text-slate-900 dark:text-white">Want a quick tour?</h2>
+        <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">See where to check your library activity, search the catalog, and suggest a book. You can exit at any time.</p>
+        <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button type="button" data-tutorial-decline class="rounded-lg px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">Not now</button>
+            <button type="button" data-tutorial-start class="rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-800">Start tutorial</button>
+        </div>
+    </div>
+</div>
+<div id="member-tutorial" data-tutorial-csrf="{{ csrf_token() }}" class="fixed inset-0 z-[100] hidden" aria-hidden="true">
+    <div data-tutorial-shade class="absolute bg-slate-950/70"></div>
+    <div data-tutorial-shade class="absolute bg-slate-950/70"></div>
+    <div data-tutorial-shade class="absolute bg-slate-950/70"></div>
+    <div data-tutorial-shade class="absolute bg-slate-950/70"></div>
+    <div data-tutorial-panel class="fixed z-10 w-[min(24rem,calc(100vw-2rem))] rounded-2xl border border-blue-100 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="tutorial-title" tabindex="-1">
+        <div class="flex items-start justify-between gap-4">
+            <p data-tutorial-count class="text-xs font-bold uppercase tracking-widest text-primary"></p>
+            <button type="button" data-tutorial-exit class="text-sm font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white">Exit tutorial</button>
+        </div>
+        <h2 id="tutorial-title" data-tutorial-title class="mt-3 text-xl font-extrabold text-slate-900 dark:text-white"></h2>
+        <p data-tutorial-copy class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300"></p>
+        <div class="mt-5 flex items-center justify-between gap-3">
+            <button type="button" data-tutorial-back class="rounded-lg px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">Back</button>
+            <button type="button" data-tutorial-next class="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">Next</button>
+        </div>
+    </div>
+</div>
+<script src="{{ url_for('static', filename='js/member-tutorial.js') }}"></script>
+{% endif %}

@@ -37,7 +37,7 @@
     </script>
 </head>
 
-<body class="bg-background-light dark:bg-background-dark text-[#0f172a] dark:text-white font-display overflow-hidden">
+<body data-tutorial-role="{{ current_user.role }}" class="bg-background-light dark:bg-background-dark text-[#0f172a] dark:text-white font-display overflow-hidden">
     <div class="flex h-screen w-full flex-row">
         <!-- Sidebar - Desktop -->
         <div
@@ -109,7 +109,7 @@
                 </div>
 
                 <!-- History tabs -->
-                <div class="flex flex-wrap gap-2 mb-6 sm:mb-8">
+                <div data-tour="history-tabs" class="flex flex-wrap gap-2 mb-6 sm:mb-8">
                     <a href="?tab=borrowing" class="px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-colors {% if tab == 'borrowing' %}bg-primary text-white{% else %}bg-white dark:bg-[#1a2235] text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}">Borrowings &amp; Returns <span class="opacity-70">({{ counts.borrowing }})</span></a>
                     <a href="?tab=fines" class="px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-colors {% if tab == 'fines' %}bg-primary text-white{% else %}bg-white dark:bg-[#1a2235] text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}">Fines <span class="opacity-70">({{ counts.fines }})</span></a>
                     <a href="?tab=reservations" class="px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-colors {% if tab == 'reservations' %}bg-primary text-white{% else %}bg-white dark:bg-[#1a2235] text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %}">Reservation History <span class="opacity-70">({{ counts.reservations }})</span></a>
@@ -118,7 +118,7 @@
 
                 {% if tab == 'borrowing' %}
                 <!-- Borrowings & Returns -->
-                <h2 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-2 sm:mb-3" style="">Borrowings &amp; Returns</h2>
+                <h2 data-tour="history-borrowing" class="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-2 sm:mb-3" style="">Borrowings &amp; Returns</h2>
                 <div class="space-y-3 sm:space-y-4 mb-8 sm:mb-10">
                     {% for record in records %}
                     {% set returned = record[5] == 'returned' %}
@@ -176,7 +176,7 @@
 
                 {% if tab == 'reservations' %}
                 <!-- Reservations -->
-                <h2 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-2 sm:mb-3" style="">Reservation History</h2>
+                <h2 data-tour="history-reservations" class="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-2 sm:mb-3" style="">Reservation History</h2>
                 <p class="text-xs text-gray-400 mb-3">Showing active reservations only — claimed and expired entries are removed automatically.</p>
                 <div class="space-y-3 sm:space-y-4 mb-8 sm:mb-10">
                     {% for res in records %}
@@ -196,7 +196,7 @@
 
                 {% if tab == 'requests' %}
                 <!-- Book Requests -->
-                <h2 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-2 sm:mb-3" style="">Book Requests</h2>
+                <h2 data-tour="history-requests" class="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-2 sm:mb-3" style="">Book Requests</h2>
                 <div class="space-y-3 sm:space-y-4">
                     {% for req in records %}
                     <div
@@ -252,6 +252,7 @@
         document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && drawer && !drawer.classList.contains('hidden')) close(); });
     })();
     </script>
+    {% include 'components/tutorial.html' %}
 </body>
 
 </html>

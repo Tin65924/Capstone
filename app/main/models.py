@@ -359,3 +359,24 @@ def get_daily_borrows(days=6):
         day = today - timedelta(days=back)
         filled.append((day, by_day.get(day.isoformat(), 0)))
     return filled
+
+
+def get_tutorial_progress(user_id, tutorial_key, tutorial_version):
+    """Return one member's saved optional-tutorial status, if any."""
+    return db.fetch_one(
+        '''SELECT status
+           FROM tutorial_progress
+           WHERE user_id = %s AND tutorial_key = %s AND tutorial_version = %s''',
+        (user_id, tutorial_key, tutorial_version),
+    )
+
+
+def save_tutorial_progress(user_id, tutorial_key, tutorial_version, status):
+    """Record that a member dismissed or completed an optional tutorial."""
+    return db.execute(
+        '''INSERT INTO tutorial_progress (user_id, tutorial_key, tutorial_version, status)
+           VALUES (%s, %s, %s, %s)
+           ON CONFLICT (user_id, tutorial_key, tutorial_version)
+           DO UPDATE SET status = EXCLUDED.status, updated_at = NOW()''',
+        (user_id, tutorial_key, tutorial_version, status),
+    )
