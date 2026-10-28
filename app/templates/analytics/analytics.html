@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Analytics & Reporting | MCST Library</title>
+    {% include 'components/csrf_guard.html' %}
     <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='images/Library_Logo.jpg') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/Library_Logo.jpg') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -916,7 +917,11 @@
             const isCustom = preset === 'custom';
             const cleanFrom = isCustom ? (from || '') : '';
             const cleanTo = isCustom ? (to || '') : '';
-            const fields = { kpi_type: kpi_type, format: format, preset: preset, from: cleanFrom, to: cleanTo };
+            // This form is built entirely in JS, so the server-side
+            // inject_form_tokens hook (“only rendered HTML”) never sees it —
+            // attach the session CSRF token explicitly to every export POST.
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+            const fields = { kpi_type: kpi_type, format: format, preset: preset, from: cleanFrom, to: cleanTo, csrf_token: csrfToken };
             Object.keys(fields).forEach(function (k) {
                 const input = document.createElement('input');
                 input.type = 'hidden';

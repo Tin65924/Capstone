@@ -1,0 +1,20 @@
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<script>
+    // Standalone pages don't extend base.html, so they carry their own copy of
+    // the fetch interceptor: every same-origin POST/PUT/PATCH/DELETE ships the
+    // session CSRF token header (enforced by app/csrf.py protect_mutations).
+    (() => {
+        const token = document.querySelector('meta[name="csrf-token"]')?.content;
+        const originalFetch = window.fetch;
+        window.fetch = (input, init = {}) => {
+            const method = (init.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+            const url = new URL(input instanceof Request ? input.url : input, window.location.href);
+            if (token && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && url.origin === window.location.origin) {
+                const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
+                headers.set('X-CSRFToken', token);
+                init = {...init, headers};
+            }
+            return originalFetch(input, init);
+        };
+    })();
+</script>

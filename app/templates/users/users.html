@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Management | MCST Library</title>
+    {% include 'components/csrf_guard.html' %}
     <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='images/Library_Logo.jpg') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/Library_Logo.jpg') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1176,6 +1177,11 @@ document.addEventListener('keydown', function (e) {
             var statusForm = document.createElement('form');
             statusForm.method = 'POST';
             statusForm.action = String(statusTpl).split('/0/').join('/' + item.id + '/');
+            var csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = document.querySelector('meta[name="csrf-token"]')?.content || '';
+            statusForm.appendChild(csrfInput);
             var sel = document.createElement('select');
             sel.name = 'status';
             sel.className = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white';
@@ -1205,6 +1211,11 @@ document.addEventListener('keydown', function (e) {
             // librarian view must not contain admin URLs (see
             // test_staff_management), and this template is admin-only anyway.
             form.action = String(tpl).split('/0/').join('/' + item.id + '/');
+            var csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = document.querySelector('meta[name="csrf-token"]')?.content || '';
+            form.appendChild(csrfInput);
             form.setAttribute('data-dept-delete', '');
             form.setAttribute('data-dept-name', item.name);
             form.setAttribute('onsubmit', 'return confirmDeptDelete(this);');

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta content="width=device-width, initial-scale=1.0" name="viewport">
 <title>{{ book[1] }} - Book Detail</title>
+{% include 'components/csrf_guard.html' %}
 <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='images/Library_Logo.jpg') }}">
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/Library_Logo.jpg') }}">
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
