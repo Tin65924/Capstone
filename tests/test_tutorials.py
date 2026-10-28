@@ -1,5 +1,8 @@
 """Tests for the optional Student and Faculty member tutorial API."""
 
+import pytest
+import psycopg2
+
 
 def test_ebook_example_uses_real_title(student_client, mock_db):
     mock_db['fetch_one'].return_value = (15, 'A & B')
@@ -98,3 +101,63 @@ def test_catalog_tutorial_has_search_and_responsive_filters(student_client):
     assert b'data-tour="catalog-search"' in response.data
     assert response.data.count(b'data-tour="catalog-filters"') == 2
     assert b'data-tour="catalog-results"' in response.data
+
+
+MISSING_TABLE = psycopg2.errors.UndefinedTable(
+    'relation "tutorial_progress" does not exist')
+
+
+def _executed_sql(mock_db):
+    """List of SQL strings passed to db.execute, in call order."""
+    return [call.args[0] for call in mock_db['execute'].call_args_list]
+
+
+def test_status_self_heals_missing_table(student_client, mock_db):
+    """Validates status self-heal missing table `/tutorials/status` as student (expects 200) [tutorials].
+    If fails: likely the UndefinedTable retry path changed; prod renders
+    the member guide against a boot whose schema sync skipped the DDL.
+    Failure indicates /tutorials/status 500s on every member page load."""
+    mock_db['fetch_one'].side_effect = [MISSING_TABLE, ('dismissed',)]
+
+    response = student_client.get('/tutorials/status')
+
+    assert response.status_code == 200
+    assert response.get_json() == {
+        'available': True,
+        'status': 'dismissed',
+        'version': 1,
+    }
+    ddl = "CREATE TABLE IF NOT EXISTS tutorial_progress"
+    assert ddl in _executed_sql(mock_db)[0]
+    assert mock_db['fetch_one'].call_count == 2
+
+
+def test_progress_self_heals_missing_table(student_client, mock_db):
+    """Validates progress self-heal missing table `/tutorials/progress` as student (expects 200) [tutorials].
+    If fails: likely the UndefinedTable retry path changed.
+    Failure means guide dismissals are lost on pre-tutorials databases."""
+    mock_db['execute'].side_effect = [MISSING_TABLE, 0, 1]
+
+    response = student_client.post('/tutorials/progress',
+                                   json={'status': 'completed'})
+
+    assert response.status_code == 200
+    assert response.get_json() == {'status': 'completed'}
+    queries = _executed_sql(mock_db)
+    assert 'INSERT INTO tutorial_progress' in queries[0]
+    assert 'CREATE TABLE IF NOT EXISTS tutorial_progress' in queries[1]
+    assert 'INSERT INTO tutorial_progress' in queries[2]
+    assert mock_db['execute'].call_count == 3
+
+
+def test_unexpected_db_error_is_not_swallowed(student_client, mock_db):
+    """Validates unexpected DB errors propagate `/tutorials/status` as student (expects 500) [tutorials].
+    If fails: the self-heal catch became too broad (blanket swallow) —
+    narrowed to psycopg2.errors.UndefinedTable only."""
+    mock_db['fetch_one'].side_effect = psycopg2.errors.OperationalError(
+        'connection lost')
+    mock_db['fetch_one'].return_value = None
+
+    with pytest.raises(psycopg2.errors.OperationalError):
+        student_client.get('/tutorials/status')
+    mock_db['execute'].assert_not_called()

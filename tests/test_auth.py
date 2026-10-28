@@ -828,7 +828,20 @@ class TestLogout:
     If fails: likely redirect/flash logic changed or guard misordered.
     Failure indicates login/RBAC is broken (users locked out or wrongly allowed)."""
         resp = client.get('/logout')
-        assert resp.status_code == 405
+        assert resp.status_code == 302
+        assert resp.location.endswith('/logout') or '/login' in resp.location
+
+    @patch('app.auth.routes.log_activity')
+    def test_logout_get_fallback(self, mock_log_activity, student_client):
+        """Validates GET fallback `/logout` as student (expects 302) [TestLogout / auth].
+    If fails: likely route methods changed back to POST-only, which 405s
+    every standalone template's plain Log Out link (base.html's POST
+    interceptor only ships on templates that extend it).
+    Failure indicates members/librarians cannot sign out."""
+        resp = student_client.get('/logout')
+        assert resp.status_code == 302
+        assert resp.location.endswith('/login')
+        mock_log_activity.assert_called_once()
 
 
 class TestUserManagement:

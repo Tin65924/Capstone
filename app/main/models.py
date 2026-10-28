@@ -32,6 +32,8 @@ from app.procurement.models import get_procurement_items
 import threading
 import time
 
+import psycopg2
+
 # Short-lived in-process cache for Overview headline counts (perf batch
 # #5). The librarian/admin dashboards re-count on every hit; a 60s TTL
 # absorbs repeat views without visible staleness. Single-worker safe
@@ -821,23 +823,69 @@ def get_daily_borrows(days=6):
     return filled
 
 
+TUTORIAL_PROGRESS_DDL = '''
+CREATE TABLE IF NOT EXISTS tutorial_progress (
+      user_id          INT NOT NULL REFERENCES user_accounts(user_id) ON DELETE CASCADE,
+      tutorial_key     VARCHAR(50) NOT NULL,
+      tutorial_version INT NOT NULL DEFAULT 1,
+      status           VARCHAR(20) NOT NULL CHECK (status IN ('dismissed', 'completed')),
+      updated_at       TIMESTAMP NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (user_id, tutorial_key, tutorial_version)
+  )
+'''
+
+
+def _repair_tutorial_progress_table():
+    """Create tutorial_progress when the running database is missing it.
+
+    schema.sql (applied by app.database.run_schema at startup) is the
+    source of truth; this idempotent guard mirrors its tutorial_progress
+    DDL byte-for-byte so a deployed instance whose boot-time sync skipped
+    the statement converges to a working database on first real use
+    instead of 500ing every member page. Safe to run repeatedly.
+    """
+    return db.execute(TUTORIAL_PROGRESS_DDL)
+
+
 def get_tutorial_progress(user_id, tutorial_key, tutorial_version):
-    """Return one member's saved optional-tutorial status, if any."""
-    return db.fetch_one(
-        '''SELECT status
-           FROM tutorial_progress
-           WHERE user_id = %s AND tutorial_key = %s AND tutorial_version <= %s
-           ORDER BY tutorial_version DESC LIMIT 1''',
-        (user_id, tutorial_key, tutorial_version),
-    )
+    """Return one member's saved optional-tutorial status, if any.
+
+    Self-heals a database that predates the tutorials feature: the first
+    request after the missing table is detected creates it (schema.sql
+    DDL) and retries once. Any other database failure still propagates.
+    """
+    try:
+        return db.fetch_one(
+            '''SELECT status
+               FROM tutorial_progress
+               WHERE user_id = %s AND tutorial_key = %s AND tutorial_version <= %s
+               ORDER BY tutorial_version DESC LIMIT 1''',
+            (user_id, tutorial_key, tutorial_version),
+        )
+    except psycopg2.errors.UndefinedTable:
+        _repair_tutorial_progress_table()
+        return db.fetch_one(
+            '''SELECT status
+               FROM tutorial_progress
+               WHERE user_id = %s AND tutorial_key = %s AND tutorial_version <= %s
+               ORDER BY tutorial_version DESC LIMIT 1''',
+            (user_id, tutorial_key, tutorial_version),
+        )
 
 
 def save_tutorial_progress(user_id, tutorial_key, tutorial_version, status):
-    """Record that a member dismissed or completed an optional tutorial."""
-    return db.execute(
-        '''INSERT INTO tutorial_progress (user_id, tutorial_key, tutorial_version, status)
+    """Record that a member dismissed or completed an optional tutorial.
+
+    Same self-healing as get_tutorial_progress: a pre-tutorials database
+    gets the table created and the write retried once.
+    """
+    insert = '''INSERT INTO tutorial_progress (user_id, tutorial_key, tutorial_version, status)
            VALUES (%s, %s, %s, %s)
            ON CONFLICT (user_id, tutorial_key, tutorial_version)
-           DO UPDATE SET status = EXCLUDED.status, updated_at = NOW()''',
-        (user_id, tutorial_key, tutorial_version, status),
-    )
+           DO UPDATE SET status = EXCLUDED.status, updated_at = NOW()'''
+    params = (user_id, tutorial_key, tutorial_version, status)
+    try:
+        return db.execute(insert, params)
+    except psycopg2.errors.UndefinedTable:
+        _repair_tutorial_progress_table()
+        return db.execute(insert, params)

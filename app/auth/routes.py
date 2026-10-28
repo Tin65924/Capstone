@@ -1249,13 +1249,21 @@ def _wants_json():
     return 'application/json' in (request.headers.get('Accept') or '')
 
 
-@auth_bp.route('/logout', methods=['POST'])
+@auth_bp.route('/logout', methods=['POST', 'GET'])
 @login_required
 def logout():
-    """Sign out the current user (POST /logout, login required).
+    """Sign out the current user (POST /logout, with GET as fallback).
     Requires login with no role restriction. Writes a logout audit row
     via log_activity, clears the Flask-Login session, and redirects to
     the public login page.
+
+    GET is accepted as well: standalone member/librarian templates
+    (dashboard, users, circulation, analytics, ...) render Log Out as a
+    plain link, and the POST/CSRF interceptor from base.html only ships
+    on templates that extend it. Without the GET fallback those clicks
+    hit the route with the wrong method and 405. A stray GET can at most
+    end the requester's own session (logout-CSRF impact), which matches
+    the documented GET /logout contract in auth/dcs.
     Args:
         None.
     Returns:
